@@ -1,0 +1,52 @@
+// Read-only views of the existing billing tables. Column lists are explicit so
+// token_hash and key_hash can never leave the database through the admin API.
+// last_seen_at and billing_downloads come from the updated billing server; both are optional.
+
+const LIMIT = 2000
+const INSTALL_COLS = 'id, customer_id, lifetime_session_id, decision_subscription_id, pending_lifetime_session_id, pending_decision_session_id, license_id, license_slot, created_at'
+const LICENSE_COLS = 'id, installation_id, key_last4, email, created_at, sent_at, revoked_at, activated_at'
+
+export async function createSqliteAdminStore(path) {
+  const { DatabaseSync } = await import('node:sqlite')
+  let db
+  try { db = new DatabaseSync(path, { readOnly: true }) }
+  catch { throw new Error(`Billing database not found at ${path}. Start the billing server once or set BILLING_DB_PATH.`) }
+  const all = (sql, ...args) => db.prepare(sql).all(...args)
+  const optional = (sql, ...args) => { try { return all(sql, ...args)[0] ?? null } catch { return null } }
+  const hasSeen = () => all('pragma table_info(installations)').some((column) => column.name === 'last_seen_at')
+  return {
+    kind: 'sqlite',
+    ping: async () => { all('select 1 from installations limit 1'); all('select 1 from licenses limit 1') },
+    seenTracking: async () => hasSeen(),
+    installations: async () => all(`select ${INSTALL_COLS}, ${hasSeen() ? 'last_seen_at' : 'null as last_seen_at'} from installations order by created_at desc limit ${LIMIT}`),
+    licenses: async () => all(`select ${LICENSE_COLS} from licenses order by created_at desc limit ${LIMIT}`),
+    trialLicenses: async () => all(`select id, key_last4, email, sent_at, revoked_at, expires_at, bound_installation_id from trial_licenses order by created_at desc limit ${LIMIT}`),
+    webhooks: async () => optional('select count(*) as count, max(received_at) as last from billing_events'),
+    downloads: async () => optional('select count(*) as total, count(distinct installation_id) as buyers, sum(case when created_at >= ? then 1 else 0 end) as last30d, max(created_at) as last from billing_downloads',
+      new Date(Date.now() - 30 * 86_400_000).toISOString()),
+    close: () => db.close(),
+  }
+}
+
+export async function createNeonAdminStore(databaseUrl) {
+  if (!/^postgres(?:ql)?:\/\//.test(databaseUrl ?? '')) throw new Error('DATABASE_URL must be a Postgres connection URL.')
+  const { neon } = await import('@neondatabase/serverless')
+  const sql = neon(databaseUrl)
+  let seen = false
+  const hasSeen = async () => {
+    if (!seen) seen = (await sql`select 1 from information_schema.columns where table_name = 'billing_installations' and column_name = 'last_seen_at' limit 1`).length > 0
+    return seen
+  }
+  const optional = async (query) => { try { return (await query())[0] ?? null } catch { return null } }
+  return {
+    kind: 'neon',
+    ping: async () => { await sql`select 1 from billing_installations limit 1`; await sql`select 1 from billing_licenses limit 1` },
+    seenTracking: hasSeen,
+    installations: async () => (await hasSeen())
+      ? sql`select id, customer_id, lifetime_session_id, decision_subscription_id, pending_lifetime_session_id, pending_decision_session_id, license_id, license_slot, created_at, last_seen_at from billing_installations order by created_at desc limit 2000`
+      : sql`select id, customer_id, lifetime_session_id, decision_subscription_id, pending_lifetime_session_id, pending_decision_session_id, license_id, license_slot, created_at, null as last_seen_at from billing_installations order by created_at desc limit 2000`,
+    licenses: async () => sql`select id, installation_id, key_last4, email, created_at, sent_at, revoked_at, activated_at from billing_licenses order by created_at desc limit 2000`,
+    webhooks: () => optional(() => sql`select count(*)::int as count, max(received_at) as last from billing_events`),
+    downloads: () => optional(() => sql`select count(*)::int as total, count(distinct installation_id)::int as buyers, count(*) filter (where created_at >= now() - interval '30 days')::int as last30d, max(created_at) as last from billing_downloads`),
+  }
+}

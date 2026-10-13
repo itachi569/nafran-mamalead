@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "functions": { "api/billing.mjs": { "maxDuration": 30 } },
+  "rewrites": [
+    { "source": "/", "destination": "/api/billing?endpoint=home" },
+    { "source": "/health", "destination": "/api/billing?endpoint=health" },
+    { "source": "/cancel", "destination": "/api/billing?endpoint=cancel" },
+    { "source": "/return", "destination": "/api/billing?endpoint=return" },
+    { "source": "/v1/installations", "destination": "/api/billing?endpoint=installations" },
+    { "source": "/v1/status", "destination": "/api/billing?endpoint=status" },
+    { "source": "/v1/trial", "destination": "/api/billing?endpoint=trial" },
+    { "source": "/v1/checkout", "destination": "/api/billing?endpoint=checkout" },
+    { "source": "/v1/portal", "destination": "/api/billing?endpoint=portal" },
+    { "source": "/v1/invoices", "destination": "/api/billing?endpoint=invoices" }
+  ]
+}

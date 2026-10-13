@@ -1,0 +1,31 @@
+[Unit]
+Description=Nafran license and billing API (Stripe test mode)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nafran-billing
+Group=nafran-billing
+WorkingDirectory=/opt/billing/app
+EnvironmentFile=/etc/nafran-billing.env
+ExecStart=/usr/local/bin/node /opt/billing/app/server.mjs
+Restart=on-failure
+RestartSec=5
+StateDirectory=nafran-billing
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/nafran-billing
+
+[Install]
+WantedBy=multi-user.target

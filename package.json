@@ -1,0 +1,111 @@
+{
+  "name": "nafran-leads-scraper",
+  "private": true,
+  "version": "1.4.0",
+  "description": "Local-first Google Maps lead scraper and enrichment desktop app.",
+  "author": {
+    "name": "Nafran Leads",
+    "email": "billing@nafran.co"
+  },
+  "homepage": "https://nafran.co",
+  "desktopName": "nafran-leads-scraper",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "npm run build:renderer && npm run build:electron",
+    "build:renderer": "tsc -b && vite build",
+    "build:electron": "tsc -p electron/tsconfig.json && node scripts/electron-cjs.mjs && node scripts/copy-electron-assets.mjs && node scripts/write-update-config.mjs",
+    "typecheck": "tsc -b --pretty false && tsc -p electron/tsconfig.json --noEmit",
+    "db:test": "npm run build:electron && node scripts/test-database.cjs",
+    "deep:test": "npm run build:electron && node scripts/test-deep-pass.cjs",
+    "packaging:test": "node scripts/verify-packaging-config.cjs",
+    "updates:test": "node scripts/verify-updates.cjs",
+    "leads:scale:test": "npm run build && node scripts/verify-2000-leads.cjs",
+    "local-ui:test": "npm run build && node scripts/verify-local-settings-phone.cjs",
+    "billing:dev": "node --env-file=.secrets/stripe-test.env billing-server/server.mjs",
+    "billing:test": "node scripts/verify-billing-server.mjs",
+    "verify": "node scripts/verify-all.mjs",
+    "verify:dataforseo-runtime": "npm run build && node scripts/verify-dataforseo-runtime.cjs",
+    "debug": "node scripts/dev-debug.mjs",
+    "preview": "vite preview",
+    "desktop": "npm run build && electron .",
+    "scrape": "npm run build:electron && node dist-electron/scraper/cli.js",
+    "package": "npm run build && electron-builder --config electron-builder.config.cjs --dir",
+    "package:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
+    "package:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac",
+    "package:linux": "npm run build && electron-builder --config electron-builder.config.cjs --linux",
+    "release:signing:check": "node scripts/verify-release-signing.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "exceljs": "^4.4.0",
+    "fflate": "^0.8.3",
+    "lottie-web": "^5.13.0",
+    "pdf-lib": "^1.17.1",
+    "playwright": "^1.50.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^38.1.0",
+    "electron-builder": "^26.0.12",
+    "parse5": "^8.0.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "com.nafran.leadsscraper",
+    "productName": "Nafran Leads Scraper",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "maintainer": "Nafran Leads <billing@nafran.co>"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "allowScripts": {
+    "electron@38.8.6": true,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
+  }
+}

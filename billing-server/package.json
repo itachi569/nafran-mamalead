@@ -1,0 +1,10 @@
+{
+  "name": "mamalead-billing-service",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0"
+  }
+}

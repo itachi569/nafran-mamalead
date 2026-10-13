@@ -1,0 +1,23 @@
+[Unit]
+Description=Back up and integrity-check Nafran billing SQLite database
+After=nafran-billing.service
+
+[Service]
+Type=oneshot
+User=nafran-billing
+Group=nafran-billing
+WorkingDirectory=/opt/billing/admin
+EnvironmentFile=/etc/nafran-billing.env
+ExecStart=/usr/local/bin/node /opt/billing/admin/backup.mjs
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/backups/nafran-billing

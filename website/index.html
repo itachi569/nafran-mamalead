@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-400.woff2") format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-500.woff2") format('woff2'); font-weight: 500; font-display: swap; }
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-700.woff2") format('woff2'); font-weight: 700; font-display: swap; }
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-900.woff2") format('woff2'); font-weight: 900; font-display: swap; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: #EFEFEF; color: #1C1C1C; font-family: 'Satoshi', 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; text-wrap: pretty; }
+  a { color: #1C1C1C; text-decoration: none; }
+  a:hover { color: #4A5A47; }
+  ::selection { background: #C8D5BB; color: #1C1C1C; }
+  * { box-sizing: border-box; }
+  @keyframes rise { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+  @keyframes riseSm { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes popIn { from { opacity: 0; transform: translateY(34px) scale(.985); } to { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(24px) scale(.97); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
+<div style="position: relative; background: #EFEFEF; overflow-x: hidden;">
+  <div style="position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(60vw 52vh at 4% 6%, rgba(169,188,155,.5), transparent 62%), radial-gradient(56vw 50vh at 96% 34%, rgba(200,213,187,.46), transparent 62%), radial-gradient(62vw 56vh at 20% 88%, rgba(213,222,203,.46), transparent 66%);"></div>
+  <div style="position: relative; z-index: 1;">
+
+  <header style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
+      <a href="#top" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+        <span style="width: 32px; height: 32px; border-radius: 10px; background: #1C1C1C; color: #C8D5BB; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">L</span>
+        <span style="line-height: 1.1;">
+          <span style="display: block; font-size: 15.5px; font-weight: 700; letter-spacing: -.02em;">Nafran Leads Scraper</span>
+          <span style="display: block; font-size: 10.5px; color: #555956;">v1.4.0 &middot; for Windows</span>
+        </span>
+      </a>
+      <nav style="margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); overflow-x: auto; max-width: 100%;">
+        <a href="#how" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">How it works</a>
+        <a href="#modules" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Modules</a>
+        <a href="#privacy" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Privacy</a>
+        <a href="#pricing" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Pricing</a>
+        <a href="#faq" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">FAQ</a>
+      </nav>
+      <a href="#download" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500; white-space: nowrap; transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF;"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M3 5.3l7.4-1v7.2H3zM11.4 4.1L21 2.8v8.7h-9.6zM3 12.5h7.4v7.2L3 18.7zM11.4 12.5H21v8.7l-9.6-1.3z"></path></svg>Download for Windows</a>
+    </div>
+  </header>
+
+  <section id="top" data-screen-label="Hero" style="position: relative; overflow: hidden; padding: 64px 0 76px;">
+    <sc-if value="{{ showPainting }}" hint-placeholder-val="{{ true }}">
+      <div style="position: absolute; left: 0; right: 0; top: 0; height: 560px; background-image: url(img/sierra.jpg); background-size: cover; background-position: center 42%;"></div>
+      <div style="position: absolute; left: 0; right: 0; top: 0; height: 560px; background: linear-gradient(180deg, rgba(239,239,239,.78) 0%, rgba(239,239,239,.5) 34%, rgba(239,239,239,.58) 76%, #EFEFEF 100%);"></div>
+    </sc-if>
+    <div style="position: relative; max-width: 1180px; margin: 0 auto; padding: 0 24px; text-align: center;">
+      <span style="display: inline-flex; align-items: center; gap: 9px; padding: 7px 15px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10.5px; letter-spacing: .14em; color: #1C1C1C; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M3 5.3l7.4-1v7.2H3zM11.4 4.1L21 2.8v8.7h-9.6zM3 12.5h7.4v7.2L3 18.7zM11.4 12.5H21v8.7l-9.6-1.3z"></path></svg>WINDOWS DESKTOP APP &middot; 10 / 11, 64-BIT</span>
+      <h1 style="margin: 24px auto 0; max-width: 900px; font-size: clamp(36px, 5.4vw, 70px); line-height: 1.02; letter-spacing: -.045em; font-weight: 700; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .06s;">Google Maps leads, scraped and enriched on your own PC.</h1>
+      <p style="margin: 22px auto 0; max-width: 640px; font-size: 16px; line-height: 1.6; color: #1C1C1C; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .14s;">Nafran Leads Scraper is a Windows app. Give it a keyword and a city: it collects each business from Google Maps, reads the business's own website for emails, phones, social profiles and decision makers, and keeps every row in a SQLite file on your machine.</p>
+      <div style="margin: 32px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .22s;">
+        <a href="#download" style="display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 14.5px; font-weight: 500; white-space: nowrap; box-shadow: 0 14px 30px -14px rgba(28,28,28,.7); transition: transform .35s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-2px); color: #FFFFFF;"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M3 5.3l7.4-1v7.2H3zM11.4 4.1L21 2.8v8.7h-9.6zM3 12.5h7.4v7.2L3 18.7zM11.4 12.5H21v8.7l-9.6-1.3z"></path></svg>Download for Windows<span style="font-size: 12px; color: #C8D5BB;">~100 MB</span></a>
+        <a href="#modules" style="display: inline-flex; align-items: center; gap: 9px; padding: 15px 24px; border-radius: 999px; background: rgba(255,255,255,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 10px 26px -16px rgba(28,28,28,.3); font-size: 14.5px; font-weight: 500; white-space: nowrap; transition: transform .35s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-2px);">See the 8 modules<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></a>
+      </div>
+      <div style="margin: 24px 0 0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .3s;">
+        <span style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(18px) saturate(180%); -webkit-backdrop-filter: blur(18px) saturate(180%); border: 1px solid rgba(255,255,255,.85); font-size: 12.5px; white-space: nowrap;"><span style="width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>No sign-up or account</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(18px) saturate(180%); -webkit-backdrop-filter: blur(18px) saturate(180%); border: 1px solid rgba(255,255,255,.85); font-size: 12.5px; white-space: nowrap;"><span style="width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>No credit card</span>
+        <span style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 8px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(18px) saturate(180%); -webkit-backdrop-filter: blur(18px) saturate(180%); border: 1px solid rgba(255,255,255,.85); font-size: 12.5px; white-space: nowrap;"><span style="width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Nothing is uploaded</span>
+      </div>
+      <figure style="margin: 54px auto 0; max-width: 1080px; animation: popIn 1.1s cubic-bezier(.16,1,.3,1) both; animation-delay: .38s;">
+        <div style="padding: 10px; border-radius: 26px; background: rgba(255,255,255,.5); backdrop-filter: blur(24px) saturate(170%); -webkit-backdrop-filter: blur(24px) saturate(170%); border: 1px solid rgba(255,255,255,.88); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 60px 110px -56px rgba(28,28,28,.55);">
+          <div role="img" aria-label="{{ heroAlt }}" style="width: 100%; aspect-ratio: {{ heroRatio }}; border-radius: 17px; background-color: #F5F5F4; background-image: url({{ heroSrc }}); background-size: cover; background-position: center;"></div>
+        </div>
+        <figcaption style="margin: 14px 0 0; font-size: 12.5px; color: #42473F;">{{ heroCaption }}</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="how" data-screen-label="How it works" style="position: relative; overflow: hidden; padding: 84px 0 96px;">
+    <div style="position: absolute; inset: 0; overflow: hidden; pointer-events: none; mask-image: linear-gradient(180deg, transparent 0, #000 170px, #000 calc(100% - 170px), transparent 100%); -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 170px, #000 calc(100% - 170px), transparent 100%);">
+      <div style="position: absolute; inset: -60px 0; background-image: radial-gradient(38% 42% at 12% 26%, #A9C79B 0%, rgba(169,199,155,0) 68%), radial-gradient(36% 40% at 34% 74%, #BFD3B4 0%, rgba(191,211,180,0) 70%), radial-gradient(40% 44% at 62% 18%, #C3D6E4 0%, rgba(195,214,228,0) 70%), radial-gradient(34% 38% at 84% 62%, #AFC8D8 0%, rgba(175,200,216,0) 70%), radial-gradient(30% 34% at 50% 50%, #EDF2EC 0%, rgba(237,242,236,0) 72%); filter: blur(44px);"></div>
+      <div style="position: absolute; right: -150px; top: -110px; width: 460px; height: 460px; border-radius: 50%; background: radial-gradient(circle at 34% 26%, rgba(255,255,255,.96), rgba(255,255,255,.4) 40%, rgba(203,222,192,.46) 66%, rgba(255,255,255,0) 100%); box-shadow: inset 22px 26px 60px rgba(255,255,255,.95), inset -28px -34px 60px rgba(186,206,175,.6);"></div>
+      <div style="position: absolute; left: -180px; top: 320px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle at 62% 30%, rgba(255,255,255,.94), rgba(255,255,255,.34) 44%, rgba(206,224,196,.44) 70%, rgba(255,255,255,0) 100%); box-shadow: inset -20px 24px 56px rgba(255,255,255,.92), inset 26px -30px 56px rgba(188,208,177,.55);"></div>
+      <div style="position: absolute; left: 32%; top: 240px; width: 340px; height: 340px; border-radius: 50%; background: radial-gradient(circle at 38% 28%, rgba(255,255,255,.95), rgba(255,255,255,.32) 42%, rgba(200,219,189,.5) 68%, rgba(255,255,255,0) 100%); box-shadow: inset 20px 24px 52px rgba(255,255,255,.95), inset -24px -28px 52px rgba(184,205,173,.6);"></div>
+      <div style="position: absolute; right: 8%; bottom: -160px; width: 440px; height: 440px; border-radius: 50%; background: radial-gradient(circle at 40% 34%, rgba(255,255,255,.92), rgba(255,255,255,.3) 46%, rgba(199,219,188,.42) 72%, rgba(255,255,255,0) 100%); box-shadow: inset 24px 22px 58px rgba(255,255,255,.9), inset -26px -30px 58px rgba(186,206,175,.5);"></div>
+    </div>
+    <div style="position: relative; max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
+        <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">HOW IT WORKS</span>
+        <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Scrape, enrich, export</h2>
+        <p style="margin: 14px auto 0; max-width: 540px; font-size: 15px; line-height: 1.6; color: #1C1C1C;">Three steps, all running on your machine. Click a screenshot to open that module.</p>
+      </div>
+      <div style="margin: 46px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px;">
+        <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;" style-hover="transform: translateY(-8px);">
+          <button type="button" onClick="{{ openStep1 }}" aria-label="Open the Google Maps Scraper module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
+            <img src="img/app/maps-light.png" alt="Latest light-mode Google Maps Scraper page with keywords, location and filters" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+          </button>
+          <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
+            <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">01</span>
+            <h3 style="margin: 16px 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Scrape Google Maps</h3>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Enter keywords and a city. The app opens Google Maps in its own browser window, from your Google account if you sign it in, and saves the name, address, phone, website, rating and review count of every place.</p>
+            <p style="margin: auto 0 0; padding-top: 16px; font-size: 12px; color: #42473F;">Screenshot: Google Maps page, before a run.</p>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .08s;" style-hover="transform: translateY(-8px);">
+          <button type="button" onClick="{{ openStep2 }}" aria-label="Open the Email Finder module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
+            <img src="img/app/email.png" alt="Latest light-mode Email Finder page with the coverage cascade and LeadsAngel recheck" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+          </button>
+          <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
+            <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">02</span>
+            <h3 style="margin: 16px 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Enrich from each website</h3>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">A queue visits every business's own website and pulls out the emails, phone numbers, social profiles and named people it publishes, then writes them to the same lead.</p>
+            <p style="margin: auto 0 0; padding-top: 16px; font-size: 12px; color: #42473F;">Screenshot: Email Finder and its cascade.</p>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .16s;" style-hover="transform: translateY(-8px);">
+          <button type="button" onClick="{{ openStep3 }}" aria-label="Open the All Leads, Saved Lists and Run History module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
+            <img src="img/app/leads.png" alt="Latest light-mode All Leads page with the permanent store and lead ledger" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+          </button>
+          <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
+            <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">03</span>
+            <h3 style="margin: 16px 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Work the list, export</h3>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Score and filter the leads, bookmark the ones worth calling into saved lists, and export CSV or Excel files straight to disk.</p>
+            <p style="margin: auto 0 0; padding-top: 16px; font-size: 12px; color: #42473F;">Screenshot: All Leads, the permanent store.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="modules" data-screen-label="Modules" style="padding: 80px 0 90px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
+        <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">8 MODULES</span>
+        <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Everything in the sidebar</h2>
+        <p style="margin: 14px auto 0; max-width: 520px; font-size: 15px; line-height: 1.6; color: #42473F;">Click any module to see what it does, where it lives in the app, and its screen.</p>
+      </div>
+      <div style="margin: 44px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px;">
+        <sc-for list="{{ modules }}" as="m" hint-placeholder-count="8">
+          <button type="button" onClick="{{ m.onOpen }}" style="display: flex; flex-direction: column; text-align: left; font-family: inherit; color: #1C1C1C; cursor: pointer; padding: 10px 10px 20px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 30px 60px -44px rgba(28,28,28,.3); transition: transform .5s cubic-bezier(.16,1,.3,1), box-shadow .5s ease; animation: popIn .9s cubic-bezier(.16,1,.3,1) both;" style-hover="transform: translateY(-6px); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 44px 70px -40px rgba(28,28,28,.42);">
+            <span style="display: block; width: 100%; aspect-ratio: 16 / 10; border-radius: 15px; overflow: hidden; background: #F5F5F4;">
+              <span role="img" aria-label="{{ m.thumbAlt }}" style="display: block; width: 100%; height: 100%; background-image: url({{ m.thumb }}); background-size: cover; background-position: 100% 0;"></span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 16px 8px 0;">
+              <span style="flex: none; width: 36px; height: 36px; border-radius: 11px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ m.d1 }}"></path><path d="{{ m.d2 }}"></path></svg></span>
+              <span style="margin-left: auto; font-size: 30px; line-height: 1; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.3px, transparent 1.4px); background-size: 3px 3px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">{{ m.num }}</span>
+            </span>
+            <span style="display: block; padding: 14px 8px 0; font-size: 17px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25;">{{ m.name }}</span>
+            <span style="display: block; padding: 6px 8px 0; font-size: 13px; line-height: 1.5; color: #42473F;">{{ m.short }}</span>
+            <span style="margin-top: auto; padding: 16px 8px 0; display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 500; color: #1C1C1C;">See what it does<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy" data-screen-label="Privacy" style="padding: 40px 0 90px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
+        <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">PRIVACY</span>
+        <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Your leads stay on this PC</h2>
+        <p style="margin: 14px auto 0; max-width: 540px; font-size: 15px; line-height: 1.6; color: #42473F;">No cloud, no account, no telemetry. The app has no server to send anything to.</p>
+      </div>
+      <div style="margin: 44px 0 0; display: flex; flex-wrap: wrap; gap: 18px; align-items: stretch;">
+        <div style="flex: 1 1 460px; min-width: 0; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0; box-shadow: 0 50px 90px -50px rgba(28,28,28,.6); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;">
+          <div style="font-size: 10.5px; letter-spacing: .16em; color: #C8D5BB;">WHERE YOUR DATA LIVES</div>
+          <div style="margin: 14px 0 0; padding: 14px 16px; border-radius: 14px; background: #2A2E2A; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: clamp(12px, 1.4vw, 15px); color: #E9EBE7; overflow-x: auto; white-space: nowrap;">%APPDATA%\nafran-leads-scraper\leads.db</div>
+          <div style="margin: 24px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 22px 26px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3z"></path><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"></path></svg></span>Stored on disk</div>
+              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Every lead, run and saved list is written to one SQLite file on your machine.</p>
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17.5a4.5 4.5 0 0 1-.6-9 5.5 5.5 0 0 1 10.6 1.5 3.8 3.8 0 0 1 .5 7.5"></path><path d="M4 4l16 16"></path></svg></span>Nothing is uploaded</div>
+              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">No cloud sync and no telemetry. The only traffic is the app visiting Google Maps and the websites you enrich.</p>
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5"></path></svg></span>No account</div>
+              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">No sign-up and no login. If you connect Google, you sign in on Google's own page; the password never passes through the app.</p>
+            </div>
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 8.5h10a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 7 18.5V10a1.5 1.5 0 0 1 1.5-1.5z"></path><path d="M4 15.5V5.5A1.5 1.5 0 0 1 5.5 4h10"></path></svg></span>Back it up like any file</div>
+              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Copy leads.db somewhere safe and you have a full backup of your data.</p>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 18px;">
+          <div style="flex: 1; padding: 26px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 30px 60px -44px rgba(28,28,28,.3); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .08s;">
+            <div style="font-size: 10.5px; letter-spacing: .16em; color: #3F443F;">OPTIONAL INTEGRATIONS</div>
+            <h3 style="margin: 10px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em;">Your key, your licence</h3>
+            <div style="margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><span style="flex: 1; font-size: 13.5px;"><b style="font-weight: 500;">DataForSEO</b> &middot; deep search</span><span style="font-size: 12.5px; color: #42473F; white-space: nowrap;">~$0.0024 / lead</span></div>
+              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><span style="flex: 1; font-size: 13.5px;"><b style="font-weight: 500;">LeadsAngel</b> &middot; email verification</span><span style="font-size: 12.5px; color: #42473F; white-space: nowrap;">licence ZIP</span></div>
+            </div>
+            <p style="margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; color: #42473F;">Add your DataForSEO key or import your LeadsAngel licence ZIP in Settings. These services are optional; the app does not bill you for them.</p>
+          </div>
+          <div style="flex: 1; padding: 26px; border-radius: 22px; background: #C8D5BB; box-shadow: 0 30px 60px -44px rgba(28,28,28,.3); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .16s;">
+            <div style="font-size: 10.5px; letter-spacing: .16em; color: #2F3A2C;">HOW A RUN BEHAVES</div>
+            <div style="margin: 14px 0 0; display: flex; flex-direction: column; gap: 9px; font-size: 13.5px; line-height: 1.5;">
+              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>1.5&ndash;3 s between places by default, adjustable up to 10 s.</span>
+              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Headless, or a visible browser window you can watch.</span>
+              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Runs in the app's own browser, with your own Google account if you sign it in.</span>
+              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Stops with a clear message if Google shows a challenge.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" data-screen-label="Pricing" style="padding: 40px 0 90px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
+        <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">PRICING</span>
+        <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Try it for a day, then own it for life</h2>
+        <p style="margin: 14px auto 0; max-width: 520px; font-size: 15px; line-height: 1.6; color: #42473F;">Request a 1-day trial key by email, or buy a lifetime key through Stripe test checkout. Each key unlocks a protected installer link.</p>
+      </div>
+      <div style="margin: 44px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 18px; align-items: stretch;">
+        <div style="display: flex; flex-direction: column; padding: 28px 26px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 30px 60px -44px rgba(28,28,28,.3); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;">
+          <div style="font-size: 15px; font-weight: 500;">1-day trial</div>
+          <div style="margin: 14px 0 0; display: flex; align-items: baseline; gap: 6px;"><span style="font-size: 46px; line-height: 1; font-weight: 700; letter-spacing: -.045em;">$0</span></div>
+          <p style="margin: 10px 0 0; font-size: 13px; color: #42473F;">All built-in features for 24 hours from first activation. One trial per email and one machine.</p>
+          <div style="margin: 20px 0 0; padding-top: 18px; border-top: 1px solid rgba(28,28,28,.08); display: flex; flex-direction: column; gap: 11px; font-size: 13.5px;">
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Google Maps scraper</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Website enrichment: emails, phones, socials, decision makers</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>All Leads, Saved Lists, Run History</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>CSV / Excel export to disk</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Data stays on your machine</span>
+          </div>
+          <form data-trial-request="1" style="margin:auto 0 0;display:flex;flex-direction:column;gap:9px;"><label for="trial-email" style="font-size:13px;">Email for your trial key</label><input id="trial-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" style="padding:12px;border:1px solid #cbd2c6;border-radius:12px;background:#fff;font:inherit;"><button type="submit" style="padding:14px;border:0;border-radius:999px;background:#1c1c1c;color:#fff;font:inherit;cursor:pointer;">Email my 1-day key</button></form>
+        </div>
+        <div style="display: flex; flex-direction: column; padding: 28px 26px; border-radius: 22px; background: #1C1C1C; color: #F0F0F0; box-shadow: 0 50px 90px -50px rgba(28,28,28,.6); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .08s;">
+          <div style="display: flex; align-items: center; gap: 10px;"><span style="font-size: 15px; font-weight: 500;">Lifetime</span><span style="margin-left: auto; padding: 4px 11px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 10px; letter-spacing: .1em; font-weight: 500;">ONE TIME</span></div>
+          <div style="margin: 14px 0 0; display: flex; align-items: baseline; gap: 6px;"><span style="font-size: 46px; line-height: 1; font-weight: 700; letter-spacing: -.045em;">$30</span><span style="font-size: 13px; color: #B9BEB6;">one time</span></div>
+          <p style="margin: 10px 0 0; font-size: 13px; color: #B9BEB6;">All built-in features for life, with activation on up to two machines.</p>
+          <div style="margin: 20px 0 0; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 11px; font-size: 13.5px;">
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>2,000 Maps scrapes</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>1,500 email lookups</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>1,500 phone lookups</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>1,000 social lookups</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>500 decision-maker lookups</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Unlimited exports</span>
+          </div>
+          <a href="#" data-buy-product="lifetime" style="margin: 26px 0 0; display: block; text-align: center; padding: 14px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 13.5px; font-weight: 500; transition: transform .3s ease;" style-hover="transform: translateY(-1px); color: #1C1C1C;">Buy now</a>
+        </div>
+      </div>
+      <p style="margin: 22px auto 0; max-width: 620px; text-align: center; font-size: 12.5px; line-height: 1.6; color: #42473F;">Optional deep search uses your DataForSEO key; SMTP verification uses your imported LeadsAngel licence. This app does not bill for either.</p>
+    </div>
+  </section>
+
+  <section id="download" data-screen-label="Download" style="padding: 20px 0 90px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 26px; padding: clamp(22px, 3.4vw, 40px); border-radius: 28px; background: rgba(255,255,255,.5); backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%); border: 1px solid rgba(255,255,255,.88); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 50px 90px -56px rgba(28,28,28,.4); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;">
+        <div style="flex: 1 1 400px; min-width: 0;">
+          <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: #1C1C1C; color: #C8D5BB; font-size: 10px; letter-spacing: .16em; white-space: nowrap;">DOWNLOAD</span>
+          <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Get it for Windows</h2>
+          <div style="margin: 20px 0 0; display: flex; flex-wrap: wrap; gap: 8px;">
+            <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Windows 10 / 11, 64-bit</span>
+            <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">~100 MB</span>
+            <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Version 1.4.0</span>
+            <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Choose your install folder</span>
+          </div>
+          <a href="#download" style="margin: 26px 0 0; display: inline-flex; align-items: center; gap: 11px; padding: 17px 30px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 15px; font-weight: 500; white-space: nowrap; box-shadow: 0 16px 34px -16px rgba(28,28,28,.7); transition: transform .35s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-2px); color: #FFFFFF;"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M3 5.3l7.4-1v7.2H3zM11.4 4.1L21 2.8v8.7h-9.6zM3 12.5h7.4v7.2L3 18.7zM11.4 12.5H21v8.7l-9.6-1.3z"></path></svg>Download for Windows</a>
+          <form data-license-download="1" style="margin-top:18px;display:flex;flex-wrap:wrap;gap:9px;align-items:center;">
+            <label for="download-license" style="width:100%;font-size:13px;color:#42473F;">Have a trial or lifetime key? Enter it to get a secure installer link.</label>
+            <input id="download-license" name="licenseKey" type="password" autocomplete="off" required placeholder="NF-XXXX-XXXX-…" style="flex:1 1 230px;min-width:0;padding:12px;border:1px solid #cbd2c6;border-radius:12px;background:#fff;font:inherit;">
+            <button type="submit" style="padding:12px 18px;border:0;border-radius:999px;background:#1C1C1C;color:#fff;font:inherit;cursor:pointer;">Get installer</button>
+          </form>
+          <p style="margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: #42473F;">After installing, enter your trial or lifetime key in Settings → Account. Then start from the Google Maps page.</p>
+        </div>
+        <div style="flex: 1 1 320px; min-width: 0; padding: 24px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06);">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7.5 3v5.5c0 4.4-3.1 7.6-7.5 8.5-4.4-.9-7.5-4.1-7.5-8.5V6.5z"></path><path d="M12 9v4M12 16h.01"></path></svg></span>About the SmartScreen warning</div>
+          <p style="margin: 12px 0 0; font-size: 13.5px; line-height: 1.6; color: #2F332F;">Windows may show a SmartScreen warning because this build is not code-signed yet. Choose More info &rarr; Run anyway.</p>
+          <div style="margin: 16px 0 0; display: flex; flex-direction: column; gap: 8px;">
+            <span style="display: flex; align-items: center; gap: 12px; padding: 10px 13px; border-radius: 13px; background: #FFFFFF; font-size: 13px;"><span style="flex: none; width: 22px; height: 22px; border-radius: 50%; background: #C8D5BB; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">1</span>Run the installer you downloaded</span>
+            <span style="display: flex; align-items: center; gap: 12px; padding: 10px 13px; border-radius: 13px; background: #FFFFFF; font-size: 13px;"><span style="flex: none; width: 22px; height: 22px; border-radius: 50%; background: #C8D5BB; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">2</span>On &ldquo;Windows protected your PC&rdquo;, choose More info</span>
+            <span style="display: flex; align-items: center; gap: 12px; padding: 10px 13px; border-radius: 13px; background: #FFFFFF; font-size: 13px;"><span style="flex: none; width: 22px; height: 22px; border-radius: 50%; background: #C8D5BB; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">3</span>Choose Run anyway</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" data-screen-label="FAQ" style="padding: 20px 0 90px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
+        <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">FAQ</span>
+        <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Questions</h2>
+      </div>
+      <div style="margin: 40px auto 0; max-width: 800px; padding: 6px 8px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 30px 60px -44px rgba(28,28,28,.3);">
+        <sc-for list="{{ faqs }}" as="f" hint-placeholder-count="5">
+          <div style="border-bottom: 1px solid {{ f.line }};">
+            <button type="button" onClick="{{ f.onToggle }}" aria-expanded="{{ f.expanded }}" style="width: 100%; display: flex; align-items: center; gap: 16px; padding: 19px 14px; background: none; border: 0; cursor: pointer; text-align: left; font-family: inherit; color: #1C1C1C;">
+              <span style="flex: 1; font-size: 15px; font-weight: 500;">{{ f.q }}</span>
+              <span style="flex: none; width: 28px; height: 28px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center; transition: transform .4s cubic-bezier(.16,1,.3,1); transform: rotate({{ f.rot }});"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></span>
+            </button>
+            <div style="overflow: hidden; transition: max-height .55s cubic-bezier(.16,1,.3,1), opacity .4s ease; max-height: {{ f.max }}; opacity: {{ f.op }};">
+              <p style="margin: 0; padding: 0 56px 20px 14px; font-size: 13.5px; line-height: 1.7; color: #2F332F;">{{ f.a }}</p>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <footer data-screen-label="Footer" style="padding: 0 0 40px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 26px; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0;">
+        <div style="flex: 1 1 300px; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="width: 32px; height: 32px; border-radius: 10px; background: #C8D5BB; color: #1C1C1C; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">L</span>
+            <span style="font-size: 17px; font-weight: 700; letter-spacing: -.02em;">Nafran Leads Scraper</span>
+          </div>
+          <p style="margin: 14px 0 0; max-width: 340px; font-size: 13px; line-height: 1.6; color: #B9BEB6;">A local-first lead generation app for Windows. It finds and organises business data; it does not contact anyone on your behalf.</p>
+          <p style="margin: 18px 0 0; font-size: 11.5px; color: #8E948B;">Windows 10 / 11 &middot; 64-bit &middot; v1.4.0 &middot; &copy; 2026 Nafran</p>
+        </div>
+        <nav style="flex: 1 1 300px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 20px; align-content: start; font-size: 13.5px;">
+          <a href="#how" style="color: #E9EBE7;">How it works</a>
+          <a href="#modules" style="color: #E9EBE7;">Modules</a>
+          <a href="#privacy" style="color: #E9EBE7;">Privacy</a>
+          <a href="#pricing" style="color: #E9EBE7;">Pricing</a>
+          <a href="#download" style="color: #E9EBE7;">Download</a>
+          <a href="#faq" style="color: #E9EBE7;">FAQ</a>
+        </nav>
+      </div>
+    </div>
+  </footer>
+  </div>
+
+  <sc-if value="{{ showModal }}" hint-placeholder-val="{{ false }}">
+    <div role="dialog" aria-modal="true" aria-label="{{ cur.name }}" onClick="{{ onOverlay }}" style="position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: clamp(10px, 3vw, 28px); background: rgba(28,28,28,.42); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: fadeIn .3s ease both;">
+      <div style="position: relative; width: 100%; max-width: 1140px; max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-wrap: wrap; gap: 22px; padding: 16px; border-radius: 28px; background: rgba(245,245,244,.95); backdrop-filter: blur(30px) saturate(170%); -webkit-backdrop-filter: blur(30px) saturate(170%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,1), 0 60px 120px -40px rgba(0,0,0,.55); animation: modalIn .45s cubic-bezier(.16,1,.3,1) both;">
+        <button type="button" onClick="{{ onClose }}" aria-label="Close" style="position: absolute; top: 14px; right: 14px; z-index: 2; width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer; background: #1C1C1C; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        <div style="flex: 1 1 580px; min-width: 0;">
+          <sc-if value="{{ cur.hasTabs }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px;">
+              <sc-for list="{{ cur.tabs }}" as="t" hint-placeholder-count="2">
+                <button type="button" onClick="{{ t.onSelect }}" style="padding: 8px 14px; border-radius: 999px; border: 0; cursor: pointer; font-family: inherit; font-size: 12.5px; font-weight: 500; background: {{ t.bg }}; color: {{ t.fg }}; transition: background .3s ease;">{{ t.label }}</button>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="border-radius: 18px; overflow: hidden; background: #F5F5F4;">
+            <div role="img" aria-label="{{ cur.shotAlt }}" style="width: 100%; aspect-ratio: {{ cur.shotRatio }}; background-image: url({{ cur.shotSrc }}); background-size: contain; background-repeat: no-repeat; background-position: center;"></div>
+          </div>
+          <p style="margin: 10px 4px 0; font-size: 12.5px; color: #42473F;">{{ cur.shotCaption }}</p>
+        </div>
+        <div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; padding: 10px 8px 6px;">
+          <div style="font-size: 10.5px; letter-spacing: .16em; color: #3F443F;">MODULE {{ cur.num }} OF 08</div>
+          <h3 style="margin: 10px 46px 0 0; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.08; font-weight: 700; letter-spacing: -.035em;">{{ cur.name }}</h3>
+          <p style="margin: 12px 0 0; font-size: 14.5px; line-height: 1.6; color: #2F332F;">{{ cur.lead }}</p>
+          <div style="margin: 20px 0 0; font-size: 10.5px; letter-spacing: .16em; color: #3F443F;">WHAT IT DOES</div>
+          <div style="margin: 10px 0 0; display: flex; flex-direction: column; gap: 9px;">
+            <sc-for list="{{ cur.bullets }}" as="b" hint-placeholder-count="4">
+              <span style="display: flex; gap: 10px; font-size: 13.5px; line-height: 1.55;"><span style="flex: none; margin-top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>{{ b.t }}</span>
+            </sc-for>
+          </div>
+          <div style="margin: 20px 0 0; font-size: 10.5px; letter-spacing: .16em; color: #3F443F;">WHERE IT LIVES</div>
+          <div style="margin: 10px 0 0; align-self: flex-start; padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1px solid rgba(28,28,28,.08); font-size: 12.5px;">{{ cur.where }}</div>
+          <div style="margin: auto 0 0; padding-top: 22px; display: flex; gap: 8px;">
+            <button type="button" onClick="{{ onPrev }}" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 999px; border: 1px solid rgba(28,28,28,.1); background: #FFFFFF; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; color: #1C1C1C;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12h-14"></path><path d="M11 6.5L5.5 12l5.5 5.5"></path></svg>Previous</button>
+            <button type="button" onClick="{{ onNext }}" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 999px; border: 0; background: #1C1C1C; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; color: #FFFFFF;">Next<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;heroShot&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dashboard&quot;,&quot;Google Maps&quot;,&quot;All Leads&quot;],&quot;default&quot;:&quot;Dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;showPainting&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;openModuleOnLoad&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;min&quot;:0,&quot;max&quot;:8,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Modules&quot;}}">
+const circ = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${r * 2} 0a${r} ${r} 0 1 0 ${-r * 2} 0z`;
+const rect = (x, y, w, h, r) => `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+
+const MODULES = [
+  {
+    num: '01', name: 'Google Maps Scraper', short: 'Keyword and city in, one row per business out.',
+    d1: 'M9 4.5l-5 2v13l5-2 6 2 5-2v-13l-5 2-6-2z', d2: 'M9 4.5v13M15 6.5v13',
+    where: 'Sidebar \u2192 Scraper \u2192 Google Maps',
+    lead: 'Type one or more keywords and a city. The app drives Google Maps in its own browser window and saves every place it finds to the local database.',
+    bullets: [
+      'Every keyword runs as its own pass; leave the city blank to use your current location.',
+      'Saves name, category, address, postcode, phone, website, rating, review count, coordinates and the Maps link.',
+      'Sponsored entries are skipped and duplicates are merged by name and address.',
+      'Filters for minimum rating, minimum reviews, has website and has phone.',
+      'A coverage view shows captured places, results and live run activity.'
+    ],
+    shots: [
+      { src: 'img/app/maps-light.png', label: 'Query and filters', caption: 'Current light-mode query, location and Maps filters.', alt: 'Light-mode Google Maps Scraper page with keywords, location and Maps filters' },
+      { src: 'img/app/coverage-map.png', label: 'Coverage and results', caption: 'Current coverage view, results and live activity.', alt: 'Light-mode coverage view with captured lead labels, results and live activity' }
+    ]
+  },
+  {
+    num: '02', name: 'Social Profiles', short: 'Which platforms each business is on.',
+    d1: circ(12, 12, 8.5), d2: 'M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z',
+    where: 'Sidebar \u2192 Add-ons \u2192 Social Profiles',
+    lead: 'Reads each lead\u2019s own website for links to its social accounts and shows how many of your leads are present on each platform.',
+    bullets: [
+      'Finds Instagram, Facebook, LinkedIn, YouTube, TikTok and X links published on the business\u2019s site.',
+      'Platform coverage shows the share of enriched leads on each network.',
+      'Uses the same website pass as Email Finder, so one run fills both.',
+      'Deep enrich missing is an optional DataForSEO search on your own key, about $0.0024 per lead.'
+    ],
+    shots: [{ src: 'img/app/social.png', label: 'Social Profiles', caption: 'Platform coverage across the enriched leads.', alt: 'Social Profiles page with coverage rings for Instagram, Facebook and LinkedIn and bars for YouTube, TikTok and X' }]
+  },
+  {
+    num: '03', name: 'Email Finder', short: 'Published emails, traced through a cascade.',
+    d1: rect(3.5, 5.5, 17, 13, 3), d2: 'M4 7.5l8 5.5 8-5.5',
+    where: 'Sidebar \u2192 Add-ons \u2192 Email Finder',
+    lead: 'Visits each business\u2019s website and extracts the email addresses it publishes, then shows where every lead sits in the pipeline.',
+    bullets: [
+      'The cascade: scraped, website found, emails extracted, verified.',
+      'Confidence mix scores the deliverability of every extracted address.',
+      'Run in bulk for the leads that still have no address on file.',
+      'SMTP verification is optional and uses your imported LeadsAngel licence ZIP.'
+    ],
+    shots: [{ src: 'img/app/email.png', label: 'Email Finder', caption: 'The cascade and email validity in the current light-mode app.', alt: 'Light-mode Email Finder page showing the current coverage cascade and verification controls' }]
+  },
+  {
+    num: '04', name: 'Phone Finder', short: 'Every number, by line type and area code.',
+    d1: 'M6.6 3.5h2.6l1.4 4-2 1.5a11 11 0 0 0 6.4 6.4l1.5-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z', d2: 'M15.5 4.6a5 5 0 0 1 3.9 3.9',
+    where: 'Sidebar \u2192 Add-ons \u2192 Phone Finder',
+    lead: 'Phone numbers from Google Maps load with the scrape. Leads without one can be backfilled by reading the business\u2019s own website.',
+    bullets: [
+      'Splits numbers into direct line, reception and mobile.',
+      'Groups numbers by area code, so you can see where they dial to.',
+      'Find phones for missing visits each lead\u2019s website to fill the gaps.',
+      'Backfill shows how many leads without a number have a website to read.'
+    ],
+    shots: [{ src: 'img/app/phone.png', label: 'Phone Finder', caption: 'Phone Finder: line types, area codes and backfill.', alt: 'Phone Finder page with numbers split into direct line, reception, mobile and no number, grouped by area code' }]
+  },
+  {
+    num: '05', name: 'Decision Makers', short: 'Named people, only when the site says so.',
+    d1: circ(12, 8, 3.5), d2: 'M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5',
+    where: 'Sidebar \u2192 Add-ons \u2192 Decision Makers',
+    lead: 'Looks for the people behind each business. Only clear evidence is asserted; anything softer is offered for you to confirm.',
+    bullets: [
+      'Asserted from schema.org people, named mailto addresses, LinkedIn /in/ profiles and explicit name-and-role text.',
+      'Weaker signals become suggested contacts that you confirm or dismiss.',
+      'Awaiting a match groups leads with no named contact by what blocked them.'
+    ],
+    shots: [{ src: 'img/app/dm.png', label: 'Decision Makers', caption: 'Suggested contacts waiting to be confirmed or dismissed.', alt: 'Decision Makers page with a suggested contact derived from an email address and Confirm and Dismiss buttons' }]
+  },
+  {
+    num: '06', name: 'Website Lookup', short: 'Start from a list of websites instead of Maps.',
+    d1: 'M9.5 14.5l-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0', d2: 'M14.5 9.5l2-2a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0',
+    where: 'Sidebar \u2192 Add-ons \u2192 Website Lookup',
+    lead: 'Paste a list of websites, one per line, and the app fills in the business behind each one.',
+    bullets: [
+      'Returns business name, address, phone, emails, social profiles and LinkedIn for each site.',
+      'Imported sites join the same lead database as your Maps runs.',
+      'The filled-in card on this screen is a labelled example until you import your own list.'
+    ],
+    shots: [{ src: 'img/app/website.png', label: 'Website Lookup', caption: 'Paste websites; each comes back as a filled-in record.', alt: 'Website Lookup page with a pasted list of websites and an example record showing business name, address, phone, email and socials' }]
+  },
+  {
+    num: '07', name: 'All Leads, Saved Lists & Run History', short: 'One permanent store, your lists and a full log.',
+    d1: 'M8.5 6.5h12M8.5 12h12M8.5 17.5h12', d2: 'M4 6.5h.01M4 12h.01M4 17.5h.01',
+    where: 'Sidebar \u2192 Data \u2192 All Leads \u00b7 Saved Lists \u00b7 Run History',
+    lead: 'Every place any run captures lands in one permanent store. Runs only add; nothing is overwritten and nothing expires.',
+    bullets: [
+      'Search, and filter by has phone, has email, has socials or no contact yet.',
+      'Bookmark the leads worth calling into saved lists.',
+      'Run History logs every scrape, import and enrichment pass, with re-run.',
+      'Export CSV, TSV or semicolon-separated files for Excel, straight to disk.'
+    ],
+    shots: [
+      { src: 'img/app/leads.png', label: 'All Leads', caption: 'All Leads: the permanent store and what is on file.', alt: 'Current light-mode All Leads page showing saved leads, their sources and the lead ledger' },
+      { src: 'img/app/lists.png', label: 'Saved Lists', caption: 'Saved Lists: sort the last run and bookmark the keepers.', alt: 'Current light-mode Saved Lists page with saved lead groups' },
+      { src: 'img/app/runs.png', label: 'Run History', caption: 'Run History: every pass, what it captured and how long it took.', alt: 'Current light-mode Run History page with scrape and import activity' }
+    ]
+  },
+  {
+    num: '08', name: 'Settings', short: 'Keys for the extras, data location and usage.',
+    d1: 'M4 8h9M17 8h3M4 16h3M11 16h9', d2: circ(15, 8, 2.2) + circ(9, 16, 2.2),
+    where: 'Sidebar \u2192 System \u2192 Settings',
+    lead: 'Settings is where the optional paid extras are switched on and where you can see what the app has used.',
+    bullets: [
+      'Add a DataForSEO key for deep search and import your LeadsAngel licence ZIP for SMTP email verification.',
+      'Shows where the database lives on this machine.',
+      'Usage meters for Maps scrapes and lookups in the current cycle.'
+    ],
+    shots: [
+      { src: 'img/app/settings.png', label: 'Plan and usage', caption: 'Current plan and usage in light mode.', alt: 'Light-mode Settings page with plan and usage' },
+      { src: 'img/app/settings-account.png', label: 'Account and licence', caption: 'LeadsAngel SMTP licence in Settings → Account.', alt: 'Light-mode Settings Account page showing the imported LeadsAngel SMTP licence' }
+    ]
+  }
+];
+
+const FAQS = [
+  ['Do I need an API key?', 'No. Scraping and website enrichment work without any key. Optional deep search uses a DataForSEO key; SMTP email verification uses your imported LeadsAngel licence ZIP.'],
+  ['Is scraping Google Maps allowed?', 'The app reads public business listings through your own signed-in browser window, at a human pace, and stops if Google shows a challenge. It does not bypass consent screens or CAPTCHAs. Automated access is against Google\u2019s terms of service; for high volume, Google\u2019s official Places API is the sanctioned route.'],
+  ['Which countries does it work in?', 'United Kingdom, Pakistan, India, UAE, Saudi Arabia, Bangladesh, United States, Canada, Australia, Ireland, Germany, France, Spain, Italy, Netherlands, Turkey, Malaysia, Singapore, South Africa, Qatar, Kuwait, Oman and Bahrain.'],
+  ['Where is my data, and what happens when I uninstall?', 'Everything is in %APPDATA%\\nafran-leads-scraper\\leads.db. Uninstalling removes the app but leaves that folder in place, so your leads survive a reinstall. Delete the folder yourself if you want the data gone.'],
+  ['Does the app need to stay open?', 'Yes, while a scrape or enrichment pass is running: the work happens inside the app, on your PC. Places captured before you close it are already saved to the database.']
+];
+
+const HERO = {
+  'Dashboard': { src: 'img/app/dashboard-light.png', alt: 'Leads Scraper v1.4.0 dashboard in its Windows window: 463 total leads, 266 enriched, 431 with phone, 438 ready to export, scrape volume chart and data quality score', caption: 'Dashboard in v1.4.0: totals, scrape volume and data quality, read from the local database.' },
+  'Google Maps': { src: 'img/app/maps-light.png', alt: 'Google Maps Scraper page with keywords, location and Maps filters', caption: 'Google Maps Scraper: keywords, location and filters.' },
+  'All Leads': { src: 'img/app/leads.png', alt: 'All Leads page with the permanent store and lead ledger', caption: 'All Leads: every captured place in one permanent store.' }
+};
+
+class Component extends DCLogic {
+  state = { mod: -1, shot: 0, faq: 0 };
+
+  componentDidMount() {
+    this._key = (e) => {
+      if (this.state.mod < 0) return;
+      if (e.key === 'Escape') this.close();
+      else if (e.key === 'ArrowRight') this.step(1);
+      else if (e.key === 'ArrowLeft') this.step(-1);
+    };
+    window.addEventListener('keydown', this._key);
+    const start = Number(this.props.openModuleOnLoad || 0);
+    if (start >= 1 && start <= MODULES.length) this.open(start - 1);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener('keydown', this._key);
+    document.documentElement.style.overflow = '';
+  }
+
+  open(i) {
+    this.setState({ mod: i, shot: 0 });
+    document.documentElement.style.overflow = 'hidden';
+  }
+
+  close() {
+    this.setState({ mod: -1 });
+    document.documentElement.style.overflow = '';
+  }
+
+  step(d) {
+    this.setState((s) => ({ mod: (s.mod + d + MODULES.length) % MODULES.length, shot: 0 }));
+  }
+
+  renderVals() {
+    const modules = MODULES.map((m, i) => ({
+      num: m.num, name: m.name, short: m.short, d1: m.d1, d2: m.d2,
+      thumb: m.shots[0].src, thumbAlt: m.shots[0].alt,
+      onOpen: () => this.open(i)
+    }));
+
+    const open = this.state.mod >= 0;
+    const src = MODULES[open ? this.state.mod : 0];
+    const shot = src.shots[Math.min(this.state.shot, src.shots.length - 1)];
+    const cur = {
+      num: src.num, name: src.name, lead: src.lead, where: src.where,
+      bullets: src.bullets.map((t) => ({ t })),
+      hasTabs: src.shots.length > 1,
+      tabs: src.shots.map((s, i) => ({
+        label: s.label,
+        bg: i === this.state.shot ? '#1C1C1C' : '#E2E4DE',
+        fg: i === this.state.shot ? '#FFFFFF' : '#1C1C1C',
+        onSelect: () => this.setState({ shot: i })
+      })),
+      shotSrc: shot.src, shotAlt: shot.alt, shotCaption: shot.caption,
+      shotRatio: '3 / 2'
+    };
+
+    const faqs = FAQS.map(([q, a], i) => {
+      const isOpen = this.state.faq === i;
+      return {
+        q, a,
+        expanded: isOpen ? 'true' : 'false',
+        rot: isOpen ? '45deg' : '0deg',
+        max: isOpen ? '320px' : '0px',
+        op: isOpen ? '1' : '0',
+        line: i === FAQS.length - 1 ? 'transparent' : 'rgba(28,28,28,.08)',
+        onToggle: () => this.setState({ faq: isOpen ? -1 : i })
+      };
+    });
+
+    const hero = HERO[this.props.heroShot] || HERO['Dashboard'];
+
+    return {
+      modules, cur, faqs,
+      showModal: open,
+      showPainting: this.props.showPainting !== false,
+      heroSrc: hero.src, heroAlt: hero.alt, heroCaption: hero.caption,
+      heroRatio: '3 / 2',
+      openStep1: () => this.open(0),
+      openStep2: () => this.open(2),
+      openStep3: () => this.open(6),
+      onClose: () => this.close(),
+      onPrev: () => this.step(-1),
+      onNext: () => this.step(1),
+      onOverlay: (e) => { if (e.target === e.currentTarget) this.close(); }
+    };
+  }
+}
+</script>
+<script src="./sales.js" defer></script>
+</body>
+</html>

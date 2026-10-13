@@ -1,0 +1,28 @@
+[Unit]
+Description=Nafran static landing page (private loopback)
+After=network.target
+
+[Service]
+Type=simple
+User=nafran-site
+Group=nafran-site
+WorkingDirectory=/srv/nafran-site
+Environment=SITE_ROOT=/srv/nafran-site/public
+Environment=SITE_HOST=127.0.0.1
+Environment=SITE_PORT=38748
+ExecStart=/usr/local/bin/node /srv/nafran-site/server.mjs
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

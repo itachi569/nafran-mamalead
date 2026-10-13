@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #EFEFEF; color: #1C1C1C; font-family: 'Satoshi', 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; text-wrap: pretty; }
+  a { color: #1C1C1C; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: #4A5A47; }
+  ::selection { background: #C8D5BB; color: #1C1C1C; }
+  button, input { font-family: inherit; }
+  button:disabled { opacity: .55; cursor: default; }
+  :focus-visible { outline: 2px solid #6F8462; outline-offset: 2px; }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #EFEFEF; background-image: radial-gradient(50vw 40vh at 0% 0%, rgba(200,213,187,.45), transparent 62%), radial-gradient(44vw 40vh at 100% 100%, rgba(203,216,188,.35), transparent 62%);">
+<div style="max-width: 1480px; margin: 0 auto; padding: 20px; display: flex; gap: 20px; align-items: flex-start;">
+  <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+  <nav aria-label="Dashboard sections" style="position: sticky; top: 20px; flex: none; width: 76px; min-height: calc(100vh - 40px); background: #FFFFFF; border-radius: 38px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0;">
+    <span role="img" aria-label="mamalead" style="width: 46px; height: 46px; border-radius: 15px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center; font-size: 23px; font-weight: 700; letter-spacing: -.04em; margin-bottom: 14px;">m</span>
+    <button type="button" aria-label="Overview" title="Overview" onClick="{{ nav.overview.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.overview.bg }}; color: {{ nav.overview.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="2"></rect><rect x="13" y="4" width="7" height="7" rx="2"></rect><rect x="4" y="13" width="7" height="7" rx="2"></rect><rect x="13" y="13" width="7" height="7" rx="2"></rect></svg></button>
+    <button type="button" aria-label="Revenue" title="Revenue" onClick="{{ nav.revenue.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.revenue.bg }}; color: {{ nav.revenue.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M16.5 7.2c-.6-1.4-2.3-2.4-4.5-2.4-2.6 0-4.4 1.4-4.4 3.2 0 4.3 9 2.2 9 6.6 0 1.9-1.9 3.3-4.6 3.3-2.3 0-4.1-1-4.7-2.6"></path></svg></button>
+    <button type="button" aria-label="Users" title="Users" onClick="{{ nav.users.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.users.bg }}; color: {{ nav.users.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"></circle><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15.5 4.6a3.5 3.5 0 0 1 0 6.8M18 14.4c1.8.8 3 2.9 3 5.6"></path></svg></button>
+    <button type="button" aria-label="Purchases" title="Purchases" onClick="{{ nav.purchases.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.purchases.bg }}; color: {{ nav.purchases.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.5"></rect><path d="M3 10.5h18M7 15h3"></path></svg></button>
+    <button type="button" aria-label="Licenses" title="Licenses" onClick="{{ nav.licenses.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.licenses.bg }}; color: {{ nav.licenses.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="3.5"></circle><path d="M11.5 12H21M18 12v3M21 12v2"></path></svg></button>
+    <button type="button" aria-label="Installation slots" title="Installation slots" onClick="{{ nav.activations.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.activations.bg }}; color: {{ nav.activations.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M9 20h6M12 16v4"></path></svg></button>
+    <button type="button" aria-label="Email delivery" title="Email delivery" onClick="{{ nav.email.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.email.bg }}; color: {{ nav.email.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"></rect><path d="m4 7 8 6 8-6"></path></svg></button>
+    <button type="button" aria-label="Service health" title="Service health" onClick="{{ nav.health.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.health.bg }}; color: {{ nav.health.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6H21"></path></svg></button>
+    <div style="margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+      <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ false }}">
+        <button type="button" aria-label="Sign out" title="Sign out" onClick="{{ onLogout }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: #1C1C1C;" style-hover="background: #EFEFEF;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10"></path></svg></button>
+      </sc-if>
+      <span title="{{ ownerName }}" style="width: 46px; height: 46px; border-radius: 50%; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600;">{{ ownerInitial }}</span>
+    </div>
+  </nav>
+  </sc-if>
+  <main style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 20px;">
+    <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}">
+      <nav aria-label="Dashboard sections" style="display: flex; gap: 6px; overflow-x: auto; padding: 6px; background: #FFFFFF; border-radius: 999px;">
+        <sc-for list="{{ navList }}" as="n" hint-placeholder-count="8">
+          <button type="button" onClick="{{ n.go }}" style="flex: none; padding: 10px 16px; border-radius: 999px; border: 0; cursor: pointer; font-size: 13px; font-weight: 500; background: {{ n.bg }}; color: {{ n.fg }};">{{ n.label }}</button>
+        </sc-for>
+      </nav>
+    </sc-if>
+    <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 8px 4px 0;">
+      <div style="flex: 1 1 340px; min-width: 0;">
+        <h1 style="margin: 0; font-size: clamp(28px, 3.4vw, 42px); font-weight: 400; letter-spacing: -.035em; line-height: 1.05;">{{ greeting }}</h1>
+        <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; color: #4E534C; max-width: 660px;">Revenue, users, licenses and installer delivery for Nafran Leads Scraper. Customer lead data stays on each customer's PC and never appears here.</p>
+      </div>
+      <div style="flex: 1 1 420px; max-width: 560px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+        <label style="flex: 1 1 240px; display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 6px 0 20px; background: #FFFFFF; border-radius: 999px;">
+          <input type="search" aria-label="Search the current view" placeholder="{{ searchPlaceholder }}" value="{{ q }}" onChange="{{ onSearch }}" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: 14px; color: #1C1C1C;">
+          <span aria-hidden="true" style="flex: none; width: 38px; height: 38px; border-radius: 50%; background: #1C1C1C; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg></span>
+        </label>
+        <span title="Stripe mode reported by the admin API" style="flex: none; display: inline-flex; align-items: center; gap: 8px; height: 50px; padding: 0 18px; border-radius: 999px; background: #FFFFFF; font-size: 12px; letter-spacing: .1em; font-weight: 600;"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{ modeDot }};"></span>{{ modeLabel }}</span>
+        <button type="button" aria-label="Refresh data" title="Refresh" onClick="{{ reload }}" style="flex: none; width: 50px; height: 50px; border-radius: 50%; border: 0; cursor: pointer; background: #FFFFFF; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;" style-hover="background: #F6F6F4;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"></path></svg></button>
+      </div>
+    </header>
+    <sc-if value="{{ banner.show }}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 16px 14px 14px; border-radius: 22px; background: {{ banner.bg }}; color: {{ banner.fg }};">
+        <span style="flex: none; font-size: 10.5px; letter-spacing: .14em; font-weight: 600; padding: 6px 11px; border-radius: 999px; background: {{ banner.tagBg }}; color: {{ banner.tagFg }};">{{ banner.tag }}</span>
+        <span style="flex: 1 1 320px; font-size: 13.5px; line-height: 1.5;">{{ banner.text }}</span>
+        <sc-if value="{{ banner.retry }}" hint-placeholder-val="{{ false }}">
+          <button type="button" onClick="{{ reload }}" style="flex: none; height: 38px; padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500;">Try again</button>
+        </sc-if>
+      </div>
+    </sc-if>
+    <sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
+      <section aria-labelledby="login-title" style="align-self: center; width: 100%; max-width: 460px; margin: 32px 0; padding: 32px; border-radius: 28px; background: #FFFFFF;">
+        <span aria-hidden="true" style="width: 52px; height: 52px; border-radius: 50%; background: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C1C1C" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="12" r="3.5"></circle><path d="M11.5 12H21M18 12v3M21 12v2"></path></svg></span>
+        <h2 id="login-title" style="margin: 18px 0 0; font-size: 24px; font-weight: 500; letter-spacing: -.02em;">Owner sign-in</h2>
+        <p style="margin: 8px 0 0; font-size: 13.5px; line-height: 1.55; color: #4E534C;">Paste your private owner token. The server checks it and returns an HttpOnly session cookie. This page does not keep the token.</p>
+        <form onSubmit="{{ onLogin }}" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+          <input type="password" autocomplete="current-password" aria-label="Owner token" placeholder="Owner token" value="{{ loginToken }}" onChange="{{ onLoginInput }}" style="height: 50px; padding: 0 18px; border-radius: 999px; border: 0; background: #EFEFEF; font-size: 14px; color: #1C1C1C;">
+          <button type="submit" disabled="{{ loginBusy }}" style="height: 50px; border-radius: 999px; border: 0; background: #1C1C1C; color: #FFFFFF; font-size: 14px; font-weight: 500; cursor: pointer;">Sign in</button>
+          <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
+            <p role="alert" style="margin: 0; font-size: 13px; color: #8A2F28;">{{ loginError }}</p>
+          </sc-if>
+        </form>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px;">
+        <button type="button" onClick="{{ revenueCard.go }}" style="text-align: left; border: 0; cursor: pointer; color: #1C1C1C; padding: 20px 22px; border-radius: 26px; background: linear-gradient(150deg, #CBD8BC, #B3C4A2); display: flex; flex-direction: column; gap: 12px; min-height: 164px;">
+          <span style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span style="font-size: 13px; font-weight: 500;">Total revenue</span>
+            <span style="font-size: 11px; padding: 4px 10px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF;">{{ revenueCard.tag }}</span>
+          </span>
+          <span style="font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1;">{{ revenueCard.value }}</span>
+          <span style="font-size: 12.5px; line-height: 1.45;">{{ revenueCard.sub }}</span>
+          <span style="margin-top: auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding-top: 10px; border-top: 1px solid rgba(28,28,28,.14); font-size: 12px;"><span>{{ revenueCard.foot }}</span><span style="font-weight: 600;">{{ revenueCard.mrr }}</span></span>
+        </button>
+        <sc-for list="{{ stats }}" as="s" hint-placeholder-count="3">
+          <button type="button" onClick="{{ s.go }}" style="text-align: left; border: 0; cursor: pointer; color: #1C1C1C; padding: 20px 22px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px; min-height: 164px;" style-hover="background: #FBFBFA;">
+            <span style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+              <span style="font-size: 13px; color: #4E534C;">{{ s.label }}</span>
+              <span style="font-size: 11px; padding: 4px 10px; border-radius: 999px; background: #EFEFEF; color: #1C1C1C; white-space: nowrap;">{{ s.tag }}</span>
+            </span>
+            <span style="display: flex; align-items: baseline; gap: 8px;"><span style="font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1;">{{ s.value }}</span><span style="font-size: 14px; color: #5F645C;">{{ s.of }}</span></span>
+            <span style="margin-top: auto; display: block; height: 6px; border-radius: 999px; background: #EFEFEF; overflow: hidden;"><span style="display: block; height: 100%; width: {{ s.pct }}; border-radius: 999px; background: #8FA382;"></span></span>
+            <span style="font-size: 12.5px; color: #4E534C;">{{ s.sub }}</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch;">
+        <section aria-labelledby="chart-title" style="flex: 2 1 480px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px;">
+            <div style="flex: 1 1 200px;">
+              <h2 id="chart-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">Revenue by month</h2>
+              <span style="display: block; margin-top: 4px; font-size: 12.5px; color: #5F645C;">Net of refunds, last 12 months, from Stripe</span>
+            </div>
+            <div style="display: flex; gap: 20px;">
+              <div><span style="display: block; font-size: 11.5px; color: #5F645C;">This month</span><span style="display: block; margin-top: 2px; font-size: 18px; font-weight: 500;">{{ chart.thisMonth }}</span></div>
+              <div><span style="display: block; font-size: 11.5px; color: #5F645C;">12 months</span><span style="display: block; margin-top: 2px; font-size: 18px; font-weight: 500;">{{ chart.year }}</span></div>
+            </div>
+          </div>
+          <sc-if value="{{ chart.show }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; align-items: stretch; gap: 6px; height: 190px;">
+              <sc-for list="{{ chart.months }}" as="m" hint-placeholder-count="12">
+                <div title="{{ m.title }}" style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                  <span style="height: 14px; font-size: 10.5px; color: #4E534C; white-space: nowrap;">{{ m.value }}</span>
+                  <span style="flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center;"><span style="display: block; width: 100%; max-width: 30px; height: {{ m.h }}; border-radius: 9px; background: {{ m.bg }};"></span></span>
+                  <span style="font-size: 11px; color: {{ m.labelFg }};">{{ m.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ chartEmpty.show }}" hint-placeholder-val="{{ true }}">
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 22px; border-radius: 18px; border: 1.5px dashed #D3D8CE; min-height: 190px;">
+              <span style="font-size: 14.5px; font-weight: 500;">{{ chartEmpty.title }}</span>
+              <span style="font-size: 13px; line-height: 1.55; color: #4E534C; max-width: 520px;">{{ chartEmpty.text }}</span>
+            </div>
+          </sc-if>
+        </section>
+        <section aria-labelledby="users-title" style="flex: 1 1 300px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 id="users-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">Software users</h2>
+            <button type="button" onClick="{{ nav.users.go }}" aria-label="Open users" style="margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"></path></svg></button>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 10px;"><span style="font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1;">{{ usersBreak.head }}</span><span style="font-size: 12.5px; line-height: 1.4; color: #4E534C;">{{ usersBreak.caption }}</span></div>
+          <div style="display: flex; gap: 3px; height: 12px; border-radius: 999px; overflow: hidden; background: #EFEFEF;">
+            <sc-for list="{{ usersBreak.segments }}" as="g" hint-placeholder-count="4">
+              <span style="display: block; height: 100%; width: {{ g.pct }}; background: {{ g.color }};"></span>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <sc-for list="{{ usersBreak.segments }}" as="g" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #EFEFEF;">
+                <span style="flex: none; width: 9px; height: 9px; border-radius: 3px; background: {{ g.color }};"></span>
+                <span style="flex: 1; min-width: 0;"><span style="display: block; font-size: 13px;">{{ g.label }}</span><span style="display: block; font-size: 11.5px; color: #5F645C;">{{ g.sub }}</span></span>
+                <span style="flex: none; font-size: 14px; font-weight: 500;">{{ g.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="margin-top: auto; font-size: 12px; color: #5F645C;">{{ usersBreak.total }}</span>
+        </section>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch;">
+        <section aria-labelledby="payments-title" style="flex: 2 1 480px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+            <h2 id="payments-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">Recent payments</h2>
+            <span style="font-size: 10.5px; letter-spacing: .12em; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: #C8D5BB;">{{ modeShort }}</span>
+            <button type="button" onClick="{{ nav.revenue.go }}" style="margin-left: auto; height: 36px; padding: 0 14px; border-radius: 999px; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; font-size: 12.5px; font-weight: 500;" style-hover="background: #E6E8E3;">View all</button>
+          </div>
+          <sc-if value="{{ paymentsShow }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column;">
+              <sc-for list="{{ payments }}" as="p" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid #EFEFEF;">
+                  <span style="flex: none; width: 40px; height: 40px; border-radius: 50%; background: #E4EBDD; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;">{{ p.initial }}</span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ p.title }}</span>
+                    <span style="display: block; margin-top: 2px; font-size: 12.5px; color: #5F645C;">{{ p.meta }}</span>
+                  </span>
+                  <span style="flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    <span style="font-size: 14.5px; font-weight: 600;">{{ p.amount }}</span>
+                    <span style="font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 999px; background: {{ p.pillBg }}; color: {{ p.pillFg }};">{{ p.pill }}</span>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ paymentsEmpty.show }}" hint-placeholder-val="{{ true }}">
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 22px; border-radius: 18px; border: 1.5px dashed #D3D8CE; min-height: 150px;">
+              <span style="font-size: 14.5px; font-weight: 500;">{{ paymentsEmpty.title }}</span>
+              <span style="font-size: 13px; line-height: 1.55; color: #4E534C; max-width: 520px;">{{ paymentsEmpty.text }}</span>
+            </div>
+          </sc-if>
+        </section>
+        <section aria-labelledby="license-title" style="flex: 1 1 260px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 id="license-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">License status</h2>
+            <button type="button" onClick="{{ nav.licenses.go }}" aria-label="Open licenses" style="margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"></path></svg></button>
+          </div>
+          <span style="font-size: 12.5px; color: #5F645C;">Licenses activated on at least one machine</span>
+          <div style="position: relative; margin: 10px auto 0; width: 100%; max-width: 230px;">
+            <svg viewBox="0 0 200 112" width="100%" aria-hidden="true"><path d="M 16 100 A 84 84 0 0 1 184 100" fill="none" stroke="#EFEFEF" stroke-width="16" stroke-linecap="round"></path><path d="M 16 100 A 84 84 0 0 1 184 100" fill="none" stroke="#8FA382" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="{{ gauge.dash }}" opacity="{{ gauge.opacity }}"></path></svg>
+            <span style="position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 30px; font-weight: 500; letter-spacing: -.03em;">{{ gauge.label }}</span>
+          </div>
+          <div style="margin-top: 12px; display: flex; flex-direction: column;">
+            <sc-for list="{{ licenseLegend }}" as="l" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid #EFEFEF; font-size: 13px;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ l.dot }};"></span>
+                <span style="flex: 1;">{{ l.label }}</span>
+                <span style="font-weight: 500;">{{ l.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+        <section aria-labelledby="installer-title" style="flex: 1 1 260px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;">
+          <span aria-hidden="true" style="width: 72px; height: 72px; border-radius: 50%; background: #E4EBDD; display: inline-flex; align-items: center; justify-content: center; margin-top: 6px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1C1C1C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"></path></svg></span>
+          <h2 id="installer-title" style="margin: 8px 0 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">Windows installer</h2>
+          <span style="font-size: 12.5px; color: #5F645C; word-break: break-all;">{{ installer.filename }}</span>
+          <span style="font-size: 11.5px; font-weight: 500; padding: 5px 12px; border-radius: 999px; background: {{ installer.pillBg }}; color: {{ installer.pillFg }};">{{ installer.pill }}</span>
+          <div style="margin-top: 8px; width: 100%; padding-top: 14px; border-top: 1px solid #EFEFEF; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+            <sc-for list="{{ installer.facts }}" as="f" hint-placeholder-count="3">
+              <div style="min-width: 0;"><span style="display: block; font-size: 11.5px; color: #5F645C;">{{ f.label }}</span><span style="display: block; margin-top: 3px; font-size: 14px; font-weight: 500;">{{ f.value }}</span></div>
+            </sc-for>
+          </div>
+          <p style="margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: #4E534C;">{{ installer.detail }}</p>
+        </section>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch;">
+        <section aria-labelledby="slots-title" style="flex: 2 1 480px; min-width: 0; padding: 24px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0; display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+            <h2 id="slots-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em; color: #FFFFFF;">Installation slots</h2>
+            <span style="font-size: 11.5px; padding: 4px 10px; border-radius: 999px; background: #2A2E2A; color: #C8D5BB;">{{ slotsCaption }}</span>
+            <button type="button" onClick="{{ nav.activations.go }}" style="margin-left: auto; height: 36px; padding: 0 14px; border-radius: 999px; border: 0; cursor: pointer; background: #2A2E2A; color: #FFFFFF; font-size: 12.5px; font-weight: 500;" style-hover="background: #353A35;">View all</button>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #C4C9C0; max-width: 620px;">A slot is taken when the desktop app activates a license key. The billing server enforces the limit and re-checks the Stripe payment on every status call, so refunds release access on all machines.</p>
+          <sc-if value="{{ slotPreviewShow }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <sc-for list="{{ slotPreview }}" as="lic" hint-placeholder-count="2">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 16px; border-radius: 18px; background: #2A2E2A;">
+                  <span style="flex: 1 1 160px; min-width: 0;">
+                    <span style="display: block; font-size: 14px; font-weight: 500; color: #FFFFFF;">{{ lic.title }}</span>
+                    <span style="display: block; margin-top: 2px; font-size: 12px; color: #C4C9C0;">{{ lic.meta }}</span>
+                  </span>
+                  <span style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    <sc-for list="{{ lic.slots }}" as="s" hint-placeholder-count="2">
+                      <span style="min-width: 112px; padding: 8px 12px; border-radius: 12px; background: {{ s.bg }}; color: {{ s.fg }};"><span style="display: block; font-size: 10px; letter-spacing: .12em; font-weight: 600;">SLOT {{ s.n }}</span><span style="display: block; margin-top: 2px; font-size: 12.5px; font-weight: 500;">{{ s.label }}</span><span style="display: block; font-size: 11px; opacity: .8;">{{ s.seen }}</span></span>
+                    </sc-for>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ slotEmpty.show }}" hint-placeholder-val="{{ true }}">
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 22px; border-radius: 18px; border: 1.5px dashed rgba(255,255,255,.2); min-height: 120px;">
+              <span style="font-size: 14.5px; font-weight: 500; color: #FFFFFF;">{{ slotEmpty.title }}</span>
+              <span style="font-size: 13px; line-height: 1.55; color: #C4C9C0;">{{ slotEmpty.text }}</span>
+            </div>
+          </sc-if>
+        </section>
+        <section aria-labelledby="email-title" style="flex: 1 1 260px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 id="email-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">Email delivery</h2>
+            <button type="button" onClick="{{ nav.email.go }}" aria-label="Open email delivery" style="margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"></path></svg></button>
+          </div>
+          <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 16px; background: #F4F5F2;">
+            <span style="flex: none; margin-top: 5px; width: 8px; height: 8px; border-radius: 50%; background: {{ emailProvider.dot }};"></span>
+            <span style="flex: 1; min-width: 0;">
+              <span style="display: block; font-size: 13px; font-weight: 500;">{{ emailProvider.label }}</span>
+              <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: #5F645C;">{{ emailProvider.sub }}</span>
+            </span>
+          </div>
+          <sc-if value="{{ emailPreviewShow }}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column;">
+              <sc-for list="{{ emailPreview }}" as="e" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #EFEFEF;">
+                  <span style="flex: none; width: 3px; height: 34px; border-radius: 3px; background: {{ e.bar }};"></span>
+                  <span style="flex: 1; min-width: 0;">
+                    <span style="display: block; font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ e.title }}</span>
+                    <span style="display: block; margin-top: 2px; font-size: 12px; color: #5F645C;">{{ e.meta }}</span>
+                  </span>
+                  <span style="flex: none; font-size: 11.5px; font-weight: 500; padding: 5px 10px; border-radius: 999px; background: {{ e.pillBg }}; color: {{ e.pillFg }};">{{ e.pill }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ emailEmpty.show }}" hint-placeholder-val="{{ true }}">
+            <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #4E534C;">{{ emailEmpty.text }}</p>
+          </sc-if>
+          <p style="margin: auto 0 0; padding-top: 6px; font-size: 12px; line-height: 1.5; color: #5F645C;">This dashboard never sends email. A license email goes out once, inside the billing flow, when the key is issued.</p>
+        </section>
+        <section aria-labelledby="health-title" style="flex: 1 1 260px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 id="health-title" style="margin: 0; font-size: 18px; font-weight: 500; letter-spacing: -.01em;">Service health</h2>
+            <span style="font-size: 11.5px; padding: 4px 10px; border-radius: 999px; background: #EFEFEF;">{{ healthCount }}</span>
+            <button type="button" onClick="{{ nav.health.go }}" aria-label="Open service health" style="margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"></path></svg></button>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <sc-for list="{{ healthPreview }}" as="h" hint-placeholder-count="5">
+              <div style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #EFEFEF;">
+                <span style="flex: none; margin-top: 5px; width: 9px; height: 9px; border-radius: 50%; background: {{ h.dot }};"></span>
+                <span style="flex: 1; min-width: 0;">
+                  <span style="display: block; font-size: 13.5px; font-weight: 500;">{{ h.label }}</span>
+                  <span style="display: block; margin-top: 2px; font-size: 12px; line-height: 1.45; color: #5F645C;">{{ h.detail }}</span>
+                </span>
+                <span style="flex: none; font-size: 11.5px; font-weight: 500; color: {{ h.stateFg }};">{{ h.state }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <button type="button" onClick="{{ runProbe }}" disabled="{{ probeDisabled }}" style="margin-top: auto; height: 42px; border-radius: 999px; border: 0; cursor: pointer; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500;">{{ probeLabel }}</button>
+        </section>
+      </div>
+    </div>
+    </sc-if>
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <section aria-labelledby="detail-title" style="min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px;">
+          <button type="button" onClick="{{ nav.overview.go }}" aria-label="Back to overview" style="flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;" style-hover="background: #E6E8E3;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg></button>
+          <div style="flex: 1 1 280px; min-width: 0;">
+            <h2 id="detail-title" style="margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -.02em;">{{ detail.title }}</h2>
+            <p style="margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #4E534C; max-width: 760px;">{{ detail.intro }}</p>
+          </div>
+          <span style="flex: none; font-size: 12.5px; color: #5F645C;">{{ detail.countLabel }}</span>
+          <sc-if value="{{ detail.hasAction }}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{ detail.actionGo }}" disabled="{{ detail.actionDisabled }}" style="flex: none; height: 40px; padding: 0 18px; border-radius: 999px; border: 0; cursor: pointer; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500;">{{ detail.actionLabel }}</button>
+          </sc-if>
+        </div>
+        <sc-if value="{{ detail.hasKpis }}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+            <sc-for list="{{ detail.kpis }}" as="k" hint-placeholder-count="5">
+              <div style="padding: 14px 16px; border-radius: 18px; background: {{ k.bg }};">
+                <span style="display: block; font-size: 12px; color: #3F443D;">{{ k.label }}</span>
+                <span style="display: block; margin-top: 6px; font-size: 24px; font-weight: 500; letter-spacing: -.03em;">{{ k.value }}</span>
+                <span style="display: block; margin-top: 2px; font-size: 11.5px; color: #4E534C;">{{ k.sub }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ detail.showChart }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: stretch; gap: 6px; height: 200px; padding: 8px 4px 0;">
+            <sc-for list="{{ chart.months }}" as="m" hint-placeholder-count="12">
+              <div title="{{ m.title }}" style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+                <span style="height: 14px; font-size: 10.5px; color: #4E534C; white-space: nowrap;">{{ m.value }}</span>
+                <span style="flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center;"><span style="display: block; width: 100%; max-width: 38px; height: {{ m.h }}; border-radius: 10px; background: {{ m.bg }};"></span></span>
+                <span style="font-size: 11px; color: {{ m.labelFg }};">{{ m.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ detail.hasChips }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            <sc-for list="{{ detail.chips }}" as="c" hint-placeholder-count="4">
+              <button type="button" onClick="{{ c.go }}" style="height: 34px; padding: 0 14px; border-radius: 999px; border: 0; cursor: pointer; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; background: {{ c.bg }}; color: {{ c.fg }};">{{ c.label }}<span style="font-size: 11px; opacity: .8;">{{ c.count }}</span></button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ detail.hasRows }}" hint-placeholder-val="{{ false }}">
+          <div style="overflow-x: auto;">
+            <div role="table" aria-label="{{ detail.title }}" style="min-width: 760px;">
+              <div role="row" style="display: grid; grid-template-columns: {{ detail.grid }}; gap: 14px; padding: 0 8px 10px; border-bottom: 1px solid #E6E8E3;">
+                <sc-for list="{{ detail.columns }}" as="col" hint-placeholder-count="5">
+                  <span role="columnheader" style="font-size: 10.5px; letter-spacing: .14em; font-weight: 600; color: #5F645C; text-transform: uppercase;">{{ col.label }}</span>
+                </sc-for>
+              </div>
+              <sc-for list="{{ detail.rows }}" as="row" hint-placeholder-count="4">
+                <div role="row" style="display: grid; grid-template-columns: {{ detail.grid }}; gap: 14px; align-items: center; padding: 13px 8px; border-bottom: 1px solid #EFEFEF;" style-hover="background: #FAFAF9;">
+                  <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="5">
+                    <div role="cell" style="min-width: 0;">
+                      <sc-if value="{{ cell.isText }}" hint-placeholder-val="{{ true }}">
+                        <span style="display: block; font-size: 13.5px; font-weight: 500; overflow-wrap: anywhere;">{{ cell.text }}</span>
+                        <span style="display: block; margin-top: 2px; font-size: 12px; color: #5F645C; overflow-wrap: anywhere;">{{ cell.sub }}</span>
+                      </sc-if>
+                      <sc-if value="{{ cell.isPill }}" hint-placeholder-val="{{ false }}">
+                        <span style="display: inline-block; font-size: 11.5px; font-weight: 500; padding: 5px 11px; border-radius: 999px; background: {{ cell.bg }}; color: {{ cell.fg }};">{{ cell.text }}</span>
+                      </sc-if>
+                      <sc-if value="{{ cell.isButton }}" hint-placeholder-val="{{ false }}">
+                        <button type="button" onClick="{{ cell.go }}" disabled="{{ cell.busy }}" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 0; cursor: pointer; background: #EFEFEF; color: #1C1C1C; font-size: 12px; font-weight: 500;" style-hover="background: #E4EBDD;">{{ cell.text }}</button>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ detail.empty.show }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 6px; padding: 26px; border-radius: 18px; border: 1.5px dashed #D3D8CE;">
+            <span style="font-size: 14.5px; font-weight: 500;">{{ detail.empty.title }}</span>
+            <span style="font-size: 13px; line-height: 1.55; color: #4E534C; max-width: 640px;">{{ detail.empty.text }}</span>
+          </div>
+        </sc-if>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #5F645C;">{{ detail.footnote }}</p>
+      </section>
+    </sc-if>
+    <footer style="padding: 4px 4px 12px; font-size: 12px; color: #5F645C; display: flex; flex-wrap: wrap; gap: 6px 18px;">
+      <span>Nafran Leads Scraper · MamaLead owner dashboard</span>
+      <span>Read-only. Full license keys, tokens and API keys never leave the server.</span>
+    </footer>
+  </main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dataSource&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;live&quot;, &quot;fixture&quot;], &quot;default&quot;: &quot;live&quot;, &quot;tsType&quot;: &quot;'live' | 'fixture'&quot;, &quot;section&quot;: &quot;Data&quot;}, &quot;apiBase&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Data&quot;}, &quot;ownerName&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Nafran&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Display&quot;}}">
+const TONE = {
+  ok: { bg: '#E4EBDD', fg: '#2F4A28', dot: '#8FA382', word: 'OK' },
+  warn: { bg: '#F3ECD9', fg: '#5C4813', dot: '#C9A646', word: 'Check' },
+  missing: { bg: '#EFEFEF', fg: '#3F443D', dot: '#9AA096', word: 'Setup' },
+  error: { bg: '#F6E3E0', fg: '#7A2A22', dot: '#C0574B', word: 'Failing' },
+  neutral: { bg: '#EFEFEF', fg: '#1C1C1C', dot: '#B9BEB6', word: 'Unverified' },
+};
+const SEVERITY = { error: 0, warn: 1, missing: 2, neutral: 3, ok: 4 };
+const PAY = {
+  paid: ['Paid', 'ok'], refunded: ['Refunded', 'error'], partial_refund: ['Part refunded', 'warn'],
+  disputed: ['Disputed', 'error'], failed: ['Failed', 'error'], pending: ['Pending', 'warn'],
+};
+const HANDOFF_CHECKS = [
+  { id: 'db', label: 'Vercel database', state: 'neutral', detail: 'DATABASE_URL for Neon Postgres still needs hosted setup.' },
+  { id: 'secrets', label: 'Billing secrets', state: 'neutral', detail: 'Stripe test key, Price IDs, webhook secret and download signing key.' },
+  { id: 'routes', label: 'Public billing routes', state: 'neutral', detail: 'At handoff mamalead.com showed the waitlist and /v1 routes returned 404.' },
+  { id: 'email', label: 'License email delivery', state: 'neutral', detail: 'No email provider has been chosen or configured.' },
+  { id: 'installer', label: 'Private installer upload', state: 'neutral', detail: 'The Windows installer is not uploaded to private storage yet.' },
+];
+const VIEWS = [
+  { id: 'overview', label: 'Overview' }, { id: 'revenue', label: 'Revenue' }, { id: 'users', label: 'Users' },
+  { id: 'purchases', label: 'Purchases' }, { id: 'licenses', label: 'Licenses' }, { id: 'activations', label: 'Slots' },
+  { id: 'email', label: 'Email' }, { id: 'health', label: 'Health' },
+];
+const DAY = 86400000;
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
+class Component extends DCLogic {
+  state = {
+    view: 'overview', q: '', conn: 'loading', data: null, error: '',
+    rev: { status: 'idle', data: null, message: '' },
+    filters: { revenue: 'all', users: 'all', purchases: 'all', licenses: 'all', activations: 'all', email: 'all', health: 'all' },
+    width: typeof window === 'undefined' ? 1200 : window.innerWidth,
+    loginToken: '', loginError: '', loginBusy: false, probing: false, verify: {}, verifying: null,
+  };
+
+  componentDidMount() {
+    this.onResize = () => this.setState({ width: window.innerWidth });
+    window.addEventListener('resize', this.onResize);
+    this.load();
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this.onResize); }
+  componentDidUpdate(prev) { if (prev.dataSource !== this.props.dataSource || prev.apiBase !== this.props.apiBase) this.load(); }
+
+  isFixture() { return (this.props.dataSource ?? 'live') === 'fixture'; }
+
+  async api(path, opts = {}) {
+    const base = String(this.props.apiBase ?? '').replace(/\/$/, '');
+    const fail = (kind, message) => Object.assign(new Error(message), { kind });
+    let res;
+    try {
+      res = await fetch(base + path, {
+        method: opts.method ?? 'GET', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'x-nafran-admin': '1', ...(opts.body ? { 'content-type': 'application/json' } : {}) },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+    } catch { throw fail('unreachable', 'The admin API did not answer.'); }
+    if (!(res.headers.get('content-type') || '').includes('application/json')) throw fail('unreachable', 'No admin API at this address.');
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401) throw fail('unauthorized', body.error || 'Owner sign-in required.');
+    if (!res.ok) throw fail(res.status === 503 ? 'unavailable' : 'error', body.error || `Admin API returned ${res.status}.`);
+    return body;
+  }
+
+  async load() {
+    if (this.isFixture()) {
+      this.setState({ conn: 'fixture', data: Component.fixture(), rev: { status: 'ok', data: Component.fixtureRevenue(), message: '' }, error: '', verify: {} });
+      return;
+    }
+    this.setState({ conn: 'loading', error: '' });
+    try {
+      const [summary, purchases, licenses, activations, users] = await Promise.all(
+        ['summary', 'purchases', 'licenses', 'activations', 'users'].map((p) => this.api(`/admin/api/${p}`)));
+      this.setState({ conn: 'ok', data: { summary, purchases: purchases.rows, licenses: licenses.rows, activations: activations.rows, users: users.rows, checks: summary.checks } });
+      this.loadRevenue(false);
+    } catch (e) { this.setState({ conn: e.kind ?? 'error', error: e.message, data: null, rev: { status: 'idle', data: null, message: '' } }); }
+  }
+
+  async loadRevenue(refresh) {
+    if (this.isFixture()) return;
+    this.setState((s) => ({ rev: { ...s.rev, status: 'loading' } }));
+    try {
+      const r = await this.api(`/admin/api/revenue${refresh ? '?refresh=1' : ''}`);
+      this.setState({ rev: r.available ? { status: 'ok', data: r, message: '' } : { status: 'unavailable', data: null, message: r.reason } });
+    } catch (e) { this.setState({ rev: { status: 'error', data: null, message: e.message } }); }
+  }
+
+  async login(event) {
+    event.preventDefault();
+    const token = this.state.loginToken;
+    this.setState({ loginBusy: true, loginError: '', loginToken: '' });
+    try { await this.api('/admin/api/session', { method: 'POST', body: { token } }); this.setState({ loginBusy: false }); this.load(); }
+    catch (e) { this.setState({ loginBusy: false, loginError: e.message }); }
+  }
+
+  async logout() {
+    if (this.isFixture()) return;
+    try { await this.api('/admin/api/session', { method: 'DELETE' }); } catch {}
+    this.setState({ conn: 'unauthorized', data: null, error: 'Signed out.', rev: { status: 'idle', data: null, message: '' } });
+  }
+
+  async probe() {
+    if (!this.state.data) return;
+    this.setState({ probing: true });
+    try {
+      const checks = this.isFixture() ? Component.fixtureChecks(true) : (await this.api('/admin/api/health?probe=1')).checks;
+      this.setState((s) => ({ probing: false, data: { ...s.data, checks } }));
+    } catch (e) { this.setState({ probing: false, error: e.message }); }
+  }
+
+  async verifyPurchase(id) {
+    this.setState({ verifying: id });
+    try {
+      const result = this.isFixture()
+        ? { id, amount: 3000, currency: 'usd', livemode: false, paid: true, refunded: false, disputed: false }
+        : await this.api('/admin/api/purchases/verify', { method: 'POST', body: { id } });
+      this.setState((s) => ({ verifying: null, verify: { ...s.verify, [id]: result } }));
+    } catch (e) { this.setState((s) => ({ verifying: null, verify: { ...s.verify, [id]: { error: e.message } } })); }
+  }
+
+  // ---------- labelled test fixture (mirrors verify-admin.mjs; not real data) ----------
+  static fixtureChecks(live) {
+    const base = [
+      { id: 'stripe_key', label: 'Stripe secret key', state: 'ok', detail: 'Test-mode key is set.' },
+      { id: 'stripe_prices', label: 'Stripe Price IDs', state: 'ok', detail: 'Lifetime and Decision Maker prices are set.' },
+      { id: 'webhook', label: 'Stripe webhook secret', state: 'ok', detail: 'Signed webhooks can be verified.' },
+      { id: 'public_url', label: 'Billing public URL', state: 'warn', detail: 'Localhost only. Fine for local testing.' },
+      { id: 'signing', label: 'Download signing key', state: 'ok', detail: 'Short-lived download grants can be signed.' },
+      { id: 'installer', label: 'Private installer', state: 'warn', detail: 'DOWNLOAD_URL is only honoured while billing runs on localhost.' },
+      { id: 'email', label: 'License email delivery', state: 'missing', detail: 'Not configured. License keys are shown once on the purchase return page.' },
+      { id: 'usage_tracking', label: 'Usage and download tracking', state: 'ok', detail: 'Desktop last-seen and installer downloads are recorded.' },
+      { id: 'webhooks', label: 'Stripe webhooks received', state: 'warn', detail: 'No signed Stripe webhook has been recorded yet.' },
+    ];
+    return live ? [...base,
+      { id: 'database', label: 'Billing database', state: 'ok', detail: 'Local SQLite file is readable.' },
+      { id: 'stripe_api', label: 'Stripe API', state: 'ok', detail: 'Lifetime price answers in test mode (fake Stripe in the test script).' }] : base;
+  }
+
+  static fixture() {
+    const at = new Date(Date.now() - DAY).toISOString();
+    const seen = new Date(Date.now() - 2 * 3600000).toISOString();
+    const email = 'b••••@example.test';
+    return {
+      summary: {
+        mode: 'test', cap: 2,
+        counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, addons: 0, licenses: 1, revoked: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
+        usage: { tracking: true, registered: 4, desktop: 2, checkout: 1, unseen: 1, licensed: 2, active24h: 1, active7d: 1, active30d: 1 },
+        downloads: { tracking: true, total: 1, buyers: 1, last30d: 1, last: at },
+        webhooks: { count: 0, last: null },
+        installer: { storage: 'local-url', filename: 'Nafran-Leads-Scraper-Setup.exe', signing: true, ready: false, detail: 'DOWNLOAD_URL is only honoured while billing runs on localhost.' },
+        email: { provider: 'none' },
+      },
+      purchases: [{ id: '3f9c2a71', created: at, status: 'paid', session: '…fetime', customer: '…s_mock', addon: 'none', license: { last4: '9K2D', revoked: false }, email }],
+      licenses: [{ id: 'a71e0c44', last4: '9K2D', email, created: at, sentAt: null, revokedAt: null, activatedAt: at, slotsUsed: 2, cap: 2 }],
+      activations: [{ license: '9K2D', email, revoked: false, created: at, slots: [{ slot: 1, installation: 'c02d91be', since: at, lastSeen: seen }, { slot: 2, installation: '5e7a13f0', since: at, lastSeen: null }] }],
+      users: [
+        { id: 'e81b6d29', kind: 'unseen', created: at, lastSeen: null, licensed: false, license: null, slot: null, buyer: false, addon: false, email: null },
+        { id: '5e7a13f0', kind: 'desktop', created: at, lastSeen: null, licensed: true, license: '9K2D', slot: 2, buyer: false, addon: false, email },
+        { id: 'c02d91be', kind: 'desktop', created: at, lastSeen: seen, licensed: true, license: '9K2D', slot: 1, buyer: false, addon: false, email },
+        { id: '3f9c2a71', kind: 'checkout', created: at, lastSeen: null, licensed: false, license: '9K2D', slot: null, buyer: true, addon: false, email },
+      ],
+      checks: Component.fixtureChecks(false),
+    };
+  }
+
+  static fixtureRevenue() {
+    const at = new Date(Date.now() - DAY);
+    const now = new Date();
+    const months = Array.from({ length: 12 }, (_, i) => ({ key: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + i, 1)).toISOString().slice(0, 7), net: 0 }));
+    const hit = months.find((m) => m.key === at.toISOString().slice(0, 7));
+    if (hit) hit.net = 3000;
+    return {
+      available: true, mode: 'test', currency: 'usd', gross: 3000, refunded: 0, net: 3000, lifetimeSales: 1, lifetimeNet: 3000,
+      addonCharges: 0, addonNet: 0, disputed: 0, otherCurrency: 0, activeSubs: 0, mrr: 0, months, paymentCount: 1, partial: false, truncated: false,
+      payments: [{ id: '…h_mock', created: at.toISOString(), product: 'lifetime', amount: 3000, refunded: 0, currency: 'usd', status: 'paid', email: 'b••••@example.test' }],
+    };
+  }
+
+  // ---------- helpers ----------
+  date(v) { return v ? new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'; }
+  ago(v) {
+    if (!v) return 'Never';
+    const days = Math.floor((Date.now() - Date.parse(v)) / DAY);
+    return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 30 ? `${days} days ago` : this.date(v);
+  }
+  money(cents) { return cents == null ? '—' : USD.format(cents / 100); }
+  compact(cents) { const v = cents / 100; return v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `$${Math.round(v)}`; }
+  match(row, fields) {
+    const q = this.state.q.trim().toLowerCase();
+    return !q || fields.some((f) => String(row[f] ?? '').toLowerCase().includes(q));
+  }
+  setFilter(view, value) { this.setState((s) => ({ filters: { ...s.filters, [view]: value } })); }
+  chips(view, defs, rows, ready) {
+    const active = this.state.filters[view];
+    return defs.map(([id, label, test]) => {
+      const on = active === id;
+      return { label, count: ready ? String(rows.filter(test).length) : '', go: () => this.setFilter(view, id), bg: on ? '#1C1C1C' : '#EFEFEF', fg: on ? '#FFFFFF' : '#1C1C1C' };
+    });
+  }
+  filtered(view, rows, defs, fields) {
+    const test = (defs.find((d) => d[0] === this.state.filters[view]) ?? defs[0])[2];
+    return rows.filter(test).filter((r) => this.match(r, fields));
+  }
+  pill(text, tone) { const t = TONE[tone] ?? TONE.neutral; return { isText: false, isPill: true, isButton: false, text, bg: t.bg, fg: t.fg }; }
+  cell(text, sub) { return { isText: true, isPill: false, isButton: false, text, sub: sub ?? '' }; }
+  connText() {
+    const c = this.state.conn;
+    if (c === 'loading') return 'Contacting the admin API…';
+    if (c === 'unauthorized') return 'Sign in as the owner to load this data.';
+    if (c === 'unreachable') return 'No admin API answered at this address. Start the local admin server or finish the hosted setup.';
+    return this.state.error || 'The admin API returned an error.';
+  }
+  revText() {
+    const { rev, data } = this.state;
+    if (!data) return this.connText();
+    if (rev.status === 'loading') return 'Reading payments from Stripe…';
+    return rev.message || 'Revenue has not loaded yet.';
+  }
+  purchaseDefs() {
+    return [
+      ['all', 'All', () => true], ['paid', 'Paid', (r) => r.status === 'paid'],
+      ['checkout_started', 'Checkout started', (r) => r.status === 'checkout_started'],
+      ['unlicensed', 'No license', (r) => r.status === 'paid' && !r.license], ['addon', 'Add-on active', (r) => r.addon === 'active'],
+    ];
+  }
+  within(v, days) { return Boolean(v) && Date.now() - Date.parse(v) <= days * DAY; }
+
+  chart() {
+    const months = this.state.rev.data?.months ?? [];
+    const max = Math.max(0, ...months.map((m) => m.net));
+    const last = months.length - 1;
+    return {
+      show: months.length > 0,
+      thisMonth: months.length ? this.money(months[last].net) : '—',
+      year: months.length ? this.money(months.reduce((a, m) => a + m.net, 0)) : '—',
+      months: months.map((m, i) => {
+        const [y, mo] = m.key.split('-').map(Number);
+        const name = new Date(Date.UTC(y, mo - 1, 1)).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+        const net = Math.max(0, m.net);
+        return {
+          label: name, value: net > 0 ? this.compact(net) : '', title: `${name} ${y}: ${this.money(m.net)} net`,
+          h: max > 0 && net > 0 ? `${Math.max(4, Math.round((net / max) * 100))}%` : '3px',
+          bg: i === last ? '#1C1C1C' : net > 0 ? '#8FA382' : '#E6E8E3', labelFg: i === last ? '#1C1C1C' : '#5F645C',
+        };
+      }),
+    };
+  }
+
+  overview(nav) {
+    const { data, conn, rev } = this.state;
+    const s = data?.summary;
+    const c = s?.counts;
+    const u = s?.usage;
+    const cap = s?.cap ?? 2;
+    const pct = (a, b) => (b ? `${Math.min(100, Math.round((a / b) * 100))}%` : '0%');
+    const off = { value: '—', of: '', pct: '0%', sub: conn === 'loading' ? 'Loading…' : 'Not connected' };
+    const r = rev.data;
+    const live = (r?.mode ?? s?.mode) === 'live';
+
+    const revenueCard = r
+      ? { value: this.money(r.net), tag: live ? 'Stripe live' : 'Stripe test', sub: `Gross ${this.money(r.gross)} · Refunds ${this.money(r.refunded)}`, foot: live ? `${r.paymentCount} charges` : 'Test mode. Not real money.', mrr: `MRR ${this.money(r.mrr)}` }
+      : { value: '—', tag: s ? (s.mode === 'missing' ? 'Stripe not set' : `Stripe ${s.mode}`) : 'Stripe', sub: this.revText(), foot: '', mrr: '' };
+    revenueCard.go = nav.revenue.go;
+
+    const stats = [
+      { label: 'Paying customers', tag: 'Lifetime', go: nav.purchases.go, ...(c ? { value: String(c.customers ?? c.purchases), of: '', pct: pct(c.addons, c.customers), sub: `${c.addons} with Decision Maker add-on` } : off) },
+      { label: 'Active users · 7 days', tag: 'Desktop app', go: nav.users.go, ...(u ? (u.tracking ? { value: String(u.active7d), of: `/ ${u.desktop}`, pct: pct(u.active7d, u.desktop), sub: `Last 24h ${u.active24h} · last 30 days ${u.active30d}` } : { value: '—', of: '', pct: '0%', sub: 'Needs the billing-server update' }) : off) },
+      { label: 'Licensed machines', tag: `Max ${cap} each`, go: nav.activations.go, ...(c ? { value: String(c.slotsUsed), of: `/ ${c.slotsTotal}`, pct: pct(c.slotsUsed, c.slotsTotal), sub: `${c.licenses} license${c.licenses === 1 ? '' : 's'} issued` } : off) },
+    ];
+
+    const chart = this.chart();
+    const chartEmpty = chart.show ? { show: false } : { show: true, title: rev.status === 'loading' ? 'Loading revenue…' : 'Revenue is read from Stripe', text: this.revText() };
+
+    const seg = (label, value, color, sub) => ({ label, sub, color, value: u ? String(value) : '—', pct: u && u.registered ? `${(value / u.registered) * 100}%` : '0%' });
+    const usersBreak = {
+      head: u ? (u.tracking ? String(u.active7d) : '—') : '—',
+      caption: u ? (u.tracking ? `of ${u.desktop} desktop install${u.desktop === 1 ? '' : 's'} used the app this week` : 'Activity appears once the updated billing server is deployed') : this.connText(),
+      total: u ? `${u.registered} billing identities registered in total` : '',
+      segments: [
+        seg('Active in last 7 days', u ? u.active7d : 0, '#1C1C1C', 'Desktop app checked its license'),
+        seg('Desktop, idle 7+ days', u ? u.desktop - u.active7d : 0, '#8FA382', 'Installed or licensed, quiet this week'),
+        seg('Website checkout identities', u ? u.checkout : 0, '#C8D5BB', 'Created when someone starts checkout'),
+        seg('Registered, not seen yet', u ? u.unseen : 0, '#D3D8CE', 'No license check recorded'),
+      ],
+    };
+
+    const payments = (r?.payments ?? []).filter((p) => this.match(p, ['email', 'id'])).slice(0, 5).map((p) => {
+      const [word, tone] = PAY[p.status] ?? ['Unknown', 'neutral'];
+      const t = TONE[tone];
+      return {
+        initial: (p.email || '#').slice(0, 1).toUpperCase(), title: p.email || 'Email not on file',
+        meta: `${p.product === 'lifetime' ? 'Lifetime Deal' : 'Decision Maker add-on'} · ${this.date(p.created)}`,
+        amount: this.money(p.amount), pill: word, pillBg: t.bg, pillFg: t.fg,
+      };
+    });
+    const paymentsEmpty = !r
+      ? { show: true, title: rev.status === 'loading' ? 'Reading payments from Stripe…' : 'Payments load from Stripe', text: this.revText() }
+      : payments.length ? { show: false }
+        : { show: true, title: r.paymentCount ? 'No payments match' : 'No payments yet', text: r.paymentCount ? 'Clear the search to see all payments.' : 'Buy the Lifetime Deal on the local site with Stripe test card 4242 4242 4242 4242, then refresh the Revenue page.' };
+
+    const activePct = c && c.licenses ? Math.round((c.activated / c.licenses) * 100) : 0;
+    const gauge = { label: c && c.licenses ? `${activePct}%` : '—', dash: `${activePct} 100`, opacity: activePct > 0 ? '1' : '0' };
+    const v = (n) => (c ? String(n) : '—');
+    const licenseLegend = [
+      { label: 'Active keys', value: v(c ? c.licenses - c.revoked : 0), dot: '#8FA382' },
+      { label: 'Activated', value: v(c?.activated), dot: '#1C1C1C' },
+      { label: 'Revoked', value: v(c?.revoked), dot: '#C0574B' },
+      { label: 'Emailed to buyer', value: v(c?.emailed), dot: '#C8D5BB' },
+    ];
+
+    const inst = s?.installer;
+    const dl = s?.downloads;
+    const privateStorage = inst && ['blob', 'local-file'].includes(inst.storage);
+    const instTone = !inst ? 'neutral' : privateStorage ? (inst.ready ? 'ok' : 'warn') : inst.storage === 'local-url' ? 'warn' : 'missing';
+    const installer = {
+      filename: inst?.filename ?? 'Nafran-Leads-Scraper-Setup.exe',
+      pill: !inst ? 'Not verified' : privateStorage ? (inst.ready ? 'Private installer ready' : 'Signing key missing') : inst.storage === 'local-url' ? 'Local test URL only' : 'Not uploaded',
+      pillBg: TONE[instTone].bg, pillFg: TONE[instTone].fg,
+      facts: [
+        { label: 'Storage', value: !inst ? '—' : { blob: 'Blob', 'local-file': 'Server file', 'local-url': 'Local URL', none: 'None' }[inst.storage] },
+        { label: 'Signed links', value: !inst ? '—' : inst.signing ? 'Yes' : 'No' },
+        { label: 'Downloads', value: dl?.tracking ? String(dl.total) : '—' },
+      ],
+      detail: !inst ? 'At handoff the private installer upload was still pending. Connect the admin API to check it.'
+        : `${inst.detail} ${dl?.tracking ? `${dl.buyers} installation${dl.buyers === 1 ? '' : 's'} downloaded, ${dl.last30d} in the last 30 days.` : 'Download counts start once the updated billing server is deployed.'}`,
+    };
+
+    const actRows = (data?.activations ?? []).filter((x) => this.match(x, ['license', 'email']));
+    const slotPreview = actRows.slice(0, 3).map((x) => ({
+      title: `License …${x.license}`, meta: `${x.email} · ${x.revoked ? 'Revoked' : 'Active'}`,
+      slots: x.slots.map((sl) => ({
+        n: String(sl.slot), label: sl.installation ? `Install ${sl.installation}` : 'Free',
+        seen: sl.installation ? `Seen ${this.ago(sl.lastSeen).toLowerCase()}` : '',
+        bg: sl.installation ? '#C8D5BB' : '#353A35', fg: sl.installation ? '#1C1C1C' : '#C4C9C0',
+      })),
+    }));
+    const slotEmpty = !data ? { show: true, title: 'Not connected', text: 'Slots appear once the admin API can read the billing database.' }
+      : slotPreview.length ? { show: false } : { show: true, title: 'No licenses yet', text: 'A slot fills when the desktop app activates a key in Settings → Account.' };
+
+    const provider = s?.email?.provider;
+    const emailProvider = !s ? { dot: TONE.neutral.dot, label: 'Not verified', sub: 'Connect admin API' }
+      : provider === 'resend' ? { dot: TONE.ok.dot, label: 'Resend configured', sub: `${c.emailed} of ${c.licenses} sent` }
+        : { dot: TONE.missing.dot, label: 'No email provider', sub: 'Keys shown once on return page' };
+    const emailPreview = (data?.licenses ?? []).filter((x) => this.match(x, ['email', 'last4'])).slice(0, 4).map((x) => {
+      const t = x.sentAt ? TONE.ok : TONE.warn;
+      return { title: x.email, meta: `Key …${x.last4} · ${this.date(x.created)}`, pill: x.sentAt ? 'Sent' : 'Not sent', bar: t.dot, pillBg: t.bg, pillFg: t.fg };
+    });
+    const emailEmpty = !data ? { show: true, text: 'Delivery status loads from the admin API.' }
+      : emailPreview.length ? { show: false } : { show: true, text: 'No license emails yet. Each issued key records whether its email was sent.' };
+
+    const checks = data ? data.checks : HANDOFF_CHECKS;
+    const okCount = checks.filter((x) => x.state === 'ok').length;
+    const healthPreview = [...checks].sort((a, b) => (SEVERITY[a.state] ?? 3) - (SEVERITY[b.state] ?? 3)).slice(0, 6)
+      .map((x) => { const t = TONE[x.state] ?? TONE.neutral; return { label: x.label, detail: x.detail, dot: t.dot, state: t.word, stateFg: t.fg }; });
+
+    return {
+      revenueCard, stats, chart, chartEmpty, usersBreak,
+      payments, paymentsShow: payments.length > 0, paymentsEmpty,
+      gauge, licenseLegend, installer,
+      slotsCaption: `Max ${cap} machines per license`, slotPreview, slotPreviewShow: slotPreview.length > 0, slotEmpty,
+      emailProvider, emailPreview, emailPreviewShow: emailPreview.length > 0, emailEmpty,
+      healthPreview, healthCount: data ? `${okCount} of ${checks.length} OK` : 'Unverified',
+      runProbe: () => this.probe(), probeDisabled: !data || this.state.probing,
+      probeLabel: this.state.probing ? 'Running checks…' : data ? 'Run live checks' : 'Live checks need the admin API',
+    };
+  }
+
+  detail() {
+    const { view, data, conn, rev } = this.state;
+    if (view === 'overview') return { empty: { show: false } };
+    const s = data?.summary;
+    const mode = s?.mode;
+    const cap = s?.cap ?? 2;
+    const notConnected = { show: true, title: conn === 'loading' ? 'Loading…' : 'Not connected', text: this.connText() };
+    const noMatch = { show: true, title: 'Nothing matches', text: 'Change the filter or clear the search.' };
+    const kpi = (label, value, sub, hi) => ({ label, value, sub, bg: hi ? '#CBD8BC' : '#F4F5F2' });
+    let out;
+
+    if (view === 'revenue') {
+      const r = rev.data;
+      const defs = [
+        ['all', 'All', () => true], ['lifetime', 'Lifetime Deal', (p) => p.product === 'lifetime'],
+        ['addon', 'Decision Maker', (p) => p.product !== 'lifetime'], ['refunded', 'Refunds & disputes', (p) => ['refunded', 'partial_refund', 'disputed'].includes(p.status)],
+      ];
+      const all = r?.payments ?? [];
+      const rows = this.filtered('revenue', all, defs, ['email', 'id']);
+      const live = r?.mode === 'live';
+      const notes = [];
+      if (r?.partial) notes.push('Some Stripe objects could not be read, so totals may be low.');
+      if (r?.truncated) notes.push('Only the first 300 customers are counted.');
+      if (r?.otherCurrency) notes.push(`${r.otherCurrency} non-USD charges are not included.`);
+      out = {
+        title: 'Revenue',
+        intro: live ? 'Live Stripe revenue for customers recorded by the billing server.' : 'Stripe test-mode revenue. These are test payments, not real money. The same view shows live revenue once live payments are approved and ADMIN_ALLOW_LIVE_READS=1 is set.',
+        kpis: r ? [
+          kpi('Net revenue', this.money(r.net), live ? 'After refunds' : 'Test mode, after refunds', true),
+          kpi('Gross', this.money(r.gross), `${r.paymentCount} charge${r.paymentCount === 1 ? '' : 's'}`),
+          kpi('Refunds', this.money(r.refunded), r.disputed ? `${r.disputed} disputed` : 'No disputes'),
+          kpi('Lifetime sales', String(r.lifetimeSales), `${this.money(r.lifetimeNet)} net at $30`),
+          kpi('Decision Maker MRR', this.money(r.mrr), `${r.activeSubs} active subscription${r.activeSubs === 1 ? '' : 's'}`),
+        ] : [],
+        showChart: Boolean(r),
+        chips: this.chips('revenue', defs, all, Boolean(r)),
+        columns: ['Date', 'Customer', 'Product', 'Amount', 'Refunded', 'Status'],
+        grid: 'minmax(0,.9fr) minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.8fr) minmax(0,.9fr)',
+        rows: rows.map((p) => {
+          const [word, tone] = PAY[p.status] ?? ['Unknown', 'neutral'];
+          return { cells: [
+            this.cell(this.date(p.created)), this.cell(p.email || 'Email not on file', `Charge ${p.id}`),
+            this.cell(p.product === 'lifetime' ? 'Lifetime Deal' : 'Decision Maker add-on', p.product === 'lifetime' ? 'One-time' : 'Monthly'),
+            this.cell(this.money(p.amount)), this.cell(p.refunded ? this.money(p.refunded) : '—'), this.pill(word, tone),
+          ] };
+        }),
+        hasAction: Boolean(data), actionLabel: rev.status === 'loading' ? 'Reading Stripe…' : 'Refresh from Stripe',
+        actionGo: () => this.loadRevenue(true), actionDisabled: !data || rev.status === 'loading',
+        empty: !r ? { show: true, title: rev.status === 'loading' ? 'Reading payments from Stripe…' : 'Revenue is not available', text: this.revText() }
+          : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No payments yet', text: 'Complete a test checkout with card 4242 4242 4242 4242, then refresh.' },
+        footnote: ['Amounts come from Stripe, read on the server for customers the billing server knows, and cached for 5 minutes. Other activity on the Stripe account is not counted. Charge ids and emails are masked.', ...notes].join(' '),
+      };
+    } else if (view === 'users') {
+      const u = s?.usage;
+      const defs = [
+        ['all', 'All', () => true], ['desktop', 'Desktop app', (x) => x.kind === 'desktop'],
+        ['active7', 'Active 7 days', (x) => this.within(x.lastSeen, 7)], ['inactive', 'Idle 30+ days', (x) => x.kind === 'desktop' && !this.within(x.lastSeen, 30)],
+        ['licensed', 'Licensed', (x) => x.licensed], ['checkout', 'Website checkout', (x) => x.kind === 'checkout'], ['unseen', 'Not seen yet', (x) => x.kind === 'unseen'],
+      ];
+      const all = data?.users ?? [];
+      const rows = this.filtered('users', all, defs, ['id', 'email', 'license']);
+      const KIND = { desktop: 'Desktop app', checkout: 'Website checkout', unseen: 'Not seen yet' };
+      out = {
+        title: 'Users',
+        intro: 'One row per billing identity. The desktop app creates one per Windows account; the website creates one when a checkout starts. "Last seen" updates when the app checks its license with the server, at most every 10 minutes. Lead data stays on the customer\'s PC.',
+        kpis: u ? [
+          kpi('Active · 7 days', u.tracking ? String(u.active7d) : '—', u.tracking ? `of ${u.desktop} desktop installs` : 'Needs the billing-server update', true),
+          kpi('Active · 24 hours', u.tracking ? String(u.active24h) : '—', 'Desktop app'),
+          kpi('Active · 30 days', u.tracking ? String(u.active30d) : '—', 'Desktop app'),
+          kpi('Licensed machines', String(u.licensed), 'Holding a license slot'),
+          kpi('Paying customers', String(s.counts.customers ?? s.counts.purchases), `${s.counts.addons} with add-on`),
+          kpi('Registered', String(u.registered), 'All billing identities'),
+        ] : [],
+        chips: this.chips('users', defs, all, Boolean(data)),
+        columns: ['Installation', 'Type', 'License', 'Plan', 'Registered', 'Last seen', 'Status'],
+        grid: 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.8fr)',
+        rows: rows.map((x) => {
+          const active = this.within(x.lastSeen, 7);
+          return { cells: [
+            this.cell(`Install ${x.id}`, x.email || ''),
+            this.cell(KIND[x.kind]),
+            this.cell(x.license ? `…${x.license}` : '—', x.slot ? `Slot ${x.slot}` : x.buyer ? 'Purchased here' : ''),
+            this.cell(x.buyer ? 'Lifetime buyer' : x.licenseType === 'trial' ? '1-day trial' : x.licensed ? 'Licensed seat' : '—', x.addon ? '+ Decision Maker' : ''),
+            this.cell(this.date(x.created)),
+            this.cell(x.kind === 'checkout' ? 'n/a' : this.ago(x.lastSeen)),
+            x.kind !== 'desktop' ? this.pill(x.kind === 'checkout' ? 'Web' : 'Unseen', 'neutral') : this.pill(active ? 'Active' : 'Idle', active ? 'ok' : 'neutral'),
+          ] };
+        }),
+        empty: !data ? notConnected : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No users yet', text: 'A row appears when the desktop app first contacts the billing server or a website checkout starts.' },
+        footnote: u && !u.tracking
+          ? 'Activity tracking is off: deploy the updated billing-server files (core.mjs, neon-store.mjs, server.mjs). Until then, desktop installs are only known once they activate a license.'
+          : 'Website checkout identities never call the license check, so they have no last-seen time. App version and machine details are not collected.',
+      };
+    } else if (view === 'purchases') {
+      const defs = this.purchaseDefs();
+      const all = data?.purchases ?? [];
+      const rows = this.filtered('purchases', all, defs, ['id', 'email', 'session', 'customer']);
+      out = {
+        title: mode === 'live' ? 'Stripe purchases' : 'Stripe test purchases',
+        intro: 'Lifetime Deal checkouts recorded by the billing server. Verify asks Stripe for the amount, payment and refund state of one purchase.',
+        chips: this.chips('purchases', defs, all, Boolean(data)),
+        columns: ['Customer', 'Checkout', 'Created', 'License', 'Add-on', 'Status', 'Stripe'],
+        grid: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.2fr)',
+        rows: rows.map((r) => {
+          const v = this.state.verify[r.id];
+          let stripeCell;
+          if (r.status !== 'paid') stripeCell = this.cell('—', 'Nothing to verify');
+          else if (mode !== 'test' && conn !== 'fixture') stripeCell = this.cell('—', 'Test mode only');
+          else if (v?.error) stripeCell = this.cell('Check failed', v.error);
+          else if (v) stripeCell = this.pill(`${this.money(v.amount)} · ${v.refunded ? 'Refunded' : v.disputed ? 'Disputed' : v.paid ? 'Paid' : 'Not paid'}`, v.refunded || v.disputed || !v.paid ? 'error' : 'ok');
+          else stripeCell = { isText: false, isPill: false, isButton: true, text: this.state.verifying === r.id ? 'Checking…' : 'Verify', busy: this.state.verifying === r.id, go: () => this.verifyPurchase(r.id) };
+          return { cells: [
+            this.cell(r.email || 'Email not on file yet', `Install ${r.id}`),
+            this.cell('Lifetime Deal', `${r.session ?? '—'} · ${r.customer ?? 'no customer'}`),
+            this.cell(this.date(r.created)),
+            r.license ? this.cell(`…${r.license.last4}`, r.license.revoked ? 'Revoked' : 'Issued') : this.cell('—', 'None issued'),
+            this.pill({ active: 'Active', checkout_started: 'Started', none: 'None' }[r.addon], r.addon === 'active' ? 'ok' : r.addon === 'none' ? 'neutral' : 'warn'),
+            this.pill(r.status === 'paid' ? 'Paid' : 'Checkout started', r.status === 'paid' ? 'ok' : 'warn'),
+            stripeCell,
+          ] };
+        }),
+        empty: !data ? notConnected : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No Stripe test purchases yet', text: 'Complete a test checkout with card 4242 4242 4242 4242 to see it here.' },
+        footnote: 'Stripe ids and customer emails are masked by the server. Set ADMIN_SHOW_EMAILS=1 to see full emails. Verification is read-only and limited to test mode.',
+      };
+    } else if (view === 'licenses') {
+      const defs = [
+        ['all', 'All', () => true], ['active', 'Active', (r) => !r.revokedAt], ['revoked', 'Revoked', (r) => Boolean(r.revokedAt)],
+        ['unsent', 'Not emailed', (r) => !r.sentAt], ['unactivated', 'Never activated', (r) => r.slotsUsed === 0], ['full', 'At limit', (r) => r.slotsUsed >= r.cap],
+      ];
+      const all = data?.licenses ?? [];
+      const rows = this.filtered('licenses', all, defs, ['id', 'last4', 'email']);
+      out = {
+        title: 'Licenses',
+        intro: 'One key per Lifetime purchase. Only a hash and the last four characters are stored; the full key is shown once to the buyer and is never available here.',
+        chips: this.chips('licenses', defs, all, Boolean(data)),
+        columns: ['Key', 'Customer', 'Issued', 'Email', 'Activations', 'Status'],
+        grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr)',
+        rows: rows.map((r) => ({ cells: [
+          this.cell(`…${r.last4}`, `License ${r.id}`), this.cell(r.email), this.cell(this.date(r.created)),
+          this.pill(r.sentAt ? 'Sent' : 'Not sent', r.sentAt ? 'ok' : 'warn'),
+          this.cell(`${r.slotsUsed} / ${r.cap}`, r.activatedAt ? `First ${this.date(r.activatedAt)}` : 'Never activated'),
+          this.pill(r.revokedAt ? 'Revoked' : 'Active', r.revokedAt ? 'error' : 'ok'),
+        ] })),
+        empty: !data ? notConnected : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No licenses issued yet', text: 'A key is issued after a paid Lifetime checkout returns to the site.' },
+        footnote: 'Revocation is enforced by the billing server. This dashboard does not revoke or reissue keys.',
+      };
+    } else if (view === 'activations') {
+      const flat = (data?.activations ?? []).flatMap((r) => r.slots.map((sl) => ({ ...sl, license: r.license, email: r.email, revoked: r.revoked })));
+      const defs = [['all', 'All slots', () => true], ['used', 'Used', (r) => Boolean(r.installation)], ['free', 'Free', (r) => !r.installation]];
+      const rows = this.filtered('activations', flat, defs, ['license', 'email', 'installation']);
+      out = {
+        title: 'Installation slots',
+        intro: `Each license activates on up to ${cap} machines (LICENSE_MAX_ACTIVATIONS). The desktop app re-checks the license with the server before paid work, so a refund or revocation stops every slot.`,
+        chips: this.chips('activations', defs, flat, Boolean(data)),
+        columns: ['License', 'Customer', 'Slot', 'Installation', 'Registered', 'Last seen', 'State'],
+        grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.5fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.8fr)',
+        rows: rows.map((r) => ({ cells: [
+          this.cell(`…${r.license}`), this.cell(r.email), this.cell(String(r.slot)),
+          this.cell(r.installation ? `Install ${r.installation}` : '—'),
+          this.cell(r.since ? this.date(r.since) : '—'), this.cell(r.installation ? this.ago(r.lastSeen) : '—'),
+          this.pill(r.revoked ? 'Revoked' : r.installation ? 'In use' : 'Free', r.revoked ? 'error' : r.installation ? 'ok' : 'neutral'),
+        ] })),
+        empty: !data ? notConnected : rows.length ? { show: false } : flat.length ? noMatch : { show: true, title: 'No slots yet', text: 'Slots exist once a license is issued.' },
+        footnote: 'Registered is when that desktop installation first contacted the billing server. Per-slot activation times are not stored by the current schema.',
+      };
+    } else if (view === 'email') {
+      const defs = [['all', 'All', () => true], ['sent', 'Sent', (r) => Boolean(r.sentAt)], ['unsent', 'Not sent', (r) => !r.sentAt]];
+      const all = data?.licenses ?? [];
+      const rows = this.filtered('email', all, defs, ['email', 'last4']);
+      const provider = s?.email?.provider;
+      out = {
+        title: 'Email delivery',
+        intro: provider === 'resend' ? 'Resend is configured. Each issued key records whether its license email was accepted.'
+          : 'No email provider is configured, so license emails are not sent. The buyer sees the key once on the purchase return page.',
+        chips: this.chips('email', defs, all, Boolean(data)),
+        columns: ['Customer', 'Key', 'Issued', 'Delivery'],
+        grid: 'minmax(0,1.6fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr)',
+        rows: rows.map((r) => ({ cells: [
+          this.cell(r.email), this.cell(`…${r.last4}`), this.cell(this.date(r.created)),
+          r.sentAt ? this.pill(`Sent ${this.date(r.sentAt)}`, 'ok') : this.pill('Not sent', 'warn'),
+        ] })),
+        empty: !data ? notConnected : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No license emails yet', text: 'Rows appear when keys are issued.' },
+        footnote: 'This dashboard cannot send or resend email. Choosing an email provider is your call; nothing is set up automatically.',
+      };
+    } else {
+      const source = data ? data.checks : HANDOFF_CHECKS;
+      const defs = [['all', 'All checks', () => true], ['attention', 'Needs attention', (r) => r.state !== 'ok']];
+      const rows = this.filtered('health', source, defs, ['label', 'detail']).sort((a, b) => (SEVERITY[a.state] ?? 3) - (SEVERITY[b.state] ?? 3));
+      out = {
+        title: 'Service health',
+        intro: data ? 'Configuration checks read environment flags only; values never leave the server. Live checks query the database, a read-only Stripe price lookup, the public /health route and the private installer object.'
+          : 'These are the hosted setup items still open at handoff. They stay unverified until the admin API is running.',
+        chips: this.chips('health', defs, source, true),
+        columns: ['Check', 'Detail', 'State'],
+        grid: 'minmax(0,1fr) minmax(0,2.4fr) minmax(0,.6fr)',
+        rows: rows.map((r) => ({ cells: [this.cell(r.label), this.cell(r.detail), this.pill((TONE[r.state] ?? TONE.neutral).word, r.state)] })),
+        hasAction: true, actionLabel: this.state.probing ? 'Running checks…' : 'Run live checks', actionGo: () => this.probe(), actionDisabled: !data || this.state.probing,
+        empty: rows.length ? { show: false } : noMatch,
+        footnote: 'Set ADMIN_PROBE_SITE_URL=https://mamalead.com to include the public billing route check.',
+      };
+    }
+    return {
+      hasAction: false, actionLabel: '', actionDisabled: true, actionGo: () => {}, kpis: [], showChart: false,
+      ...out,
+      hasKpis: (out.kpis ?? []).length > 0,
+      columns: out.columns.map((label) => ({ label })),
+      hasChips: true, hasRows: out.rows.length > 0,
+      countLabel: data && out.rows.length ? `${out.rows.length} shown` : '',
+    };
+  }
+
+  renderVals() {
+    const { view, data, conn } = this.state;
+    const ownerName = this.props.ownerName ?? 'Nafran';
+    const hour = new Date().getHours();
+    const narrow = this.state.width < 760;
+    const go = (id) => () => { this.setState({ view: id }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const nav = {};
+    VIEWS.forEach((v) => { const on = view === v.id; nav[v.id] = { go: go(v.id), bg: on ? '#1C1C1C' : 'transparent', fg: on ? '#C8D5BB' : '#1C1C1C' }; });
+    const navList = VIEWS.map((v) => ({ label: v.label, go: nav[v.id].go, bg: view === v.id ? '#1C1C1C' : 'transparent', fg: view === v.id ? '#FFFFFF' : '#1C1C1C' }));
+    const mode = data?.summary?.mode;
+    const banners = {
+      loading: { tag: 'LOADING', text: 'Contacting the admin API…', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#EFEFEF', tagFg: '#1C1C1C' },
+      unreachable: { tag: 'SETUP NEEDED', text: 'No admin API answered here, so nothing below is live. Run node website/admin/server/local-server.mjs and open http://127.0.0.1:38750/admin/, or deploy api/admin.mjs after the hosted setup.', bg: '#1C1C1C', fg: '#F0F0F0', tagBg: '#C8D5BB', tagFg: '#1C1C1C', retry: true },
+      unauthorized: { tag: 'SIGN IN', text: 'The admin API is running. Data stays hidden until the server accepts your owner token.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#C8D5BB', tagFg: '#1C1C1C' },
+      unavailable: { tag: 'SETUP NEEDED', text: `${this.state.error} The billing tables appear after the billing server handles its first request.`, bg: '#1C1C1C', fg: '#F0F0F0', tagBg: '#C8D5BB', tagFg: '#1C1C1C', retry: true },
+      error: { tag: 'ERROR', text: this.state.error, bg: '#F6E3E0', fg: '#5C1F1A', tagBg: '#7A2A22', tagFg: '#FFFFFF', retry: true },
+      fixture: { tag: 'TEST FIXTURE', text: 'Sample rows that mirror the verify-admin.mjs scenario: one $30 Stripe test purchase, one license, two activations, one download. They are not real sales or customers.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#1C1C1C', tagFg: '#C8D5BB' },
+    };
+    let banner = banners[conn];
+    if (conn === 'ok' && mode === 'live') banner = { tag: 'LIVE KEY', text: 'A live Stripe key is configured. This dashboard stays read-only. Switch back to test keys until live payments are approved.', bg: '#F3ECD9', fg: '#3D300C', tagBg: '#5C4813', tagFg: '#FFFFFF' };
+    return {
+      wide: !narrow, narrow, nav, navList,
+      ownerName, ownerInitial: ownerName.slice(0, 1).toUpperCase(),
+      greeting: `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, ${ownerName}`,
+      q: this.state.q, onSearch: (e) => this.setState({ q: e.target.value }),
+      searchPlaceholder: { overview: 'Search emails, keys, installs…', revenue: 'Search email or charge id…', users: 'Search install id, key ending or email…', purchases: 'Search email, install or Stripe id…', licenses: 'Search key ending or email…', activations: 'Search key ending or install id…', email: 'Search email or key ending…', health: 'Search checks…' }[view],
+      modeLabel: mode ? `STRIPE · ${mode === 'missing' ? 'NOT SET' : mode.toUpperCase()}` : 'NOT CONNECTED',
+      modeShort: mode ? (mode === 'missing' ? 'NO STRIPE' : mode.toUpperCase()) : 'OFFLINE',
+      modeDot: mode === 'test' ? '#8FA382' : mode === 'live' ? '#C9A646' : '#B9BEB6',
+      reload: () => this.load(),
+      banner: banner ? { show: true, retry: Boolean(banner.retry), ...banner } : { show: false },
+      signedIn: conn === 'ok', onLogout: () => this.logout(),
+      showLogin: conn === 'unauthorized',
+      loginToken: this.state.loginToken, loginBusy: this.state.loginBusy, loginError: this.state.loginError,
+      onLoginInput: (e) => this.setState({ loginToken: e.target.value }), onLogin: (e) => this.login(e),
+      isOverview: view === 'overview' && conn !== 'unauthorized',
+      isDetail: view !== 'overview' && conn !== 'unauthorized',
+      ...this.overview(nav),
+      detail: this.detail(),
+    };
+  }
+}
+</script>
+</body>
+</html>

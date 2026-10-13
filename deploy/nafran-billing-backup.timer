@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Nafran billing SQLite backup
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=nafran-billing-backup.service
+
+[Install]
+WantedBy=timers.target
