@@ -103,6 +103,15 @@ try {
   assert.equal(status.trial?.active, true)
   assert.equal(status.license?.kind, 'trial')
   console.log('PASS  emailed key activates the 24-hour trial on this device')
+
+  const run = await page.evaluate(() => window.desktop.scraper.start({
+    provider: 'mock', query: { keywords: ['clinic'], location: 'Manchester', maxResultsPerKeyword: 1 },
+  }))
+  await page.waitForFunction(async (runId) => {
+    const latest = await window.desktop.scraper.last()
+    return latest?.runId === runId && latest.status === 'done' && latest.leads.length === 1
+  }, run.runId, { timeout: 15_000 })
+  console.log('PASS  activated trial runs a licensed scrape through the desktop app')
 } finally {
   if (desktop) await desktop.close()
   service.close()
