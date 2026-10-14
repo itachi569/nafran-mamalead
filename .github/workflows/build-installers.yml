@@ -37,7 +37,15 @@ jobs:
           path: release/*
 
   macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
     env:
       REQUIRE_CODE_SIGNING: ${{ inputs.unsigned_mac_test && '0' || '1' }}
       REQUIRE_NOTARIZATION: ${{ inputs.unsigned_mac_test && '0' || '1' }}
@@ -79,16 +87,20 @@ jobs:
             unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             unset APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER
           fi
-          npm run package:mac -- --publish never
+          npm run package:mac -- --${{ matrix.arch }} --publish never
+      - name: Test installed Mac app and bundled Chromium
+        run: node scripts/verify-packaged-mac.mjs
+      - name: Test Mac trial and licence activation
+        run: node scripts/verify-desktop-trial.mjs
       - if: ${{ inputs.unsigned_mac_test }}
         uses: actions/upload-artifact@v4
         with:
-          name: nafran-macos-test-dmg
+          name: nafran-macos-${{ matrix.arch }}-test-dmg
           path: release/*.dmg
       - if: ${{ !inputs.unsigned_mac_test }}
         uses: actions/upload-artifact@v4
         with:
-          name: nafran-macos-installer
+          name: nafran-macos-${{ matrix.arch }}-installer
           path: |
             release/*.dmg
             release/*.zip

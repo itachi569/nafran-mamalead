@@ -18,6 +18,10 @@ if (requireNotarization && !hasMacNotarizationCredentials) {
 
 module.exports = {
   ...packageJson.build,
+  extraResources: [
+    ...(packageJson.build.extraResources ?? []),
+    { from: '.playwright-browsers', to: 'playwright-browsers' },
+  ],
   mac: {
     ...packageJson.build.mac,
     // Hardened runtime is required for notarized macOS builds. It is safe to keep it on for local
