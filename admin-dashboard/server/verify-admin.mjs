@@ -1,6 +1,6 @@
 // Local, offline test of the owner admin API against the real purchase → license → download → activation flow.
 // Uses the billing server with a fake Stripe fetch: no network, no real payments, no email.
-// Run from the repo root after copying the updated billing-server files:  node website/admin/server/verify-admin.mjs
+// Run from the repo root: node admin-dashboard/server/verify-admin.mjs
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { createHash, randomBytes } from 'node:crypto'
@@ -12,7 +12,7 @@ import { createAdminHandler } from './admin-core.mjs'
 import { createSqliteAdminStore } from './stores.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const billingModule = resolve(process.env.BILLING_SERVER_MODULE ?? join(here, '../../../desktop-app/billing-server/server.mjs'))
+const billingModule = resolve(process.env.BILLING_SERVER_MODULE ?? join(here, '../../billing-server/server.mjs'))
 const { createBillingServer } = await import(pathToFileURL(billingModule).href)
 
 const dir = mkdtempSync(join(tmpdir(), 'nafran-admin-'))
@@ -47,8 +47,8 @@ const sentMessages = []
 const billing = createBillingServer({ env: billingEnv, fetch: fakeStripe, sendEmail: async (message) => { sentMessages.push(message); return true } })
 await new Promise((done) => billing.server.listen(0, '127.0.0.1', done))
 const base = `http://127.0.0.1:${billing.server.address().port}`
-const bill = async (path, token, method = 'GET', data) => {
-  const response = await fetch(base + path, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(data ? { 'content-type': 'application/json' } : {}) }, body: data ? JSON.stringify(data) : undefined })
+const bill = async (path, token, method = 'GET', data, device) => {
+  const response = await fetch(base + path, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(device ? { 'x-nafran-device-id': device, 'x-nafran-device-platform': 'Windows x64 10.0' } : {}), ...(data ? { 'content-type': 'application/json' } : {}) }, body: data ? JSON.stringify(data) : undefined })
   return { status: response.status, body: await response.json() }
 }
 
@@ -69,14 +69,15 @@ try {
   const desktopA = (await bill('/v1/installations', null, 'POST')).body.token
   const desktopB = (await bill('/v1/installations', null, 'POST')).body.token
   const desktopC = (await bill('/v1/installations', null, 'POST')).body.token
-  check('billing flow: two desktop activations succeed', (await bill('/v1/activate', desktopA, 'POST', { licenseKey })).status === 200 && (await bill('/v1/activate', desktopB, 'POST', { licenseKey })).status === 200)
-  check('billing flow: third activation is still denied', (await bill('/v1/activate', desktopC, 'POST', { licenseKey })).status === 409)
-  const statusA = await bill('/v1/status', desktopA)
+  const devices = ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)]
+  check('billing flow: two desktop activations succeed', (await bill('/v1/activate', desktopA, 'POST', { licenseKey }, devices[0])).status === 200 && (await bill('/v1/activate', desktopB, 'POST', { licenseKey }, devices[1])).status === 200)
+  check('billing flow: third activation is still denied', (await bill('/v1/activate', desktopC, 'POST', { licenseKey }, devices[2])).status === 409)
+  const statusA = await bill('/v1/status', desktopA, 'GET', undefined, devices[0])
   check('billing flow: /v1/status response is unchanged and licensed', statusA.status === 200 && statusA.body.license.active === true && statusA.body.lifetime.active === true && !('lastSeen' in statusA.body))
   const raw = new DatabaseSync(database, { readOnly: true })
   const seenOf = () => raw.prepare("select last_seen_at as s from installations where last_seen_at is not null").all().map((r) => r.s)
   const firstSeen = seenOf()
-  await bill('/v1/status', desktopA)
+  await bill('/v1/status', desktopA, 'GET', undefined, devices[0])
   check('last-seen is recorded once and throttled to one write per 10 minutes', firstSeen.length === 1 && seenOf()[0] === firstSeen[0])
   raw.close()
 
@@ -135,6 +136,10 @@ try {
   check('license filter "full" finds the license at its activation limit', (await call('/admin/api/licenses?filter=full', { cookie })).body.rows.length === 1)
   const activations = await call('/admin/api/activations', { cookie })
   check('activation slots show both machines', activations.body.rows[0].slots.filter((s) => s.installation).length === 2)
+  check('activation slots include short device IDs and platform', activations.body.rows[0].slots.some((s) => s.device === devices[0].slice(0, 8) && s.platform === 'Windows x64 10.0'))
+  const publicInstaller = await fetch(`${base}/v1/download`, { redirect: 'manual' })
+  const publicSummary = await call('/admin/api/summary', { cookie })
+  check('anonymous public download is counted without a license', publicInstaller.status === 302 && publicSummary.body.downloads.public === 1 && publicSummary.body.downloads.total === 2)
   const health = await call('/admin/api/health?probe=1', { cookie })
   const state = Object.fromEntries(health.body.checks.map((x) => [x.id, x.state]))
   check('health reports configuration without values', state.stripe_key === 'ok' && state.email === 'missing' && state.installer === 'warn' && state.database === 'ok' && state.stripe_api === 'ok' && state.usage_tracking === 'ok' && state.webhooks === 'warn')
@@ -146,7 +151,7 @@ try {
   const trialInstall = (await bill('/v1/installations', null, 'POST')).body.token
   check('billing flow: a 1-day trial key is sent', (await bill('/v1/trial', trialInstall, 'POST', { email: 'trial@example.test' })).status === 200 && sentMessages.at(-1)?.kind === 'trial')
   const trialKey = sentMessages.at(-1).licenseKey
-  check('billing flow: the trial activates on its first machine', (await bill('/v1/activate', trialInstall, 'POST', { licenseKey: trialKey })).status === 200)
+  check('billing flow: the trial activates on its first machine', (await bill('/v1/activate', trialInstall, 'POST', { licenseKey: trialKey }, 'd'.repeat(64))).status === 200)
   const trialSummary = await call('/admin/api/summary', { cookie })
   const trialUsers = await call('/admin/api/users?filter=licensed', { cookie })
   check('admin shows trial use without counting it as a paid license', trialSummary.body.counts.trials === 1 && trialSummary.body.counts.licenses === 1 && trialSummary.body.usage.licensed === 3 && trialUsers.body.rows.some((r) => r.licenseType === 'trial' && r.licensed))
@@ -157,7 +162,7 @@ try {
   check('no license key, tokens, hashes, Stripe ids or secrets appear in any admin response', ![licenseKey, trialKey, trialInstall, buyer, desktopA, desktopB, desktopC, ownerToken, sessionSecret, grant, ...Object.values(secrets), ...hashes, 'token_hash', 'key_hash', 'buyer@example.test', 'trial@example.test', 'cus_mock', 'ch_mock', 'pi_mock', 'cs_test_lifetime'].some((value) => all.includes(value)))
   check('the admin store cannot write to the billing database', (() => { try { db.exec("update licenses set revoked_at = 'x'"); return false } catch { return true } })())
   db.close()
-  check('license enforcement is unchanged after admin use', (await bill('/v1/status', desktopA)).body.license.active === true && (await bill('/v1/activate', desktopC, 'POST', { licenseKey })).status === 409)
+  check('license enforcement is unchanged after admin use', (await bill('/v1/status', desktopA, 'GET', undefined, devices[0])).body.license.active === true && (await bill('/v1/activate', desktopC, 'POST', { licenseKey }, devices[2])).status === 409)
   console.log(`${passed}/${passed} admin checks passed`)
 } finally {
   store?.close()

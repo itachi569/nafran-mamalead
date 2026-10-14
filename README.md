@@ -125,7 +125,13 @@ Stripe server keys stay outside the Electron build in server environment variabl
 
 The supplied MamaLead Stripe document was imported into ignored local files
 `.secrets/stripe-test.env` and `.secrets/stripe-live.env`. The server key stays in the separate
-`billing-server` process; Electron stores only an encrypted installation token. The server checks
+`billing-server` process; Electron stores only an encrypted installation token. On Windows it also
+sends a SHA-256 hash derived from the machine ID and a short platform label. The server binds the
+installation token to that device ID and limits a lifetime key to two activated devices. A key is
+required to activate app features, not to download the installer. Anonymous download clicks can
+be counted; the customer's email and device become known after key activation. Device IDs and
+client checks raise the cost of casual sharing, but cannot make a client app impossible to patch.
+The server checks
 Stripe for the $30 one-time Lifetime Deal, which unlocks all built-in features. A free 1-day trial
 key is emailed once per address and browser identity, activates on one machine, and expires 24 hours
 after first activation. The server creates hosted Checkout and portal sessions and reads real invoices. A new workspace is no longer
@@ -137,16 +143,14 @@ checks authentication, trial expiry, checkout creation, payment reconciliation, 
 invoices without charging a card. Do not use the live key in the desktop process or installer.
 
 The own-server deployment runs `billing-server/server.mjs` on billing VM131 with a persistent SQLite
-`BILLING_DB_PATH`. It is currently private on `127.0.0.1:38747` in Stripe test mode. Before customer
-use, route `https://api.mamalead.com` to the VM through HTTPS, set `BILLING_PUBLIC_URL` to that origin,
-set `BILLING_ALLOWED_ORIGINS=https://mamalead.com,https://www.mamalead.com`, and verify a database
-backup and restore point. `LOCAL_DOWNLOAD_PATH` lets the service stream the Windows installer from
-its own disk after a short-lived signed license grant. The protected file must be readable by the
-service user and inaccessible from the public web server directly.
+`BILLING_DB_PATH`, routed publicly at `https://api.mamalead.com` in Stripe test mode. The server
+streams the Windows installer from `LOCAL_DOWNLOAD_PATH` at `GET /v1/download` without a key;
+the file itself remains private on the VM. Legacy signed download grants still work. Keep the
+installer readable only by the service account and back up the SQLite database.
 Set `RESEND_API_KEY` and `EMAIL_FROM` (or another tested mail sender) on the server before offering
 trial keys or relying on automatic lifetime emails. The desktop keeps separate encrypted installation identities per billing origin,
-so local test purchases never appear as live purchases. Preserve the production URL and back up
-the Postgres database once customers have paid.
+so local test purchases never appear as live purchases. Preserve the public API URL and keep
+independent SQLite backups once customers have paid.
 Exports write CSV/TSV/semicolon straight to disk; Social Profiles also exports the saved profile
 links as Excel `.xlsx` or PDF `.pdf` through the local save dialog.
 

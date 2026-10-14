@@ -720,15 +720,15 @@ class Component extends DCLogic {
     const instTone = !inst ? 'neutral' : privateStorage ? (inst.ready ? 'ok' : 'warn') : inst.storage === 'local-url' ? 'warn' : 'missing';
     const installer = {
       filename: inst?.filename ?? 'Nafran-Leads-Scraper-Setup.exe',
-      pill: !inst ? 'Not verified' : privateStorage ? (inst.ready ? 'Private installer ready' : 'Signing key missing') : inst.storage === 'local-url' ? 'Local test URL only' : 'Not uploaded',
+      pill: !inst ? 'Not verified' : privateStorage ? (inst.ready ? 'Installer ready' : 'Signing key missing') : inst.storage === 'local-url' ? 'Local test URL only' : 'Not uploaded',
       pillBg: TONE[instTone].bg, pillFg: TONE[instTone].fg,
       facts: [
         { label: 'Storage', value: !inst ? '—' : { blob: 'Blob', 'local-file': 'Server file', 'local-url': 'Local URL', none: 'None' }[inst.storage] },
         { label: 'Signed links', value: !inst ? '—' : inst.signing ? 'Yes' : 'No' },
         { label: 'Downloads', value: dl?.tracking ? String(dl.total) : '—' },
       ],
-      detail: !inst ? 'At handoff the private installer upload was still pending. Connect the admin API to check it.'
-        : `${inst.detail} ${dl?.tracking ? `${dl.buyers} installation${dl.buyers === 1 ? '' : 's'} downloaded, ${dl.last30d} in the last 30 days.` : 'Download counts start once the updated billing server is deployed.'}`,
+      detail: !inst ? 'Connect the admin API to check the installer.'
+        : `${inst.detail} ${dl?.tracking ? `${dl.public ?? 0} public downloads, ${dl.buyers} licensed installation downloads, ${dl.last30d} in the last 30 days. Anonymous downloaders become identifiable after license activation.` : 'Download counts start once the updated billing server is deployed.'}`,
     };
 
     const actRows = (data?.activations ?? []).filter((x) => this.match(x, ['license', 'email']));
@@ -925,11 +925,11 @@ class Component extends DCLogic {
         title: 'Installation slots',
         intro: `Each license activates on up to ${cap} machines (LICENSE_MAX_ACTIVATIONS). The desktop app re-checks the license with the server before paid work, so a refund or revocation stops every slot.`,
         chips: this.chips('activations', defs, flat, Boolean(data)),
-        columns: ['License', 'Customer', 'Slot', 'Installation', 'Registered', 'Last seen', 'State'],
-        grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.5fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.8fr)',
+        columns: ['License', 'Customer', 'Slot', 'Device', 'Registered', 'Last seen', 'State'],
+        grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.5fr) minmax(0,1.3fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.8fr)',
         rows: rows.map((r) => ({ cells: [
           this.cell(`…${r.license}`), this.cell(r.email), this.cell(String(r.slot)),
-          this.cell(r.installation ? `Install ${r.installation}` : '—'),
+          this.cell(r.installation ? (r.platform || 'Legacy device') : '—', r.installation ? `Install ${r.installation}${r.device ? ` · device ${r.device}` : ''}` : ''),
           this.cell(r.since ? this.date(r.since) : '—'), this.cell(r.installation ? this.ago(r.lastSeen) : '—'),
           this.pill(r.revoked ? 'Revoked' : r.installation ? 'In use' : 'Free', r.revoked ? 'error' : r.installation ? 'ok' : 'neutral'),
         ] })),

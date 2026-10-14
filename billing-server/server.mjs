@@ -32,17 +32,21 @@ export function createBillingServer(options = {}) {
   )`)
   db.exec(`create table if not exists billing_events (event_id text primary key, received_at text not null)`)
   db.exec('create table if not exists billing_downloads (id text primary key, installation_id text not null, created_at text not null)')
+  db.exec('create table if not exists billing_public_downloads (id text primary key, created_at text not null)')
   const columns = new Set(db.prepare('pragma table_info(installations)').all().map((column) => column.name))
   if (!columns.has('pending_lifetime_session_id')) db.exec('alter table installations add column pending_lifetime_session_id text')
   if (!columns.has('pending_decision_session_id')) db.exec('alter table installations add column pending_decision_session_id text')
   if (!columns.has('license_id')) db.exec('alter table installations add column license_id text')
   if (!columns.has('license_slot')) db.exec('alter table installations add column license_slot integer')
   if (!columns.has('last_seen_at')) db.exec('alter table installations add column last_seen_at text')
+  if (!columns.has('device_id')) db.exec('alter table installations add column device_id text')
+  if (!columns.has('device_platform')) db.exec('alter table installations add column device_platform text')
   const licenseColumns = new Set(db.prepare('pragma table_info(licenses)').all().map((column) => column.name))
   if (!licenseColumns.has('encrypted_key')) db.exec('alter table licenses add column encrypted_key text')
   db.exec('create unique index if not exists installations_license_slot on installations (license_id, license_slot) where license_id is not null and license_slot is not null')
   const store = {
-    create: async (id, tokenHash, createdAt) => { db.prepare('insert into installations (id, token_hash, created_at) values (?, ?, ?)').run(id, tokenHash, createdAt) },
+    create: async (id, tokenHash, createdAt, deviceId, devicePlatform) => { db.prepare('insert into installations (id, token_hash, created_at, device_id, device_platform) values (?, ?, ?, ?, ?)').run(id, tokenHash, createdAt, deviceId, devicePlatform) },
+    bindDevice: async (id, deviceId, devicePlatform) => Boolean(db.prepare('update installations set device_id = ?, device_platform = coalesce(device_platform, ?) where id = ? and (device_id is null or device_id = ?)').run(deviceId, devicePlatform, id, deviceId).changes),
     byTokenHash: async (tokenHash) => db.prepare('select * from installations where token_hash = ?').get(tokenHash),
     byId: async (id) => db.prepare('select * from installations where id = ?').get(id),
     savePending: async (id, product, sessionId) => { db.prepare(product === 'lifetime' ? 'update installations set pending_lifetime_session_id = ? where id = ?' : 'update installations set pending_decision_session_id = ? where id = ?').run(sessionId, id) },
@@ -104,6 +108,7 @@ export function createBillingServer(options = {}) {
     claimWebhookEvent: async (eventId) => { try { db.prepare('insert into billing_events (event_id, received_at) values (?, ?)').run(eventId, new Date().toISOString()); return true } catch { return false } },
     markSeen: async (id, seenAt) => { db.prepare('update installations set last_seen_at = ? where id = ? and (last_seen_at is null or last_seen_at < ?)').run(seenAt, id, new Date(Date.parse(seenAt) - 600_000).toISOString()) },
     recordDownload: async (id, installationId, createdAt) => { db.prepare('insert into billing_downloads (id, installation_id, created_at) values (?, ?, ?)').run(id, installationId, createdAt) },
+    recordPublicDownload: async (id, createdAt) => { db.prepare('insert into billing_public_downloads (id, created_at) values (?, ?)').run(id, createdAt) },
     revokeDecision: async (subscriptionId) => { db.prepare('update installations set decision_subscription_id = null where decision_subscription_id = ?').run(subscriptionId) },
   }
   let handler
@@ -138,6 +143,8 @@ export function createBillingServer(options = {}) {
       method: req.method,
       url: req.url,
       authorization: req.headers.authorization,
+      deviceId: req.headers['x-nafran-device-id'],
+      devicePlatform: req.headers['x-nafran-device-platform'],
       stripeSignature: req.headers['stripe-signature'],
       readBody: async () => {
         let raw = ''

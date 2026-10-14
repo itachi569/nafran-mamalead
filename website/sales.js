@@ -6,6 +6,7 @@
     : 'https://api.mamalead.com'
   const tokenKey = 'nafran.billing.installation.' + new URL(billingOrigin).host
   const api = (path) => new URL(path, billingOrigin).toString()
+  document.querySelectorAll('[data-public-download]').forEach((link) => { link.href = api('/v1/download') })
   const readToken = () => localStorage.getItem(tokenKey) || ''
   const saveToken = (token) => { if (/^[A-Za-z0-9_-]{43}$/.test(token)) localStorage.setItem(tokenKey, token) }
   async function request(path, options) {
@@ -54,14 +55,11 @@
         ? 'Payment verified. Your license is ' + license.licenseKey + (license.emailSent ? '. It was also emailed to you.' : '. Save this key; email delivery is not configured yet.')
         : 'Your license is already issued and ends in ' + license.last4 + '.'
       const status = banner(message, false, true)
-      if (license.downloadAvailable) {
-        const download = await request('/v1/download-link', { method: 'POST' })
-        const link = document.createElement('a')
-        link.href = download.url
-        link.textContent = ' Download the installer'
-        link.style.cssText = 'color:#c8d5bb;margin-left:8px'
-        status.appendChild(link)
-      }
+      const link = document.createElement('a')
+      link.href = api('/v1/download')
+      link.textContent = ' Download the installer'
+      link.style.cssText = 'color:#c8d5bb;margin-left:8px'
+      status.appendChild(link)
       history.replaceState({}, '', window.location.pathname + window.location.hash)
     } catch (error) { banner(error instanceof Error ? error.message : 'Payment is still being verified. Refresh in a moment.', true) }
   }
@@ -86,21 +84,6 @@
       form.reset()
     } catch (error) { banner(error instanceof Error ? error.message : 'Trial key could not be requested.', true) }
     finally { button.disabled = false }
-  }, true)
-  document.addEventListener('submit', async (event) => {
-    if (!event.target.matches('[data-license-download]')) return
-    event.preventDefault()
-    const input = event.target.elements.namedItem('licenseKey')
-    try {
-      const body = await request('/v1/download-by-license', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ licenseKey: input.value }) })
-      const node = banner('License verified. ', false, true)
-      const link = document.createElement('a')
-      link.href = body.url
-      link.textContent = 'Download the Windows installer'
-      link.style.cssText = 'color:#c8d5bb'
-      node.appendChild(link)
-      input.value = ''
-    } catch (error) { banner(error instanceof Error ? error.message : 'License could not be verified.', true) }
   }, true)
   void finishPurchase()
 }())

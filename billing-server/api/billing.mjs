@@ -44,6 +44,8 @@ export function createCloudFunction({ env = process.env, storeFactory = createNe
         method: request.method,
         url: target.toString(),
         authorization: request.headers.get('authorization'),
+        deviceId: request.headers.get('x-nafran-device-id'),
+        devicePlatform: request.headers.get('x-nafran-device-platform'),
         stripeSignature: request.headers.get('stripe-signature'),
         readBody: () => request.text(),
       })

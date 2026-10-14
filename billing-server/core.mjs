@@ -74,11 +74,19 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     return result
   }
 
-  async function installation(authorization) {
+  async function installation(authorization, deviceId, devicePlatform) {
     const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization ?? '')?.[1]
     if (!token) throw new HttpError(401, 'Billing installation token is missing.')
     const row = await store.byTokenHash(hash(token))
     if (!row) throw new HttpError(401, 'Billing installation token is invalid.')
+    if (row.device_id) {
+      if (deviceId !== row.device_id) throw new HttpError(403, 'This installation belongs to a different device.')
+    } else if (deviceId) {
+      if (typeof store.bindDevice !== 'function' || !(await store.bindDevice(row.id, deviceId, devicePlatform))) {
+        throw new HttpError(403, 'This installation belongs to a different device.')
+      }
+      row.device_id = deviceId
+    }
     return row
   }
 
@@ -301,9 +309,12 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     try { return raw ? JSON.parse(raw) : {} } catch { throw new HttpError(400, 'Invalid JSON.') }
   }
 
-  async function handle({ method, url: rawUrl, authorization, stripeSignature, readBody = async () => '' }) {
+  async function handle({ method, url: rawUrl, authorization, deviceId: rawDeviceId, devicePlatform: rawDevicePlatform, stripeSignature, readBody = async () => '' }) {
     try {
       const url = new URL(rawUrl, publicUrl)
+      const deviceId = rawDeviceId && /^[a-f0-9]{64}$/.test(rawDeviceId) ? rawDeviceId : null
+      const devicePlatform = rawDevicePlatform && /^[A-Za-z0-9 ._()-]{1,64}$/.test(rawDevicePlatform) ? rawDevicePlatform : null
+      if (rawDeviceId && !deviceId) throw new HttpError(400, 'Invalid device identity.')
       if (method === 'GET' && url.pathname === '/health') return json(200, { ok: true, mode })
       if (method === 'GET' && url.pathname === '/') return page('MamaLead billing', 'Return to MamaLead to view your billing status.')
       if (method === 'GET' && url.pathname === '/cancel') return page('Checkout cancelled', 'No purchase was completed. You can return to MamaLead.')
@@ -326,7 +337,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (method === 'POST' && url.pathname === '/v1/installations') {
         const token = randomBytes(32).toString('base64url')
         const id = randomUUID()
-        await store.create(id, hash(token), new Date().toISOString())
+        await store.create(id, hash(token), new Date().toISOString(), deviceId, devicePlatform)
         return json(201, { token })
       }
       if (method === 'POST' && url.pathname === '/v1/download-by-license') {
@@ -345,8 +356,9 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         return json(200, await downloadLink(purchasedInstallation))
       }
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
-        const row = await installation(authorization)
+        const row = await installation(authorization, deviceId, devicePlatform)
         if (method === 'GET' && url.pathname === '/v1/status') {
+          if (row.license_id && !deviceId) throw new HttpError(403, 'Update the app to verify this device before using a license.')
           const status = await verifiedStatus(row)
           if (typeof store.markSeen === 'function') { try { await store.markSeen(row.id, new Date().toISOString()) } catch {} }
           return json(200, status)
@@ -401,6 +413,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           return json(200, await issueLicense(row))
         }
         if (method === 'POST' && url.pathname === '/v1/activate') {
+          if (!deviceId) throw new HttpError(400, 'A device identity is required to activate a license.')
           const body = await jsonBody(readBody)
           return json(200, await activateLicense(row, body.licenseKey))
         }
@@ -409,34 +422,42 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         }
       }
       if (method === 'GET' && url.pathname === '/v1/download') {
-        const subjectId = verifyDownloadGrant(url.searchParams.get('grant'))
+        // No grant means the installer is free to download. A supplied but invalid
+        // grant still fails, so old signed links retain their existing semantics.
+        const subjectId = url.searchParams.has('grant') ? verifyDownloadGrant(url.searchParams.get('grant')) : null
         const download = env.DOWNLOAD_URL?.trim()
         if (!downloadConfigured()) throw new HttpError(503, 'The protected installer is not configured yet.')
         let downloadInstallationId = subjectId
-        if (subjectId.startsWith('trial-')) {
+        if (subjectId?.startsWith('trial-')) {
           const trial = await store.trialById(subjectId.slice(6))
           if (!trial || !trial.sent_at || trial.revoked_at || (trial.expires_at && Date.parse(trial.expires_at) <= Date.now())) throw new HttpError(403, 'This trial download grant is no longer active.')
           downloadInstallationId = trial.installation_id
-        } else {
+        } else if (subjectId) {
           const row = await store.byId(subjectId)
           const status = row ? await verifiedStatus(row) : null
           if (!status?.license?.active && !status?.lifetime?.active) throw new HttpError(403, 'This download grant is no longer active.')
+        }
+        const recordDownload = async () => {
+          try {
+            if (subjectId && typeof store.recordDownload === 'function') await store.recordDownload(randomUUID(), downloadInstallationId, new Date().toISOString())
+            else if (!subjectId && typeof store.recordPublicDownload === 'function') await store.recordPublicDownload(randomUUID(), new Date().toISOString())
+          } catch {}
         }
         if (env.BLOB_DOWNLOAD_PATH?.trim()) {
           if (!getBlob) throw new HttpError(503, 'Private installer storage is unavailable.')
           const blob = await getBlob(env.BLOB_DOWNLOAD_PATH.trim(), { access: 'private' })
           if (blob?.statusCode !== 200 || !blob.stream) throw new HttpError(503, 'The protected installer is not available yet.')
-          if (typeof store.recordDownload === 'function') { try { await store.recordDownload(randomUUID(), downloadInstallationId, new Date().toISOString()) } catch {} }
+          await recordDownload()
           return { status: 200, body: blob.stream, headers: { 'content-type': blob.blob?.contentType || 'application/octet-stream', 'content-disposition': `attachment; filename="${env.BLOB_DOWNLOAD_FILENAME?.trim() || 'Nafran-Leads-Scraper-Setup.exe'}"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } }
         }
         if (env.LOCAL_DOWNLOAD_PATH?.trim()) {
           const local = await getLocalInstaller?.(env.LOCAL_DOWNLOAD_PATH.trim())
           if (!local?.stream || !Number.isSafeInteger(local.size) || local.size < 1) throw new HttpError(503, 'The protected installer is not available yet.')
           const filename = (env.LOCAL_DOWNLOAD_FILENAME?.trim() || 'Nafran-Leads-Scraper-Setup.exe').replace(/["\\\r\n]/g, '_')
-          if (typeof store.recordDownload === 'function') { try { await store.recordDownload(randomUUID(), downloadInstallationId, new Date().toISOString()) } catch {} }
+          await recordDownload()
           return { status: 200, body: local.stream, headers: { 'content-type': 'application/octet-stream', 'content-length': String(local.size), 'content-disposition': `attachment; filename="${filename}"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } }
         }
-        if (typeof store.recordDownload === 'function') { try { await store.recordDownload(randomUUID(), downloadInstallationId, new Date().toISOString()) } catch {} }
+        await recordDownload()
         return { status: 302, body: '', headers: { location: download, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } }
       }
       throw new HttpError(404, 'Endpoint not found.')

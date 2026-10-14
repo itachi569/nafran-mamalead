@@ -52,11 +52,15 @@ await new Promise((resolve) => service.server.listen(0, '127.0.0.1', resolve))
 const base = `http://127.0.0.1:${service.server.address().port}`
 let passed = 0
 function check(name, condition) { assert.ok(condition, name); passed += 1; console.log(`PASS  ${name}`) }
-async function call(path, token, method = 'GET', data) {
-  const response = await fetch(base + path, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(data ? { 'content-type': 'application/json' } : {}) }, body: data ? JSON.stringify(data) : undefined })
+async function call(path, token, method = 'GET', data, device) {
+  const response = await fetch(base + path, { method, headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(device ? { 'x-nafran-device-id': device, 'x-nafran-device-platform': 'Windows x64 10.0' } : {}), ...(data ? { 'content-type': 'application/json' } : {}) }, body: data ? JSON.stringify(data) : undefined })
   return { status: response.status, body: await response.json() }
 }
 try {
+  const freeDownload = await fetch(base + '/v1/download')
+  check('any visitor can download the installer without a key or account', freeDownload.status === 200 && await freeDownload.text() === 'installer bytes' && service.db.prepare('select count(*) as n from billing_public_downloads').get().n === 1)
+  const forgedFreeDownload = await fetch(base + '/v1/download?grant=forged')
+  check('a supplied forged download grant is still rejected', forgedFreeDownload.status === 401)
   const register = await call('/v1/installations', null, 'POST')
   const token = register.body.token
   check('registration returns a random installation token', register.status === 201 && /^[A-Za-z0-9_-]{43}$/.test(token))
@@ -82,17 +86,21 @@ try {
   const trialDownloadUrl = new URL(trialInstaller.body.url)
   const trialDownload = await fetch(base + trialDownloadUrl.pathname + trialDownloadUrl.search)
   check('the server streams the private installer only through a signed trial grant', trialDownload.status === 200 && await trialDownload.text() === 'installer bytes' && trialDownload.headers.get('content-length') === '15')
-  const trialMachine = (await call('/v1/installations', null, 'POST')).body.token
-  const trialActivation = await call('/v1/activate', trialMachine, 'POST', { licenseKey: trialKey })
-  const trialStatus = await call('/v1/status', trialMachine)
+  const firstDevice = 'a'.repeat(64)
+  const otherDevice = 'b'.repeat(64)
+  const trialMachine = (await call('/v1/installations', null, 'POST', undefined, firstDevice)).body.token
+  const trialActivation = await call('/v1/activate', trialMachine, 'POST', { licenseKey: trialKey }, firstDevice)
+  const trialStatus = await call('/v1/status', trialMachine, 'GET', undefined, firstDevice)
   check('trial starts on first machine activation and unlocks every built-in feature', trialActivation.status === 200 && trialActivation.body.kind === 'trial' && trialStatus.body.trial.active && trialStatus.body.decisionMaker.active)
+  check('server stores a hashed device ID and platform with activation', service.db.prepare('select device_id, device_platform from installations where token_hash = ?').get(createHash('sha256').update(trialMachine).digest('hex')).device_id === firstDevice)
+  check('same installation token cannot be reused without its device identity', (await call('/v1/status', trialMachine)).status === 403 && (await call('/v1/status', trialMachine, 'GET', undefined, otherDevice)).status === 403)
   check('trial expiry is 24 hours after first activation', Math.abs(Date.parse(trialActivation.body.expiresAt) - Date.parse(trialActivation.body.activatedAt) - 86_400_000) < 1000)
   const anotherTrialMachine = (await call('/v1/installations', null, 'POST')).body.token
-  check('trial key cannot be activated on another machine', (await call('/v1/activate', anotherTrialMachine, 'POST', { licenseKey: trialKey })).status === 409)
-  check('same email cannot claim a new trial through another browser', (await call('/v1/trial', anotherTrialMachine, 'POST', { email: 'trial@example.test' })).status === 409)
+  check('trial key cannot be activated on another machine', (await call('/v1/activate', anotherTrialMachine, 'POST', { licenseKey: trialKey }, otherDevice)).status === 409)
+  check('same email cannot claim a new trial through another browser', (await call('/v1/trial', anotherTrialMachine, 'POST', { email: 'trial@example.test' }, otherDevice)).status === 409)
   service.db.prepare("update trial_licenses set expires_at = '2000-01-01T00:00:00.000Z'").run()
-  check('expired trial disables all features on the server', !(await call('/v1/status', trialMachine)).body.license.active)
-  check('expired trial key cannot be reactivated', (await call('/v1/activate', trialMachine, 'POST', { licenseKey: trialKey })).status === 403)
+  check('expired trial disables all features on the server', !(await call('/v1/status', trialMachine, 'GET', undefined, firstDevice)).body.license.active)
+  check('expired trial key cannot be reactivated', (await call('/v1/activate', trialMachine, 'POST', { licenseKey: trialKey }, firstDevice)).status === 403)
   check('expired trial key cannot download the installer', (await call('/v1/download-by-license', null, 'POST', { licenseKey: trialKey })).status === 403)
   const checkout = await call('/v1/checkout', token, 'POST', { product: 'lifetime' })
   check('Lifetime Deal creates a hosted Stripe Checkout', checkout.status === 200 && checkout.body.url.startsWith('https://checkout.stripe.com/'))
@@ -107,16 +115,17 @@ try {
   check('a paid Lifetime Deal issues a license key without storing it in plaintext', issued.status === 200 && /^NF(?:-[A-Z0-9]{4}){10}$/.test(issued.body.licenseKey) && issued.body.email === 'buyer@example.test' && !readFileSync(database).includes(Buffer.from(issued.body.licenseKey)))
   const reissued = await call('/v1/license', token, 'POST')
   check('reopening a paid return does not issue a second license', reissued.status === 200 && reissued.body.licenseKey === null && reissued.body.last4 === issued.body.licenseKey.slice(-4) && service.db.prepare('select count(*) as count from licenses').get().count === 1)
-  const activated = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey })
+  check('activation without a device identity is rejected', (await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey })).status === 400)
+  const activated = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey }, firstDevice)
   check('the purchased license activates the current installation', activated.status === 200 && activated.body.active)
   const secondToken = (await call('/v1/installations', null, 'POST')).body.token
-  const secondActivation = await call('/v1/activate', secondToken, 'POST', { licenseKey: issued.body.licenseKey })
+  const secondActivation = await call('/v1/activate', secondToken, 'POST', { licenseKey: issued.body.licenseKey }, otherDevice)
   check('the same license activates a second installation', secondActivation.status === 200 && secondActivation.body.active)
-  check('the second installation inherits verified Stripe entitlement', (await call('/v1/status', secondToken)).body.license.active)
+  check('the second installation inherits verified Stripe entitlement', (await call('/v1/status', secondToken, 'GET', undefined, otherDevice)).body.license.active)
   const thirdToken = (await call('/v1/installations', null, 'POST')).body.token
-  const thirdActivation = await call('/v1/activate', thirdToken, 'POST', { licenseKey: issued.body.licenseKey })
+  const thirdActivation = await call('/v1/activate', thirdToken, 'POST', { licenseKey: issued.body.licenseKey }, 'c'.repeat(64))
   check('a third installation is denied by the activation limit', thirdActivation.status === 409)
-  const grant = await call('/v1/download-link', token, 'POST')
+  const grant = await call('/v1/download-link', token, 'POST', undefined, firstDevice)
   check('an active license receives a protected short-lived download grant', grant.status === 200 && grant.body.url.includes('/v1/download?grant='))
   const paidDownloadUrl = new URL(grant.body.url)
   const paidDownload = await fetch(base + paidDownloadUrl.pathname + paidDownloadUrl.search)
@@ -146,17 +155,17 @@ try {
   const badWebhook = await fetch(base + '/webhooks/stripe', { method: 'POST', headers: { 'stripe-signature': 't=1,v1=bad', 'content-type': 'application/json' }, body: webhookPayload })
   check('an invalid Stripe webhook signature is rejected', badWebhook.status === 400)
   chargeRefunded = true
-  check('a refunded payment revokes active status despite a saved license', !(await call('/v1/status', token)).body.lifetime.active)
-  check('a refunded payment revokes other machines too', !(await call('/v1/status', secondToken)).body.license.active)
-  const afterRefund = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey })
+  check('a refunded payment revokes active status despite a saved license', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.lifetime.active)
+  check('a refunded payment revokes other machines too', !(await call('/v1/status', secondToken, 'GET', undefined, otherDevice)).body.license.active)
+  const afterRefund = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey }, firstDevice)
   check('a refunded license cannot be activated again', afterRefund.status === 403)
   const refundedDownload = await call('/v1/download-by-license', null, 'POST', { licenseKey: issued.body.licenseKey })
   check('a refunded license cannot download the installer', refundedDownload.status === 403)
   chargeRefunded = false
-  check('restored $30 purchase includes Decision Makers without an add-on', (await call('/v1/status', token)).body.decisionMaker.active)
-  const invoices = await call('/v1/invoices', token)
+  check('restored $30 purchase includes Decision Makers without an add-on', (await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active)
+  const invoices = await call('/v1/invoices', token, 'GET', undefined, firstDevice)
   check('invoice rows come from Stripe', invoices.body.invoices.length === 1 && invoices.body.invoices[0].number === 'M-1')
-  const portal = await call('/v1/portal', token, 'POST')
+  const portal = await call('/v1/portal', token, 'POST', undefined, firstDevice)
   check('customer portal is created on the server', portal.body.url.startsWith('https://billing.stripe.com/'))
   const live = createBillingServer({
     env: { STRIPE_SECRET_KEY: 'rk_live_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: join(dir, 'live.db'), BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38748' },

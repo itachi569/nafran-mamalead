@@ -114,7 +114,8 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     license: l.key_last4, email: email(l.email), revoked: Boolean(l.revoked_at), created: iso(l.created_at),
     slots: Array.from({ length: cap }, (_, i) => {
       const row = (d.attached.get(l.id) ?? []).find((r) => Number(r.license_slot) === i + 1)
-      return { slot: i + 1, installation: row ? short(row.id) : null, since: row ? iso(row.created_at) : null, lastSeen: row ? iso(row.last_seen_at) : null }
+      return { slot: i + 1, installation: row ? short(row.id) : null, device: row?.device_id ? short(row.device_id) : null,
+        platform: row?.device_platform || null, since: row ? iso(row.created_at) : null, lastSeen: row ? iso(row.last_seen_at) : null }
     }),
   })).sort(newest)
 
@@ -128,6 +129,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     return {
       id: short(r.id), kind: desktop ? 'desktop' : checkout ? 'checkout' : 'unseen',
       created: iso(r.created_at), lastSeen: iso(r.last_seen_at),
+      device: r.device_id ? short(r.device_id) : null, platform: r.device_platform || null,
       licensed: Boolean(trial ? trialActive : r.license_id && license && !license.revoked_at), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
       licenseType: trial ? 'trial' : license ? 'lifetime' : null,
       buyer: Boolean(r.lifetime_session_id), addon: Boolean(r.decision_subscription_id),
@@ -368,7 +370,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
             slotsUsed: live.reduce((sum, l) => sum + Math.min(l.slotsUsed, cap), 0), slotsTotal: live.length * cap,
           },
           usage: usage(d),
-          downloads: d.downloads ? { tracking: true, total: Number(d.downloads.total ?? 0), buyers: Number(d.downloads.buyers ?? 0), last30d: Number(d.downloads.last30d ?? 0), last: iso(d.downloads.last) } : { tracking: false },
+          downloads: d.downloads ? { tracking: true, total: Number(d.downloads.total ?? 0), public: Number(d.downloads.public ?? 0), buyers: Number(d.downloads.buyers ?? 0), last30d: Number(d.downloads.last30d ?? 0), last: iso(d.downloads.last) } : { tracking: false },
           webhooks: d.webhooks ? { count: Number(d.webhooks.count ?? 0), last: iso(d.webhooks.last) } : null,
           revenueReadable: stripeReadsAllowed,
           installer: installer(), email: emailConfig(), checks: [...configChecks(), ...dataChecks(d)],

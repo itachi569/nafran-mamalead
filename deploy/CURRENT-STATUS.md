@@ -1,5 +1,13 @@
 # MamaLead self-hosted test deployment — 14 October 2026 (Pakistan time)
 
+## Version 1.4.1 public installer and device binding
+
+The billing VM now serves `GET https://api.mamalead.com/v1/download` without a license key. A full public HTTPS download was 105,569,746 bytes and matched the rebuilt 1.4.1 installer SHA-256 `8AA63211634CD88E8EE898AAE8F59370EA3773EF95EA08C47AB680274ECD1B87`. Public download requests are counted separately from legacy signed downloads. The Windows app must submit a stable SHA-256 device ID and platform label when registering and checking a license; the server binds each installation token to that ID and rejects a different ID. The owner dashboard can show a shortened device ID and platform for activated slots. The packaged 1.4.1 app launched and created a device-bound registration on the public server. Local checks passed: 59 billing checks, 38 dashboard checks, and TypeScript type checking.
+
+The updated 1.4.1 website files are staged on VM131 at `/srv/nafran-site/public`, but the public `https://mamalead.com/` gateway still serves the previous website copy (verified by its unchanged SHA-256). The VM site service is bound to loopback; switching the public origin requires gateway access. The supplied gateway SSH key is rejected, so the public website button and copy have **not** been updated. Until routing is fixed, the public installer link above works directly.
+
+The 1.4.1 Windows installer is unsigned (`Get-AuthenticodeSignature: NotSigned`), so a SmartScreen reputation warning remains possible. Hosting the file on Azure would not sign it. Device IDs and server checks discourage key sharing but do not make a desktop client impossible to modify.
+
 The website, billing API, and owner dashboard are publicly routed through HTTPS:
 
 - Website: `https://mamalead.com/`

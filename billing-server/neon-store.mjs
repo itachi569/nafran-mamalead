@@ -24,6 +24,8 @@ export function createNeonStore(databaseUrl) {
       await sql`alter table billing_installations add column if not exists pending_decision_session_id text`
       await sql`alter table billing_installations add column if not exists license_id text`
       await sql`alter table billing_installations add column if not exists license_slot integer`
+      await sql`alter table billing_installations add column if not exists device_id text`
+      await sql`alter table billing_installations add column if not exists device_platform text`
       await sql`create unique index if not exists billing_license_slot on billing_installations (license_id, license_slot) where license_id is not null and license_slot is not null`
       await sql`
         create table if not exists billing_licenses (
@@ -55,13 +57,19 @@ export function createNeonStore(databaseUrl) {
         )
       `
       await sql`create table if not exists billing_events (event_id text primary key, received_at timestamptz not null)`
+      await sql`create table if not exists billing_public_downloads (id text primary key, created_at timestamptz not null)`
     }).catch((error) => { schemaReady = undefined; throw error })
     return schemaReady
   }
   return {
-    async create(id, tokenHash, createdAt) {
+    async create(id, tokenHash, createdAt, deviceId, devicePlatform) {
       await ready()
-      await sql`insert into billing_installations (id, token_hash, created_at) values (${id}, ${tokenHash}, ${createdAt})`
+      await sql`insert into billing_installations (id, token_hash, created_at, device_id, device_platform) values (${id}, ${tokenHash}, ${createdAt}, ${deviceId}, ${devicePlatform})`
+    },
+    async bindDevice(id, deviceId, devicePlatform) {
+      await ready()
+      const rows = await sql`update billing_installations set device_id = ${deviceId}, device_platform = coalesce(device_platform, ${devicePlatform}) where id = ${id} and (device_id is null or device_id = ${deviceId}) returning id`
+      return rows.length > 0
     },
     async byTokenHash(tokenHash) {
       await ready()
@@ -177,6 +185,10 @@ export function createNeonStore(databaseUrl) {
     async claimWebhookEvent(eventId) {
       await ready()
       try { await sql`insert into billing_events (event_id, received_at) values (${eventId}, ${new Date().toISOString()})`; return true } catch { return false }
+    },
+    async recordPublicDownload(id, createdAt) {
+      await ready()
+      await sql`insert into billing_public_downloads (id, created_at) values (${id}, ${createdAt})`
     },
     async revokeDecision(subscriptionId) {
       await ready()

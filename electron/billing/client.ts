@@ -1,6 +1,8 @@
 import { app, safeStorage } from 'electron'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { arch, hostname, platform, release } from 'node:os'
 import { join } from 'node:path'
 
 export interface BillingStatus {
@@ -36,6 +38,28 @@ type LicensedFeature = 'lifetime' | 'decisionMaker'
 const LICENSE_STATUS_TTL_MS = 15_000
 let verifiedLicense: { status: BillingStatus; expiresAt: number } | null = null
 let pendingLicenseCheck: Promise<BillingStatus> | null = null
+let machineIdentity: { id: string; label: string } | null = null
+
+function deviceIdentity(): { id: string; label: string } {
+  if (machineIdentity) return machineIdentity
+  let machineId = ''
+  if (platform() === 'win32') {
+    const output = execFileSync('reg.exe', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'], {
+      encoding: 'utf8', timeout: 5000, windowsHide: true,
+    })
+    machineId = /MachineGuid\s+REG_SZ\s+([^\s]+)/i.exec(output)?.[1] ?? ''
+  } else if (platform() === 'linux' && existsSync('/etc/machine-id')) {
+    machineId = readFileSync('/etc/machine-id', 'utf8').trim()
+  } else {
+    machineId = hostname()
+  }
+  if (!machineId) throw new Error('This device identity could not be read. License activation needs a stable device ID.')
+  machineIdentity = {
+    id: createHash('sha256').update(`nafran-device-v1\0${platform()}\0${machineId.toLowerCase()}`).digest('hex'),
+    label: `${platform() === 'win32' ? 'Windows' : platform()} ${arch()} ${release()}`.slice(0, 64),
+  }
+  return machineIdentity
+}
 
 function billingUrl(): URL | null {
   // A shipped app must never accept a caller-selected license server, even from its environment.
@@ -63,9 +87,11 @@ function tokenPath(): string {
 async function request<T>(path: string, method = 'GET', body?: unknown, token?: string): Promise<T> {
   const base = billingUrl()
   if (!base) throw new Error('Billing server is not configured for this build.')
+  const device = deviceIdentity()
   const response = await fetch(new URL(path, base), {
     method,
-    headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
+    headers: { 'x-nafran-device-id': device.id, 'x-nafran-device-platform': device.label,
+      ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     redirect: 'error',
     signal: AbortSignal.timeout(20_000),
