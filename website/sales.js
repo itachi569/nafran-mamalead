@@ -7,20 +7,27 @@
   const tokenKey = 'nafran.billing.installation.' + new URL(billingOrigin).host
   const api = (path) => new URL(path, billingOrigin).toString()
   document.querySelectorAll('[data-public-download="windows"]').forEach((link) => { link.href = api('/v1/download?platform=windows') })
-  const macDownload = document.querySelector('[data-public-download="mac"]')
+  const macDownloads = {
+    'mac-arm64': { key: 'macArm64', label: 'Download for Mac · Apple Silicon' },
+    'mac-x64': { key: 'macX64', label: 'Download for Mac · Intel' },
+  }
   const macDownloadStatus = document.querySelector('[data-mac-download-status]')
-  if (macDownload) {
+  if (document.querySelector('[data-public-download="mac-arm64"]')) {
     fetch(api('/v1/download-options'), { cache: 'no-store' })
       .then((response) => response.ok ? response.json() : null)
       .then((options) => {
-        if (!options?.mac) return
-        macDownload.href = api('/v1/download?platform=mac')
-        macDownload.textContent = 'Download for Mac'
-        macDownload.removeAttribute('aria-disabled')
-        macDownload.style.cursor = 'pointer'
-        macDownload.style.background = '#1C1C1C'
-        macDownload.style.color = '#FFFFFF'
-        if (macDownloadStatus) macDownloadStatus.textContent = 'Mac installer ready. Download it, then enter your licence key inside the app.'
+        if (!options) return
+        for (const [platform, choice] of Object.entries(macDownloads)) {
+          const link = document.querySelector(`[data-public-download="${platform}"]`)
+          if (!link || !options[choice.key]) continue
+          link.href = api(`/v1/download?platform=${platform}`)
+          link.textContent = choice.label
+          link.removeAttribute('aria-disabled')
+          link.style.cursor = 'pointer'
+          link.style.background = '#1C1C1C'
+          link.style.color = '#FFFFFF'
+        }
+        if (macDownloadStatus && (options.macArm64 || options.macX64)) macDownloadStatus.textContent = 'Choose Apple Silicon or Intel in About This Mac, then enter your licence key inside the app.'
       })
       .catch(() => {})
   }

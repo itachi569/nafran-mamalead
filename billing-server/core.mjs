@@ -343,12 +343,14 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
   }
 
   function downloadSource(platform = 'windows') {
-    const prefix = platform === 'mac' ? 'MAC_' : ''
-    const blobPath = env[`${prefix}BLOB_DOWNLOAD_PATH`]?.trim()
-    const localPath = env[`${prefix}LOCAL_DOWNLOAD_PATH`]?.trim()
-    const redirectUrl = env[`${prefix}DOWNLOAD_URL`]?.trim()
-    const filename = (env[`${prefix}LOCAL_DOWNLOAD_FILENAME`]?.trim() || env[`${prefix}BLOB_DOWNLOAD_FILENAME`]?.trim() ||
-      (platform === 'mac' ? 'Nafran-Leads-Scraper.dmg' : 'Nafran-Leads-Scraper-Setup.exe')).replace(/["\\\r\n]/g, '_')
+    const appleSilicon = platform === 'mac' || platform === 'mac-arm64'
+    const prefix = appleSilicon ? 'MAC_ARM64_' : platform === 'mac-x64' ? 'MAC_X64_' : ''
+    const setting = (name) => env[`${prefix}${name}`]?.trim() || (appleSilicon ? env[`MAC_${name}`]?.trim() : '')
+    const blobPath = setting('BLOB_DOWNLOAD_PATH')
+    const localPath = setting('LOCAL_DOWNLOAD_PATH')
+    const redirectUrl = setting('DOWNLOAD_URL')
+    const filename = (setting('LOCAL_DOWNLOAD_FILENAME') || setting('BLOB_DOWNLOAD_FILENAME') ||
+      (platform === 'mac-x64' ? 'Nafran-Leads-Scraper-Intel.dmg' : appleSilicon ? 'Nafran-Leads-Scraper-Apple-Silicon.dmg' : 'Nafran-Leads-Scraper-Setup.exe')).replace(/["\\\r\n]/g, '_')
     return { blobPath, localPath, redirectUrl, filename }
   }
 
@@ -398,7 +400,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (rawDeviceId && !deviceId) throw new HttpError(400, 'Invalid device identity.')
       if (method === 'GET' && url.pathname === '/health') return json(200, { ok: true, mode })
       if (method === 'GET' && url.pathname === '/v1/download-options') {
-        return json(200, { windows: await downloadReady('windows'), mac: await downloadReady('mac') })
+        const [windows, macArm64, macX64] = await Promise.all([downloadReady('windows'), downloadReady('mac-arm64'), downloadReady('mac-x64')])
+        return json(200, { windows, mac: macArm64, macArm64, macX64 })
       }
       if (method === 'GET' && url.pathname === '/') return page('MamaLead billing', 'Return to MamaLead to view your billing status.')
       if (method === 'GET' && url.pathname === '/cancel') return page('Checkout cancelled', 'No purchase was completed. You can return to MamaLead.')
@@ -589,12 +592,12 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       if (method === 'GET' && url.pathname === '/v1/download') {
         const platform = url.searchParams.get('platform') || 'windows'
-        if (platform !== 'windows' && platform !== 'mac') throw new HttpError(400, 'Choose Windows or Mac for the download.')
+        if (!['windows', 'mac', 'mac-arm64', 'mac-x64'].includes(platform)) throw new HttpError(400, 'Choose Windows, Mac Apple Silicon, or Mac Intel for the download.')
         // No grant means the installer is free to download. A supplied but invalid
         // grant still fails, so old signed links retain their existing semantics.
         const subjectId = url.searchParams.has('grant') ? verifyDownloadGrant(url.searchParams.get('grant')) : null
         const source = downloadSource(platform)
-        if (!downloadConfigured(platform)) throw new HttpError(503, `The ${platform === 'mac' ? 'Mac' : 'Windows'} installer is not available yet.`)
+        if (!downloadConfigured(platform)) throw new HttpError(503, `The ${platform.startsWith('mac') ? 'Mac' : 'Windows'} installer is not available yet.`)
         let downloadInstallationId = subjectId
         if (subjectId?.startsWith('trial-')) {
           const trial = await store.trialById(subjectId.slice(6))

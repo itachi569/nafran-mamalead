@@ -11,6 +11,7 @@ const dir = mkdtempSync(join(tmpdir(), 'mamalead-billing-'))
 const database = join(dir, 'billing.db')
 const installerPath = join(dir, 'Nafran.exe')
 const macInstallerPath = join(dir, 'Nafran.dmg')
+const intelInstallerPath = join(dir, 'Nafran-Intel.dmg')
 writeFileSync(installerPath, 'installer bytes')
 const sessions = new Map()
 const customers = new Map()
@@ -50,7 +51,7 @@ const fakeStripe = async (raw, request) => {
 }
 
 const service = createBillingServer({
-  env: { STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: database, BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38747', LOCAL_DOWNLOAD_PATH: installerPath, MAC_LOCAL_DOWNLOAD_PATH: macInstallerPath, DOWNLOAD_SIGNING_KEY: 'test-download-secret-with-32-characters', STRIPE_WEBHOOK_SECRET: 'whsec_test', BILLING_ALLOWED_ORIGINS: 'https://mamalead.com' },
+  env: { STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: database, BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38747', LOCAL_DOWNLOAD_PATH: installerPath, MAC_ARM64_LOCAL_DOWNLOAD_PATH: macInstallerPath, MAC_X64_LOCAL_DOWNLOAD_PATH: intelInstallerPath, DOWNLOAD_SIGNING_KEY: 'test-download-secret-with-32-characters', STRIPE_WEBHOOK_SECRET: 'whsec_test', BILLING_ALLOWED_ORIGINS: 'https://mamalead.com' },
   fetch: fakeStripe,
   sendEmail: async (message) => {
     if (message.kind === 'lifetime' && failNextLicenseEmail) { failNextLicenseEmail = false; return false }
@@ -68,18 +69,23 @@ async function call(path, token, method = 'GET', data, device) {
 }
 try {
   const optionsBeforeMac = await call('/v1/download-options', null)
-  check('download choices show Windows ready and Mac unavailable before a Mac build exists', optionsBeforeMac.status === 200 && optionsBeforeMac.body.windows === true && optionsBeforeMac.body.mac === false)
+  check('download choices show Windows ready and both Mac builds unavailable before upload', optionsBeforeMac.status === 200 && optionsBeforeMac.body.windows === true && optionsBeforeMac.body.macArm64 === false && optionsBeforeMac.body.macX64 === false)
   const missingMac = await call('/v1/download?platform=mac', null)
   check('Mac download does not serve a missing installer', missingMac.status === 503)
   writeFileSync(macInstallerPath, 'mac installer bytes')
   const optionsWithMac = await call('/v1/download-options', null)
-  check('download choices enable Mac when its installer exists', optionsWithMac.status === 200 && optionsWithMac.body.mac === true)
-  const macDownload = await fetch(base + '/v1/download?platform=mac')
-  check('Mac download streams the Mac installer with a DMG filename', macDownload.status === 200 && await macDownload.text() === 'mac installer bytes' && macDownload.headers.get('content-disposition')?.includes('Nafran-Leads-Scraper.dmg'))
+  check('download choices enable Apple Silicon only when its installer exists', optionsWithMac.status === 200 && optionsWithMac.body.macArm64 === true && optionsWithMac.body.macX64 === false)
+  const macDownload = await fetch(base + '/v1/download?platform=mac-arm64')
+  check('Apple Silicon download streams its own DMG', macDownload.status === 200 && await macDownload.text() === 'mac installer bytes' && macDownload.headers.get('content-disposition')?.includes('Apple-Silicon.dmg'))
+  writeFileSync(intelInstallerPath, 'intel installer bytes')
+  const optionsWithIntel = await call('/v1/download-options', null)
+  check('download choices enable Intel when its installer exists', optionsWithIntel.body.macX64 === true)
+  const intelDownload = await fetch(base + '/v1/download?platform=mac-x64')
+  check('Intel download streams its own DMG', intelDownload.status === 200 && await intelDownload.text() === 'intel installer bytes' && intelDownload.headers.get('content-disposition')?.includes('Intel.dmg'))
   const wrongPlatform = await call('/v1/download?platform=linux', null)
   check('unknown platform cannot fall back to the Windows installer', wrongPlatform.status === 400)
   const freeDownload = await fetch(base + '/v1/download')
-  check('visitors can download both installers without a key or account', freeDownload.status === 200 && await freeDownload.text() === 'installer bytes' && service.db.prepare('select count(*) as n from billing_public_downloads').get().n === 2)
+  check('visitors can download every installer without a key or account', freeDownload.status === 200 && await freeDownload.text() === 'installer bytes' && service.db.prepare('select count(*) as n from billing_public_downloads').get().n === 3)
   const forgedFreeDownload = await fetch(base + '/v1/download?grant=forged')
   check('a supplied forged download grant is still rejected', forgedFreeDownload.status === 401)
   const register = await call('/v1/installations', null, 'POST')

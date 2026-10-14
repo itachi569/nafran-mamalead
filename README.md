@@ -145,16 +145,18 @@ invoices without charging a card. Do not use the live key in the desktop process
 The own-server deployment runs `billing-server/server.mjs` on billing VM131 with a persistent SQLite
 `BILLING_DB_PATH`, routed publicly at `https://api.mamalead.com` in Stripe test mode. The server
 streams the Windows installer from `LOCAL_DOWNLOAD_PATH` at `GET /v1/download?platform=windows`
-without a key. `GET /v1/download?platform=mac` streams a separate Mac `.dmg` from
-`MAC_LOCAL_DOWNLOAD_PATH` once a Mac build is installed on the VM. The website checks
-`GET /v1/download-options` and leaves the Mac button disabled until that file exists.
+without a key. `GET /v1/download?platform=mac-arm64` and `platform=mac-x64` stream
+separate Apple Silicon and Intel Mac `.dmg` files from `MAC_ARM64_LOCAL_DOWNLOAD_PATH`
+and `MAC_X64_LOCAL_DOWNLOAD_PATH`. The website checks `GET /v1/download-options`
+and enables each Mac button only when its own file exists. The legacy `platform=mac`
+and `MAC_LOCAL_DOWNLOAD_PATH` still select Apple Silicon.
 The default download URL still selects Windows, and legacy signed grants still work.
 Both files remain private on the VM. Keep the
 installer readable only by the service account and back up the SQLite database.
-For Blob storage, use `BLOB_DOWNLOAD_PATH` and `MAC_BLOB_DOWNLOAD_PATH` instead; set
-`MAC_BLOB_DOWNLOAD_FILENAME` or `MAC_LOCAL_DOWNLOAD_FILENAME` if the Mac file needs another
-download name. Build the Mac `.dmg` on macOS with `npm run package:mac`, then test it on a Mac
-before enabling the website button.
+For Blob storage, use `BLOB_DOWNLOAD_PATH`, `MAC_ARM64_BLOB_DOWNLOAD_PATH`, and
+`MAC_X64_BLOB_DOWNLOAD_PATH` instead. Native Mac builds use `npm run package:mac -- --arm64`
+on Apple Silicon and `npm run package:mac -- --x64` on Intel. Both include the matching
+Playwright Chromium browser. Test each `.dmg` on its architecture before uploading it.
 Set `RESEND_API_KEY` and `EMAIL_FROM` (or another tested mail sender) on the server before offering
 trial keys or relying on automatic lifetime emails. The desktop keeps separate encrypted installation identities per billing origin,
 so local test purchases never appear as live purchases. Preserve the public API URL and keep

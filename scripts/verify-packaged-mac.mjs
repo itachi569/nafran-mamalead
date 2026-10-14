@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -23,31 +24,21 @@ try {
   })
   const page = await desktop.firstWindow()
   await page.locator('[data-view="dashboard"]').first().waitFor({ timeout: 45_000 })
-  const runtime = await desktop.evaluate(async ({ app }) => {
-    const { existsSync } = require('node:fs')
-    const { chromium } = require('playwright')
-    const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH || ''
-    const executable = chromium.executablePath()
-    const browser = await chromium.launch({ headless: true })
-    try {
-      const browserPage = await browser.newPage()
-      await browserPage.goto('data:text/html,<title>Nafran browser check</title>')
-      return {
-        packaged: app.isPackaged,
-        browsers,
-        executable,
-        exists: existsSync(executable),
-        title: await browserPage.title(),
-      }
-    } finally {
-      await browser.close()
-    }
-  })
+  const runtime = await desktop.evaluate(({ app }) => ({
+    packaged: app.isPackaged,
+    browsers: process.env.PLAYWRIGHT_BROWSERS_PATH || '',
+  }))
   assert.equal(runtime.packaged, true)
   assert.match(runtime.browsers, /playwright-browsers$/)
-  assert.equal(runtime.exists, true)
-  assert.equal(runtime.title, 'Nafran browser check')
-  assert.ok(runtime.executable.startsWith(runtime.browsers))
+  assert.equal(existsSync(runtime.browsers), true)
+  const browserCheck = spawnSync(process.execPath, [resolve(import.meta.dirname, 'verify-bundled-chromium.mjs')], {
+    cwd: resolve(import.meta.dirname, '..'),
+    env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: runtime.browsers },
+    encoding: 'utf8', timeout: 60_000,
+  })
+  if (browserCheck.error) throw browserCheck.error
+  assert.equal(browserCheck.status, 0, `${browserCheck.stdout}\n${browserCheck.stderr}`)
+  process.stdout.write(browserCheck.stdout)
   console.log('PASS  packaged Mac app launches its bundled Chromium')
 
   await page.locator('[data-view="settings"]').first().click()
