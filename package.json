@@ -33,7 +33,7 @@
     "scrape": "npm run build:electron && node dist-electron/scraper/cli.js",
     "package": "npm run build && electron-builder --config electron-builder.config.cjs --dir",
     "package:win": "npm run build && electron-builder --config electron-builder.config.cjs --win",
-    "package:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac",
+    "package:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac --universal",
     "package:linux": "npm run build && electron-builder --config electron-builder.config.cjs --linux",
     "release:signing:check": "node scripts/verify-release-signing.cjs"
   },
