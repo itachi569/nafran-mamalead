@@ -10,9 +10,11 @@
     { "source": "/v1/invoices", "destination": "/api/billing?endpoint=invoices" },
     { "source": "/v1/license", "destination": "/api/billing?endpoint=license" },
     { "source": "/v1/activate", "destination": "/api/billing?endpoint=activate" },
+    { "source": "/v1/decision-maker/consume", "destination": "/api/billing?endpoint=decisionConsume" },
     { "source": "/v1/download-link", "destination": "/api/billing?endpoint=downloadLink" },
     { "source": "/v1/download-by-license", "destination": "/api/billing?endpoint=downloadByLicense" },
     { "source": "/v1/download", "destination": "/api/billing?endpoint=download" },
+    { "source": "/v1/download-options", "destination": "/api/billing?endpoint=downloadOptions" },
     { "source": "/cancel", "destination": "/api/billing?endpoint=cancel" },
     { "source": "/return", "destination": "/api/billing?endpoint=return" }
   ],

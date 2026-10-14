@@ -53,6 +53,7 @@ const LEDGER_PAGE = 200
 const MAX_MAP_KEYWORDS = 8
 const NOTIFICATIONS_STORAGE_KEY = 'nafran.notifications'
 const NOTIFICATIONS_ENABLED_KEY = 'nafran.notifications.enabled'
+const LIFETIME_CHECKOUT_PENDING_KEY = 'nafran.billing.lifetimeCheckoutUntil'
 
 export type AppNotification = {
   id: string
@@ -100,6 +101,16 @@ function readNotificationsEnabled(): boolean {
     return window.localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) !== '0'
   } catch {
     return true
+  }
+}
+
+function readPendingLifetimeCheckout(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const until = Number(window.localStorage.getItem(LIFETIME_CHECKOUT_PENDING_KEY))
+    return Number.isFinite(until) && until > Date.now() && until < Date.now() + 60 * 60 * 1000 ? until : 0
+  } catch {
+    return 0
   }
 }
 
@@ -482,7 +493,7 @@ export function useAppValues() {
   const db = useMemo(() => localDb(), [])
 
   const [view, setView] = useState('dashboard')
-  const [range, setRange] = useState('30 Days')
+  const [range, setRange] = useState<'7 Days' | '30 Days' | 'All Time'>('30 Days')
   const [maxResults, setMaxResults] = useState(25)
   const [dark, setDark] = useState(readStoredTheme)
   // How the browser behaves during a run. Both survive a restart, because a choice made after
@@ -548,6 +559,8 @@ export function useAppValues() {
   const [bulkKeywordsOpen, setBulkKeywordsOpen] = useState(false)
   const [bulkKeywordsText, setBulkKeywordsText] = useState('')
   const [stab, setStab] = useState('plan')
+  const [lifetimeCheckoutUntil, setLifetimeCheckoutUntil] = useState(readPendingLifetimeCheckout)
+  const [licenseNextStep, setLicenseNextStep] = useState('')
   const [swWarn, setSwWarn] = useState(readNotificationsEnabled)
   const [impOpen, setImpOpen] = useState(false)
   const [impCount, setImpCount] = useState(3)
@@ -814,6 +827,53 @@ export function useAppValues() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  const startLifetimeCheckoutWatch = useCallback(() => {
+    const until = Date.now() + 60 * 60 * 1000
+    try { window.localStorage.setItem(LIFETIME_CHECKOUT_PENDING_KEY, String(until)) } catch { /* Poll for this session. */ }
+    setLifetimeCheckoutUntil(until)
+  }, [])
+
+  // Stripe Checkout runs in the user's browser. Only the billing server's paid status can move
+  // this app to the licence field; opening Checkout alone must never count as a purchase.
+  useEffect(() => {
+    if (!lifetimeCheckoutUntil) return
+    const bridge = window.desktop?.billing
+    if (!bridge) return
+    let cancelled = false
+    let checking = false
+    const stopWatch = () => {
+      try { window.localStorage.removeItem(LIFETIME_CHECKOUT_PENDING_KEY) } catch { /* Session state still clears. */ }
+      setLifetimeCheckoutUntil(0)
+    }
+    const checkPayment = async () => {
+      if (cancelled || checking) return
+      if (Date.now() >= lifetimeCheckoutUntil) { stopWatch(); return }
+      checking = true
+      try {
+        const status = await bridge.status()
+        if (!cancelled && status.connected && status.lifetime?.active) {
+          stopWatch()
+          setLicenseNextStep('Payment confirmed. When your lifetime key arrives by email, paste it below to activate this machine.')
+          go('settings')
+          setStab('acct')
+        }
+      } catch {
+        // Keep checking while the browser finishes Checkout or the connection recovers.
+      } finally {
+        checking = false
+      }
+    }
+    const onFocus = () => { void checkPayment() }
+    void checkPayment()
+    const timer = window.setInterval(() => void checkPayment(), 5000)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [go, lifetimeCheckoutUntil])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
@@ -822,10 +882,14 @@ export function useAppValues() {
         setGlobalOpen(true)
       } else if (event.key === 'Escape') {
         setGlobalOpen(false)
+        setNotificationsOpen(false)
       }
     }
     const onPointer = (event: PointerEvent) => {
-      if (!(event.target as Element).closest?.('[data-global-search-root="1"]')) setGlobalOpen(false)
+      const target = event.target instanceof Element ? event.target : null
+      if (!target?.closest('[data-global-search-root="1"]')) setGlobalOpen(false)
+      if (!target?.closest('[data-notifications-button="1"], [data-notifications-panel="1"]')) setNotificationsOpen(false)
+      if (!target?.closest('[data-assist="1"], [data-chat-panel="1"]')) setChatOpen(false)
     }
     window.addEventListener('keydown', onKey)
     document.addEventListener('pointerdown', onPointer)
@@ -1282,6 +1346,8 @@ export function useAppValues() {
   const [runs, setRuns] = useState<StoredRun[]>([])
   const [runStats, setRunStats] = useState({ runs: 0, clean: 0, places: 0, medianMs: 0 })
   const [dashboard, setDashboard] = useState<DashboardTotals | null>(null)
+  const [rangeDashboard, setRangeDashboard] = useState<{ range: typeof range; totals: DashboardTotals } | null>(null)
+  const rangeRequest = useRef(0)
   const [phone, setPhone] = useState<{ rows: PhoneRow[]; summary: PhoneSummary | null }>({ rows: [], summary: null })
   const [people, setPeople] = useState<{ rows: DecisionMakerRow[]; funnel: DecisionMakerFunnel | null }>({
     rows: [],
@@ -1328,12 +1394,14 @@ export function useAppValues() {
 
   const refreshLists = useCallback(async () => {
     if (!db) return
+    const request = ++rangeRequest.current
     try {
-      const [stored, history, counts, totals] = await Promise.all([
+      const [stored, history, counts, totals, periodTotals] = await Promise.all([
         db.stats(),
         db.runs.list(5000),
         db.runs.counts(),
         db.dashboard(),
+        range === 'All Time' ? Promise.resolve(null) : db.dashboard(range === '7 Days' ? 7 : 30),
       ])
       setLists(await db.lists.list())
       setStoredLeadCount(stored.total)
@@ -1341,6 +1409,7 @@ export function useAppValues() {
       setRuns(history)
       setRunStats(counts)
       setDashboard(totals)
+      if (request === rangeRequest.current) setRangeDashboard(periodTotals ? { range, totals: periodTotals } : null)
       // The Phone Finder and Decision Makers pages read their own tables.
       void refreshPhone()
       // Website Lookup: the batches and the leads they created, read in one call.
@@ -1392,7 +1461,7 @@ export function useAppValues() {
     } catch {
       // Leaving the last good value on screen beats clearing the page on a read failure.
     }
-  }, [db, refreshPhone])
+  }, [db, refreshPhone, range])
 
   const refreshUsage = useCallback(async () => {
     if (!db) return
@@ -1555,11 +1624,11 @@ export function useAppValues() {
       const note = `${result.failed ? ` ${result.failed} failed and will be retried on the next pass.` : ''}${result.limited ? ` ${result.limited} more will be checked on the next pass.` : ''}`
       const message = `Email validity complete — ${parts.join(' · ')}.${note}`
       flash(message)
-      void window.desktop?.notifications?.show('Email validity complete', parts.join(' · '))
+      notify('Email validity complete', `${parts.join(' · ')}.${note}`, 'success')
     } catch (error) {
       flash(error instanceof Error ? error.message : 'Email validity could not be checked.')
     }
-  }, [email, flash])
+  }, [email, flash, notify])
 
   const recheckUnknownEmailValidity = useCallback(async () => {
     try {
@@ -2362,35 +2431,41 @@ export function useAppValues() {
    */
   const socialPicks: Record<string, () => void> = {}
 
-  // Everything the dashboard states, derived from one aggregate query. The coverage rings are
-  // drawn by a circumference of 276.5, so the offset is that circumference less the filled arc.
+  // Other pages use all-time totals. Only the Dashboard uses the selected date window.
+  const selectedDashboard = range === 'All Time'
+    ? dashboard
+    : rangeDashboard?.range === range ? rangeDashboard.totals : null
+  const periodDays = range === '7 Days' ? 7 : range === '30 Days' ? 30 : null
+  const periodStart = periodDays === null ? -Infinity : Date.now() - periodDays * 86_400_000
+  const periodRuns = runs.filter((run) => {
+    const started = Date.parse(run.started_at)
+    return Number.isFinite(started) && started >= periodStart && started <= Date.now()
+  })
+
+  // The coverage rings are drawn by a circumference of 276.5.
   const CIRCUMFERENCE = 276.5
   const share = (count: number) => (dashboard?.total ? Math.round((count / dashboard.total) * 100) : 0)
+  const dashShare = (count: number) => (selectedDashboard?.total ? Math.round((count / selectedDashboard.total) * 100) : 0)
   const offset = (pct: number) => String(Math.round(CIRCUMFERENCE * (1 - pct / 100)))
-  const dashWithPhone = dashboard?.withPhone ?? 0
-  const dashWithEmail = dashboard?.withEmail ?? 0
-  const dashWithSocial = dashboard?.withSocial ?? 0
-  const dashDm = dashboard?.decisionMakers ?? 0
-  const dashEnriched = dashboard?.enriched ?? 0
-  const dashExportReady = dashboard?.exportReady ?? 0
-  const dashPhonePct = share(dashWithPhone)
-  const dashEmailPct = share(dashWithEmail)
-  const dashSocialPct = share(dashWithSocial)
-  const dashDmPct = share(dashDm)
-  const biggestPlatform = dashboard?.platforms[0]
-  // Compare the run log's two adjacent thirty-day windows. The dashboard used to print the
-  // reference's "+42%" even when this workspace had no runs; an empty previous window is shown as
-  // an em dash unless the current window has activity, in which case the first period is +100%.
+  const dashWithPhone = selectedDashboard?.withPhone ?? 0
+  const dashWithEmail = selectedDashboard?.withEmail ?? 0
+  const dashWithSocial = selectedDashboard?.withSocial ?? 0
+  const dashDm = selectedDashboard?.decisionMakers ?? 0
+  const dashEnriched = selectedDashboard?.enriched ?? 0
+  const dashExportReady = selectedDashboard?.exportReady ?? 0
+  const dashPhonePct = dashShare(dashWithPhone)
+  const dashEmailPct = dashShare(dashWithEmail)
+  const dashSocialPct = dashShare(dashWithSocial)
+  const dashDmPct = dashShare(dashDm)
+  const biggestPlatform = selectedDashboard?.platforms[0]
+  // Compare a selected window with the equally long preceding window.
   const dashScrapeDelta = (() => {
+    if (periodDays === null) return 'All time'
     const now = Date.now()
     const day = 24 * 60 * 60 * 1000
-    const currentStart = now - 30 * day
-    const previousStart = now - 60 * day
-    const current = runs
-      .filter((run) => {
-        const at = new Date(run.started_at).getTime()
-        return at >= currentStart && at <= now
-      })
+    const currentStart = now - periodDays * day
+    const previousStart = now - periodDays * 2 * day
+    const current = periodRuns
       .reduce((sum, run) => sum + (run.found ?? 0), 0)
     const previous = runs
       .filter((run) => {
@@ -2402,40 +2477,57 @@ export function useAppValues() {
     const delta = Math.round(((current - previous) / previous) * 100)
     return `${delta >= 0 ? '+' : ''}${delta}%`
   })()
+  const dashVolumeBars = (() => {
+    if (!periodRuns.length) return []
+    const now = Date.now()
+    const first = Math.min(...periodRuns.map((run) => Date.parse(run.started_at)))
+    const start = periodDays === null ? first : periodStart
+    const bins = Array.from({ length: periodDays ?? 30 }, () => 0)
+    for (const run of periodRuns) {
+      const index = Math.min(bins.length - 1, Math.floor(((Date.parse(run.started_at) - start) / Math.max(1, now - start)) * bins.length))
+      bins[Math.max(0, index)] += run.found ?? 0
+    }
+    const highest = Math.max(1, ...bins)
+    return bins.map((leads) => ({ height: `${leads ? Math.max(6, Math.round((leads / highest) * 100)) : 0}%`, leads }))
+  })()
   const dashboardValues = {
-    dashCategories: (dashboard?.categories ?? []).map((category) => ({
+    dashVolumeLabel: range === 'All Time' ? 'Leads captured across all time.' : `Leads captured in the last ${periodDays} days.`,
+    dashComparisonLabel: periodDays === null ? '' : `vs. previous ${periodDays} days`,
+    dashVolumeEmpty: periodRuns.length ? '' : `No Maps runs in ${range.toLowerCase()}.`,
+    dashVolumeBars,
+    dashCategories: (selectedDashboard?.categories ?? []).map((category) => ({
       label: category.category,
       count: String(category.count),
-      width: `${Math.max(6, Math.round((category.count / Math.max(1, dashboard?.categories[0]?.count ?? 1)) * 100))}%`,
+      width: `${Math.max(6, Math.round((category.count / Math.max(1, selectedDashboard?.categories[0]?.count ?? 1)) * 100))}%`,
     })),
     dashDmOffset: offset(dashDmPct),
     dashDmPct,
     dashEmailOffset: offset(dashEmailPct),
     dashEmailPct,
     dashEnriched,
-    dashEnrichedPct: `${share(dashEnriched)}%`,
+    dashEnrichedPct: `${dashShare(dashEnriched)}%`,
     dashExportNote: dashExportReady ? 'Ready' : 'Nothing yet',
     dashExportReady,
     // The "Needs Attention" card: one row per gap, each stating how many leads are behind it. A gap
     // with nothing behind it has no row to draw, so each carries its own flag — a number cannot be
     // handed to the template's truthiness test, because 0 is not one of the values it treats as
     // false.
-    dashNoEmailOn: dashboard?.noEmail ? '1' : '',
-    dashNoPhoneOn: dashboard?.noPhone ? '1' : '',
+    dashNoEmailOn: selectedDashboard?.noEmail ? '1' : '',
+    dashNoPhoneOn: selectedDashboard?.noPhone ? '1' : '',
     dashExportReadyOn: dashExportReady ? '1' : '',
     dashActionCount: (() => {
-      const open = [dashboard?.noEmail ?? 0, dashboard?.noPhone ?? 0, dashExportReady].filter((count) => count > 0).length
+      const open = [selectedDashboard?.noEmail ?? 0, selectedDashboard?.noPhone ?? 0, dashExportReady].filter((count) => count > 0).length
       return `${open} action${open === 1 ? '' : 's'}`
     })(),
     // The reference's insight line describes the biggest gap; this states the real one.
     dashInsight:
-      dashboard && dashboard.total
-        ? dashboard.noEmail
-          ? `${dashboard.noEmail} of ${dashboard.total} leads have a website but no address on file. A pass over their sites would lift email coverage from ${dashEmailPct}% towards ${share(dashboard.withWebsite)}%.`
-          : `Every lead with a website has an address on file.${biggestPlatform ? ` ${biggestPlatform.leads} of ${dashboard.total} carry a ${biggestPlatform.platform} profile.` : ''}`
+      selectedDashboard && selectedDashboard.total
+        ? selectedDashboard.noEmail
+          ? `${selectedDashboard.noEmail} of ${selectedDashboard.total} leads have a website but no address on file. A pass over their sites would lift email coverage from ${dashEmailPct}% towards ${dashShare(selectedDashboard.withWebsite)}%.`
+          : `Every lead with a website has an address on file.${biggestPlatform ? ` ${biggestPlatform.leads} of ${selectedDashboard.total} carry a ${biggestPlatform.platform} profile.` : ''}`
         : 'Run a Google Maps scrape and this panel reports what was found.',
-    dashNoEmail: dashboard?.noEmail ?? 0,
-    dashNoPhone: dashboard?.noPhone ?? 0,
+    dashNoEmail: selectedDashboard?.noEmail ?? 0,
+    dashNoPhone: selectedDashboard?.noPhone ?? 0,
     // The three small tiles under the scrape-volume chart. They describe the run log, so they are
     // read from it: what the last seven days brought in, the best single run, and the average.
     dashWeekLeads: (() => {
@@ -2445,19 +2537,19 @@ export function useAppValues() {
         .reduce((sum, run) => sum + (run.found ?? 0), 0)
       return `${total.toLocaleString('en-GB')} leads`
     })(),
-    dashBestRun: `${Math.max(0, ...runs.map((run) => run.found ?? 0)).toLocaleString('en-GB')} leads`,
-    dashAvgRun: `${runStats.runs ? (runStats.places / runStats.runs).toFixed(1) : '0.0'} leads`,
+    dashBestRun: `${Math.max(0, ...periodRuns.map((run) => run.found ?? 0)).toLocaleString('en-GB')} leads`,
+    dashAvgRun: `${periodRuns.length ? (periodRuns.reduce((sum, run) => sum + (run.found ?? 0), 0) / periodRuns.length).toFixed(1) : '0.0'} leads`,
     dashPhoneNote: `${dashPhonePct}%`,
     dashPhoneOffset: offset(dashPhonePct),
     dashPhonePct,
-    dashPlatforms: (dashboard?.platforms ?? []).map((platform) => ({
+    dashPlatforms: (selectedDashboard?.platforms ?? []).map((platform) => ({
       short: platform.platform.slice(0, 2),
       label: platform.platform.charAt(0).toUpperCase() + platform.platform.slice(1),
       count: String(platform.leads),
-      width: `${Math.max(6, Math.round((platform.leads / Math.max(1, dashboard?.platforms[0]?.leads ?? 1)) * 100))}%`,
+      width: `${Math.max(6, Math.round((platform.leads / Math.max(1, selectedDashboard?.platforms[0]?.leads ?? 1)) * 100))}%`,
     })),
-    dashQuality: dashboard?.quality ?? 0,
-    dashQualityLabel: dashboard?.qualityLabel ?? 'No data',
+    dashQuality: selectedDashboard?.quality ?? 0,
+    dashQualityLabel: selectedDashboard?.qualityLabel ?? 'No data',
     /**
      * The Social Platform Coverage chart.
      *
@@ -2473,7 +2565,7 @@ export function useAppValues() {
       const CODES: Record<string, string> = {
         instagram: 'IG', facebook: 'FB', linkedin: 'LI', youtube: 'YT', tiktok: 'TT', x: 'X', other: 'OT',
       }
-      const ranked = (dashboard?.platforms ?? []).map((platform) => ({
+      const ranked = (selectedDashboard?.platforms ?? []).map((platform) => ({
         short: CODES[platform.platform.toLowerCase()] ?? platform.platform.slice(0, 2).toUpperCase(),
         count: String(platform.leads),
       }))
@@ -2484,13 +2576,13 @@ export function useAppValues() {
      * The Top Categories list: the business types this workspace actually holds, most common first,
      * with the design's own words for how strong each one is.
      */
-    dashCategoryRows: (dashboard?.categories ?? []).slice(0, 6).map((category, index) => ({
+    dashCategoryRows: (selectedDashboard?.categories ?? []).slice(0, 6).map((category, index) => ({
       name: category.category,
       count: String(category.count),
       badge: index === 0 ? 'Top' : category.count >= 12 ? 'Strong' : category.count >= 6 ? 'Steady' : 'Thin',
       tone: index === 0 ? 'top' : index <= 2 ? 'strong' : 'steady',
     })),
-    dashCategoriesEmpty: (dashboard?.categories ?? []).length
+    dashCategoriesEmpty: (selectedDashboard?.categories ?? []).length
       ? ''
       : 'No business types yet — run a scrape and the categories land here.',
     /**
@@ -2499,41 +2591,37 @@ export function useAppValues() {
      * no chip to draw.
      */
     dashTimelineBars: (() => {
-      const recent = runs.slice(0, 24).reverse()
+      const recent = periodRuns.slice(0, 24).reverse()
       const tallest = Math.max(1, ...recent.map((run) => run.found ?? 0))
       return recent.map((run) => ({ height: `${Math.max(4, Math.round(((run.found ?? 0) / tallest) * 100))}%` }))
     })(),
     dashTimelineAxis: (() => {
-      const times = runs.map((run) => new Date(run.started_at).getTime()).filter((time) => Number.isFinite(time))
+      const times = periodRuns.map((run) => new Date(run.started_at).getTime()).filter((time) => Number.isFinite(time))
       if (!times.length) return []
       const from = Math.min(...times)
       const to = Math.max(...times)
       return Array.from({ length: 5 }, (_, index) => ({ label: shortDate(new Date(from + ((to - from) * index) / 4).toISOString()) }))
     })(),
-    dashTimelineEmpty: runs.length ? '' : 'Nothing has run on this machine yet.',
+    dashTimelineEmpty: periodRuns.length ? '' : `No Maps runs in ${range.toLowerCase()}.`,
     // Five milestone chips, in the design's order. Each carries its own flag so a milestone this
     // workspace has not reached is simply not drawn.
     dashMile1: (() => {
-      const first = runs.length ? runs[runs.length - 1] : null
+      const first = periodRuns.length ? periodRuns[periodRuns.length - 1] : null
       return first ? `First Maps scrape · ${shortDate(first.started_at)}` : ''
     })(),
-    dashMile1On: runs.length ? '1' : '',
-    dashMile2: `${runStats.runs.toLocaleString('en-GB')} run${runStats.runs === 1 ? '' : 's'} · ${runStats.places.toLocaleString('en-GB')} places captured`,
-    dashMile2On: runStats.runs ? '1' : '',
-    dashMile3: `Enriched ↑ ${(() => {
-      const total = ledger.length
-      const reachable = ledger.filter((lead) => lead.hasPhone || lead.hasEmail || lead.hasSocial).length
-      return total ? Math.round((reachable / total) * 100) : 0
-    })()}%`,
-    dashMile3On: ledger.length ? '1' : '',
+    dashMile1On: periodRuns.length ? '1' : '',
+    dashMile2: `${periodRuns.length.toLocaleString('en-GB')} run${periodRuns.length === 1 ? '' : 's'} · ${periodRuns.reduce((sum, run) => sum + (run.found ?? 0), 0).toLocaleString('en-GB')} places captured`,
+    dashMile2On: periodRuns.length ? '1' : '',
+    dashMile3: `Enriched ↑ ${dashShare(selectedDashboard?.withContact ?? 0)}%`,
+    dashMile3On: selectedDashboard?.total ? '1' : '',
     dashMile4: `${dashExportReady.toLocaleString('en-GB')} ready to export`,
     dashMile4On: dashExportReady ? '1' : '',
-    dashMile5: `${storedLeadCount.toLocaleString('en-GB')} lead${storedLeadCount === 1 ? '' : 's'} on file`,
-    dashMile5On: storedLeadCount ? '1' : '',
+    dashMile5: `${(selectedDashboard?.total ?? 0).toLocaleString('en-GB')} lead${selectedDashboard?.total === 1 ? '' : 's'} captured`,
+    dashMile5On: selectedDashboard?.total ? '1' : '',
     leadsOnFile: `${onFile.toLocaleString('en-GB')} saved leads`,
     dashSocialOffset: offset(dashSocialPct),
     dashSocialPct,
-    dashTotal: dashboard?.total ?? 0,
+    dashTotal: selectedDashboard?.total ?? 0,
     dashScrapeDelta,
     dashTotalNote: dashScrapeDelta,
     dashWithPhone,
@@ -2871,6 +2959,10 @@ export function useAppValues() {
     activeRange: range,
     activeTab: stab,
     activeView: view,
+    lifetimeCheckoutPending: lifetimeCheckoutUntil > Date.now(),
+    licenseNextStep,
+    startLifetimeCheckoutWatch,
+    clearLicenseNextStep: () => setLicenseNextStep(''),
     chDm: chDm ? '1' : '0',
     chEmails: chEmails ? '1' : '0',
     chLinkedin: chLinkedin ? '1' : '0',

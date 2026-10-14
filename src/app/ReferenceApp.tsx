@@ -297,9 +297,9 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <p style={{margin: "8px 0 0", fontSize: "14.5px", color: "#5A5F5C"}}>At-a-glance view of your lead database. Click any card to drill in.</p>
                   </div>
                   <div data-range="1" data-active={V.activeRange} style={{display: "flex", gap: "4px", padding: "4px", borderRadius: "999px", background: "#E5E5E5"}}>
-                    <button type="button" data-r="7 Days" onClick={V.set7} style={{padding: "8px 16px", border: "0", borderRadius: "999px", fontSize: "13px", fontWeight: "500", fontFamily: "inherit", cursor: "pointer"}}>7 Days</button>
-                    <button type="button" data-r="30 Days" onClick={V.set30} style={{padding: "8px 16px", border: "0", borderRadius: "999px", fontSize: "13px", fontWeight: "500", fontFamily: "inherit", cursor: "pointer"}}>30 Days</button>
-                    <button type="button" data-r="All Time" onClick={V.setAll} style={{padding: "8px 16px", border: "0", borderRadius: "999px", fontSize: "13px", fontWeight: "500", fontFamily: "inherit", cursor: "pointer"}}>All Time</button>
+                    <button type="button" data-r="7 Days" aria-pressed={V.activeRange === '7 Days'} onClick={V.set7} style={{padding: "8px 16px", border: "0", borderRadius: "999px", fontSize: "13px", fontWeight: "500", fontFamily: "inherit", cursor: "pointer"}}>7 Days</button>
+                    <button type="button" data-r="30 Days" aria-pressed={V.activeRange === '30 Days'} onClick={V.set30} style={{padding: "8px 16px", border: "0", borderRadius: "999px", fontSize: "13px", fontWeight: "500", fontFamily: "inherit", cursor: "pointer"}}>30 Days</button>
+                    <button type="button" data-r="All Time" aria-pressed={V.activeRange === 'All Time'} onClick={V.setAll} style={{padding: "8px 16px", border: "0", borderRadius: "999px", fontSize: "13px", fontWeight: "500", fontFamily: "inherit", cursor: "pointer"}}>All Time</button>
                   </div>
                 </div>
                 <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,190px),1fr))", gap: "clamp(12px,1.4vw,20px)", alignItems: "end"}}>
@@ -364,74 +364,20 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
                       <div>
                         <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Scrape Volume</h2>
-                        <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#4C554A"}}>Leads captured across the last 30 days.</p>
+                        <p data-volume-period="1" style={{margin: "4px 0 0", fontSize: "13.5px", color: "#4C554A"}}>{V.dashVolumeLabel}</p>
                       </div>
                       <span data-open="1" aria-hidden="true" style={{display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "999px", background: "rgba(255,255,255,.6)", fontSize: "14px", flex: "none"}}>↗</span>
                     </div>
                     <div style={{position: "relative", marginTop: "18px"}}>
                       <span style={{position: "absolute", top: "0", left: "36%", display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "11.5px", whiteSpace: "nowrap", zIndex: "2"}}>
                         <strong style={{fontWeight: "700"}}>{V.dashScrapeDelta}</strong>
-                        {' '}vs. last month
+                        {' '}{V.dashComparisonLabel}
                       </span>
-                      <div style={{position: "relative", height: "clamp(140px,15vw,168px)", marginTop: "30px"}}>
-                        <div style={{position: "absolute", inset: "0", display: "flex", alignItems: "flex-end", gap: "2px"}}>
-                          <span style={{flex: "1", height: "12%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.46)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.000s both"}}></span>
-                          <span style={{flex: "1", height: "13%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.46)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.018s both"}}></span>
-                          <span style={{flex: "1", height: "9%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.45)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.036s both"}}></span>
-                          <span style={{flex: "1", height: "25%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.49)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.054s both"}}></span>
-                          <span style={{flex: "1", height: "15%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.46)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.072s both"}}></span>
-                          <span style={{flex: "1", height: "27%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.50)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.090s both"}}></span>
-                          <span style={{flex: "1", height: "16%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.47)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.108s both"}}></span>
-                          <span style={{flex: "1", height: "20%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.48)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.126s both"}}></span>
-                          <span style={{flex: "1", height: "28%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.50)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.144s both"}}></span>
-                          <span style={{flex: "1", height: "26%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.50)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.162s both"}}></span>
-                          <span style={{flex: "1", height: "39%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.54)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.180s both"}}></span>
-                          <span style={{flex: "1", height: "23%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.49)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.198s both"}}></span>
-                          <span style={{flex: "1", height: "35%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.53)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.216s both"}}></span>
-                          <span style={{flex: "1", height: "30%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.51)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.234s both"}}></span>
-                          <span style={{flex: "1", height: "41%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.54)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.252s both"}}></span>
-                          <span style={{flex: "1", height: "46%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.56)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.270s both"}}></span>
-                          <span style={{flex: "1", height: "37%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.53)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.288s both"}}></span>
-                          <span style={{flex: "1", height: "48%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.56)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.306s both"}}></span>
-                          <span style={{flex: "1", height: "39%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.54)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.324s both"}}></span>
-                          <span style={{flex: "1", height: "60%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.60)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.342s both"}}></span>
-                          <span style={{flex: "1", height: "56%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.59)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.360s both"}}></span>
-                          <span style={{flex: "1", height: "62%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.61)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.378s both"}}></span>
-                          <span style={{flex: "1", height: "64%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.61)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.396s both"}}></span>
-                          <span style={{flex: "1", height: "61%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.60)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.414s both"}}></span>
-                          <span style={{flex: "1", height: "81%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.66)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.432s both"}}></span>
-                          <span style={{flex: "1", height: "75%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.65)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.450s both"}}></span>
-                          <span style={{flex: "1", height: "90%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.69)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.468s both"}}></span>
-                          <span style={{flex: "1", height: "79%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.66)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.486s both"}}></span>
-                          <span style={{flex: "1", height: "85%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.68)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.504s both"}}></span>
-                          <span style={{flex: "1", height: "89%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,.95)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.522s both"}}></span>
-                          <span style={{flex: "1", height: "87%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,.95)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.540s both"}}></span>
-                          <span style={{flex: "1", height: "97%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,.95)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.558s both"}}></span>
-                          <span style={{flex: "1", height: "78%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,.95)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.576s both"}}></span>
-                          <span style={{flex: "1", height: "86%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,.95)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.594s both"}}></span>
-                          <span style={{flex: "1", height: "74%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.64)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.612s both"}}></span>
-                          <span style={{flex: "1", height: "81%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.66)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.630s both"}}></span>
-                          <span style={{flex: "1", height: "79%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.66)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.648s both"}}></span>
-                          <span style={{flex: "1", height: "67%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.62)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.666s both"}}></span>
-                          <span style={{flex: "1", height: "69%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.63)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.684s both"}}></span>
-                          <span style={{flex: "1", height: "53%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.58)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.702s both"}}></span>
-                          <span style={{flex: "1", height: "68%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.62)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.720s both"}}></span>
-                          <span style={{flex: "1", height: "58%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.59)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.738s both"}}></span>
-                          <span style={{flex: "1", height: "61%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.60)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.756s both"}}></span>
-                          <span style={{flex: "1", height: "53%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.58)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.774s both"}}></span>
-                          <span style={{flex: "1", height: "45%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.55)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.792s both"}}></span>
-                          <span style={{flex: "1", height: "56%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.59)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.810s both"}}></span>
-                          <span style={{flex: "1", height: "46%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.56)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.828s both"}}></span>
-                          <span style={{flex: "1", height: "58%", borderRadius: "2px 2px 0 0", background: "rgba(247,249,245,0.59)", transformOrigin: "bottom", animation: "lsRise 1s cubic-bezier(.22,1,.36,1) 0.846s both"}}></span>
+                      <div data-volume-chart="1" style={{position: "relative", height: "clamp(140px,15vw,168px)", marginTop: "30px"}}>
+                        {V.dashVolumeEmpty ? <span style={{position: "absolute", inset: "0", display: "grid", placeItems: "center", fontSize: "13px", color: "#4C554A"}}>{V.dashVolumeEmpty}</span> : null}
+                        <div style={{position: "absolute", inset: "0", display: "flex", alignItems: "flex-end", gap: "3px"}}>
+                          {(V.dashVolumeBars ?? []).map((bar, index) => <span key={index} title={`${bar.leads} leads`} style={{flex: "1", height: bar.height, borderRadius: "3px 3px 0 0", background: "rgba(247,249,245,.9)", transition: "height .25s ease"}} />)}
                         </div>
-                        <svg viewBox="0 0 520 156" preserveAspectRatio="none" aria-hidden="true" style={{position: "absolute", inset: "0", display: "block", width: "100%", height: "100%"}}>
-                          <path d="M0.0 133.8 Q5.5 133.8 11.1 130.1 Q16.6 130.1 22.1 129.3 Q27.7 129.3 33.2 125.1 Q38.8 125.1 44.3 124.2 Q49.8 124.2 55.3 121.2 Q60.9 121.2 66.4 120.3 Q71.9 120.3 77.4 117.2 Q83.0 117.2 88.5 113.9 Q94.0 113.9 99.6 111.9 Q105.1 111.9 110.6 107.7 Q116.2 107.7 121.7 107.2 Q127.3 107.2 132.8 103.0 Q138.3 103.0 143.8 101.0 Q149.4 101.0 154.9 97.1 Q160.4 97.1 166.0 93.4 Q171.5 93.4 177.0 90.9 Q182.6 90.9 188.1 85.6 Q193.6 85.6 199.1 82.8 Q204.6 82.8 210.2 75.8 Q215.8 75.8 221.3 71.3 Q226.8 71.3 232.3 65.2 Q237.9 65.2 243.4 59.3 Q248.9 59.3 254.5 54.0 Q260.0 54.0 265.5 46.1 Q271.1 46.1 276.6 41.9 Q282.1 41.9 287.7 35.2 Q293.2 35.2 298.7 33.0 Q304.3 33.0 309.8 29.6 Q315.4 29.6 320.9 27.6 Q326.4 27.6 331.9 27.9 Q337.4 27.9 343.0 27.6 Q348.5 27.6 354.0 31.8 Q359.6 31.8 365.1 33.5 Q370.6 33.5 376.2 38.6 Q381.7 38.6 387.2 41.6 Q392.8 41.6 398.3 46.4 Q403.9 46.4 409.4 52.3 Q414.9 52.3 420.4 55.9 Q425.9 55.9 431.5 61.8 Q437.1 61.8 442.6 63.5 Q448.1 63.5 453.6 68.0 Q459.1 68.0 464.7 70.2 Q470.2 70.2 475.7 73.6 Q481.3 73.6 486.8 76.9 Q492.4 76.9 497.9 77.8 Q503.4 77.8 508.9 76.4 Q514.5 76.4 520.0 72.7" fill="none" stroke="#1C1C1C" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="7 8" opacity=".5" style={{animation: "lsFadeIn 1.2s linear .5s both,lsMarch 3.4s linear infinite"}}></path>
-                        </svg>
-                        <span aria-hidden="true" style={{position: "absolute", left: "66.0%", top: "-14px", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "0", animation: "lsFadeIn .9s linear 1.1s both"}}>
-                          <svg viewBox="0 0 14 10" width="13" height="9" aria-hidden="true" style={{display: "block"}}>
-                            <path d="M7 10L0 0h14z" fill="#1C1C1C"></path>
-                          </svg>
-                        </span>
                       </div>
                     </div>
                     <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "14px"}}>
@@ -3522,7 +3468,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             {shows(V.isSettings) ? <SettingsPanel V={V} /> : null}
             {shows(V.gWin) ? (
               <>
-              <div style={{position: "fixed", inset: "0", zIndex: "95", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
+              <div data-google-backdrop="1" onClick={(event) => { if (event.target === event.currentTarget) V.gCancel() }} style={{position: "fixed", inset: "0", zIndex: "95", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
                 <section style={{width: "100%", maxWidth: "560px", borderRadius: "22px", background: "#F5F5F4", overflow: "hidden", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <div style={{display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", background: "#E4E6E3"}}>
                     <span aria-hidden="true" style={{display: "flex", gap: "6px"}}>
@@ -3625,7 +3571,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.scanOverlay) ? (
               <>
-              <div style={{position: "fixed", inset: "0", zIndex: "95", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.66)", animation: "lsScrimIn .35s linear both"}} data-scanscrim="1">
+              <div onClick={(event) => { if (event.target === event.currentTarget && !shows(V.scanCancelVisible)) V.exitScan() }} style={{position: "fixed", inset: "0", zIndex: "95", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.66)", animation: "lsScrimIn .35s linear both"}} data-scanscrim="1">
                 <section style={{width: "100%", maxWidth: "520px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(22px,3vw,32px)", borderRadius: "28px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <div style={{display: "flex", alignItems: "center", gap: "18px"}}>
                     <span aria-hidden="true" style={{position: "relative", display: "block", width: "78px", height: "78px", borderRadius: "999px", background: "#E7EDE0", overflow: "hidden", flex: "none"}}>
@@ -3679,7 +3625,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.bulkKeywordsOpen) ? (
               <>
-              <div data-bulk-keywords-modal="1" role="dialog" aria-modal="true" aria-labelledby="bulk-keywords-title" style={{position: "fixed", inset: "0", zIndex: "92", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
+              <div data-bulk-keywords-modal="1" role="dialog" aria-modal="true" aria-labelledby="bulk-keywords-title" onClick={(event) => { if (event.target === event.currentTarget) V.closeBulkKeywords() }} style={{position: "fixed", inset: "0", zIndex: "92", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
                 <section style={{width: "100%", maxWidth: "650px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(20px,2.6vw,30px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "16px"}}>
                     <div>
@@ -3726,7 +3672,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.impOpen) ? (
               <>
-              <div style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}} data-socimp="1" data-impmodal="1">
+              <div onClick={(event) => { if (event.target === event.currentTarget) V.closeImp() }} style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}} data-socimp="1" data-impmodal="1">
                 <section style={{width: "100%", maxWidth: "620px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(20px,2.4vw,28px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <h2 style={{margin: "0", fontSize: "clamp(19px,2.1vw,24px)", fontWeight: "400", letterSpacing: "-.02em"}}>Import websites</h2>
                   <p style={{margin: "6px 0 0", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C"}}>Paste website URLs, one per line.</p>
@@ -3751,7 +3697,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.expOpen) ? (
               <>
-              <div style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
+              <div data-export-backdrop="1" onClick={(event) => { if (event.target === event.currentTarget) V.closeExp() }} style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
                 <section style={{width: "100%", maxWidth: "700px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(20px,2.4vw,28px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "14px"}}>
                     <div>
@@ -3824,7 +3770,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.profileExportOpen) ? (
               <>
-              <div style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
+              <div data-profile-export-backdrop="1" onClick={(event) => { if (event.target === event.currentTarget) V.closeProfileExport() }} style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
                 <section style={{width: "100%", maxWidth: "520px", padding: "clamp(22px,3vw,32px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <h2 style={{margin: "0", fontSize: "clamp(20px,2.2vw,26px)", fontWeight: "400", letterSpacing: "-.02em"}}>Export social profiles</h2>
                   <p style={{margin: "7px 0 0", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C"}}>{V.profileExportSummary}</p>
@@ -3839,7 +3785,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.chatOpen) ? (
               <>
-              <div style={{position: "fixed", right: "clamp(12px,2vw,26px)", bottom: "clamp(12px,2vw,26px)", zIndex: "95", width: "min(384px,calc(100vw - 24px))", maxHeight: "min(80vh,620px)", display: "flex", flexDirection: "column", borderRadius: "24px", background: "#F5F5F4", boxShadow: "0 34px 70px -34px rgba(28,28,28,.75)", overflow: "hidden", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
+              <div data-chat-panel="1" style={{position: "fixed", right: "clamp(12px,2vw,26px)", bottom: "clamp(12px,2vw,26px)", zIndex: "95", width: "min(384px,calc(100vw - 24px))", maxHeight: "min(80vh,620px)", display: "flex", flexDirection: "column", borderRadius: "24px", background: "#F5F5F4", boxShadow: "0 34px 70px -34px rgba(28,28,28,.75)", overflow: "hidden", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                 <div style={{display: "flex", alignItems: "center", gap: "11px", padding: "14px 16px", background: "#1C1C1C", color: "#F0F0F0", flex: "none"}}>
                   <span data-chatlottie2="1" aria-hidden="true" style={{display: "block", width: "40px", height: "40px", flex: "none"}}></span>
                   <span style={{flex: "1", minWidth: "0"}}>

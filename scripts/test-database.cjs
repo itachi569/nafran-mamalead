@@ -401,6 +401,30 @@ check('the database reopens with its rows intact', reopenedRepo.listLeads(worksp
 check('and keeps its workspace', reopened.ensureWorkspace().id === workspace.id)
 reopened.close()
 
+// The Dashboard's date buttons must change the database aggregate, including related contacts.
+const periodDb = new LocalDatabase(join(dir, 'period.db'))
+const periodRepo = new Repository(periodDb)
+const periodWorkspace = periodDb.ensureWorkspace()
+for (const [age, name, ref, phone] of [
+  [1, 'Today Clinic', 'period-today', '+44 161 000 0000'],
+  [15, 'Earlier Clinic', 'period-earlier', ''],
+  [45, 'Old Clinic', 'period-old', ''],
+]) {
+  const at = new Date(Date.now() - age * 86_400_000).toISOString()
+  periodRepo.saveRun(periodWorkspace.id, {
+    provider: 'chromium-maps', status: 'done', keywords: ['clinic'], location: 'Manchester',
+    maxResultsPerKeyword: 1, detail: true, durationMs: 100, startedAt: at, finishedAt: at,
+    error: null, leads: [lead(name, ref, { capturedAt: at, phone })],
+  })
+}
+const last7 = periodRepo.dashboard(periodWorkspace.id, 7)
+const last30 = periodRepo.dashboard(periodWorkspace.id, 30)
+const allTime = periodRepo.dashboard(periodWorkspace.id)
+check('dashboard 7 days excludes older leads', last7.total === 1 && last7.withPhone === 1)
+check('dashboard 30 days includes recent and earlier leads', last30.total === 2 && last30.withPhone === 1)
+check('dashboard all time includes the complete ledger', allTime.total === 3)
+periodDb.close()
+
 rmSync(dir, { recursive: true, force: true })
 
 const failed = results.filter((entry) => !entry.ok)

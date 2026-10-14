@@ -6,7 +6,24 @@
     : 'https://api.mamalead.com'
   const tokenKey = 'nafran.billing.installation.' + new URL(billingOrigin).host
   const api = (path) => new URL(path, billingOrigin).toString()
-  document.querySelectorAll('[data-public-download]').forEach((link) => { link.href = api('/v1/download') })
+  document.querySelectorAll('[data-public-download="windows"]').forEach((link) => { link.href = api('/v1/download?platform=windows') })
+  const macDownload = document.querySelector('[data-public-download="mac"]')
+  const macDownloadStatus = document.querySelector('[data-mac-download-status]')
+  if (macDownload) {
+    fetch(api('/v1/download-options'), { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((options) => {
+        if (!options?.mac) return
+        macDownload.href = api('/v1/download?platform=mac')
+        macDownload.textContent = 'Download for Mac'
+        macDownload.removeAttribute('aria-disabled')
+        macDownload.style.cursor = 'pointer'
+        macDownload.style.background = '#1C1C1C'
+        macDownload.style.color = '#FFFFFF'
+        if (macDownloadStatus) macDownloadStatus.textContent = 'Mac installer ready. Download it, then enter your licence key inside the app.'
+      })
+      .catch(() => {})
+  }
   const readToken = () => localStorage.getItem(tokenKey) || ''
   const saveToken = (token) => { if (/^[A-Za-z0-9_-]{43}$/.test(token)) localStorage.setItem(tokenKey, token) }
   async function request(path, options) {
@@ -39,10 +56,11 @@
     if (!sticky) node._hide = setTimeout(() => node.remove(), error ? 9000 : 7000)
     return node
   }
-  async function buy(product) {
+  async function buy(product, email) {
     try {
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()) || email.length > 254) throw new Error('Enter a valid email address for your lifetime key.')
       await ensureToken()
-      const body = await request('/v1/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ product }) })
+      const body = await request('/v1/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ product, email: email.trim().toLowerCase() }) })
       window.location.assign(body.url)
     } catch (error) { banner(error instanceof Error ? error.message : 'Checkout could not be started.', true) }
   }
@@ -56,18 +74,19 @@
         : 'Your license is already issued and ends in ' + license.last4 + '.'
       const status = banner(message, false, true)
       const link = document.createElement('a')
-      link.href = api('/v1/download')
-      link.textContent = ' Download the installer'
+      link.href = '#download'
+      link.textContent = ' Choose your download'
       link.style.cssText = 'color:#c8d5bb;margin-left:8px'
       status.appendChild(link)
       history.replaceState({}, '', window.location.pathname + window.location.hash)
     } catch (error) { banner(error instanceof Error ? error.message : 'Payment is still being verified. Refresh in a moment.', true) }
   }
-  document.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-buy-product]')
-    if (!button) return
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-lifetime-purchase]')
+    if (!form) return
     event.preventDefault()
-    void buy(button.dataset.buyProduct)
+    const email = form.elements.namedItem('email')?.value?.trim()
+    if (email) void buy('lifetime', email)
   })
   document.addEventListener('submit', async (event) => {
     if (!event.target.matches('[data-trial-request]')) return

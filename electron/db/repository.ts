@@ -814,32 +814,33 @@ export class Repository {
    * All of it is derived here rather than in the page, so the dashboard cannot disagree with the
    * tables it summarises.
    */
-  dashboard(workspaceId: string): DashboardTotals {
-    const total = this.db.one<{ n: number }>('select count(*) as n from leads where workspace_id = ?', [workspaceId])?.n ?? 0
-    const count = (sql: string) => this.db.one<{ n: number }>(sql, [workspaceId])?.n ?? 0
+  dashboard(workspaceId: string, days: 7 | 30 | null = null): DashboardTotals {
+    const cutoff = days === null ? null : new Date(Date.now() - days * 86_400_000).toISOString()
+    const scope = `l.workspace_id = ?${cutoff ? ' and l.captured_at >= ?' : ''}`
+    const args = cutoff ? [workspaceId, cutoff] : [workspaceId]
+    const count = (sql: string) => this.db.one<{ n: number }>(sql, args)?.n ?? 0
+    const total = count(`select count(*) as n from leads l where ${scope}`)
 
-    const withWebsite = count("select count(*) as n from leads where workspace_id = ? and website <> ''")
-    const withPhone = count("select count(*) as n from leads where workspace_id = ? and phone <> ''")
-    const withEmail = count(
-      "select count(distinct lead_id) as n from lead_contacts where workspace_id = ? and kind = 'email'",
-    )
-    const withSocial = count('select count(distinct lead_id) as n from social_profiles where workspace_id = ?')
-    const withContact = count(
-      `select count(*) as n from leads l where l.workspace_id = ?
-         and (l.phone <> ''
-           or exists (select 1 from lead_contacts c where c.lead_id = l.id)
-           or exists (select 1 from social_profiles s where s.lead_id = l.id))`,
-    )
-    const decisionMakers = count('select count(distinct lead_id) as n from decision_makers where workspace_id = ?')
+    const withWebsite = count(`select count(*) as n from leads l where ${scope} and l.website <> ''`)
+    const withPhone = count(`select count(*) as n from leads l where ${scope} and l.phone <> ''`)
+    const withEmail = count(`select count(*) as n from leads l where ${scope}
+      and exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email')`)
+    const withSocial = count(`select count(*) as n from leads l where ${scope}
+      and exists (select 1 from social_profiles s where s.lead_id = l.id)`)
+    const withContact = count(`select count(*) as n from leads l where ${scope}
+      and (l.phone <> '' or exists (select 1 from lead_contacts c where c.lead_id = l.id)
+        or exists (select 1 from social_profiles s where s.lead_id = l.id))`)
+    const decisionMakers = count(`select count(*) as n from leads l where ${scope}
+      and exists (select 1 from decision_makers d where d.lead_id = l.id)`)
 
     // "Enriched" is a lead with more than the Maps listing: a website plus something found on it.
     const enriched = count(
-      `select count(*) as n from leads l where l.workspace_id = ? and l.website <> ''
+      `select count(*) as n from leads l where ${scope} and l.website <> ''
          and (exists (select 1 from lead_contacts c where c.lead_id = l.id)
            or exists (select 1 from social_profiles s where s.lead_id = l.id))`,
     )
     const exportReady = count(
-      `select count(*) as n from leads l where l.workspace_id = ?
+      `select count(*) as n from leads l where ${scope}
          and l.name <> ''
          and (l.phone <> '' or exists (select 1 from lead_contacts c where c.lead_id = l.id))`,
     )
@@ -856,19 +857,20 @@ export class Repository {
           (case when exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email') then 1 else 0 end) +
           (case when exists (select 1 from social_profiles s where s.lead_id = l.id) then 1 else 0 end)
         ), 0) as filled
-       from leads l where l.workspace_id = ?`,
-      [workspaceId],
+       from leads l where ${scope}`,
+      args,
     )?.filled ?? 0
 
     const platforms = this.db.query<{ platform: string; leads: number }>(
-      `select platform, count(distinct lead_id) as leads
-       from social_profiles where workspace_id = ? group by platform order by leads desc`,
-      [workspaceId],
+      `select s.platform, count(distinct s.lead_id) as leads
+       from social_profiles s join leads l on l.id = s.lead_id
+       where ${scope} group by s.platform order by leads desc`,
+      args,
     )
     const categories = this.db.query<{ category: string; count: number }>(
-      `select category, count(*) as count from leads
-       where workspace_id = ? and category <> '' group by category order by count desc limit 6`,
-      [workspaceId],
+      `select l.category, count(*) as count from leads l
+       where ${scope} and l.category <> '' group by l.category order by count desc limit 6`,
+      args,
     )
 
     return {

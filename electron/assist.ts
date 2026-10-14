@@ -83,11 +83,9 @@ function responseText(payload: unknown): string {
  * Calls an OpenAI-compatible chat-completions endpoint from Electron's main process. The API key
  * is read only here, so the renderer receives the answer but never receives the credential.
  */
-export async function askAssist(request: AssistChatRequest = {}, defaultKeyFile = ''): Promise<AssistChatResult> {
-  const credential = readAssistCredential(defaultKeyFile)
-  if (!credential.value) {
-    throw new Error('Nafran Assist is not configured. Set CEREBRAS_API_KEY_FILE (or CEREBRAS_API_KEY) for this app session.')
-  }
+export async function askAssist(request: AssistChatRequest = {}, defaultKeyFile = '', savedKey = ''): Promise<AssistChatResult> {
+  const credential = savedKey.trim() || readAssistCredential(defaultKeyFile).value
+  if (!credential) throw new Error('Nafran Assist is not configured on this device. Add your Cerebras API key in Settings → Account.')
 
   const model = modelName()
   const messages = [
@@ -108,7 +106,7 @@ export async function askAssist(request: AssistChatRequest = {}, defaultKeyFile 
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${credential.value}`,
+        Authorization: `Bearer ${credential}`,
       },
       body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: 600 }),
       signal: controller.signal,

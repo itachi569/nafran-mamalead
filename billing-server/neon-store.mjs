@@ -41,6 +41,9 @@ export function createNeonStore(databaseUrl) {
         )
       `
       await sql`create unique index if not exists billing_licenses_one_per_purchase on billing_licenses (installation_id)`
+      await sql`create unique index if not exists billing_licenses_one_per_email on billing_licenses (lower(email))`
+      await sql`create table if not exists billing_lifetime_checkout_emails (email text primary key, installation_id text not null unique, session_id text, customer_id text, created_at timestamptz not null default now())`
+      await sql`alter table billing_lifetime_checkout_emails add column if not exists created_at timestamptz`
       await sql`
         create table if not exists billing_trial_licenses (
           id text primary key,
@@ -53,11 +56,19 @@ export function createNeonStore(databaseUrl) {
           revoked_at timestamptz,
           activated_at timestamptz,
           expires_at timestamptz,
-          bound_installation_id text unique
+          bound_installation_id text unique,
+          correction_count integer not null default 0
         )
       `
+      await sql`alter table billing_trial_licenses add column if not exists correction_count integer not null default 0`
       await sql`create table if not exists billing_events (event_id text primary key, received_at timestamptz not null)`
       await sql`create table if not exists billing_public_downloads (id text primary key, created_at timestamptz not null)`
+      await sql`create table if not exists billing_decision_lead_uses (
+        owner_id text not null, period_key text not null, subject_hash text not null,
+        slot integer not null, created_at timestamptz not null,
+        primary key (owner_id, period_key, subject_hash),
+        unique (owner_id, period_key, slot)
+      )`
     }).catch((error) => { schemaReady = undefined; throw error })
     return schemaReady
   }
@@ -84,6 +95,33 @@ export function createNeonStore(databaseUrl) {
       if (product === 'lifetime') await sql`update billing_installations set pending_lifetime_session_id = ${sessionId} where id = ${id}`
       else await sql`update billing_installations set pending_decision_session_id = ${sessionId} where id = ${id}`
     },
+    async reserveLifetimeEmail(email, installationId) {
+      await ready()
+      const inserted = await sql`insert into billing_lifetime_checkout_emails (email, installation_id, created_at) values (${email}, ${installationId}, ${new Date().toISOString()}) on conflict do nothing returning email`
+      const row = (await sql`select * from billing_lifetime_checkout_emails where email = ${email} and installation_id = ${installationId} limit 1`)[0]
+      return row ? { ...row, newlyCreated: inserted.length > 0 } : null
+    },
+    async lifetimeCheckoutByEmail(email) {
+      await ready()
+      return (await sql`select * from billing_lifetime_checkout_emails where email = ${email} limit 1`)[0] ?? null
+    },
+    async releaseLifetimeEmail(email, installationId) {
+      await ready()
+      await sql`delete from billing_lifetime_checkout_emails where email = ${email} and installation_id = ${installationId}`
+    },
+    async saveLifetimeCheckout(email, installationId, sessionId, customerId) {
+      await ready()
+      await sql`update billing_lifetime_checkout_emails set session_id = ${sessionId}, customer_id = ${customerId} where email = ${email} and installation_id = ${installationId}`
+      await sql`update billing_installations set pending_lifetime_session_id = ${sessionId}, customer_id = ${customerId} where id = ${installationId}`
+    },
+    async lifetimeCheckoutForInstallation(installationId) {
+      await ready()
+      return (await sql`select * from billing_lifetime_checkout_emails where installation_id = ${installationId} limit 1`)[0] ?? null
+    },
+    async lifetimeLicenseByEmail(email) {
+      await ready()
+      return (await sql`select * from billing_licenses where lower(email) = ${email} limit 1`)[0] ?? null
+    },
     async saveLifetime(id, sessionId, customerId) {
       await ready()
       await sql`update billing_installations set lifetime_session_id = ${sessionId}, pending_lifetime_session_id = null, customer_id = ${customerId} where id = ${id}`
@@ -91,6 +129,28 @@ export function createNeonStore(databaseUrl) {
     async saveDecision(id, subscriptionId, customerId) {
       await ready()
       await sql`update billing_installations set decision_subscription_id = ${subscriptionId}, pending_decision_session_id = null, customer_id = ${customerId} where id = ${id}`
+    },
+    async countDecisionUses(ownerId, periodKey) {
+      await ready()
+      return Number((await sql`select count(*)::int as n from billing_decision_lead_uses where owner_id = ${ownerId} and period_key = ${periodKey}`)[0]?.n ?? 0)
+    },
+    async reserveDecisionUse(ownerId, periodKey, subjectHash, limit) {
+      await ready()
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const existing = (await sql`select slot from billing_decision_lead_uses where owner_id = ${ownerId} and period_key = ${periodKey} and subject_hash = ${subjectHash} limit 1`)[0]
+        if (existing) return { used: await this.countDecisionUses(ownerId, periodKey), new: false }
+        const rows = await sql`
+          insert into billing_decision_lead_uses (owner_id, period_key, subject_hash, slot, created_at)
+          select ${ownerId}, ${periodKey}, ${subjectHash}, candidate.slot, ${new Date().toISOString()}
+          from generate_series(1, ${limit}) as candidate(slot)
+          where not exists (select 1 from billing_decision_lead_uses used where used.owner_id = ${ownerId} and used.period_key = ${periodKey} and used.slot = candidate.slot)
+          order by candidate.slot limit 1
+          on conflict do nothing returning slot
+        `
+        if (rows.length) return { used: await this.countDecisionUses(ownerId, periodKey), new: true }
+        if (await this.countDecisionUses(ownerId, periodKey) >= limit) return null
+      }
+      throw new Error('Decision Maker capacity is busy. Retry shortly.')
     },
     async licenseForInstallation(installationId) {
       await ready()
@@ -125,6 +185,28 @@ export function createNeonStore(databaseUrl) {
     async createTrial({ id, installationId, keyHash, keyLast4, email, createdAt }) {
       await ready()
       await sql`insert into billing_trial_licenses (id, installation_id, key_hash, key_last4, email, created_at) values (${id}, ${installationId}, ${keyHash}, ${keyLast4}, ${email}, ${createdAt})`
+    },
+    async replaceUnactivatedTrial({ id, installationId, keyHash, keyLast4, email }) {
+      await ready()
+      const rows = await sql`
+        update billing_trial_licenses set key_hash = ${keyHash}, key_last4 = ${keyLast4},
+          email = ${email}, sent_at = null, correction_count = 1
+        where id = ${id} and installation_id = ${installationId} and correction_count = 0
+          and sent_at is not null and activated_at is null and bound_installation_id is null and revoked_at is null
+        returning id
+      `
+      return rows.length > 0
+    },
+    async restoreTrialCorrection({ id, replacementHash, previous }) {
+      await ready()
+      const rows = await sql`
+        update billing_trial_licenses set key_hash = ${previous.key_hash}, key_last4 = ${previous.key_last4},
+          email = ${previous.email}, sent_at = ${previous.sent_at}, correction_count = 0
+        where id = ${id} and key_hash = ${replacementHash} and correction_count = 1 and sent_at is null
+          and activated_at is null and bound_installation_id is null
+        returning id
+      `
+      return rows.length > 0
     },
     async markTrialSent(id, sentAt) {
       await ready()

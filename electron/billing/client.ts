@@ -12,7 +12,7 @@ export interface BillingStatus {
   message?: string
   lifetime?: { amount: number; currency: string; interval: null; active: boolean }
   trial?: { active: boolean; expiresAt: string | null }
-  decisionMaker?: { amount: number; currency: string; interval: string | null; active: boolean; status: string; includedPeople: number }
+  decisionMaker?: { amount: number; currency: string; interval: string | null; available?: boolean; active: boolean; status: string; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null }
   hasCustomer?: boolean
   license?: { active: boolean; kind?: 'trial' | 'lifetime'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
 }
@@ -135,7 +135,7 @@ export async function billingStatus(): Promise<BillingStatus> {
 }
 
 /** Main-process gate for paid work. Only a fresh server status can start a user action. */
-export async function requireActiveLicense(_feature: LicensedFeature = 'lifetime', fresh = true): Promise<void> {
+export async function requireActiveLicense(feature: LicensedFeature = 'lifetime', fresh = true): Promise<void> {
   try {
     let status: BillingStatus
     if (!fresh && verifiedLicense && verifiedLicense.expiresAt > Date.now()) {
@@ -153,6 +153,10 @@ export async function requireActiveLicense(_feature: LicensedFeature = 'lifetime
     if (!status.connected || !(status.lifetime?.active || status.trial?.active) || !status.license?.active || (status.trial?.active && status.license?.kind === 'trial' && status.trial.expiresAt && Date.parse(status.trial.expiresAt) <= Date.now())) {
       throw new LicenseAccessError('Activate an active 1-day trial or lifetime Nafran license in Settings → Account before using this feature.')
     }
+    if (feature === 'decisionMaker' && !(status.decisionMaker?.active && status.decisionMaker.available !== false && status.decisionMaker.amount === 300 &&
+      status.decisionMaker.interval === 'month' && status.decisionMaker.monthlyLimit === 1000)) {
+      throw new LicenseAccessError('Decision Makers requires the $3/month subscription. Subscribe in Settings → Usage.')
+    }
   } catch (error) {
     if (error instanceof LicenseAccessError) throw error
     verifiedLicense = null
@@ -160,10 +164,27 @@ export async function requireActiveLicense(_feature: LicensedFeature = 'lifetime
   }
 }
 
-export async function billingCheckout(product: 'lifetime'): Promise<string> {
-  if (product !== 'lifetime') throw new Error('Only the Lifetime Deal is available.')
-  const result = await request<{ url: string }>('/v1/checkout', 'POST', { product }, await installationToken())
+export async function billingCheckout(product: 'lifetime' | 'decisionMaker', email: string): Promise<string> {
+  if (product === 'decisionMaker') {
+    const result = await request<{ url: string }>('/v1/checkout', 'POST', { product }, await installationToken())
+    return result.url
+  }
+  const address = email.trim().toLowerCase()
+  if (address.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) throw new Error('Enter a valid email address for your lifetime key.')
+  const result = await request<{ url: string }>('/v1/checkout', 'POST', { product, email: address }, await installationToken())
   return result.url
+}
+
+export async function billingConsumeDecisionMaker(leadId: string): Promise<void> {
+  await request('/v1/decision-maker/consume', 'POST', { leadId }, await installationToken())
+}
+
+export async function billingRequestTrial(email: string, replaceExisting = false): Promise<{ emailSent: boolean; message: string }> {
+  const address = email.trim().toLowerCase()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address) || address.length > 254) {
+    throw new Error('Enter a valid email address for your trial key.')
+  }
+  return request<{ emailSent: boolean; message: string }>('/v1/trial', 'POST', { email: address, replaceExisting }, await installationToken())
 }
 
 export async function billingPortal(): Promise<string> {

@@ -21,9 +21,11 @@ const routes = {
   invoices: '/v1/invoices',
   license: '/v1/license',
   activate: '/v1/activate',
+  decisionConsume: '/v1/decision-maker/consume',
   downloadLink: '/v1/download-link',
   downloadByLicense: '/v1/download-by-license',
   download: '/v1/download',
+  downloadOptions: '/v1/download-options',
   stripeWebhook: '/webhooks/stripe',
 }
 

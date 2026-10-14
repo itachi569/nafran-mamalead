@@ -32,6 +32,7 @@ export interface EnrichmentProgress {
 export interface EnrichmentOptions {
   onProgress?: (progress: EnrichmentProgress) => void
   authorize?: (kind: JobKind, fresh: boolean) => Promise<void>
+  consumeDecisionLead?: (leadId: string) => Promise<void>
   /**
    * The DataForSEO credential, handed over by the window for as long as this worker lives.
    *
@@ -254,6 +255,7 @@ export class EnrichmentRunner {
         processed += 1
         continue
       }
+      if (kind === 'decision-maker') await this.options.consumeDecisionLead?.(leadId)
 
       this.emit({
         jobId: job.id,
@@ -404,6 +406,7 @@ export class EnrichmentRunner {
     setProcessed: (count: number) => void,
   ): Promise<void> {
     const key = this.options.deepKey?.() ?? ''
+    if (!key) throw new Error('Add a DataForSEO key in Settings → Account before running a deep pass.')
     let found = 0
     let processed = 0
     let spent = 0
@@ -417,6 +420,7 @@ export class EnrichmentRunner {
         processed += 1
         continue
       }
+      await this.options.consumeDecisionLead?.(leadId)
 
       this.emit({
         jobId: job.id,

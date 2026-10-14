@@ -11,10 +11,10 @@ import { registerLocalDatabase } from './db/ipc'
 import { EnrichmentRunner } from './enrichment/runner'
 import { checkKey } from './enrichment/dataforseo'
 import { isUsableEmail, isUsablePerson } from './enrichment/website'
-import { readApifyCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
+import { readApifyCredential, readAssistCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
 import { askAssist, type AssistChatRequest } from './assist'
 import { readLeadsAngelBundle, verifyEmailAddressesWithLeadsAngel, type LeadsAngelCredentials } from './leadsangel'
-import { billingActivate, billingCheckout, billingInvoices, billingPortal, billingStatus, requireActiveLicense } from './billing/client'
+import { billingActivate, billingCheckout, billingConsumeDecisionMaker, billingInvoices, billingPortal, billingRequestTrial, billingStatus, requireActiveLicense } from './billing/client'
 import {
   DEFAULT_APIFY_EMAIL_ACTOR,
   parseApifyEmailResult,
@@ -443,8 +443,10 @@ function stripePage(raw: string, allowed: string[]): string {
 }
 
 ipcMain.handle('billing:status', () => billingStatus())
-ipcMain.handle('billing:checkout', async (_event, product: 'lifetime') => {
-  const url = stripePage(await billingCheckout(product), ['checkout.stripe.com'])
+ipcMain.handle('billing:request-trial', (_event, payload: { email: string; replaceExisting?: boolean } | string) =>
+  billingRequestTrial(typeof payload === 'string' ? payload : payload.email, typeof payload === 'string' ? false : payload.replaceExisting === true))
+ipcMain.handle('billing:checkout', async (_event, payload: { product: 'lifetime' | 'decisionMaker'; email: string }) => {
+  const url = stripePage(await billingCheckout(payload.product, payload.email), ['checkout.stripe.com'])
   await shell.openExternal(url)
   return { opened: true }
 })
@@ -499,9 +501,47 @@ ipcMain.handle('notifications:show', (_event, payload: { title?: string; body?: 
  * this IPC boundary here prevents an API key from entering the renderer bundle or a page's
  * JavaScript context.
  */
-ipcMain.handle('assist:chat', (_event, payload: AssistChatRequest = {}) =>
-  askAssist(payload, join(app.getPath('userData'), 'secrets', 'cerebras.key')),
-)
+function assistSecretPaths(): { encrypted: string; legacy: string } {
+  const directory = join(app.getPath('userData'), 'secrets')
+  return { encrypted: join(directory, 'cerebras.key.enc'), legacy: join(directory, 'cerebras.key') }
+}
+
+function savedAssistKey(): string {
+  const { encrypted } = assistSecretPaths()
+  if (!existsSync(encrypted)) return ''
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is unavailable on this device.')
+  try { return safeStorage.decryptString(readFileSync(encrypted)).trim() }
+  catch { throw new Error('Saved Nafran Assist key could not be opened on this device. Add it again in Settings → Account.') }
+}
+
+ipcMain.handle('assist:status', () => {
+  const paths = assistSecretPaths()
+  const configured = Boolean(savedAssistKey() || readAssistCredential(paths.legacy).value)
+  return { configured, savedOnDevice: existsSync(paths.encrypted) || existsSync(paths.legacy) }
+})
+ipcMain.handle('assist:save-key', (_event, rawKey: string) => {
+  const key = String(rawKey ?? '').trim()
+  if (key.length < 20 || key.length > 512 || /\s/.test(key)) throw new Error('Enter a valid Cerebras API key.')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is unavailable on this device.')
+  const paths = assistSecretPaths()
+  mkdirSync(join(app.getPath('userData'), 'secrets'), { recursive: true })
+  writeFileSync(paths.encrypted, safeStorage.encryptString(key), { mode: 0o600 })
+  return { configured: true, savedOnDevice: true }
+})
+ipcMain.handle('assist:remove-key', () => {
+  const paths = assistSecretPaths()
+  for (const path of [paths.encrypted, paths.legacy]) if (existsSync(path)) unlinkSync(path)
+  return { configured: Boolean(readAssistCredential().value), savedOnDevice: false }
+})
+ipcMain.handle('assist:test', () => {
+  const paths = assistSecretPaths()
+  return askAssist({ messages: [{ role: 'user', content: 'Say hello in one short sentence.' }] }, paths.legacy, savedAssistKey())
+    .then(({ model }) => ({ connected: true, model }))
+})
+ipcMain.handle('assist:chat', (_event, payload: AssistChatRequest = {}) => {
+  const paths = assistSecretPaths()
+  return askAssist(payload, paths.legacy, savedAssistKey())
+})
 
 type EmailValiditySummary = {
   configured: boolean
@@ -1116,6 +1156,7 @@ app.whenReady().then(() => {
   enricher = new EnrichmentRunner(db, repository, {
     onProgress: (progress) => broadcast('enrichment:progress', progress),
     authorize: (kind, fresh) => requireActiveLicense(kind === 'deep' || kind === 'decision-maker' ? 'decisionMaker' : 'lifetime', fresh),
+    consumeDecisionLead: billingConsumeDecisionMaker,
     // The window owns the DataForSEO credential: it is entered in Settings, it is read back from
     // there, and it is handed over for as long as the app is open. Nothing here writes it down.
     deepKey: () => deepApiKey,

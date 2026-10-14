@@ -28,7 +28,7 @@ const local = {
   workspace: () => call('db:workspace'),
   usage: () => call('db:usage'),
   stats: () => call('db:stats'),
-  dashboard: () => call('db:dashboard'),
+  dashboard: (days?: 7 | 30 | null) => call('db:dashboard', { days }),
 
   leads: {
     list: (payload?: { limit?: number; offset?: number }) => call('db:leads:list', payload ?? {}),
@@ -218,13 +218,18 @@ const desktop = {
     ipcRenderer.invoke('app:info'),
   billing: {
     status: () => call('billing:status'),
-    checkout: (product: 'lifetime') => call('billing:checkout', product),
+    requestTrial: (email: string, replaceExisting = false) => call('billing:request-trial', { email, replaceExisting }),
+    checkout: (product: 'lifetime' | 'decisionMaker', email: string) => call('billing:checkout', { product, email }),
     activate: (licenseKey: string) => call('billing:activate', licenseKey),
     portal: () => call('billing:portal'),
     invoices: () => call('billing:invoices'),
     openInvoice: (url: string) => call('billing:openInvoice', url),
   },
   assist: {
+    status: (): Promise<{ configured: boolean; savedOnDevice: boolean }> => call('assist:status'),
+    saveKey: (key: string): Promise<{ configured: boolean; savedOnDevice: boolean }> => call('assist:save-key', key),
+    removeKey: (): Promise<{ configured: boolean; savedOnDevice: boolean }> => call('assist:remove-key'),
+    test: (): Promise<{ connected: boolean; model: string }> => call('assist:test'),
     chat: (input: {
       messages?: { role: 'user' | 'assistant'; content: string }[]
       context?: Record<string, string | number | boolean | null>

@@ -10,8 +10,11 @@ import { createCloudFunction } from '../billing-server/api/billing.mjs'
 const dir = mkdtempSync(join(tmpdir(), 'mamalead-billing-'))
 const database = join(dir, 'billing.db')
 const installerPath = join(dir, 'Nafran.exe')
+const macInstallerPath = join(dir, 'Nafran.dmg')
 writeFileSync(installerPath, 'installer bytes')
 const sessions = new Map()
+const customers = new Map()
+const subscriptions = new Map()
 const emails = []
 let chargeRefunded = false
 let failNextLicenseEmail = false
@@ -22,17 +25,24 @@ const fakeStripe = async (raw, request) => {
   let result
   if (path.endsWith('/prices/price_lifetime')) result = { active: true, currency: 'usd', unit_amount: 3000, recurring: null }
   else if (path.endsWith('/prices/price_decision')) result = { active: true, currency: 'usd', unit_amount: 300, recurring: { interval: 'month' } }
+  else if (path.endsWith('/customers') && request.method === 'POST') {
+    const id = `cus_mock${customers.size + 1}`
+    customers.set(id, body.get('email'))
+    result = { id, email: body.get('email') }
+  }
   else if (path.endsWith('/checkout/sessions') && request.method === 'POST') {
-    const id = body.get('mode') === 'payment' ? 'cs_test_lifetime' : 'cs_test_decision'
+    const id = body.get('mode') === 'payment' ? `cs_test_lifetime${sessions.size || ''}` : 'cs_test_decision'
     const url = `https://checkout.stripe.com/c/pay/${id}`
-    sessions.set(id, { id, url, client_reference_id: body.get('client_reference_id'), mode: body.get('mode'), metadata: { product: body.get('metadata[product]') }, status: 'open', payment_status: 'unpaid', customer: 'cus_mock', customer_details: { email: 'buyer@example.test' }, payment_intent: id === 'cs_test_lifetime' ? 'pi_mock' : null, subscription: id === 'cs_test_decision' ? 'sub_mock' : null, livemode: false })
+    sessions.set(id, { id, url, client_reference_id: body.get('client_reference_id'), mode: body.get('mode'), metadata: { product: body.get('metadata[product]') }, status: 'open', payment_status: 'unpaid', customer: body.get('customer'), customer_details: { email: customers.get(body.get('customer')) }, payment_intent: 'pi_mock', subscription: body.get('mode') === 'subscription' ? 'sub_mock' : null, livemode: false })
+    if (body.get('mode') === 'subscription') subscriptions.set('sub_mock', { id: 'sub_mock', status: 'active', livemode: false, customer: body.get('customer'), latest_invoice: 'in_decision', items: { data: [{ price: { id: 'price_decision' }, current_period_start: Math.floor(Date.now() / 1000) - 60, current_period_end: Math.floor(Date.now() / 1000) + 2_592_000 }] } })
     result = { id, url }
   } else if (/\/checkout\/sessions\/cs_test_\w+\/line_items$/.test(path)) {
     result = { data: [{ price: { id: path.includes('decision') ? 'price_decision' : 'price_lifetime' } }] }
   } else if (/\/checkout\/sessions\/cs_test_\w+$/.test(path)) result = sessions.get(path.split('/').at(-1))
   else if (path.endsWith('/payment_intents/pi_mock')) result = { status: 'succeeded', latest_charge: 'ch_mock' }
   else if (path.endsWith('/charges/ch_mock')) result = { paid: true, refunded: chargeRefunded, amount_refunded: chargeRefunded ? 3000 : 0, disputed: false }
-  else if (path.endsWith('/subscriptions/sub_mock')) result = { status: 'active', livemode: false }
+  else if (path.endsWith('/subscriptions/sub_mock')) result = subscriptions.get('sub_mock')
+  else if (path.endsWith('/invoices/in_decision')) result = { id: 'in_decision', subscription: 'sub_mock', status: 'paid' }
   else if (path.endsWith('/billing_portal/sessions')) result = { url: 'https://billing.stripe.com/p/session/mock' }
   else if (path.endsWith('/invoices')) result = { data: [{ id: 'in_mock', number: 'M-1', created: 1_700_000_000, total: 3000, currency: 'usd', status: 'paid', hosted_invoice_url: 'https://invoice.stripe.com/i/mock' }] }
   else throw new Error(`Unexpected Stripe request: ${path}`)
@@ -40,7 +50,7 @@ const fakeStripe = async (raw, request) => {
 }
 
 const service = createBillingServer({
-  env: { STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: database, BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38747', LOCAL_DOWNLOAD_PATH: installerPath, DOWNLOAD_SIGNING_KEY: 'test-download-secret-with-32-characters', STRIPE_WEBHOOK_SECRET: 'whsec_test', BILLING_ALLOWED_ORIGINS: 'https://mamalead.com' },
+  env: { STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: database, BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38747', LOCAL_DOWNLOAD_PATH: installerPath, MAC_LOCAL_DOWNLOAD_PATH: macInstallerPath, DOWNLOAD_SIGNING_KEY: 'test-download-secret-with-32-characters', STRIPE_WEBHOOK_SECRET: 'whsec_test', BILLING_ALLOWED_ORIGINS: 'https://mamalead.com' },
   fetch: fakeStripe,
   sendEmail: async (message) => {
     if (message.kind === 'lifetime' && failNextLicenseEmail) { failNextLicenseEmail = false; return false }
@@ -57,8 +67,19 @@ async function call(path, token, method = 'GET', data, device) {
   return { status: response.status, body: await response.json() }
 }
 try {
+  const optionsBeforeMac = await call('/v1/download-options', null)
+  check('download choices show Windows ready and Mac unavailable before a Mac build exists', optionsBeforeMac.status === 200 && optionsBeforeMac.body.windows === true && optionsBeforeMac.body.mac === false)
+  const missingMac = await call('/v1/download?platform=mac', null)
+  check('Mac download does not serve a missing installer', missingMac.status === 503)
+  writeFileSync(macInstallerPath, 'mac installer bytes')
+  const optionsWithMac = await call('/v1/download-options', null)
+  check('download choices enable Mac when its installer exists', optionsWithMac.status === 200 && optionsWithMac.body.mac === true)
+  const macDownload = await fetch(base + '/v1/download?platform=mac')
+  check('Mac download streams the Mac installer with a DMG filename', macDownload.status === 200 && await macDownload.text() === 'mac installer bytes' && macDownload.headers.get('content-disposition')?.includes('Nafran-Leads-Scraper.dmg'))
+  const wrongPlatform = await call('/v1/download?platform=linux', null)
+  check('unknown platform cannot fall back to the Windows installer', wrongPlatform.status === 400)
   const freeDownload = await fetch(base + '/v1/download')
-  check('any visitor can download the installer without a key or account', freeDownload.status === 200 && await freeDownload.text() === 'installer bytes' && service.db.prepare('select count(*) as n from billing_public_downloads').get().n === 1)
+  check('visitors can download both installers without a key or account', freeDownload.status === 200 && await freeDownload.text() === 'installer bytes' && service.db.prepare('select count(*) as n from billing_public_downloads').get().n === 2)
   const forgedFreeDownload = await fetch(base + '/v1/download?grant=forged')
   check('a supplied forged download grant is still rejected', forgedFreeDownload.status === 401)
   const register = await call('/v1/installations', null, 'POST')
@@ -74,7 +95,7 @@ try {
   const status = await call('/v1/status', token)
   check('the $30 lifetime price comes from Stripe', status.body.lifetime.amount === 3000 && !status.body.lifetime.active)
   const earlyAddon = await call('/v1/checkout', token, 'POST', { product: 'decisionMaker' })
-  check('a separate Decision Maker subscription is no longer sold', earlyAddon.status === 400)
+  check('Decision Makers requires a lifetime licence first', earlyAddon.status === 403)
   const trial = await call('/v1/trial', token, 'POST', { email: 'trial@example.test' })
   const trialKey = emails.at(-1)?.licenseKey
   check('a 1-day trial key is emailed and not returned to the browser', trial.status === 200 && trial.body.emailSent && !JSON.stringify(trial.body).includes(trialKey) && emails.at(-1)?.kind === 'trial')
@@ -91,7 +112,7 @@ try {
   const trialMachine = (await call('/v1/installations', null, 'POST', undefined, firstDevice)).body.token
   const trialActivation = await call('/v1/activate', trialMachine, 'POST', { licenseKey: trialKey }, firstDevice)
   const trialStatus = await call('/v1/status', trialMachine, 'GET', undefined, firstDevice)
-  check('trial starts on first machine activation and unlocks every built-in feature', trialActivation.status === 200 && trialActivation.body.kind === 'trial' && trialStatus.body.trial.active && trialStatus.body.decisionMaker.active)
+  check('trial starts on first machine activation without the monthly Decision Makers add-on', trialActivation.status === 200 && trialActivation.body.kind === 'trial' && trialStatus.body.trial.active && !trialStatus.body.decisionMaker.active)
   check('server stores a hashed device ID and platform with activation', service.db.prepare('select device_id, device_platform from installations where token_hash = ?').get(createHash('sha256').update(trialMachine).digest('hex')).device_id === firstDevice)
   check('same installation token cannot be reused without its device identity', (await call('/v1/status', trialMachine)).status === 403 && (await call('/v1/status', trialMachine, 'GET', undefined, otherDevice)).status === 403)
   check('trial expiry is 24 hours after first activation', Math.abs(Date.parse(trialActivation.body.expiresAt) - Date.parse(trialActivation.body.activatedAt) - 86_400_000) < 1000)
@@ -102,19 +123,33 @@ try {
   check('expired trial disables all features on the server', !(await call('/v1/status', trialMachine, 'GET', undefined, firstDevice)).body.license.active)
   check('expired trial key cannot be reactivated', (await call('/v1/activate', trialMachine, 'POST', { licenseKey: trialKey }, firstDevice)).status === 403)
   check('expired trial key cannot download the installer', (await call('/v1/download-by-license', null, 'POST', { licenseKey: trialKey })).status === 403)
-  const checkout = await call('/v1/checkout', token, 'POST', { product: 'lifetime' })
+  const checkout = await call('/v1/checkout', token, 'POST', { product: 'lifetime', email: 'buyer@example.test' })
   check('Lifetime Deal creates a hosted Stripe Checkout', checkout.status === 200 && checkout.body.url.startsWith('https://checkout.stripe.com/'))
-  const resumed = await call('/v1/checkout', token, 'POST', { product: 'lifetime' })
+  check('Stripe Checkout uses a Customer with the entered email', customers.get(sessions.get('cs_test_lifetime').customer) === 'buyer@example.test')
+  const resumed = await call('/v1/checkout', token, 'POST', { product: 'lifetime', email: 'buyer@example.test' })
   check('an open Checkout session is reused instead of duplicated', resumed.status === 200 && resumed.body.url === checkout.body.url)
   Object.assign(sessions.get('cs_test_lifetime'), { status: 'complete', payment_status: 'paid' })
   const paid = await fetch(base + '/return?session_id=cs_test_lifetime')
   check('completed Checkout is reconciled to this installation', paid.status === 200 && (await call('/v1/status', token)).body.lifetime.active)
-  const duplicateLifetime = await call('/v1/checkout', token, 'POST', { product: 'lifetime' })
+  const duplicateLifetime = await call('/v1/checkout', token, 'POST', { product: 'lifetime', email: 'buyer@example.test' })
   check('a paid Lifetime Deal cannot start another checkout', duplicateLifetime.status === 409)
   const issued = await call('/v1/license', token, 'POST')
   check('a paid Lifetime Deal issues a license key without storing it in plaintext', issued.status === 200 && /^NF(?:-[A-Z0-9]{4}){10}$/.test(issued.body.licenseKey) && issued.body.email === 'buyer@example.test' && !readFileSync(database).includes(Buffer.from(issued.body.licenseKey)))
   const reissued = await call('/v1/license', token, 'POST')
   check('reopening a paid return does not issue a second license', reissued.status === 200 && reissued.body.licenseKey === null && reissued.body.last4 === issued.body.licenseKey.slice(-4) && service.db.prepare('select count(*) as count from licenses').get().count === 1)
+  const repeatBuyer = (await call('/v1/installations', null, 'POST')).body.token
+  const repeatedEmail = await call('/v1/checkout', repeatBuyer, 'POST', { product: 'lifetime', email: 'BUYER@example.test' })
+  check('another installation cannot pay again or get another lifetime key for the same email', repeatedEmail.status === 409 && /account already exists/i.test(repeatedEmail.body.error) && service.db.prepare('select count(*) as count from licenses').get().count === 1)
+  const trialUpgradeBuyer = (await call('/v1/installations', null, 'POST')).body.token
+  const upgradeCheckout = await call('/v1/checkout', trialUpgradeBuyer, 'POST', { product: 'lifetime', email: 'trial@example.test' })
+  check('a trial email can start one lifetime upgrade', upgradeCheckout.status === 200 && upgradeCheckout.body.url.startsWith('https://checkout.stripe.com/'))
+  const duplicatePendingBuyer = (await call('/v1/installations', null, 'POST')).body.token
+  const duplicatePending = await call('/v1/checkout', duplicatePendingBuyer, 'POST', { product: 'lifetime', email: 'trial@example.test' })
+  check('a second installation cannot start a duplicate lifetime payment while the first is pending', duplicatePending.status === 409)
+  const upgradeSessionId = upgradeCheckout.body.url.split('/').at(-1)
+  sessions.get(upgradeSessionId).status = 'expired'
+  const afterExpiredCheckout = await call('/v1/checkout', duplicatePendingBuyer, 'POST', { product: 'lifetime', email: 'trial@example.test' })
+  check('an expired unpaid checkout releases the email for a new attempt', afterExpiredCheckout.status === 200)
   check('activation without a device identity is rejected', (await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey })).status === 400)
   const activated = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey }, firstDevice)
   check('the purchased license activates the current installation', activated.status === 200 && activated.body.active)
@@ -162,7 +197,36 @@ try {
   const refundedDownload = await call('/v1/download-by-license', null, 'POST', { licenseKey: issued.body.licenseKey })
   check('a refunded license cannot download the installer', refundedDownload.status === 403)
   chargeRefunded = false
-  check('restored $30 purchase includes Decision Makers without an add-on', (await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active)
+  check('restored $30 purchase still requires the $3 monthly Decision Makers plan', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active)
+  const beforeDecision = await call('/v1/decision-maker/consume', token, 'POST', { leadId: '00000000-0000-4000-8000-000000000001' }, firstDevice)
+  check('unsubscribed Decision Maker lookup is denied by the server', beforeDecision.status === 403)
+  const decisionCheckout = await call('/v1/checkout', token, 'POST', { product: 'decisionMaker' }, firstDevice)
+  check('Decision Makers opens the $3 monthly Stripe subscription checkout', decisionCheckout.status === 200 && decisionCheckout.body.url.endsWith('cs_test_decision'))
+  const resumedDecision = await call('/v1/checkout', secondToken, 'POST', { product: 'decisionMaker' }, otherDevice)
+  check('a second licensed device reuses the owner’s open subscription checkout', resumedDecision.body.url === decisionCheckout.body.url)
+  Object.assign(sessions.get('cs_test_decision'), { status: 'complete', payment_status: 'paid' })
+  const decisionReturn = await fetch(base + '/return?session_id=cs_test_decision')
+  const subscribed = await call('/v1/status', secondToken, 'GET', undefined, otherDevice)
+  check('paid monthly subscription unlocks 1,000 leads on both licensed devices', decisionReturn.status === 200 && subscribed.body.decisionMaker.active && subscribed.body.decisionMaker.monthlyRemaining === 1000)
+  const decisionLead = '00000000-0000-4000-8000-000000000001'
+  const firstUse = await call('/v1/decision-maker/consume', token, 'POST', { leadId: decisionLead }, firstDevice)
+  const duplicateUse = await call('/v1/decision-maker/consume', token, 'POST', { leadId: decisionLead }, firstDevice)
+  check('each device and lead pair is counted once', firstUse.status === 200 && firstUse.body.remaining === 999 && duplicateUse.body.remaining === 999)
+  const periodKey = `sub_mock:${subscriptions.get('sub_mock').items.data[0].current_period_start}`
+  const ownerId = service.db.prepare('select id from installations where token_hash = ?').get(createHash('sha256').update(token).digest('hex')).id
+  const insertUsage = service.db.prepare('insert into decision_lead_uses (owner_id, period_key, subject_hash, slot, created_at) values (?, ?, ?, ?, ?)')
+  service.db.exec('BEGIN')
+  for (let slot = 2; slot <= 999; slot += 1) insertUsage.run(ownerId, periodKey, `filler-${slot}`, slot, new Date().toISOString())
+  service.db.exec('COMMIT')
+  const lastUse = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: decisionLead }, otherDevice)
+  const overLimit = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000002' }, otherDevice)
+  check('the 1,000th lead succeeds and the 1,001st is blocked across both devices', lastUse.status === 200 && lastUse.body.remaining === 0 && overLimit.status === 429)
+  subscriptions.get('sub_mock').items.data[0].current_period_start += 60
+  subscriptions.get('sub_mock').items.data[0].current_period_end += 60
+  check('a new paid billing period resets the monthly quota', (await call('/v1/decision-maker/consume', token, 'POST', { leadId: decisionLead }, firstDevice)).body.remaining === 999)
+  subscriptions.get('sub_mock').status = 'past_due'
+  check('past due subscription cannot run Decision Makers', (await call('/v1/decision-maker/consume', token, 'POST', { leadId: decisionLead }, firstDevice)).status === 403)
+  subscriptions.get('sub_mock').status = 'active'
   const invoices = await call('/v1/invoices', token, 'GET', undefined, firstDevice)
   check('invoice rows come from Stripe', invoices.body.invoices.length === 1 && invoices.body.invoices[0].number === 'M-1')
   const portal = await call('/v1/portal', token, 'POST', undefined, firstDevice)
@@ -183,6 +247,7 @@ try {
     live.db.close()
   }
   const cloudRows = new Map()
+  const cloudReservations = new Map()
   let blobAccess
   const cloud = createCloudFunction({
     env: { STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_PUBLIC_URL: 'https://billing.example.test', DATABASE_URL: 'postgres://example', BLOB_DOWNLOAD_PATH: 'installers/Nafran.exe', DOWNLOAD_SIGNING_KEY: 'cloud-test-download-secret' },
@@ -196,6 +261,12 @@ try {
       async byTokenHash(tokenHash) { return [...cloudRows.values()].find((row) => row.token_hash === tokenHash) ?? null },
       async byId(id) { return cloudRows.get(id) ?? null },
       async savePending(id, product, sessionId) { cloudRows.get(id)[product === 'lifetime' ? 'pending_lifetime_session_id' : 'pending_decision_session_id'] = sessionId },
+      async reserveLifetimeEmail(email, installationId) { if (cloudReservations.has(email) && cloudReservations.get(email).installation_id !== installationId) return null; const previous = cloudReservations.get(email); const row = previous || { email, installation_id: installationId, created_at: new Date().toISOString() }; cloudReservations.set(email, row); return { ...row, newlyCreated: !previous } },
+      async lifetimeCheckoutByEmail(email) { return cloudReservations.get(email) ?? null },
+      async releaseLifetimeEmail(email, installationId) { if (cloudReservations.get(email)?.installation_id === installationId) cloudReservations.delete(email) },
+      async saveLifetimeCheckout(email, installationId, sessionId, customerId) { Object.assign(cloudReservations.get(email), { session_id: sessionId, customer_id: customerId }); Object.assign(cloudRows.get(installationId), { pending_lifetime_session_id: sessionId, customer_id: customerId }) },
+      async lifetimeCheckoutForInstallation(installationId) { return [...cloudReservations.values()].find((row) => row.installation_id === installationId) ?? null },
+      async lifetimeLicenseByEmail() { return null },
       async saveLifetime(id, sessionId, customerId) { Object.assign(cloudRows.get(id), { lifetime_session_id: sessionId, pending_lifetime_session_id: null, customer_id: customerId }) },
       async saveDecision(id, subscriptionId, customerId) { Object.assign(cloudRows.get(id), { decision_subscription_id: subscriptionId, pending_decision_session_id: null, customer_id: customerId }) },
     }),
@@ -211,9 +282,10 @@ try {
   check('Vercel function stores a new installation', cloudRegistration.status === 201 && cloudRows.size === 1)
   const cloudStatus = await cloudCall('status', 'GET', cloudToken)
   check('Vercel function reads Stripe status through persistent-store interface', cloudStatus.status === 200 && JSON.parse(cloudStatus.body).lifetime.amount === 3000)
-  const cloudCheckout = await cloudCall('checkout', 'POST', cloudToken, { product: 'lifetime' })
+  const cloudCheckout = await cloudCall('checkout', 'POST', cloudToken, { product: 'lifetime', email: 'cloud@example.test' })
   check('Vercel function creates HTTPS Checkout return URLs', cloudCheckout.status === 200 && JSON.parse(cloudCheckout.body).url.startsWith('https://checkout.stripe.com/'))
-  Object.assign(sessions.get('cs_test_lifetime'), { status: 'complete', payment_status: 'paid' })
+  const cloudSessionId = JSON.parse(cloudCheckout.body).url.split('/').at(-1)
+  Object.assign(sessions.get(cloudSessionId), { status: 'complete', payment_status: 'paid' })
   const recovered = await cloudCall('status', 'GET', cloudToken)
   check('status refresh recovers a paid Checkout without browser return', recovered.status === 200 && JSON.parse(recovered.body).lifetime.active)
   const cloudGrant = await cloudCall('downloadLink', 'POST', cloudToken)
@@ -222,8 +294,8 @@ try {
   check('Vercel serves installer bytes only through private Blob access', cloudDownload.status === 200 && cloudDownload.body === 'installer bytes' && blobAccess.pathname === 'installers/Nafran.exe' && blobAccess.options.access === 'private')
   const invalidDownload = await cloudCall('download', 'GET', null, null, '&grant=forged')
   check('forged download grants are rejected', invalidDownload.status === 401)
-  const cloudReturn = await cloudCall('return', 'GET', null, null, '&session_id=cs_test_lifetime')
-  check('Vercel function reconciles a verified payment', cloudReturn.status === 200 && cloudRows.values().next().value.lifetime_session_id === 'cs_test_lifetime')
+  const cloudReturn = await cloudCall('return', 'GET', null, null, `&session_id=${cloudSessionId}`)
+  check('Vercel function reconciles a verified payment', cloudReturn.status === 200 && cloudRows.values().next().value.lifetime_session_id === cloudSessionId)
   const legacyPath = join(dir, 'legacy.db')
   const legacy = new DatabaseSync(legacyPath)
   legacy.exec('create table installations (id text primary key, token_hash text not null unique, customer_id text, lifetime_session_id text, decision_subscription_id text, created_at text not null)')

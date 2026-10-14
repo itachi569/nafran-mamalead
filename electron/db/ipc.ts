@@ -115,7 +115,8 @@ export function registerLocalDatabase(
     }),
     'db:usage': () => db.usage(workspace.id),
     'db:stats': () => repository.leadSummary(workspace.id),
-    'db:dashboard': () => repository.dashboard(workspace.id),
+    'db:dashboard': (_repo, _workspace, payload: { days?: 7 | 30 | null } = {}) =>
+      repository.dashboard(workspace.id, payload.days === 7 || payload.days === 30 ? payload.days : null),
 
     'db:leads:list': (_repo, _workspace, payload: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string } = {}) =>
       repository.listLeads(workspace.id, payload),

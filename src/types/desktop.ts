@@ -278,7 +278,7 @@ export interface LocalApi {
   }>
   usage: () => Promise<UsageSummary>
   stats: () => Promise<LeadSummary>
-  dashboard: () => Promise<DashboardTotals>
+  dashboard: (days?: 7 | 30 | null) => Promise<DashboardTotals>
   leads: {
     list: (payload?: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }) => Promise<{ rows: StoredLead[]; total: number }>
     get: (id: string) => Promise<StoredLead | null>
@@ -490,11 +490,12 @@ export interface DesktopApi {
       message?: string
       lifetime?: { amount: number; currency: string; interval: null; active: boolean }
       trial?: { active: boolean; expiresAt: string | null }
-      decisionMaker?: { amount: number; currency: string; interval: string | null; active: boolean; status: string; includedPeople: number }
+      decisionMaker?: { amount: number; currency: string; interval: string | null; available?: boolean; active: boolean; status: string; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null }
       hasCustomer?: boolean
       license?: { active: boolean; kind?: 'trial' | 'lifetime'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
     }>
-    checkout: (product: 'lifetime') => Promise<{ opened: boolean }>
+    requestTrial: (email: string, replaceExisting?: boolean) => Promise<{ emailSent: boolean; message: string }>
+    checkout: (product: 'lifetime' | 'decisionMaker', email: string) => Promise<{ opened: boolean }>
     activate: (licenseKey: string) => Promise<{ active: boolean; email?: string; last4?: string; activatedAt?: string | null }>
     portal: () => Promise<{ opened: boolean }>
     invoices: () => Promise<{ id: string; number: string; issued: string; total: number; currency: string; status: string; url: string }[]>
@@ -503,6 +504,10 @@ export interface DesktopApi {
   getInfo: () => Promise<{ version: string; platform: string; isPackaged: boolean; electron: string }>
   /** AI support chat; the provider credential remains in Electron's main process. */
   assist: {
+    status: () => Promise<{ configured: boolean; savedOnDevice: boolean }>
+    saveKey: (key: string) => Promise<{ configured: boolean; savedOnDevice: boolean }>
+    removeKey: () => Promise<{ configured: boolean; savedOnDevice: boolean }>
+    test: () => Promise<{ connected: boolean; model: string }>
     chat: (input: {
       messages?: { role: 'user' | 'assistant'; content: string }[]
       context?: Record<string, string | number | boolean | null>

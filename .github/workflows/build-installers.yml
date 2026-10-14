@@ -2,6 +2,11 @@ name: Build installers
 
 on:
   workflow_dispatch:
+    inputs:
+      unsigned_mac_test:
+        description: Build an unsigned Mac installer for private testing
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -10,6 +15,7 @@ permissions:
 
 jobs:
   windows:
+    if: ${{ !inputs.unsigned_mac_test }}
     runs-on: windows-latest
     env:
       REQUIRE_CODE_SIGNING: '1'
@@ -33,9 +39,10 @@ jobs:
   macos:
     runs-on: macos-latest
     env:
-      REQUIRE_CODE_SIGNING: '1'
-      REQUIRE_NOTARIZATION: '1'
-      REQUIRE_UPDATE_FEED: '1'
+      REQUIRE_CODE_SIGNING: ${{ inputs.unsigned_mac_test && '0' || '1' }}
+      REQUIRE_NOTARIZATION: ${{ inputs.unsigned_mac_test && '0' || '1' }}
+      REQUIRE_UPDATE_FEED: ${{ inputs.unsigned_mac_test && '0' || '1' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ inputs.unsigned_mac_test && 'false' || 'true' }}
       CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -63,7 +70,8 @@ jobs:
           key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
           printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
           echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
-      - run: npm run release:signing:check
+      - if: ${{ !inputs.unsigned_mac_test }}
+        run: npm run release:signing:check
       - run: npm run package:mac
       - uses: actions/upload-artifact@v4
         with:
@@ -71,6 +79,7 @@ jobs:
           path: release/*
 
   linux:
+    if: ${{ !inputs.unsigned_mac_test }}
     runs-on: ubuntu-latest
     env:
       REQUIRE_LINUX_SIGNING: '1'

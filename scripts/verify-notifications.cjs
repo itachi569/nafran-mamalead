@@ -1,60 +1,112 @@
-// Verifies the notifications bell, persisted history, settings switch and Electron notification
-// bridge in a real desktop process. The profile is throwaway, so this never changes user data.
+// Exercises real renderer notifications in a throwaway Electron profile.
+const assert = require('node:assert/strict')
 const { _electron } = require('playwright')
-const { mkdtempSync, mkdirSync } = require('node:fs')
-const { join } = require('node:path')
+const { mkdtempSync, realpathSync, rmSync } = require('node:fs')
+const { resolve, join, sep } = require('node:path')
 const { tmpdir } = require('node:os')
 
-const APP = process.cwd()
-const results = []
-function check(name, ok, detail = '') {
-  results.push(ok)
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` · ${detail}` : ''}`)
+const root = resolve(__dirname, '..')
+const directory = mkdtempSync(join(tmpdir(), 'nafran-notifications-'))
+const packaged = process.argv.includes('--packaged')
+let desktop
+
+async function sendUpdate(state, message) {
+  await desktop.evaluate(({ BrowserWindow }, payload) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('updates:status', payload)
+    }
+  }, { state, version: null, percent: null, message })
 }
 
 async function main() {
-  const root = mkdtempSync(join(tmpdir(), 'leadsnap-notifications-'))
-  const userData = join(root, 'userdata')
-  mkdirSync(userData, { recursive: true })
-  const app = await _electron.launch({ args: ['.', `--user-data-dir=${userData}`], cwd: APP, timeout: 60000 })
-  const page = await app.firstWindow()
-  await page.waitForLoadState('domcontentloaded')
-  await page.waitForSelector('[data-view="dashboard"]', { timeout: 30000 })
-
-  const native = await page.evaluate(() => window.desktop?.notifications?.show('Notification test', 'Electron bridge is reachable.'))
-  check('Electron notification bridge responds', Boolean(native && typeof native.shown === 'boolean'), JSON.stringify(native))
-
-  await page.click('[data-notifications-button="1"]')
-  check('bell opens the notifications panel', await page.locator('[data-notifications-panel="1"]').isVisible())
-  check('empty history has a useful state', await page.locator('[data-notifications-empty="1"]').isVisible())
-
-  // Seed one history item through the same storage format the renderer writes, then reload. This
-  // checks that the bell is useful across restarts without manufacturing a scrape or a network job.
-  await page.evaluate(() => {
-    localStorage.setItem('nafran.notifications', JSON.stringify([{
-      id: 'test-notification',
-      title: 'Maps scrape complete',
-      body: '1 lead captured.',
-      at: new Date().toISOString(),
-      level: 'success',
-      unread: true,
-    }]))
+  const env = { ...process.env, APPDATA: join(directory, 'appdata') }
+  delete env.ELECTRON_RUN_AS_NODE
+  desktop = await _electron.launch({
+    ...(packaged ? { executablePath: join(root, 'release', 'win-unpacked', 'Nafran Leads Scraper.exe') } : { cwd: root }),
+    args: packaged ? [`--user-data-dir=${join(directory, 'profile')}`] : ['.', `--user-data-dir=${join(directory, 'profile')}`],
+    env,
+    timeout: 60_000,
   })
-  await page.reload()
-  await page.waitForSelector('[data-view="dashboard"]', { timeout: 30000 })
-  check('notification history persists', await page.locator('[data-notifications-button="1"] [data-notifications-badge="1"]').textContent() === '1')
-  await page.click('[data-notifications-button="1"]')
-  check('persisted notification is rendered', await page.locator('[data-notification="test-notification"]').isVisible())
-  await page.click('[data-notifications-read="1"]')
-  check('mark all read clears unread badge', !(await page.locator('[data-notifications-badge="1"]').count()))
+  const page = await desktop.firstWindow()
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await page.locator('[data-view="dashboard"]').waitFor()
 
-  await app.close()
-  const failed = results.filter((ok) => !ok).length
-  if (failed) process.exitCode = 1
-  console.log(`notification checks: ${results.length - failed}/${results.length} passed`)
+  const native = await page.evaluate(() => window.desktop.notifications.show('Notification test', 'Bridge is reachable.'))
+  assert.equal(typeof native.shown, 'boolean')
+  console.log('PASS  native notification bridge responds')
+
+  const bell = page.locator('[data-notifications-button="1"]')
+  const panel = page.locator('[data-notifications-panel="1"]')
+  const badge = page.locator('[data-notifications-badge="1"]')
+  await bell.click()
+  await page.locator('[data-notifications-empty="1"]').waitFor()
+  assert.equal(await bell.getAttribute('aria-expanded'), 'true')
+  await page.locator('[data-notifications-close="1"]').click()
+  assert.equal(await panel.count(), 0)
+  console.log('PASS  bell opens an empty panel and Back closes it')
+
+  // Disable OS popups in this test; app history must still collect real update events.
+  await page.evaluate(() => localStorage.setItem('nafran.notifications.enabled', '0'))
+  await page.reload()
+  await page.locator('[data-view="dashboard"]').waitFor()
+  await sendUpdate('error', 'Test update failed')
+  await badge.getByText('1').waitFor()
+  await sendUpdate('ready', 'Test update ready')
+  await badge.getByText('2').waitFor()
+  await bell.click()
+  await page.getByText('Update check failed', { exact: true }).waitFor()
+  await page.getByText('Update ready', { exact: true }).waitFor()
+  assert.match(await panel.innerText(), /2 saved · 2 unread/)
+  console.log('PASS  actual error and success events create bell history and unread count')
+
+  await page.locator('[data-notifications-panel="1"] h2').click()
+  assert.equal(await panel.count(), 1)
+  await page.getByText('Total Leads', { exact: true }).first().click()
+  assert.equal(await panel.count(), 0)
+  await bell.click()
+  await page.keyboard.press('Escape')
+  assert.equal(await panel.count(), 0)
+  console.log('PASS  inside click stays open; outside click and Escape close the panel')
+
+  await bell.click()
+  const errorRow = page.locator('[data-notification]').filter({ hasText: 'Update check failed' })
+  await errorRow.locator('[data-notification-read]').click()
+  assert.equal(await errorRow.getAttribute('data-unread'), '0')
+  assert.equal(await badge.innerText(), '1')
+  await page.reload()
+  await page.locator('[data-view="dashboard"]').waitFor()
+  assert.equal(await badge.innerText(), '1')
+  await bell.click()
+  assert.equal(await page.locator('[data-notification]').count(), 2)
+  console.log('PASS  single-item read and notification history survive reload')
+
+  await page.locator('[data-notification]').filter({ hasText: 'Update ready' }).locator('[data-notification-delete]').click()
+  assert.equal(await badge.count(), 0)
+  assert.equal(await page.locator('[data-notification]').count(), 1)
+  await sendUpdate('ready', 'Another update ready')
+  await badge.getByText('1').waitFor()
+  await page.locator('[data-notifications-read="1"]').click()
+  assert.equal(await badge.count(), 0)
+  assert.match(await panel.innerText(), /2 saved · 0 unread/)
+  await page.locator('[data-notification-delete]').first().click()
+  await page.locator('[data-notification-delete]').first().click()
+  await page.locator('[data-notifications-empty="1"]').waitFor()
+  await page.reload()
+  await bell.click()
+  await page.locator('[data-notifications-empty="1"]').waitFor()
+  console.log('PASS  delete, Mark all read, and empty history persist after reload')
+
+  assert.deepEqual(pageErrors, [])
+  console.log('PASS  notification flow has no renderer errors')
+  console.log(`notification checks passed (${packaged ? 'packaged' : 'local'} app)`)
 }
 
 main().catch((error) => {
-  console.error('notification verification failed:', error.message)
+  console.error('notification verification failed:', error)
   process.exitCode = 1
+}).finally(async () => {
+  if (desktop) await desktop.close()
+  const tempRoot = realpathSync(tmpdir()) + sep
+  if (realpathSync(directory).startsWith(tempRoot)) rmSync(directory, { recursive: true, force: true })
 })

@@ -21,9 +21,11 @@ const routes = {
   invoices: '/v1/invoices',
   license: '/v1/license',
   activate: '/v1/activate',
+  decisionConsume: '/v1/decision-maker/consume',
   downloadLink: '/v1/download-link',
   downloadByLicense: '/v1/download-by-license',
   download: '/v1/download',
+  downloadOptions: '/v1/download-options',
   stripeWebhook: '/webhooks/stripe',
 }
 
@@ -44,6 +46,8 @@ export function createCloudFunction({ env = process.env, storeFactory = createNe
         method: request.method,
         url: target.toString(),
         authorization: request.headers.get('authorization'),
+        deviceId: request.headers.get('x-nafran-device-id'),
+        devicePlatform: request.headers.get('x-nafran-device-platform'),
         stripeSignature: request.headers.get('stripe-signature'),
         readBody: () => request.text(),
       })

@@ -4,11 +4,14 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { _electron as electron } from 'playwright'
+import { extractFile, listPackage } from '@electron/asar'
 
 const dir = mkdtempSync(join(tmpdir(), 'nafran-license-gate-'))
 const token = randomBytes(32).toString('base64url')
 const key = 'NF-TEST-LICENSE-FOR-PACKAGED-APP'
 let active = false
+let decisionSubscribed = false
+let legacyDecisionStatus = false
 let kind = 'lifetime'
 let trialExpiresAt = null
 let available = true
@@ -24,7 +27,9 @@ const server = createServer(async (req, res) => {
       configured: true, connected: true, mode: 'test',
       lifetime: { amount: 3000, currency: 'usd', interval: null, active: active && kind === 'lifetime' },
       trial: { active: active && kind === 'trial' && Date.parse(trialExpiresAt) > Date.now(), expiresAt: trialExpiresAt },
-      decisionMaker: { amount: 0, currency: 'usd', interval: null, active, status: 'included', includedPeople: 1000 },
+      decisionMaker: legacyDecisionStatus
+        ? { amount: 0, currency: 'usd', interval: null, active, status: 'included', includedPeople: 1000 }
+        : { amount: 300, currency: 'usd', interval: 'month', active: active && kind === 'lifetime' && decisionSubscribed, status: decisionSubscribed ? 'active' : 'not_subscribed', includedPeople: 0, monthlyLimit: 1000, monthlyUsed: 0, monthlyRemaining: 1000, renewsAt: null },
       license: { active: active && (kind === 'lifetime' || Date.parse(trialExpiresAt) > Date.now()), kind, last4: active ? 'TEST' : undefined, expiresAt: kind === 'trial' ? trialExpiresAt : null },
     })
   }
@@ -74,11 +79,16 @@ try {
   check('active license allows enrichment to start', allowed.started === true)
   const imported = await page.evaluate(() => window.desktop.local.imports.websites([]))
   check('active license allows website import', imported.added === 0)
-  check('$30 lifetime key includes Decision Makers without a subscription', /DataForSEO key/.test(await failure(page, 'decision')))
+  check('$30 lifetime key alone does not unlock Decision Makers', /\$3\/month subscription/.test(await failure(page, 'decision')))
+  legacyDecisionStatus = true
+  check('old included status cannot bypass the monthly subscription', /\$3\/month subscription/.test(await failure(page, 'decision')))
+  legacyDecisionStatus = false
+  decisionSubscribed = true
+  check('the Decision Makers subscription unlocks its action', /DataForSEO key/.test(await failure(page, 'decision')))
   kind = 'trial'
   trialExpiresAt = new Date(Date.now() + 60_000).toISOString()
   check('1-day trial unlocks enrichment', (await page.evaluate(() => window.desktop.enrichment.start())).started === true)
-  check('1-day trial includes Decision Makers', /DataForSEO key/.test(await failure(page, 'decision')))
+  check('1-day trial does not include the monthly Decision Makers plan', /\$3\/month subscription/.test(await failure(page, 'decision')))
   trialExpiresAt = new Date(Date.now() - 1_000).toISOString()
   check('expired trial blocks new scraper actions', /Activate an active 1-day trial or lifetime/.test(await failure(page, 'scraper')))
   kind = 'lifetime'
@@ -105,7 +115,12 @@ try {
   const shippedPage = await packaged.firstWindow()
   await shippedPage.locator('[data-view="settings"]').waitFor({ timeout: 45000 })
   const shippedError = await failure(shippedPage, 'enrichment')
-  check('packaged app ignores a forged billing URL override', /License verification is unavailable/.test(shippedError) && localStatusRequests === before)
+  check('packaged app ignores a forged billing URL override', /License verification is unavailable|Activate an active 1-day trial or lifetime/.test(shippedError) && localStatusRequests === before)
+  await shippedPage.locator('[data-view="settings"]').click()
+  const archive = resolve('release/win-unpacked/resources/app.asar')
+  const rendererPath = listPackage(archive).find((entry) => /dist\\assets\\index-[^\\]+\.js$/.test(entry))
+  const renderer = rendererPath ? extractFile(archive, rendererPath.slice(1)).toString('utf8') : ''
+  check('packaged app contains the separate $3 monthly plan', renderer.includes('1,000 leads each month') && renderer.includes('$3/month'))
   console.log('LICENSE_GATE_PASSED')
 } finally {
   if (app) await app.close()
