@@ -123,25 +123,25 @@ try {
   check('same installation token cannot be reused without its device identity', (await call('/v1/status', trialMachine)).status === 403 && (await call('/v1/status', trialMachine, 'GET', undefined, otherDevice)).status === 403)
   check('trial expiry is 24 hours after first activation', Math.abs(Date.parse(trialActivation.body.expiresAt) - Date.parse(trialActivation.body.activatedAt) - 86_400_000) < 1000)
   const firstMap = await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 100 }, firstDevice)
-  check('trial reserves 100 Maps lead slots', firstMap.status === 200 && firstMap.body.allowed === 100 && firstMap.body.remaining === 400)
+  check('trial reserves 100 Maps lead slots', firstMap.status === 200 && firstMap.body.allowed === 100 && firstMap.body.remaining === 200)
   check('active Maps reservation can be renewed', (await call('/v1/maps/heartbeat', trialMachine, 'POST', { reservationId: firstMap.body.reservationId }, firstDevice)).status === 200)
   const firstMapDone = await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: firstMap.body.reservationId, captured: 100 }, firstDevice)
-  check('100 captured leads leave 400 trial leads', firstMapDone.status === 200 && firstMapDone.body.used === 100 && firstMapDone.body.remaining === 400)
+  check('100 captured leads leave 200 trial leads', firstMapDone.status === 200 && firstMapDone.body.used === 100 && firstMapDone.body.remaining === 200)
   check('a repeated settlement does not double count', (await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: firstMap.body.reservationId, captured: 100 }, firstDevice)).body.used === 100)
   const emptyMap = await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 50 }, firstDevice)
   const emptyMapDone = await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: emptyMap.body.reservationId, captured: 0 }, firstDevice)
-  check('a search with no captured leads returns its unused allowance', emptyMapDone.body.used === 100 && emptyMapDone.body.remaining === 400)
+  check('a search with no captured leads returns its unused allowance', emptyMapDone.body.used === 100 && emptyMapDone.body.remaining === 200)
   const secondMap = await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 100 }, firstDevice)
   const secondMapDone = await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: secondMap.body.reservationId, captured: 100 }, firstDevice)
-  check('another keyword uses the same 500-lead allowance', secondMapDone.body.used === 200 && secondMapDone.body.remaining === 300)
+  check('another keyword uses the same 300-lead allowance', secondMapDone.body.used === 200 && secondMapDone.body.remaining === 100)
   const parallelMaps = await Promise.all([
-    call('/v1/maps/reserve', trialMachine, 'POST', { requested: 500 }, firstDevice),
-    call('/v1/maps/reserve', trialMachine, 'POST', { requested: 500 }, firstDevice),
+    call('/v1/maps/reserve', trialMachine, 'POST', { requested: 300 }, firstDevice),
+    call('/v1/maps/reserve', trialMachine, 'POST', { requested: 300 }, firstDevice),
   ])
   const lastMap = parallelMaps.find((result) => result.status === 200)
-  check('concurrent searches cannot reserve more than the remaining 300 leads', lastMap?.body.allowed === 300 && parallelMaps.some((result) => result.status === 429))
-  await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: lastMap.body.reservationId, captured: 300 }, firstDevice)
-  check('the trial stops at 500 Maps leads', (await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 1 }, firstDevice)).status === 429)
+  check('concurrent searches cannot reserve more than the remaining 100 leads', lastMap?.body.allowed === 100 && parallelMaps.some((result) => result.status === 429))
+  await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: lastMap.body.reservationId, captured: 100 }, firstDevice)
+  check('the trial stops at 300 Maps leads', (await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 1 }, firstDevice)).status === 429)
   const anotherTrialMachine = (await call('/v1/installations', null, 'POST')).body.token
   check('trial key cannot be activated on another machine', (await call('/v1/activate', anotherTrialMachine, 'POST', { licenseKey: trialKey }, otherDevice)).status === 409)
   check('same email cannot claim a new trial through another browser', (await call('/v1/trial', anotherTrialMachine, 'POST', { email: 'trial@example.test' }, otherDevice)).status === 409)

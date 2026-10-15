@@ -921,7 +921,7 @@ ipcMain.handle('scraper:runWithGoogle', async (_event, request: StartRunRequest)
   await requireActiveLicense()
   const license = await billingStatus()
   if (license.license?.kind === 'trial' && license.mapsLeads?.remaining === 0) {
-    throw new Error('The trial’s 500 Maps leads are used. Activate a lifetime key to continue.')
+    throw new Error('The trial’s 300 Maps leads are used. Activate a lifetime key to continue.')
   }
   if (runner.busy) throw new Error('A scrape is already running.')
   gateStage = 'checking the saved account'

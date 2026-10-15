@@ -38,7 +38,7 @@ export function createBillingServer(options = {}) {
   )`)
   db.exec(`create table if not exists trial_map_runs (
     id text primary key, trial_id text not null, installation_id text not null,
-    reserved integer not null check (reserved > 0 and reserved <= 500),
+    reserved integer not null check (reserved > 0 and reserved <= 300),
     delivered integer check (delivered >= 0 and delivered <= reserved),
     lease_until text not null, created_at text not null
   )`)

@@ -7,7 +7,7 @@ export class HttpError extends Error {
 const hash = (token) => createHash('sha256').update(token).digest('hex')
 const normalizeLicense = (value) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '')
 const licensePattern = /^NF(?:-[A-Z0-9]{4}){10}$/
-const TRIAL_MAP_LEADS_LIMIT = 500
+const TRIAL_MAP_LEADS_LIMIT = 300
 const createLicenseKey = () => {
   const hex = randomBytes(20).toString('hex').toUpperCase()
   return `NF-${hex.match(/.{4}/g).join('-')}`
@@ -467,7 +467,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           if (typeof store.reserveTrialMapLeads !== 'function') throw new HttpError(503, 'Trial Maps limit is not configured on this server.')
           const license = await store.licenseForInstallation(row.id)
           const reserved = await store.reserveTrialMapLeads(license.id, row.id, requested, TRIAL_MAP_LEADS_LIMIT)
-          if (!reserved) throw new HttpError(429, 'The trial’s 500 Maps leads are used. Activate a lifetime key to continue.')
+          if (!reserved) throw new HttpError(429, 'The trial’s 300 Maps leads are used. Activate a lifetime key to continue.')
           return json(200, reserved)
         }
         if (method === 'POST' && url.pathname === '/v1/maps/heartbeat') {

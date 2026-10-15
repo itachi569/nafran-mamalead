@@ -1507,7 +1507,7 @@ export function useAppValues() {
       const status = await window.desktop.billing.status()
       if (!status.connected || !status.license?.active) return setMapsAllowance(null)
       if (status.license.kind === 'lifetime') return setMapsAllowance({ kind: 'lifetime', used: 0, remaining: 0 })
-      if (status.license.kind === 'trial' && status.mapsLeads?.limit === 500) {
+      if (status.license.kind === 'trial' && status.mapsLeads?.limit === 300) {
         return setMapsAllowance({ kind: 'trial', used: status.mapsLeads.used ?? 0, remaining: status.mapsLeads.remaining ?? 0 })
       }
       setMapsAllowance(null)
@@ -3671,11 +3671,11 @@ export function useAppValues() {
     scrapeUsed: mapsAllowance?.kind === 'trial' ? String(mapsAllowance.used) : mapsAllowance?.kind === 'lifetime' ? '∞' : (usage?.used ?? 0).toLocaleString('en-GB'),
     // The meter is the used share of the allowance, as two segments of one bar. A workspace that
     // has used nothing still shows a bar rather than a gap, so the rail keeps its shape.
-    scrapeUsedFlex: String(Math.max(1, Math.round(((mapsAllowance?.used ?? 0) / 500) * 100))),
-    scrapeFreeFlex: String(Math.max(1, Math.round(((500 - (mapsAllowance?.used ?? 0)) / 500) * 100))),
+    scrapeUsedFlex: String(Math.max(1, Math.round(((mapsAllowance?.used ?? 0) / 300) * 100))),
+    scrapeFreeFlex: String(Math.max(1, Math.round(((300 - (mapsAllowance?.used ?? 0)) / 300) * 100))),
     showScrapeMeter: mapsAllowance?.kind === 'trial',
     remainingScrapes: Math.max(0, (usage?.limit ?? 2000) - (usage?.used ?? 0)),
-    scrapeLimit: mapsAllowance?.kind === 'trial' ? 'of 500 Maps leads' : mapsAllowance?.kind === 'lifetime' ? 'Maps leads · unlimited' : 'Maps runs this month',
+    scrapeLimit: mapsAllowance?.kind === 'trial' ? 'of 300 Maps leads' : mapsAllowance?.kind === 'lifetime' ? 'Maps leads · unlimited' : 'Maps runs this month',
     storedLeadCount: storedLeadCount.toLocaleString('en-GB'),
     listTotals: `${lists.length} ${lists.length === 1 ? 'list' : 'lists'} · ${lists.reduce((sum, list) => sum + list.members, 0)} leads`,
     // The picks are what the last run brought back, which is a page of the ledger rather than the
