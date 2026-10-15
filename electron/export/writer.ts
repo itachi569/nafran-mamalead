@@ -3,12 +3,15 @@
 // The export modal already lets a scope and a column set be chosen; this is the half that was
 // missing, and it is why the modal's Download button used to do nothing. Everything is written
 // locally: no upload, no network.
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { app, dialog, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import ExcelJS from 'exceljs'
-import { degrees, PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import type { Repository } from '../db/repository'
+
+const logoAsset = join(__dirname, 'assets', 'mamalead-original.jpeg')
+const watermarkAsset = join(__dirname, 'assets', 'mamalead-watermark.png')
 
 export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles'
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf'
@@ -227,10 +230,12 @@ function exportTitle(kind: ExportKind): string {
 
 async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'Nafran Leads'
-  workbook.title = `Nafran Leads - ${exportTitle(kind)}`
+  workbook.creator = 'MamaLead'
+  workbook.title = `MamaLead - ${exportTitle(kind)}`
   workbook.subject = `${exportTitle(kind)} export`
   const sheet = workbook.addWorksheet(exportTitle(kind))
+  const watermark = workbook.addImage({ filename: watermarkAsset, extension: 'png' })
+  sheet.addBackgroundImage(watermark)
   const lastColumn = Math.max(1, table.columns.length)
   const lastColumnLetter = sheet.getColumn(lastColumn).letter
   sheet.columns = table.columns.map((column, index) => ({
@@ -244,7 +249,7 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
 
   // Branding is part of the sheet itself, so it also appears when opened or printed.
   sheet.mergeCells(1, 1, 1, lastColumn)
-  sheet.getCell(1, 1).value = 'N  NAFRAN LEADS'
+  sheet.getCell(1, 1).value = 'mamalead'
   sheet.getCell(1, 1).font = { name: 'Aptos Display', size: 19, bold: true, color: { argb: 'FFFFFFFF' } }
   sheet.getCell(1, 1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
   sheet.getRow(1).height = 40
@@ -266,15 +271,20 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   headerRow.font = { name: 'Aptos', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }
   headerRow.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
   headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF27302A' } }
+  headerRow.eachCell((cell) => {
+    cell.border = { right: { style: 'hair', color: { argb: 'FF758172' } } }
+  })
 
   table.values.forEach((values, index) => {
     const row = sheet.getRow(index + 5)
     row.height = Math.min(60, Math.max(25, values.some((value) => value.length > 70) ? 42 : 25))
     row.alignment = { vertical: 'middle', wrapText: true }
     row.font = { name: 'Aptos', size: 10, color: { argb: 'FF1C1C1C' } }
-    row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: index % 2 ? 'FFF1F4EE' : 'FFFFFFFF' } }
     row.eachCell((cell, columnNumber) => {
-      cell.border = { bottom: { style: 'hair', color: { argb: 'FFDDE2DA' } } }
+      cell.border = {
+        bottom: { style: 'hair', color: { argb: 'FFDDE2DA' } },
+        right: { style: 'hair', color: { argb: 'FFDDE2DA' } },
+      }
       const label = table.columns[columnNumber - 1]
       const url = String(values[columnNumber - 1] ?? '')
       if (label === 'Profile URL' && /^https?:\/\//i.test(url)) {
@@ -286,7 +296,7 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   sheet.autoFilter = { from: { row: 4, column: 1 }, to: { row: Math.max(4, table.values.length + 4), column: lastColumn } }
   sheet.views = [{ state: 'frozen', ySplit: 4 }]
   sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:4', printArea: `A1:${lastColumnLetter}${Math.max(4, table.values.length + 4)}` }
-  sheet.headerFooter.oddFooter = `&LNAFRAN LEADS&C${exportTitle(kind)}&RPage &P of &N`
+  sheet.headerFooter.oddFooter = `&Lmamalead&C${exportTitle(kind)}&RPage &P of &N`
   return Buffer.from(await workbook.xlsx.writeBuffer())
 }
 
@@ -322,9 +332,10 @@ function pdfCellLines(value: string, font: PDFFont, size: number, width: number)
 
 async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
   const pdf = await PDFDocument.create()
-  pdf.setTitle(`Nafran Leads - ${exportTitle(kind)}`)
-  pdf.setAuthor('Nafran Leads')
+  pdf.setTitle(`MamaLead - ${exportTitle(kind)}`)
+  pdf.setAuthor('MamaLead')
   pdf.setSubject(`${exportTitle(kind)} export`)
+  const logo = await pdf.embedJpg(readFileSync(logoAsset))
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   const width = 842
@@ -352,8 +363,8 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
     const page = pdf.addPage([width, height])
     page.drawRectangle({ x: 0, y: height - 78, width, height: 78, color: rgb(0.11, 0.11, 0.11) })
     page.drawRectangle({ x: margin, y: height - 59, width: 38, height: 38, color: rgb(0.78, 0.84, 0.73) })
-    page.drawText('N', { x: margin + 11, y: height - 50, size: 20, font: bold, color: rgb(0.11, 0.11, 0.11) })
-    page.drawText('NAFRAN LEADS', { x: margin + 50, y: height - 34, size: 16, font: bold, color: rgb(1, 1, 1) })
+    page.drawText('m', { x: margin + 10, y: height - 50, size: 20, font: bold, color: rgb(0.11, 0.11, 0.11) })
+    page.drawText('mamalead', { x: margin + 50, y: height - 34, size: 16, font: bold, color: rgb(1, 1, 1) })
     page.drawText(`${title.toUpperCase()}  |  ${table.values.length} ROWS`, { x: margin + 50, y: height - 53, size: 9, font, color: rgb(0.78, 0.84, 0.73) })
     y = height - 100
     page.drawRectangle({ x: margin, y: y - 30, width: contentWidth, height: 30, color: rgb(0.16, 0.19, 0.16) })
@@ -363,6 +374,7 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
         x: lefts[index] + 7, y: y - 12 - lineIndex * 9, size: 7.5, font: bold, color: rgb(1, 1, 1),
       }))
     })
+    lefts.slice(1).forEach((x) => page.drawLine({ start: { x, y }, end: { x, y: y - 30 }, thickness: 0.45, color: rgb(0.44, 0.5, 0.44) }))
     y -= 30
     return page
   }
@@ -376,6 +388,7 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
       color: rowIndex % 2 ? rgb(0.94, 0.96, 0.93) : rgb(1, 1, 1),
     })
     page.drawLine({ start: { x: margin, y: y - rowHeight }, end: { x: width - margin, y: y - rowHeight }, thickness: 0.45, color: rgb(0.84, 0.87, 0.83) })
+    lefts.slice(1).forEach((x) => page.drawLine({ start: { x, y }, end: { x, y: y - rowHeight }, thickness: 0.45, color: rgb(0.84, 0.87, 0.83) }))
     lines.forEach((cellLines, index) => {
       cellLines.forEach((line, lineIndex) => page.drawText(line, {
         x: lefts[index] + 7, y: y - 12 - lineIndex * lineHeight, size: textSize, font,
@@ -386,12 +399,10 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
     rowIndex += 1
   }
   pdf.getPages().forEach((sheet, index) => {
-    // Draw last at very low opacity so the watermark remains visible through row fills.
-    sheet.drawText('NAFRAN LEADS', {
-      x: width * 0.28, y: height * 0.34, size: 64, font: bold,
-      color: rgb(0.45, 0.54, 0.44), opacity: 0.045, rotate: degrees(22),
-    })
-    sheet.drawText(`NAFRAN LEADS  |  ${title}`, { x: margin, y: 20, size: 7, font, color: rgb(0.38, 0.43, 0.38) })
+    // The original logo is deliberately faint above the row fills, so it survives printing
+    // without reducing contrast enough to obscure the table text and grid.
+    sheet.drawImage(logo, { x: (width - 430) / 2, y: 82, width: 430, height: 430, opacity: 0.1 })
+    sheet.drawText(`mamalead  |  ${title}`, { x: margin, y: 20, size: 7, font, color: rgb(0.38, 0.43, 0.38) })
     const label = `Page ${index + 1} of ${pdf.getPageCount()}`
     sheet.drawText(label, { x: width - margin - font.widthOfTextAtSize(label, 7), y: 20, size: 7, font, color: rgb(0.38, 0.43, 0.38) })
   })

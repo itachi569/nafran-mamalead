@@ -45,22 +45,67 @@ function tintStyle(css: string, texty: boolean): string {
     .join(';')
 }
 
+// Hover and layout updates can change one property while the rest is already dark. Recover
+// untouched properties from their light values before storing the updated source style.
+function sourceStyle(current: string, original: string, applied: string): string {
+  const parse = (css: string): CSSStyleDeclaration => {
+    const style = document.createElement('span').style
+    style.cssText = css
+    return style
+  }
+  const live = parse(current)
+  const before = parse(original)
+  const tinted = parse(applied)
+  const source = parse('')
+  for (let index = 0; index < live.length; index += 1) {
+    const prop = live.item(index)
+    const value = live.getPropertyValue(prop)
+    const priority = live.getPropertyPriority(prop)
+    const unchanged = value === tinted.getPropertyValue(prop)
+      && priority === tinted.getPropertyPriority(prop)
+      && before.getPropertyValue(prop) !== ''
+    source.setProperty(prop, unchanged ? before.getPropertyValue(prop) : value, unchanged ? before.getPropertyPriority(prop) : priority)
+  }
+  return source.cssText
+}
+
 export function skinElement(element: Element): void {
   const texty = Boolean(element.textContent && element.textContent.trim())
   for (const attribute of PAINTED) {
     const current = element.getAttribute(attribute)
-    if (!current || !/#|rgb/.test(current)) continue
+    if (!current) {
+      delete originalAttributes.get(element)?.[attribute]
+      delete appliedAttributes.get(element)?.[attribute]
+      continue
+    }
     if (appliedAttributes.get(element)?.[attribute] === current) continue
-    const next = attribute === 'style' ? tintStyle(current, texty) : tintValue(attribute, current, texty)
-    if (next === current) continue
     const originals = originalAttributes.get(element) ?? {}
     const applied = appliedAttributes.get(element) ?? {}
-    originals[attribute] = current
+    const source = attribute === 'style' && originals.style && applied.style
+      ? sourceStyle(current, originals.style, applied.style)
+      : current
+    const next = attribute === 'style' ? tintStyle(source, texty) : tintValue(attribute, source, texty)
+    if (next === current && originals[attribute] === undefined) continue
+    originals[attribute] = source
     applied[attribute] = next
     originalAttributes.set(element, originals)
     appliedAttributes.set(element, applied)
-    element.setAttribute(attribute, next)
+    if (next !== current) element.setAttribute(attribute, next)
   }
+}
+
+function skinTree(element: Element): void {
+  skinElement(element)
+  element.querySelectorAll('[style],[fill],[stroke]').forEach(skinElement)
+}
+
+function skinChanges(records: MutationRecord[]): void {
+  records.forEach((record) => {
+    if (record.type === 'attributes' && record.target.nodeType === 1) skinElement(record.target as Element)
+    if (record.type === 'childList') record.addedNodes.forEach((node) => {
+      if (node.nodeType === 1) skinTree(node as Element)
+    })
+  })
 }
 
 function restore(): void {
@@ -82,15 +127,12 @@ export function paintTheme(dark: boolean): void {
     document.querySelectorAll('[style]').forEach(skinElement)
     document.querySelectorAll('[fill],[stroke]').forEach(skinElement)
     if (!observer) {
-      observer = new MutationObserver((records) => {
-        records.forEach((record) => {
-          if (record.target.nodeType === 1) skinElement(record.target as Element)
-        })
-      })
-      observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['style', 'fill', 'stroke'] })
+      observer = new MutationObserver(skinChanges)
+      observer.observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['style', 'fill', 'stroke'] })
     }
     return
   }
+  if (observer) skinChanges(observer.takeRecords())
   observer?.disconnect()
   observer = null
   restore()
