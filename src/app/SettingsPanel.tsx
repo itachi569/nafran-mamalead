@@ -238,6 +238,30 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             </form>}
             {trialNotice && <p data-trial-notice="1" role="status" style={{ ...muted, margin: '10px 0 0' }}>{trialNotice}</p>}
           </section>}
+          <section data-maps-plan-guide="1" style={{ ...card, background: '#F5F5F4', border: '1px solid #E4E7DF' }}>
+            <p style={{ ...muted, margin: 0, fontSize: '11px', fontWeight: 600, letterSpacing: '.16em', textTransform: 'uppercase' }}>Maps scraper allowance</p>
+            <h2 style={{ margin: '7px 0 5px', fontSize: '21px', fontWeight: 500 }}>Choose how many leads you need</h2>
+            <p style={{ ...muted, margin: '0 0 17px' }}>Your activated key sets the total number of Google Maps leads you can collect.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+              <div data-maps-plan="trial" style={{ padding: '18px 19px', borderRadius: '18px', background: '#E5ECDF', border: '1px solid #C8D5BB' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <strong style={{ fontSize: '13px', fontWeight: 600 }}>1-day trial</strong>
+                  {billing.trial?.active && <span style={{ padding: '4px 9px', borderRadius: '999px', background: '#D1DFC8', color: '#24452A', fontSize: '10px', fontWeight: 600 }}>ACTIVE</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '12px' }}><strong style={{ fontSize: '38px', lineHeight: 1, letterSpacing: '-.05em' }}>300</strong><span style={{ fontSize: '13px' }}>Maps leads total</span></div>
+                <p style={{ ...muted, margin: '10px 0 0' }}>Shared across every keyword and search during your 24-hour trial.</p>
+                {billing.trial?.active && billing.mapsLeads?.limit === 300 && <p style={{ margin: '12px 0 0', fontSize: '12px', fontWeight: 600, color: '#24452A' }}>{billing.mapsLeads.remaining ?? 0} leads remaining</p>}
+              </div>
+              <div data-maps-plan="lifetime" style={{ padding: '18px 19px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #E0E4DC' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <strong style={{ fontSize: '13px', fontWeight: 600 }}>Lifetime</strong>
+                  {billing.license?.active && billing.license.kind === 'lifetime' && <span style={{ padding: '4px 9px', borderRadius: '999px', background: '#E5ECDF', color: '#24452A', fontSize: '10px', fontWeight: 600 }}>ACTIVE</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '12px' }}><strong style={{ fontSize: '38px', lineHeight: 1, letterSpacing: '-.05em' }}>∞</strong><span style={{ fontSize: '13px' }}>Maps leads</span></div>
+                <p style={{ ...muted, margin: '10px 0 0' }}>No total Maps lead limit after activating your lifetime key.</p>
+              </div>
+            </div>
+          </section>
           <section data-card="1" style={{ ...card, background: 'linear-gradient(160deg,#E9EDE4,#CBD8BC)' }}>
             <h2 style={{ margin: 0, fontSize: '21px', fontWeight: 500 }}>Local usage</h2>
             <p style={muted}>{billing.license?.active && billing.license.kind === 'lifetime' ? 'Unlimited Maps leads with your lifetime key.' : billing.trial?.active ? `${billing.mapsLeads?.remaining ?? 0} of 300 trial Maps leads remaining across all keywords.` : 'Activate a trial or lifetime key to see your Maps lead allowance.'}</p>
