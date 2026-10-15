@@ -6,6 +6,8 @@ export interface ScrapeQuery {
   keywords: string[]
   location: string
   maxResultsPerKeyword: number
+  /** Server-approved ceiling for the whole run; null means no plan ceiling. */
+  maxResultsTotal?: number | null
   language: string
   region: string
   headless: boolean
@@ -92,6 +94,7 @@ export const DEFAULT_QUERY: ScrapeQuery = {
   keywords: [],
   location: 'Manchester, United Kingdom',
   maxResultsPerKeyword: 20,
+  maxResultsTotal: null,
   language: 'en',
   region: 'uk',
   headless: false,
@@ -120,6 +123,7 @@ export function normaliseQuery(input: Partial<ScrapeQuery> = {}): ScrapeQuery {
     keywords,
     location: String(input.location ?? DEFAULT_QUERY.location).trim() || DEFAULT_QUERY.location,
     maxResultsPerKeyword: clamp(input.maxResultsPerKeyword ?? DEFAULT_QUERY.maxResultsPerKeyword, 1, HARD_LIMITS.maxResultsPerKeyword),
+    maxResultsTotal: input.maxResultsTotal == null ? null : clamp(input.maxResultsTotal, 1, HARD_LIMITS.maxKeywords * HARD_LIMITS.maxResultsPerKeyword),
     language: String(input.language ?? DEFAULT_QUERY.language).trim() || DEFAULT_QUERY.language,
     region: String(input.region ?? DEFAULT_QUERY.region).trim() || DEFAULT_QUERY.region,
     headless: Boolean(input.headless ?? DEFAULT_QUERY.headless),

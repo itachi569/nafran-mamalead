@@ -67,6 +67,10 @@ export class ScrapeRunner {
     return this.latest
   }
 
+  replaceLast(summary: RunSummary): void {
+    if (this.latest?.runId === summary.runId) this.latest = summary
+  }
+
   onStop(listener: () => void): void {
     this.gates.add(listener)
     this.controller?.signal.addEventListener('abort', listener, { once: true })
@@ -136,7 +140,7 @@ export class ScrapeRunner {
         keywordIndex: 0,
         keywordTotal: query.keywords.length,
         found,
-        target: query.maxResultsPerKeyword * query.keywords.length,
+        target: Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length),
         message,
         at: new Date().toISOString(),
         ...extra,
@@ -163,7 +167,7 @@ export class ScrapeRunner {
               keywordIndex: progress.keywordIndex ?? 0,
               keywordTotal: progress.keywordTotal ?? query.keywords.length,
               found: collected.length,
-              target: progress.target ?? query.maxResultsPerKeyword * query.keywords.length,
+              target: progress.target ?? Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length),
               status: progress.status ?? 'running',
               at: new Date().toISOString(),
               message: progress.message,

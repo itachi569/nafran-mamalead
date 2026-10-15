@@ -490,6 +490,7 @@ export interface DesktopApi {
       message?: string
       lifetime?: { amount: number; currency: string; interval: null; active: boolean }
       trial?: { active: boolean; expiresAt: string | null }
+      mapsLeads?: { used: number | null; limit: number | null; remaining: number | null }
       decisionMaker?: { amount: number; currency: string; interval: string | null; available?: boolean; active: boolean; status: string; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null }
       hasCustomer?: boolean
       license?: { active: boolean; kind?: 'trial' | 'lifetime'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }

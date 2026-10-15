@@ -122,6 +122,26 @@ try {
   check('server stores a hashed device ID and platform with activation', service.db.prepare('select device_id, device_platform from installations where token_hash = ?').get(createHash('sha256').update(trialMachine).digest('hex')).device_id === firstDevice)
   check('same installation token cannot be reused without its device identity', (await call('/v1/status', trialMachine)).status === 403 && (await call('/v1/status', trialMachine, 'GET', undefined, otherDevice)).status === 403)
   check('trial expiry is 24 hours after first activation', Math.abs(Date.parse(trialActivation.body.expiresAt) - Date.parse(trialActivation.body.activatedAt) - 86_400_000) < 1000)
+  const firstMap = await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 100 }, firstDevice)
+  check('trial reserves 100 Maps lead slots', firstMap.status === 200 && firstMap.body.allowed === 100 && firstMap.body.remaining === 400)
+  check('active Maps reservation can be renewed', (await call('/v1/maps/heartbeat', trialMachine, 'POST', { reservationId: firstMap.body.reservationId }, firstDevice)).status === 200)
+  const firstMapDone = await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: firstMap.body.reservationId, captured: 100 }, firstDevice)
+  check('100 captured leads leave 400 trial leads', firstMapDone.status === 200 && firstMapDone.body.used === 100 && firstMapDone.body.remaining === 400)
+  check('a repeated settlement does not double count', (await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: firstMap.body.reservationId, captured: 100 }, firstDevice)).body.used === 100)
+  const emptyMap = await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 50 }, firstDevice)
+  const emptyMapDone = await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: emptyMap.body.reservationId, captured: 0 }, firstDevice)
+  check('a search with no captured leads returns its unused allowance', emptyMapDone.body.used === 100 && emptyMapDone.body.remaining === 400)
+  const secondMap = await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 100 }, firstDevice)
+  const secondMapDone = await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: secondMap.body.reservationId, captured: 100 }, firstDevice)
+  check('another keyword uses the same 500-lead allowance', secondMapDone.body.used === 200 && secondMapDone.body.remaining === 300)
+  const parallelMaps = await Promise.all([
+    call('/v1/maps/reserve', trialMachine, 'POST', { requested: 500 }, firstDevice),
+    call('/v1/maps/reserve', trialMachine, 'POST', { requested: 500 }, firstDevice),
+  ])
+  const lastMap = parallelMaps.find((result) => result.status === 200)
+  check('concurrent searches cannot reserve more than the remaining 300 leads', lastMap?.body.allowed === 300 && parallelMaps.some((result) => result.status === 429))
+  await call('/v1/maps/settle', trialMachine, 'POST', { reservationId: lastMap.body.reservationId, captured: 300 }, firstDevice)
+  check('the trial stops at 500 Maps leads', (await call('/v1/maps/reserve', trialMachine, 'POST', { requested: 1 }, firstDevice)).status === 429)
   const anotherTrialMachine = (await call('/v1/installations', null, 'POST')).body.token
   check('trial key cannot be activated on another machine', (await call('/v1/activate', anotherTrialMachine, 'POST', { licenseKey: trialKey }, otherDevice)).status === 409)
   check('same email cannot claim a new trial through another browser', (await call('/v1/trial', anotherTrialMachine, 'POST', { email: 'trial@example.test' }, otherDevice)).status === 409)
@@ -159,6 +179,8 @@ try {
   check('activation without a device identity is rejected', (await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey })).status === 400)
   const activated = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey }, firstDevice)
   check('the purchased license activates the current installation', activated.status === 200 && activated.body.active)
+  const unlimitedMaps = await call('/v1/maps/reserve', token, 'POST', { requested: 1600 }, firstDevice)
+  check('lifetime Maps leads have no total quota', unlimitedMaps.status === 200 && unlimitedMaps.body.allowed === 1600 && unlimitedMaps.body.remaining === null && unlimitedMaps.body.reservationId === null)
   const secondToken = (await call('/v1/installations', null, 'POST')).body.token
   const secondActivation = await call('/v1/activate', secondToken, 'POST', { licenseKey: issued.body.licenseKey }, otherDevice)
   check('the same license activates a second installation', secondActivation.status === 200 && secondActivation.body.active)

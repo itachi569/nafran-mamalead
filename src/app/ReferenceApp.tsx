@@ -46,12 +46,12 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </button>
               <div style={{display: "flex", alignItems: "baseline", gap: "7px", marginTop: "14px"}}>
                 <span style={{fontSize: "22px", fontWeight: "700", letterSpacing: "-.03em", lineHeight: "1", fontVariantNumeric: "tabular-nums"}}>{V.scrapeUsed}</span>
-                <span style={{fontSize: "11.5px", color: "#555956"}}>of {V.scrapeLimit} Maps scrapes</span>
+                <span style={{fontSize: "11.5px", color: "#555956"}}>{V.scrapeLimit}</span>
               </div>
-              <div style={{display: "flex", gap: "3px", marginTop: "9px"}}>
+              {V.showScrapeMeter && <div style={{display: "flex", gap: "3px", marginTop: "9px"}}>
                 <span style={{flex: V.scrapeUsedFlex, height: "6px", borderRadius: "3px", background: "#1C1C1C"}}></span>
                 <span style={{flex: V.scrapeFreeFlex, height: "6px", borderRadius: "3px", background: "#E2E5DE"}}></span>
-              </div>
+              </div>}
               <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "9px", fontSize: "11.5px", color: "#555956"}}>
                 <span>{V.sidebarLeads}</span>
                 <span>{V.sidebarDays}</span>

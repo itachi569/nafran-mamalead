@@ -5,7 +5,7 @@ import { chromium, type BrowserContext } from 'playwright'
 import { autoUpdater } from 'electron-updater'
 import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './scraper/browser'
 import { ScrapeRunner } from './scraper/runner'
-import type { StartRunRequest } from './scraper/types'
+import { normaliseQuery, type StartRunRequest } from './scraper/types'
 import { closeDatabase, openDatabase } from './db'
 import { registerLocalDatabase } from './db/ipc'
 import { EnrichmentRunner } from './enrichment/runner'
@@ -14,7 +14,7 @@ import { isUsableEmail, isUsablePerson } from './enrichment/website'
 import { readApifyCredential, readAssistCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
 import { askAssist, type AssistChatRequest } from './assist'
 import { readLeadsAngelBundle, verifyEmailAddressesWithLeadsAngel, type LeadsAngelCredentials } from './leadsangel'
-import { billingActivate, billingCheckout, billingConsumeDecisionMaker, billingInvoices, billingPortal, billingRequestTrial, billingStatus, requireActiveLicense } from './billing/client'
+import { billingActivate, billingCheckout, billingConsumeDecisionMaker, billingHeartbeatMaps, billingInvoices, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
 import {
   DEFAULT_APIFY_EMAIL_ACTOR,
   parseApifyEmailResult,
@@ -803,50 +803,80 @@ ipcMain.handle('scraper:last', () => runner.last)
  * between the two cannot lose captured leads, and a finished scrape is what queues the enrichment
  * pass over the new leads. Both belong to every run however it was started, so both live here.
  */
-function startRun(request: StartRunRequest, context?: BrowserContext, executablePath?: string) {
-  const handle = runner.start({
+let reservingMapsRun = false
+async function startRun(request: StartRunRequest, context?: BrowserContext, executablePath?: string) {
+  if (runner.busy || reservingMapsRun) throw new Error('A scrape is already running.')
+  const query = normaliseQuery(request?.query)
+  if (!query.keywords.length) throw new Error('Add at least one keyword before starting a run.')
+  reservingMapsRun = true
+  let quota: Awaited<ReturnType<typeof billingReserveMaps>> | undefined
+  let handle: ReturnType<ScrapeRunner['start']>
+  try {
+    quota = await billingReserveMaps(query.maxResultsPerKeyword * query.keywords.length)
+    if (runner.busy) throw new Error('A scrape is already running.')
+    handle = runner.start({
     provider: request?.provider,
-    query: request?.query,
+    query: { ...request?.query, maxResultsTotal: quota.allowed },
     context,
     executablePath,
     onProgress: (progress) => broadcast('scraper:progress', progress),
-  })
+    })
+  } catch (error) {
+    if (quota?.reservationId) void billingSettleMaps(quota.reservationId, 0).catch(() => undefined)
+    throw error
+  } finally {
+    reservingMapsRun = false
+  }
+  // A successful runner start always has a server-approved allowance.
+  if (!quota) throw new Error('The Maps lead allowance could not be confirmed.')
   // A long scrape must stop if the purchase is revoked or the billing server becomes unavailable.
   let checkingLicense = false
   const licenseTimer = setInterval(() => {
     if (checkingLicense || !runner.busy) return
     checkingLicense = true
-    void requireActiveLicense().catch(() => runner.stop()).finally(() => { checkingLicense = false })
+    const checks = [requireActiveLicense(), ...(quota.reservationId ? [billingHeartbeatMaps(quota.reservationId)] : [])]
+    void Promise.all(checks).catch(() => runner.stop()).finally(() => { checkingLicense = false })
   }, 15_000)
   void handle.result.finally(() => clearInterval(licenseTimer)).catch(() => undefined)
-  void handle.result.then((summary) => {
+  void handle.result.then(async (summary) => {
+    let finalSummary = summary
     let stored: { runId: string; saved: number } | null = null
     let storeError: string | null = null
-    try {
+    if (quota.reservationId) {
+      try {
+        const settled = await billingSettleMaps(quota.reservationId, summary.leads.length)
+        if (settled.accepted < summary.leads.length) finalSummary = { ...summary, leads: summary.leads.slice(0, settled.accepted) }
+      } catch (error) {
+        storeError = error instanceof Error ? error.message : String(error)
+        finalSummary = { ...summary, leads: [], status: 'failed', error: 'Trial lead usage could not be confirmed. Retry when the license server is available.' }
+      }
+    }
+    if (!storeError) try {
       const { db, repository } = openDatabase()
       stored = repository.saveRun(db.ensureWorkspace().id, {
-        provider: summary.provider,
-        status: summary.status === 'idle' || summary.status === 'running' ? 'done' : summary.status,
-        keywords: summary.query.keywords,
-        location: summary.query.location,
-        maxResultsPerKeyword: summary.query.maxResultsPerKeyword,
-        detail: summary.query.detail,
-        durationMs: summary.durationMs,
-        startedAt: summary.startedAt,
-        finishedAt: summary.finishedAt,
-        error: summary.error,
-        leads: summary.leads,
+        provider: finalSummary.provider,
+        status: finalSummary.status === 'idle' || finalSummary.status === 'running' ? 'done' : finalSummary.status,
+        keywords: finalSummary.query.keywords,
+        location: finalSummary.query.location,
+        maxResultsPerKeyword: finalSummary.query.maxResultsPerKeyword,
+        detail: finalSummary.query.detail,
+        durationMs: finalSummary.durationMs,
+        startedAt: finalSummary.startedAt,
+        finishedAt: finalSummary.finishedAt,
+        error: finalSummary.error,
+        leads: finalSummary.leads,
       })
     } catch (error) {
       storeError = error instanceof Error ? error.message : String(error)
     }
-    broadcast('scraper:done', { ...summary, stored, storeError })
+    runner.replaceLast(finalSummary)
+    broadcast('scraper:done', { ...finalSummary, stored, storeError })
 
     // A fresh scrape is what creates the work: the newly captured leads have websites and no
     // addresses yet, which is exactly what enrichment reads. Queued here rather than in the
     // renderer so a run enriches whether or not a window is watching.
-    if (stored && summary.leads.length) {
-      queueEnrichmentForNewLeads(summary.leads.map((lead) => lead.name))
+    if (stored && finalSummary.leads.length) {
+      queueEnrichmentForNewLeads(finalSummary.leads.map((lead) => lead.name))
     }
 
     // The app's own browser was opened for this run, so the run is what closes it. Leaving it open
@@ -889,6 +919,10 @@ ipcMain.handle('scraper:start', async (event, request: StartRunRequest) => {
  */
 ipcMain.handle('scraper:runWithGoogle', async (_event, request: StartRunRequest) => {
   await requireActiveLicense()
+  const license = await billingStatus()
+  if (license.license?.kind === 'trial' && license.mapsLeads?.remaining === 0) {
+    throw new Error('The trial’s 500 Maps leads are used. Activate a lifetime key to continue.')
+  }
   if (runner.busy) throw new Error('A scrape is already running.')
   gateStage = 'checking the saved account'
   const query = { ...request?.query, savedProfile: true, profileDir: googleProfileDir() }
@@ -941,7 +975,12 @@ ipcMain.handle('scraper:runWithGoogle', async (_event, request: StartRunRequest)
     if (controller.signal.aborted) throw new Error('Cancelled before the run started.')
     gateStage = 'connected — starting the run'
     progress('Google account connected — starting the run in the same window.')
-    return startRun({ ...request, query }, armed.context, armedExecutable)
+    try { return await startRun({ ...request, query }, armed.context, armedExecutable) }
+    catch (error) {
+      if (armedBrowser === armed.context) { armedBrowser = null; armedExecutable = '' }
+      await armed.context.close().catch(() => undefined)
+      throw error
+    }
   }
 
   gateStage = 'connected — starting the run'

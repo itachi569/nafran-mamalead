@@ -5,6 +5,7 @@ import { stat } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
+import { randomUUID } from 'node:crypto'
 import { createBillingHandler, HttpError } from './core.mjs'
 
 export function createBillingServer(options = {}) {
@@ -35,6 +36,13 @@ export function createBillingServer(options = {}) {
     sent_at text, revoked_at text, activated_at text, expires_at text,
     bound_installation_id text unique, correction_count integer not null default 0
   )`)
+  db.exec(`create table if not exists trial_map_runs (
+    id text primary key, trial_id text not null, installation_id text not null,
+    reserved integer not null check (reserved > 0 and reserved <= 500),
+    delivered integer check (delivered >= 0 and delivered <= reserved),
+    lease_until text not null, created_at text not null
+  )`)
+  db.exec('create index if not exists trial_map_runs_trial on trial_map_runs (trial_id)')
   db.exec(`create table if not exists billing_events (event_id text primary key, received_at text not null)`)
   db.exec('create table if not exists billing_downloads (id text primary key, installation_id text not null, created_at text not null)')
   db.exec('create table if not exists billing_public_downloads (id text primary key, created_at text not null)')
@@ -107,6 +115,44 @@ export function createBillingServer(options = {}) {
     trialById: async (id) => db.prepare('select * from trial_licenses where id = ?').get(id),
     trialByEmail: async (email) => db.prepare('select * from trial_licenses where email = ?').get(email),
     trialForInstallation: async (installationId) => db.prepare('select * from trial_licenses where installation_id = ?').get(installationId),
+    trialMapUsage: async (trialId, limit) => {
+      db.prepare('delete from trial_map_runs where delivered is null and lease_until <= ?').run(new Date().toISOString())
+      const totals = db.prepare('select coalesce(sum(coalesce(delivered, 0)), 0) as used, coalesce(sum(case when delivered is null then reserved else 0 end), 0) as reserved from trial_map_runs where trial_id = ?').get(trialId)
+      return { used: totals.used, remaining: Math.max(0, limit - totals.used - totals.reserved) }
+    },
+    reserveTrialMapLeads: async (trialId, installationId, requested, limit) => {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        const now = new Date().toISOString()
+        const trial = db.prepare('select expires_at, revoked_at, bound_installation_id from trial_licenses where id = ?').get(trialId)
+        if (!trial || trial.revoked_at || trial.bound_installation_id !== installationId || !trial.expires_at || trial.expires_at <= now) { db.exec('COMMIT'); return null }
+        db.prepare('delete from trial_map_runs where delivered is null and lease_until <= ?').run(now)
+        const totals = db.prepare('select coalesce(sum(coalesce(delivered, 0)), 0) as used, coalesce(sum(case when delivered is null then reserved else 0 end), 0) as reserved from trial_map_runs where trial_id = ?').get(trialId)
+        const allowed = Math.min(requested, Math.max(0, limit - totals.used - totals.reserved))
+        if (!allowed) { db.exec('COMMIT'); return null }
+        const id = randomUUID()
+        db.prepare('insert into trial_map_runs (id, trial_id, installation_id, reserved, lease_until, created_at) values (?, ?, ?, ?, ?, ?)')
+          .run(id, trialId, installationId, allowed, new Date(Date.now() + 120_000).toISOString(), now)
+        db.exec('COMMIT')
+        return { reservationId: id, allowed, used: totals.used, remaining: Math.max(0, limit - totals.used - totals.reserved - allowed) }
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+    },
+    heartbeatTrialMapRun: async (installationId, reservationId) => Boolean(db.prepare(`
+      update trial_map_runs set lease_until = ? where id = ? and installation_id = ?
+        and delivered is null and lease_until > ?
+    `).run(new Date(Date.now() + 120_000).toISOString(), reservationId, installationId, new Date().toISOString()).changes),
+    settleTrialMapRun: async (installationId, reservationId, captured, limit) => {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        const row = db.prepare('select * from trial_map_runs where id = ? and installation_id = ?').get(reservationId, installationId)
+        if (!row || (row.delivered === null && row.lease_until <= new Date().toISOString())) { db.exec('COMMIT'); return null }
+        const accepted = row.delivered === null ? Math.min(captured, row.reserved) : row.delivered
+        if (row.delivered === null) db.prepare('update trial_map_runs set delivered = ? where id = ?').run(accepted, reservationId)
+        const used = db.prepare('select coalesce(sum(delivered), 0) as n from trial_map_runs where trial_id = ?').get(row.trial_id).n
+        db.exec('COMMIT')
+        return { accepted, used, remaining: Math.max(0, limit - used) }
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+    },
     createTrial: async ({ id, installationId, keyHash, keyLast4, email, createdAt }) => {
       db.prepare('insert into trial_licenses (id, installation_id, key_hash, key_last4, email, created_at) values (?, ?, ?, ?, ?, ?)').run(id, installationId, keyHash, keyLast4, email, createdAt)
     },

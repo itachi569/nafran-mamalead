@@ -104,6 +104,7 @@ try {
   assert.equal(status.license?.kind, 'trial')
   console.log('PASS  emailed key activates the 24-hour trial on this device')
 
+  await page.evaluate(() => { window.__trialTestDoneRunId = ''; window.desktop.scraper.onDone((summary) => { window.__trialTestDoneRunId = summary.runId }) })
   const run = await page.evaluate(() => window.desktop.scraper.start({
     provider: 'mock', query: { keywords: ['clinic'], location: 'Manchester', maxResultsPerKeyword: 1 },
   }))
@@ -111,7 +112,35 @@ try {
     const latest = await window.desktop.scraper.last()
     return latest?.runId === runId && latest.status === 'done' && latest.leads.length === 1
   }, run.runId, { timeout: 15_000 })
-  console.log('PASS  activated trial runs a licensed scrape through the desktop app')
+  await page.waitForFunction(async () => (await window.desktop.billing.status()).mapsLeads?.used === 1)
+  await page.waitForFunction((runId) => window.__trialTestDoneRunId === runId, run.runId)
+  await page.locator('[data-stab="plan"]').click()
+  await page.getByRole('button', { name: 'Refresh billing' }).click()
+  await page.locator('[data-trial-maps-usage="1"]').getByText('1 of 500 Maps leads used · 499 remaining', { exact: false }).waitFor()
+  console.log('PASS  first Maps keyword captures 1 lead and leaves 499 trial leads')
+
+  const secondRun = await page.evaluate(() => window.desktop.scraper.start({
+    provider: 'mock', query: { keywords: ['dentist'], location: 'Manchester', maxResultsPerKeyword: 8 },
+  }))
+  await page.waitForFunction(async (runId) => (await window.desktop.scraper.last())?.runId === runId && (await window.desktop.billing.status()).mapsLeads?.used === 9, secondRun.runId)
+  await page.waitForFunction((runId) => window.__trialTestDoneRunId === runId, secondRun.runId)
+  console.log('PASS  another keyword shares the same 500-lead allowance')
+
+  const trialRow = service.db.prepare('select id, bound_installation_id from trial_licenses limit 1').get()
+  service.db.prepare('insert into trial_map_runs (id, trial_id, installation_id, reserved, delivered, lease_until, created_at) values (?, ?, ?, ?, ?, ?, ?)')
+    .run('test-backfill', trialRow.id, trialRow.bound_installation_id, 490, 490, new Date(Date.now() + 60_000).toISOString(), new Date().toISOString())
+  const cappedRun = await page.evaluate(() => window.desktop.scraper.start({
+    provider: 'mock', query: { keywords: ['doctor', 'surgeon'], location: 'Manchester', maxResultsPerKeyword: 8 },
+  }))
+  await page.waitForFunction(async (runId) => (await window.desktop.scraper.last())?.runId === runId && (await window.desktop.billing.status()).mapsLeads?.used === 500, cappedRun.runId)
+  await page.waitForFunction((runId) => window.__trialTestDoneRunId === runId, cappedRun.runId)
+  await page.getByRole('button', { name: 'Refresh billing' }).click()
+  await page.locator('[data-trial-maps-usage="1"]').getByText('500 of 500 Maps leads used · 0 remaining', { exact: false }).waitFor()
+  assert.equal((await page.evaluate(() => window.desktop.scraper.last())).leads.length, 1)
+  const overLimit = await page.evaluate(() => window.desktop.scraper.start({ provider: 'mock', query: { keywords: ['clinic'], maxResultsPerKeyword: 1 } })
+    .then(() => 'unexpected success').catch((error) => String(error.message)))
+  assert.match(overLimit, /500 Maps leads are used/i)
+  console.log('PASS  desktop caps the final run at 500 leads and blocks the next one')
 } finally {
   if (desktop) await desktop.close()
   service.close()

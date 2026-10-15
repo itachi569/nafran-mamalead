@@ -27,10 +27,13 @@ export class MockProvider implements ScraperProvider {
   async run(query: ScrapeQuery, sink: ProgressSink, signal: AbortSignal): Promise<Lead[]> {
     const leads: Lead[] = []
     const total = query.keywords.length
+    const runTarget = Math.min(query.maxResultsTotal ?? Infinity, Math.min(query.maxResultsPerKeyword, 8) * total)
     for (let i = 0; i < total; i += 1) {
+      if (leads.length >= runTarget) break
       const keyword = query.keywords[i]
       const target = Math.min(query.maxResultsPerKeyword, 8)
       for (let n = 1; n <= target; n += 1) {
+        if (leads.length >= runTarget) break
         await wait(260, signal)
         const area = AREAS[(i + n) % AREAS.length]
         const name = `${area} ${keyword.charAt(0).toUpperCase()}${keyword.slice(1)} ${n}`
@@ -62,7 +65,7 @@ export class MockProvider implements ScraperProvider {
           keywordIndex: i,
           keywordTotal: total,
           found: leads.length,
-          target: target * total,
+          target: runTarget,
           message: `Demo run · ${keyword} · ${n} of ${target} simulated places`,
           lead,
         })

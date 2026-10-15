@@ -70,6 +70,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
     const leads: Lead[] = []
     const seen = new Set<string>()
     const total = query.keywords.length
+    const runTarget = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * total)
     const onAbort = () => void this.close()
     signal.addEventListener('abort', onAbort, { once: true })
 
@@ -83,6 +84,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
 
       for (let index = 0; index < total; index += 1) {
         this.assertLive(signal)
+        if (leads.length >= runTarget) break
         const keyword = query.keywords[index]
         const term = `${keyword} in ${query.location}`
         sink({
@@ -90,7 +92,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
           keyword,
           keywordIndex: index,
           keywordTotal: total,
-          target: query.maxResultsPerKeyword * total,
+          target: runTarget,
           message: `Searching Google Maps for “${term}”`,
         })
 
@@ -107,7 +109,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
           keywordIndex: index,
           keywordTotal: total,
           found: leads.length,
-          target: query.maxResultsPerKeyword * total,
+          target: runTarget,
           message: cards.length
             ? `Read ${cards.length} place${cards.length === 1 ? '' : 's'} from the results feed`
             : 'Single place result — reading the detail panel',
@@ -155,10 +157,11 @@ export class ChromiumMapsProvider implements ScraperProvider {
             keywordIndex: index,
             keywordTotal: total,
             found: leads.length,
-            target: query.maxResultsPerKeyword * total,
+            target: runTarget,
             message: `Captured ${leads.length} · ${name}`,
             lead,
           })
+          if (leads.length >= runTarget) break
           if (slot < entries.length - 1) await this.pause(query, signal)
         }
       }
@@ -330,7 +333,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
     if (!(await feed.count())) return []
     await page.waitForSelector('a.hfpxzc', { timeout: 20_000 }).catch(() => undefined)
 
-    const limit = query.maxResultsPerKeyword
+    const limit = Math.min(query.maxResultsPerKeyword, (query.maxResultsTotal ?? Infinity) - alreadyFound)
     let stagnant = 0
     let loaded = 0
     for (let pass = 0; pass < 40 && loaded < limit && stagnant < 3; pass += 1) {
@@ -344,7 +347,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
         keywordIndex: index,
         keywordTotal: total,
         found: alreadyFound,
-        target: query.maxResultsPerKeyword * total,
+        target: Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * total),
         message: `Loading results · ${Math.min(loaded, limit)} of ${limit} listed`,
       })
       if (loaded >= limit) break

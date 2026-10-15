@@ -1310,6 +1310,7 @@ export function useAppValues() {
   // the sidebar and the Saved Lists page state what is actually true on this machine.
   const [lists, setLists] = useState<StoredList[]>([])
   const [usage, setUsage] = useState<{ used: number; limit: number; daysLeft: number; renewsOn: string } | null>(null)
+  const [mapsAllowance, setMapsAllowance] = useState<{ kind: 'trial' | 'lifetime'; used: number; remaining: number } | null>(null)
   // The two switches on the billing-preferences card. There is no billing provider to honour them,
   // but they are the user's own settings, so they flip and stay flipped for the session rather than
   // looking like a control that is broken.
@@ -1499,6 +1500,19 @@ export function useAppValues() {
       // As above: a failure here should not blank the sidebar.
     }
   }, [db])
+
+  const refreshMapsAllowance = useCallback(async () => {
+    if (!window.desktop?.billing) return
+    try {
+      const status = await window.desktop.billing.status()
+      if (!status.connected || !status.license?.active) return setMapsAllowance(null)
+      if (status.license.kind === 'lifetime') return setMapsAllowance({ kind: 'lifetime', used: 0, remaining: 0 })
+      if (status.license.kind === 'trial' && status.mapsLeads?.limit === 500) {
+        return setMapsAllowance({ kind: 'trial', used: status.mapsLeads.used ?? 0, remaining: status.mapsLeads.remaining ?? 0 })
+      }
+      setMapsAllowance(null)
+    } catch { setMapsAllowance(null) }
+  }, [])
 
   /**
    * Writes the bookmarked leads into the chosen list. The list is created the first time it is
@@ -2154,7 +2168,12 @@ export function useAppValues() {
   useEffect(() => {
     void refreshLists()
     void refreshUsage()
-  }, [refreshLists, refreshUsage, snapshot.running, snapshot.revision])
+    void refreshMapsAllowance()
+  }, [refreshLists, refreshUsage, refreshMapsAllowance, snapshot.running, snapshot.revision])
+  useEffect(() => {
+    window.addEventListener('nafran:billing-updated', refreshMapsAllowance)
+    return () => window.removeEventListener('nafran:billing-updated', refreshMapsAllowance)
+  }, [refreshMapsAllowance])
 
   // The Decision Makers page reads its funnel from the database, so it has to be filled on the
   // first load as well. Without this the page only ever populated when an enrichment pass
@@ -2643,7 +2662,7 @@ export function useAppValues() {
       const format = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
       return `${format(start)} – ${format(end)}`
     })(),
-    planSummary: `${(usage?.limit ?? 2000).toLocaleString('en-GB')} Maps scrapes are tracked locally. Lookup counts below come from jobs run this month.`,
+    planSummary: 'Maps runs and lookup counts below are tracked on this device this month.',
     usedScrapes: usage?.used ?? 0,
     usedEmailLookups,
     usedPhoneLookups,
@@ -3648,14 +3667,15 @@ export function useAppValues() {
     // The plan usage behind the sidebar meter, and the lists the workspace actually has.
     daysLeft: 'Local usage',
     sidebarLeads: `${(storedLeadCount || ledger.length).toLocaleString('en-GB')} lead${(storedLeadCount || ledger.length) === 1 ? '' : 's'} on file`,
-    sidebarDays: 'Local usage',
-    scrapeUsed: (usage?.used ?? 0).toLocaleString('en-GB'),
+    sidebarDays: mapsAllowance?.kind === 'trial' ? `${mapsAllowance.remaining} leads left` : mapsAllowance?.kind === 'lifetime' ? 'Unlimited' : 'Local usage',
+    scrapeUsed: mapsAllowance?.kind === 'trial' ? String(mapsAllowance.used) : mapsAllowance?.kind === 'lifetime' ? '∞' : (usage?.used ?? 0).toLocaleString('en-GB'),
     // The meter is the used share of the allowance, as two segments of one bar. A workspace that
     // has used nothing still shows a bar rather than a gap, so the rail keeps its shape.
-    scrapeUsedFlex: String(Math.max(1, Math.round(((usage?.used ?? 0) / Math.max(1, usage?.limit ?? 2000)) * 100))),
-    scrapeFreeFlex: String(Math.max(1, 100 - Math.round(((usage?.used ?? 0) / Math.max(1, usage?.limit ?? 2000)) * 100))),
+    scrapeUsedFlex: String(Math.max(1, Math.round(((mapsAllowance?.used ?? 0) / 500) * 100))),
+    scrapeFreeFlex: String(Math.max(1, Math.round(((500 - (mapsAllowance?.used ?? 0)) / 500) * 100))),
+    showScrapeMeter: mapsAllowance?.kind === 'trial',
     remainingScrapes: Math.max(0, (usage?.limit ?? 2000) - (usage?.used ?? 0)),
-    scrapeLimit: (usage?.limit ?? 2000).toLocaleString('en-GB'),
+    scrapeLimit: mapsAllowance?.kind === 'trial' ? 'of 500 Maps leads' : mapsAllowance?.kind === 'lifetime' ? 'Maps leads · unlimited' : 'Maps runs this month',
     storedLeadCount: storedLeadCount.toLocaleString('en-GB'),
     listTotals: `${lists.length} ${lists.length === 1 ? 'list' : 'lists'} · ${lists.reduce((sum, list) => sum + list.members, 0)} leads`,
     // The picks are what the last run brought back, which is a page of the ledger rather than the

@@ -12,6 +12,7 @@ export interface BillingStatus {
   message?: string
   lifetime?: { amount: number; currency: string; interval: null; active: boolean }
   trial?: { active: boolean; expiresAt: string | null }
+  mapsLeads?: { used: number | null; limit: number | null; remaining: number | null }
   decisionMaker?: { amount: number; currency: string; interval: string | null; available?: boolean; active: boolean; status: string; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null }
   hasCustomer?: boolean
   license?: { active: boolean; kind?: 'trial' | 'lifetime'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
@@ -162,6 +163,25 @@ export async function requireActiveLicense(feature: LicensedFeature = 'lifetime'
     verifiedLicense = null
     throw new LicenseAccessError(`License verification is unavailable. Connect to the billing server and try again. ${error instanceof Error ? error.message : ''}`.trim())
   }
+}
+
+export interface MapsReservation {
+  reservationId: string | null
+  allowed: number
+  used: number | null
+  remaining: number | null
+}
+
+export async function billingReserveMaps(requested: number): Promise<MapsReservation> {
+  return request<MapsReservation>('/v1/maps/reserve', 'POST', { requested }, await installationToken())
+}
+
+export async function billingHeartbeatMaps(reservationId: string): Promise<void> {
+  await request('/v1/maps/heartbeat', 'POST', { reservationId }, await installationToken())
+}
+
+export async function billingSettleMaps(reservationId: string, captured: number): Promise<{ accepted: number; used: number; remaining: number }> {
+  return request('/v1/maps/settle', 'POST', { reservationId, captured }, await installationToken())
 }
 
 export async function billingCheckout(product: 'lifetime' | 'decisionMaker', email: string): Promise<string> {

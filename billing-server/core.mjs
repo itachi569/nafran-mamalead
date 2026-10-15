@@ -7,6 +7,7 @@ export class HttpError extends Error {
 const hash = (token) => createHash('sha256').update(token).digest('hex')
 const normalizeLicense = (value) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '')
 const licensePattern = /^NF(?:-[A-Z0-9]{4}){10}$/
+const TRIAL_MAP_LEADS_LIMIT = 500
 const createLicenseKey = () => {
   const hex = randomBytes(20).toString('hex').toUpperCase()
   return `NF-${hex.match(/.{4}/g).join('-')}`
@@ -142,6 +143,9 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const trialExpiry = isTrial && linkedLicense.expires_at ? Date.parse(linkedLicense.expires_at) : 0
     const trialActive = Boolean(isTrial && !linkedLicense.revoked_at && linkedLicense.bound_installation_id === row.id && trialExpiry > Date.now())
     const licenseActive = Boolean(linkedLicense && !linkedLicense.revoked_at && (isTrial ? trialActive : lifetimeActive))
+    const trialMapUsage = isTrial && typeof store.trialMapUsage === 'function'
+      ? await store.trialMapUsage(linkedLicense.id, TRIAL_MAP_LEADS_LIMIT)
+      : null
     let decisionPrice = { amount: 300, currency: 'usd', interval: 'month' }
     if (prices.decisionMaker) {
       decisionPrice = await price(prices.decisionMaker)
@@ -153,6 +157,9 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       configured: true, connected: true, mode,
       lifetime: { ...lifetimePrice, active: lifetimeActive },
       trial: { active: trialActive, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null },
+      mapsLeads: isTrial
+        ? { used: trialMapUsage?.used ?? 0, limit: TRIAL_MAP_LEADS_LIMIT, remaining: trialActive ? trialMapUsage?.remaining ?? 0 : 0 }
+        : { used: null, limit: null, remaining: null },
       decisionMaker: { ...decisionPrice, available: Boolean(prices.decisionMaker), active: Boolean(decisionPeriod), status: decisionPeriod ? 'active' : 'not_subscribed', includedPeople: 0, monthlyLimit: 1000, monthlyUsed: used, monthlyRemaining: decisionPeriod ? Math.max(0, 1000 - used) : 0, renewsAt: decisionPeriod?.renewsAt ?? null },
       hasCustomer: Boolean(purchaseRow?.customer_id),
       license: linkedLicense ? { active: licenseActive, kind: isTrial ? 'trial' : 'lifetime', email: linkedLicense.email, last4: linkedLicense.key_last4, activatedAt: linkedLicense.activated_at ?? null, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null } : { active: false },
@@ -449,6 +456,33 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           const status = await verifiedStatus(row)
           if (typeof store.markSeen === 'function') { try { await store.markSeen(row.id, new Date().toISOString()) } catch {} }
           return json(200, status)
+        }
+        if (method === 'POST' && url.pathname === '/v1/maps/reserve') {
+          if (!deviceId) throw new HttpError(400, 'A device identity is required for Maps leads.')
+          const { requested } = await jsonBody(readBody)
+          if (!Number.isSafeInteger(requested) || requested < 1 || requested > 1600) throw new HttpError(400, 'Request between 1 and 1,600 Maps leads.')
+          const status = await verifiedStatus(row)
+          if (!status.license?.active) throw new HttpError(403, 'Activate an active trial or lifetime license first.')
+          if (status.license.kind === 'lifetime') return json(200, { reservationId: null, allowed: requested, used: null, remaining: null })
+          if (typeof store.reserveTrialMapLeads !== 'function') throw new HttpError(503, 'Trial Maps limit is not configured on this server.')
+          const license = await store.licenseForInstallation(row.id)
+          const reserved = await store.reserveTrialMapLeads(license.id, row.id, requested, TRIAL_MAP_LEADS_LIMIT)
+          if (!reserved) throw new HttpError(429, 'The trial’s 500 Maps leads are used. Activate a lifetime key to continue.')
+          return json(200, reserved)
+        }
+        if (method === 'POST' && url.pathname === '/v1/maps/heartbeat') {
+          const { reservationId } = await jsonBody(readBody)
+          if (typeof reservationId !== 'string' || !/^[0-9a-f-]{36}$/i.test(reservationId)) throw new HttpError(400, 'Invalid Maps reservation.')
+          if (typeof store.heartbeatTrialMapRun !== 'function' || !await store.heartbeatTrialMapRun(row.id, reservationId)) throw new HttpError(409, 'The Maps run reservation has expired.')
+          return json(200, { active: true })
+        }
+        if (method === 'POST' && url.pathname === '/v1/maps/settle') {
+          const { reservationId, captured } = await jsonBody(readBody)
+          if (typeof reservationId !== 'string' || !/^[0-9a-f-]{36}$/i.test(reservationId) || !Number.isSafeInteger(captured) || captured < 0 || captured > 1600) throw new HttpError(400, 'Invalid Maps run result.')
+          if (typeof store.settleTrialMapRun !== 'function') throw new HttpError(503, 'Trial Maps limit is not configured on this server.')
+          const result = await store.settleTrialMapRun(row.id, reservationId, captured, TRIAL_MAP_LEADS_LIMIT)
+          if (!result) throw new HttpError(409, 'The Maps run reservation has expired.')
+          return json(200, result)
         }
         if (method === 'POST' && url.pathname === '/v1/decision-maker/consume') {
           if (!deviceId) throw new HttpError(400, 'A device identity is required for Decision Makers.')
