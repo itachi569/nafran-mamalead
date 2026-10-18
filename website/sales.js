@@ -7,8 +7,8 @@
     : 'https://api.mamalead.com'
   const api = (path) => new URL(path, billingOrigin).toString()
   const macDownloads = {
-    'mac-arm64': { key: 'macArm64', label: 'Download for Mac · Apple Silicon' },
-    'mac-x64': { key: 'macX64', label: 'Download for Mac · Intel' },
+    'mac-arm64': { key: 'macArm64', label: 'Mac test build · Apple Silicon' },
+    'mac-x64': { key: 'macX64', label: 'Mac test build · Intel' },
   }
   const isMac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent)
   let downloadOptions = null
@@ -34,7 +34,7 @@
     }
     const macStatus = document.querySelector('[data-mac-download-status]')
     if (macStatus && (downloadOptions?.macArm64 || downloadOptions?.macX64)) {
-      const message = 'Choose Apple Silicon or Intel in About This Mac, then enter your licence key inside the app.'
+      const message = 'Choose Apple Silicon or Intel in About This Mac. These unsigned test builds may show a macOS security warning on first open.'
       if (macStatus.textContent !== message) macStatus.textContent = message
     }
     const status = document.querySelector('[data-decision-handoff-status]')

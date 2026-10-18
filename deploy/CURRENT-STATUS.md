@@ -1,5 +1,13 @@
 # MamaLead self-hosted test deployment
 
+## 19 October 2026: Subscribe handoff and Mac test installers
+
+The website's Decision Makers Subscribe button now opens `mamalead://subscribe/decision-makers`. The desktop app handles that link by opening its device-bound Rs 1,000 Stripe Checkout. The site renderer replaces card elements after page load, so the website now uses a delegated click handler and reapplies download links after each render. If the browser remains active without opening the app, Windows visitors are sent to the public installer download after a short delay; Mac visitors are taken to the Mac chip selector. Browser focus is only a best-effort way to detect an installed app, so the page also shows a clear fallback message.
+
+Both unsigned macOS test builds passed the GitHub Actions packaged app, bundled Chromium, trial, and licence checks in [run 39157635914](https://github.com/itachi569/nafran-mamalead/actions/runs/39157635914). Apple Silicon and Intel DMGs are live at `https://api.mamalead.com/v1/download?platform=mac-arm64` and `https://api.mamalead.com/v1/download?platform=mac-x64`. The server-side SHA-256 values are `768F6118533523F5FF52CC71B89F0D322D6BDD9F311448C58D9092667CF152A1` (401,399,431 bytes) and `0F8A13021647615F6DA0F710DF597107DEAA1E2530801588A88C81699F157B0A` (419,402,252 bytes). Both public downloads returned HTTP 200 with the matching sizes. A live browser check confirmed that the website enables both Mac links after the billing API reports the files available.
+
+The Mac DMGs are unsigned private test builds because no Apple signing or notarization credentials are configured. macOS may show a security warning. Stripe remains in test mode. The existing public Windows 1.4.9 installer is unchanged because this update changed the website and server download configuration, not the packaged desktop code; a fresh local Windows package and its Decision Makers checkout test passed.
+
 ## 18 October 2026: version 1.4.9 deployed to the fleet server
 
 The current website, billing API, owner dashboard, and Windows installer are deployed to the fleet server. The website is live at `https://mamalead.com/`, the owner dashboard at `https://admin.mamalead.com/admin/`, and the Windows installer at `https://api.mamalead.com/v1/download?platform=windows`. All four application services restarted and remained active. The billing API health endpoint returned HTTP 200 in Stripe **test mode**. The admin sign-in configuration returned email login enabled and token login disabled.

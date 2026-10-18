@@ -18,6 +18,16 @@ export function createBillingServer(options = {}) {
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error
   }
+  for (const [arch, prefix] of [['arm64', 'MAC_ARM64'], ['x64', 'MAC_X64']]) {
+    try {
+      const installerPath = readFileSync(new URL(`./.mac-${arch}-path`, import.meta.url), 'utf8').trim()
+      if (!/^\/opt\/billing\/artifacts\/[A-Za-z0-9._-]+\.dmg$/.test(installerPath)) throw new Error(`The server Mac ${arch} installer path file is invalid.`)
+      env[`${prefix}_LOCAL_DOWNLOAD_PATH`] = installerPath
+      env[`${prefix}_LOCAL_DOWNLOAD_FILENAME`] = basename(installerPath)
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+  }
   const port = Number(env.BILLING_PORT ?? 38747)
   const dbPath = resolve(env.BILLING_DB_PATH ?? './billing-server/data/billing.db')
   mkdirSync(dirname(dbPath), { recursive: true })
