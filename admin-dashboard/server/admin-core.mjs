@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { normalizeOwnerEmail, validOwnerPasswordHash, verifyOwnerPassword } from './owner-password.mjs'
 
 // Read-only owner API over the existing billing tables. It never writes billing rows,
 // never returns token_hash / key_hash / full license keys, and never sends email.
@@ -39,8 +40,15 @@ function respond(status, body, headers = {}) {
 
 export function createAdminHandler({ env = process.env, store, fetch: outbound = fetch, probeBlob = null }) {
   const ownerHash = /^[0-9a-f]{64}$/i.test(env.ADMIN_TOKEN_SHA256 ?? '') ? Buffer.from(env.ADMIN_TOKEN_SHA256, 'hex') : null
+  const tokenLoginEnabled = Boolean(ownerHash && env.ADMIN_ALLOW_TOKEN_LOGIN !== '0')
+  const ownerEmail = normalizeOwnerEmail(env.ADMIN_OWNER_EMAIL)
+  const passwordHash = env.ADMIN_PASSWORD_HASH ?? ''
+  const emailLoginEnabled = Boolean(ownerEmail && passwordHash)
   const sessionSecret = env.ADMIN_SESSION_SECRET ?? ''
-  if (!ownerHash) throw new Error('ADMIN_TOKEN_SHA256 must be the hex SHA-256 of the owner token.')
+  if (Boolean(env.ADMIN_OWNER_EMAIL) !== Boolean(passwordHash) || (passwordHash && (!ownerEmail || !validOwnerPasswordHash(passwordHash)))) {
+    throw new Error('ADMIN_OWNER_EMAIL and a valid ADMIN_PASSWORD_HASH must both be set for email sign-in.')
+  }
+  if (!tokenLoginEnabled && !emailLoginEnabled) throw new Error('Set ADMIN_TOKEN_SHA256 or configure ADMIN_OWNER_EMAIL and ADMIN_PASSWORD_HASH.')
   if (sessionSecret.length < 32) throw new Error('ADMIN_SESSION_SECRET must be at least 32 characters.')
   if (!store) throw new Error('An admin store is required.')
 
@@ -54,8 +62,9 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
   let revenueCache = null
   let revenueRun = null
 
-  // ---- authentication: owner token (hash compare) or signed HttpOnly session cookie ----
-  const sign = (payload) => createHmac('sha256', sessionSecret).update(payload).digest('base64url')
+  // ---- authentication: owner email/password or owner token, then signed HttpOnly cookie ----
+  const credentialVersion = createHash('sha256').update(ownerHash ?? '').update(passwordHash).update(tokenLoginEnabled ? 'token-on' : 'token-off').digest('hex')
+  const sign = (payload) => createHmac('sha256', sessionSecret).update(credentialVersion).update(payload).digest('base64url')
   function sessionCookie(secure) {
     const payload = `${Math.floor(Date.now() / 1000) + SESSION_SECONDS}.${randomBytes(12).toString('base64url')}`
     return `${COOKIE}=${payload}.${sign(payload)}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=${SESSION_SECONDS}${secure ? '; Secure' : ''}`
@@ -66,7 +75,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     if (!expiry || !nonce || !signature || extra !== undefined) return false
     return equal(Buffer.from(signature), Buffer.from(sign(`${expiry}.${nonce}`))) && Number(expiry) > Math.floor(Date.now() / 1000)
   }
-  const validToken = (token) => typeof token === 'string' && token.length >= 24 && token.length <= 256 && equal(sha256(token), ownerHash)
+  const validToken = (token) => tokenLoginEnabled && typeof token === 'string' && token.length >= 24 && token.length <= 256 && equal(sha256(token), ownerHash)
   function throttle(ip) {
     const entry = failures.get(ip)
     if (entry && entry.until > Date.now() && entry.count >= 5) throw new AdminError(429, 'Too many sign-in attempts. Wait a minute and try again.')
@@ -79,17 +88,18 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
 
   // ---- data views built from existing tables ----
   async function snapshot() {
-    let installs, licenses, trials, webhooks, downloads, tracking
+    let installs, licenses, trials, webhooks, downloads, tracking, planMetrics
     try {
-      [installs, licenses, trials, webhooks, downloads, tracking] = await Promise.all([
+      [installs, licenses, trials, webhooks, downloads, tracking, planMetrics] = await Promise.all([
         store.installations(), store.licenses(), store.trialLicenses ? store.trialLicenses() : [],
         store.webhooks ? store.webhooks() : null, store.downloads ? store.downloads() : null,
         store.seenTracking ? store.seenTracking() : false,
+        store.planMetrics ? store.planMetrics() : null,
       ])
     } catch { throw new AdminError(503, 'The billing tables could not be read yet.') }
     const attached = new Map()
     for (const row of installs) if (row.license_id) attached.set(row.license_id, [...(attached.get(row.license_id) ?? []), row])
-    return { installs, licenses, trials, webhooks, downloads, tracking: Boolean(tracking), attached, licenseById: new Map(licenses.map((row) => [row.id, row])), trialById: new Map(trials.map((row) => [row.id, row])), issued: new Map(licenses.map((row) => [row.installation_id, row])) }
+    return { installs, licenses, trials, webhooks, downloads, planMetrics, tracking: Boolean(tracking), attached, licenseById: new Map(licenses.map((row) => [row.id, row])), trialById: new Map(trials.map((row) => [row.id, row])), issued: new Map(licenses.map((row) => [row.installation_id, row])) }
   }
 
   const purchases = (d) => d.installs.filter((r) => r.lifetime_session_id || r.pending_lifetime_session_id).map((r) => {
@@ -98,7 +108,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       id: short(r.id), created: iso(r.created_at),
       status: r.lifetime_session_id ? 'paid' : 'checkout_started',
       session: tail(r.lifetime_session_id ?? r.pending_lifetime_session_id), customer: tail(r.customer_id),
-      addon: r.decision_subscription_id ? 'active' : r.pending_decision_session_id ? 'checkout_started' : 'none',
+      addon: r.decision_pass_session_id ? 'paid_pass' : r.decision_subscription_id ? 'active' : r.pending_decision_session_id ? 'checkout_started' : 'none',
       license: license ? { last4: license.key_last4, revoked: Boolean(license.revoked_at) } : null,
       email: license ? email(license.email) : null,
     }
@@ -122,7 +132,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
   // Only the desktop app calls /v1/status (the website never does), so last_seen_at marks desktop use.
   const userRows = (d) => d.installs.map((r) => {
     const desktop = Boolean(r.license_id || r.last_seen_at)
-    const checkout = Boolean(r.lifetime_session_id || r.pending_lifetime_session_id || r.pending_decision_session_id || r.decision_subscription_id)
+    const checkout = Boolean(r.lifetime_session_id || r.pending_lifetime_session_id || r.pending_decision_session_id || r.decision_pass_session_id || r.decision_subscription_id)
     const trial = r.license_id ? d.trialById.get(r.license_id) : null
     const license = r.license_id ? (d.licenseById.get(r.license_id) ?? trial) : d.issued.get(r.id)
     const trialActive = trial && trial.sent_at && !trial.revoked_at && trial.bound_installation_id === r.id && (!trial.expires_at || Date.parse(trial.expires_at) > Date.now())
@@ -132,7 +142,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       device: r.device_id ? short(r.device_id) : null, platform: r.device_platform || null,
       licensed: Boolean(trial ? trialActive : r.license_id && license && !license.revoked_at), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
       licenseType: trial ? 'trial' : license ? 'lifetime' : null,
-      buyer: Boolean(r.lifetime_session_id), addon: Boolean(r.decision_subscription_id),
+      buyer: Boolean(r.lifetime_session_id), addon: Boolean(r.decision_pass_session_id || r.decision_subscription_id),
       email: license ? email(license.email) : null,
     }
   }).sort(newest)
@@ -172,7 +182,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     const add = (id, label, state, detail) => checks.push({ id, label, state, detail })
     add('stripe_key', 'Stripe secret key', mode === 'test' ? 'ok' : mode === 'live' ? 'warn' : 'missing',
       mode === 'test' ? 'Test-mode key is set.' : mode === 'live' ? 'A live key is set. Keep test keys until live payments are approved.' : 'STRIPE_SECRET_KEY is not set.')
-    add('stripe_prices', 'Stripe Lifetime Price ID', pricesSet ? 'ok' : 'missing', pricesSet ? 'The $30 Lifetime price is set.' : 'Set STRIPE_PRICE_LIFETIME.')
+    add('stripe_prices', 'Stripe Lifetime Price ID', pricesSet ? 'ok' : 'missing', pricesSet ? 'The Rs 10,000 PKR Lifetime price ID is set.' : 'Set STRIPE_PRICE_LIFETIME.')
     add('webhook', 'Stripe webhook secret', env.STRIPE_WEBHOOK_SECRET?.trim() ? 'ok' : 'missing', env.STRIPE_WEBHOOK_SECRET?.trim() ? 'Signed webhooks can be verified.' : 'STRIPE_WEBHOOK_SECRET is not set.')
     const publicUrl = env.BILLING_PUBLIC_URL || (env.VERCEL_URL ? `https://${env.VERCEL_URL}` : '')
     const https = /^https:\/\/[^/]+\/?$/.test(publicUrl)
@@ -212,8 +222,8 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     if (mode !== 'missing' && pricesSet) {
       try {
         const price = await stripe(`prices/${encodeURIComponent(env.STRIPE_PRICE_LIFETIME)}`)
-        const ok = price.active && price.currency === 'usd' && price.unit_amount === 3000 && !price.recurring
-        add('stripe_api', 'Stripe API', ok ? 'ok' : 'warn', ok ? `Lifetime price answers in ${mode} mode.` : 'Lifetime price does not match the approved $30 one-time product.')
+        const ok = price.active && price.currency === 'pkr' && price.unit_amount === 1000000 && !price.recurring
+        add('stripe_api', 'Stripe API', ok ? 'ok' : 'warn', ok ? `Lifetime price answers in ${mode} mode.` : 'Lifetime price does not match the approved Rs 10,000 PKR one-time product.')
       } catch { add('stripe_api', 'Stripe API', 'error', 'Stripe did not answer the price lookup.') }
     }
     const site = env.ADMIN_PROBE_SITE_URL?.trim()
@@ -263,7 +273,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       activeSubs += 1
       for (const item of sub.items?.data ?? []) {
         const price = item.price ?? {}
-        if (price.currency !== 'usd') continue
+        if (price.currency !== 'pkr') continue
         const perMonth = { year: 1 / 12, week: 52 / 12, day: 365 / 12 }[price.recurring?.interval] ?? 1
         mrr += Math.round((price.unit_amount ?? 0) * (item.quantity ?? 1) * perMonth / (price.recurring?.interval_count || 1))
       }
@@ -275,7 +285,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     const payments = []
     for (const charge of charges.values()) {
       if (charge.livemode !== (mode === 'live')) continue
-      if (charge.currency !== 'usd') { totals.otherCurrency += 1; continue }
+      if (charge.currency !== 'pkr') { totals.otherCurrency += 1; continue }
       const ok = charge.paid === true && charge.status === 'succeeded'
       const captured = ok ? Number(charge.amount_captured ?? charge.amount ?? 0) : 0
       const refunded = ok ? Number(charge.amount_refunded ?? 0) : 0
@@ -289,13 +299,13 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         if (monthIndex.has(key)) months[monthIndex.get(key)].net += captured - refunded
       }
       payments.push({
-        id: tail(charge.id), created: iso(charge.created * 1000), product, amount: Number(charge.amount ?? 0), refunded, currency: 'usd',
+        id: tail(charge.id), created: iso(charge.created * 1000), product, amount: Number(charge.amount ?? 0), refunded, currency: 'pkr',
         status: charge.disputed ? 'disputed' : !ok ? (charge.status === 'failed' ? 'failed' : 'pending') : refunded >= captured && captured > 0 ? 'refunded' : refunded > 0 ? 'partial_refund' : 'paid',
         email: email(emailByCustomer.get(charge.customer) || charge.billing_details?.email || ''),
       })
     }
     payments.sort(newest)
-    return { available: true, mode, currency: 'usd', ...totals, activeSubs, mrr, months, payments: payments.slice(0, 500), paymentCount: payments.length, partial: errors > 0, truncated: customers.length > MAX_STRIPE_OBJECTS, computedAt: new Date().toISOString() }
+    return { available: true, mode, currency: 'pkr', ...totals, activeSubs, mrr, months, payments: payments.slice(0, 500), paymentCount: payments.length, partial: errors > 0, truncated: customers.length > MAX_STRIPE_OBJECTS, computedAt: new Date().toISOString() }
   }
 
   async function verifyPurchase(d, id) {
@@ -328,10 +338,15 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       const url = new URL(rawUrl, 'http://admin.invalid')
       const path = url.pathname.replace(/\/+$/, '')
       if (!path.startsWith('/admin/api/')) throw new AdminError(404, 'Endpoint not found.')
+      if (path === '/admin/api/auth-config' && method === 'GET') {
+        return respond(200, { emailLoginEnabled, tokenLoginEnabled })
+      }
       if (path === '/admin/api/session' && method === 'POST') {
         throttle(ip)
-        const { token } = await body(readBody)
-        if (!validToken(token)) { recordFailure(ip); throw new AdminError(401, 'That owner token is not valid.') }
+        const { token, email, password } = await body(readBody)
+        const passwordValid = emailLoginEnabled && await verifyOwnerPassword(password, passwordHash)
+        const accepted = token !== undefined ? validToken(token) : Boolean(passwordValid && normalizeOwnerEmail(email) === ownerEmail)
+        if (!accepted) { recordFailure(ip); throw new AdminError(401, 'Invalid owner sign-in details.') }
         failures.delete(ip)
         return respond(200, { ok: true, mode }, { 'set-cookie': sessionCookie(secure) })
       }
@@ -357,15 +372,24 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         const lic = licenseRows(d)
         const live = lic.filter((l) => !l.revokedAt)
         const paid = d.installs.filter((r) => r.lifetime_session_id)
+        const metrics = d.planMetrics ?? {
+          lifetimePurchases: paid.length,
+          lifetimeCustomers: new Set(paid.map((r) => r.customer_id || r.id)).size,
+          decisionSubscriptions: d.installs.filter((r) => r.decision_pass_session_id || r.decision_subscription_id).length,
+          trialKeysSent: d.trials.filter((r) => r.sent_at).length,
+          trialActivated: d.trials.filter((r) => r.bound_installation_id).length,
+          trialActive: d.trials.filter((r) => r.sent_at && !r.revoked_at && r.expires_at && Date.parse(r.expires_at) > Date.now()).length,
+        }
         return respond(200, {
           mode, cap, generatedAt: new Date().toISOString(),
           counts: {
             installations: d.installs.length,
-            purchases: paid.length,
-            customers: new Set(paid.map((r) => r.customer_id || r.id)).size,
+            purchases: metrics.lifetimePurchases,
+            customers: metrics.lifetimeCustomers,
             checkoutsStarted: d.installs.filter((r) => !r.lifetime_session_id && r.pending_lifetime_session_id).length,
-            addons: d.installs.filter((r) => r.decision_subscription_id).length,
-            licenses: lic.length, revoked: lic.length - live.length, trials: d.trials.length,
+            addons: metrics.decisionSubscriptions,
+            licenses: lic.length, revoked: lic.length - live.length, trials: metrics.trialKeysSent,
+            trialActivated: metrics.trialActivated, trialActive: metrics.trialActive,
             emailed: lic.filter((l) => l.sentAt).length, activated: live.filter((l) => l.slotsUsed > 0).length,
             slotsUsed: live.reduce((sum, l) => sum + Math.min(l.slotsUsed, cap), 0), slotsTotal: live.length * cap,
           },

@@ -11,7 +11,7 @@ const token = randomBytes(32).toString('base64url')
 const key = 'NF-TEST-LICENSE-FOR-PACKAGED-APP'
 let active = false
 let decisionSubscribed = false
-let legacyDecisionStatus = false
+let includedDecisionStatus = false
 let kind = 'lifetime'
 let trialExpiresAt = null
 let available = true
@@ -25,11 +25,11 @@ const server = createServer(async (req, res) => {
     if (!available) return reply(503, { error: 'Billing server unavailable.' })
     return reply(200, {
       configured: true, connected: true, mode: 'test',
-      lifetime: { amount: 3000, currency: 'usd', interval: null, active: active && kind === 'lifetime' },
+      lifetime: { amount: 1000000, currency: 'pkr', interval: null, active: active && kind === 'lifetime' },
       trial: { active: active && kind === 'trial' && Date.parse(trialExpiresAt) > Date.now(), expiresAt: trialExpiresAt },
-      decisionMaker: legacyDecisionStatus
-        ? { amount: 0, currency: 'usd', interval: null, active, status: 'included', includedPeople: 1000 }
-        : { amount: 300, currency: 'usd', interval: 'month', active: active && kind === 'lifetime' && decisionSubscribed, status: decisionSubscribed ? 'active' : 'not_subscribed', includedPeople: 0, monthlyLimit: 1000, monthlyUsed: 0, monthlyRemaining: 1000, renewsAt: null },
+      decisionMaker: includedDecisionStatus
+        ? { amount: 100000, currency: 'pkr', interval: null, periodDays: 30, active, status: 'included', includedPeople: 0, monthlyLimit: 1000, monthlyUsed: 0, monthlyRemaining: 1000, renewsAt: new Date(Date.now() + 86_400_000).toISOString() }
+        : { amount: 100000, currency: 'pkr', interval: null, periodDays: 30, active: active && kind === 'lifetime' && decisionSubscribed, status: decisionSubscribed ? 'paid' : 'not_subscribed', includedPeople: 0, monthlyLimit: 1000, monthlyUsed: 0, monthlyRemaining: 1000, renewsAt: null },
       license: { active: active && (kind === 'lifetime' || Date.parse(trialExpiresAt) > Date.now()), kind, last4: active ? 'TEST' : undefined, expiresAt: kind === 'trial' ? trialExpiresAt : null },
     })
   }
@@ -71,7 +71,8 @@ try {
   const page = await app.firstWindow()
   await page.locator('[data-view="settings"]').waitFor({ timeout: 45000 })
   for (const action of ['scraper', 'email', 'enrichment', 'import', 'export', 'job', 'decision']) {
-    check(`no license blocks ${action}`, /Activate an active 1-day trial or lifetime/.test(await failure(page, action)))
+    const message = await failure(page, action)
+    check(`no license blocks ${action}`, /Activate an active 1-day trial or lifetime/.test(message) || ['import', 'export', 'decision'].includes(action) && /Activate a Decision Makers or lifetime key/.test(message))
   }
   const activation = await page.evaluate((licenseKey) => window.desktop.billing.activate(licenseKey), key)
   check('valid activation unlocks this installation', activation.active === true)
@@ -79,16 +80,16 @@ try {
   check('active license allows enrichment to start', allowed.started === true)
   const imported = await page.evaluate(() => window.desktop.local.imports.websites([]))
   check('active license allows website import', imported.added === 0)
-  check('$30 lifetime key alone does not unlock Decision Makers', /\$3\/month subscription/.test(await failure(page, 'decision')))
-  legacyDecisionStatus = true
-  check('old included status cannot bypass the monthly subscription', /\$3\/month subscription/.test(await failure(page, 'decision')))
-  legacyDecisionStatus = false
+  check('lifetime key without an included or paid period does not unlock Decision Makers', /30-day pass/.test(await failure(page, 'decision')))
+  includedDecisionStatus = true
+  check('the included first month unlocks Decision Makers', /DataForSEO key/.test(await failure(page, 'decision')))
+  includedDecisionStatus = false
   decisionSubscribed = true
-  check('the Decision Makers subscription unlocks its action', /DataForSEO key/.test(await failure(page, 'decision')))
+  check('the paid Decision Makers pass unlocks its action', /DataForSEO key/.test(await failure(page, 'decision')))
   kind = 'trial'
   trialExpiresAt = new Date(Date.now() + 60_000).toISOString()
   check('1-day trial unlocks enrichment', (await page.evaluate(() => window.desktop.enrichment.start())).started === true)
-  check('1-day trial does not include the monthly Decision Makers plan', /\$3\/month subscription/.test(await failure(page, 'decision')))
+  check('1-day trial does not include Decision Makers passes', /30-day pass/.test(await failure(page, 'decision')))
   trialExpiresAt = new Date(Date.now() - 1_000).toISOString()
   check('expired trial blocks new scraper actions', /Activate an active 1-day trial or lifetime/.test(await failure(page, 'scraper')))
   kind = 'lifetime'
@@ -120,7 +121,7 @@ try {
   const archive = resolve('release/win-unpacked/resources/app.asar')
   const rendererPath = listPackage(archive).find((entry) => /dist\\assets\\index-[^\\]+\.js$/.test(entry))
   const renderer = rendererPath ? extractFile(archive, rendererPath.slice(1)).toString('utf8') : ''
-  check('packaged app contains the separate $3 monthly plan', renderer.includes('1,000 leads each month') && renderer.includes('$3/month'))
+  check('packaged app contains the separate Rs 1,000 Decision Makers pass', renderer.includes('1,000 searches for 30 days') && renderer.includes('Rs 1,000'))
   console.log('LICENSE_GATE_PASSED')
 } finally {
   if (app) await app.close()

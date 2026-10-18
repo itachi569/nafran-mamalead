@@ -54,6 +54,9 @@ const MAX_MAP_KEYWORDS = 8
 const NOTIFICATIONS_STORAGE_KEY = 'nafran.notifications'
 const NOTIFICATIONS_ENABLED_KEY = 'nafran.notifications.enabled'
 const LIFETIME_CHECKOUT_PENDING_KEY = 'nafran.billing.lifetimeCheckoutUntil'
+const DECISION_CHECKOUT_PENDING_KEY = 'nafran.billing.decisionCheckoutUntil'
+const DECISION_100_ALERT_KEY = 'nafran.billing.decision100Alert'
+const DECISION_500_ALERT_KEY = 'nafran.billing.decision500Alert'
 
 export type AppNotification = {
   id: string
@@ -112,6 +115,14 @@ function readPendingLifetimeCheckout(): number {
   } catch {
     return 0
   }
+}
+
+function readPendingDecisionCheckout(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const until = Number(window.localStorage.getItem(DECISION_CHECKOUT_PENDING_KEY))
+    return Number.isFinite(until) && until > Date.now() && until < Date.now() + 60 * 60 * 1000 ? until : 0
+  } catch { return 0 }
 }
 
 /** Cleans a pasted keyword list while preserving the user's order. */
@@ -614,6 +625,9 @@ export function useAppValues() {
   const [toast, setToast] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<AppNotification[]>(readStoredNotifications)
+  const [decisionCheckoutUntil, setDecisionCheckoutUntil] = useState(readPendingDecisionCheckout)
+  const [decisionPrompt, setDecisionPrompt] = useState('')
+  const [decisionAllowance, setDecisionAllowance] = useState<{ used: number; remaining: number; limit: number; renewsAt: string | null; status: string } | null>(null)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     state: 'disabled',
     version: null,
@@ -626,6 +640,7 @@ export function useAppValues() {
   const chatMessagesRef = useRef<{ who: string; text: string }[]>(INITIAL_CHAT_MESSAGES)
   const chatPendingRef = useRef(0)
   const assistantContextRef = useRef<Record<string, string | number | boolean | null>>({})
+  const decisionAlertPeriods = useRef(new Set<string>())
   const previousScrapeRunning = useRef(snapshot.running)
   const enrichmentWasActive = useRef(false)
   const runScrapeRef = useRef<() => void>(() => undefined)
@@ -694,6 +709,50 @@ export function useAppValues() {
     },
     [swWarn],
   )
+
+  const updateDecisionAllowance = useCallback((allowance: { monthlyUsed: number; monthlyRemaining: number; monthlyLimit: number; renewsAt: string | null; periodId?: string | null; status: string } | null) => {
+    if (!allowance) { setDecisionAllowance(null); return }
+    setDecisionAllowance({ used: allowance.monthlyUsed, remaining: allowance.monthlyRemaining, limit: allowance.monthlyLimit, renewsAt: allowance.renewsAt, status: allowance.status })
+    if (allowance.monthlyRemaining <= 0 || allowance.monthlyRemaining > 500 || !allowance.renewsAt) return
+    const period = allowance.periodId || allowance.renewsAt
+    const threshold = allowance.monthlyRemaining <= 100 ? 100 : 500
+    const alertId = `${period}:${threshold}`
+    if (decisionAlertPeriods.current.has(alertId)) return
+    const storageKey = threshold === 100 ? DECISION_100_ALERT_KEY : DECISION_500_ALERT_KEY
+    try {
+      if (window.localStorage.getItem(storageKey) === period) return
+      window.localStorage.setItem(storageKey, period)
+      if (threshold === 100) window.localStorage.setItem(DECISION_500_ALERT_KEY, period)
+    } catch { /* Keep the alert for this app session. */ }
+    decisionAlertPeriods.current.add(alertId)
+    if (threshold === 100) decisionAlertPeriods.current.add(`${period}:500`)
+    notify('Decision Makers allowance is low', `${allowance.monthlyRemaining} of ${allowance.monthlyLimit} searches remain in this period.`, 'info')
+  }, [notify])
+
+  useEffect(() => {
+    const bridge = window.desktop?.billing
+    if (!bridge) return
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const status = await bridge.status()
+        if (!cancelled && status.connected) updateDecisionAllowance(status.decisionMaker ?? null)
+      } catch { /* Keep the last verified allowance until the next connection. */ }
+    }
+    const onUsage = (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => {
+      updateDecisionAllowance({ monthlyUsed: usage.used, monthlyRemaining: usage.remaining, monthlyLimit: 1000, renewsAt: usage.renewsAt, periodId: usage.periodId, status: 'active' })
+    }
+    void refresh()
+    const unsubscribe = bridge.onDecisionUsage?.(onUsage)
+    window.addEventListener('focus', refresh)
+    window.addEventListener('nafran:billing-updated', refresh)
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('nafran:billing-updated', refresh)
+    }
+  }, [updateDecisionAllowance])
 
   const markNotificationsRead = useCallback(() => {
     setNotifications((current) => {
@@ -798,13 +857,40 @@ export function useAppValues() {
     chatPendingRef.current += 1
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.assist
     try {
+      // Quota answers come directly from the billing server. A language model must never guess a
+      // paid allowance or repeat an old local counter when another device has used searches.
+      if (/\b(decision\s*makers?|dm\s*searches?)\b/i.test(trimmed) && /\b(kitn\w*|baqi|baki|reh\w*|bach\w*|remaining|left|used|usage|quota|limit)\b/i.test(trimmed)) {
+        const status = await window.desktop?.billing?.status()
+        const quota = status?.connected ? status.decisionMaker : null
+        const romanUrdu = /\b(kitn\w*|baqi|baki|reh\w*|bach\w*|mera|mere|hain)\b/i.test(trimmed)
+        const response = !quota
+          ? romanUrdu ? 'Abhi billing server se Decision Maker allowance verify nahi ho rahi. Connection check karke dobara poochhein.' : 'I cannot verify your Decision Maker allowance right now. Check the billing connection and try again.'
+          : quota.monthlyRemaining > 0
+            ? romanUrdu ? `Aap ke ${quota.monthlyRemaining} of ${quota.monthlyLimit} Decision Maker searches baqi hain. Yeh count server se verify hua hai.` : `You have ${quota.monthlyRemaining} of ${quota.monthlyLimit} Decision Maker searches remaining in this period. This count is verified by the server.`
+            : romanUrdu ? 'Is period mein 0 Decision Maker searches baqi hain. Settings → Usage mein Rs 1,000 ka naya period khareed kar dobara use karein.' : 'You have 0 Decision Maker searches remaining. Open Settings → Usage to buy the next Rs 1,000 period.'
+        if (quota) updateDecisionAllowance(quota)
+        const withBot = [...chatMessagesRef.current, { who: 'bot', text: response }]
+        chatMessagesRef.current = withBot
+        setMsgs(withBot)
+        return
+      }
       if (!bridge?.chat) throw new Error('Nafran Assist is available in the Electron app once an AI provider key is configured.')
+      let context = assistantContextRef.current
+      if (/decision\s*makers?|dm\s*searches?/i.test(trimmed)) {
+        try {
+          const status = await window.desktop?.billing?.status()
+          if (status?.connected && status.decisionMaker) {
+            updateDecisionAllowance(status.decisionMaker)
+            context = { ...context, decisionMakerSearchesRemaining: status.decisionMaker.monthlyRemaining, decisionMakerSearchesLimit: status.decisionMaker.monthlyLimit, decisionMakerPeriodEndsAt: status.decisionMaker.renewsAt, decisionMakerAccessStatus: status.decisionMaker.status }
+          }
+        } catch { /* Other support questions still work when billing is offline. */ }
+      }
       const result = await bridge.chat({
         messages: next.slice(-16).map((message) => ({
           role: message.who === 'me' ? ('user' as const) : ('assistant' as const),
           content: message.text,
         })),
-        context: assistantContextRef.current,
+        context,
       })
       const response = result.text?.trim() || 'The AI provider returned an empty response.'
       const withBot = [...chatMessagesRef.current, { who: 'bot', text: response }]
@@ -820,7 +906,7 @@ export function useAppValues() {
       chatPendingRef.current = Math.max(0, chatPendingRef.current - 1)
       if (chatPendingRef.current === 0) setChatTyping(false)
     }
-  }, [])
+  }, [updateDecisionAllowance])
 
   const go = useCallback((next: string) => {
     setView(next)
@@ -832,6 +918,89 @@ export function useAppValues() {
     try { window.localStorage.setItem(LIFETIME_CHECKOUT_PENDING_KEY, String(until)) } catch { /* Poll for this session. */ }
     setLifetimeCheckoutUntil(until)
   }, [])
+
+  const startDecisionCheckoutWatch = useCallback(() => {
+    const until = Date.now() + 60 * 60 * 1000
+    try { window.localStorage.setItem(DECISION_CHECKOUT_PENDING_KEY, String(until)) } catch { /* Poll for this session. */ }
+    setDecisionCheckoutUntil(until)
+  }, [])
+
+  useEffect(() => {
+    const bridge = window.desktop?.billing
+    if (!bridge?.claimDecisionSubscribeHandoff || !bridge.onDecisionSubscribeHandoff) return
+    let busy = false
+    let cancelled = false
+    const openFromWebsite = async () => {
+      if (busy || cancelled) return
+      busy = true
+      try {
+        const claimed = await bridge.claimDecisionSubscribeHandoff()
+        if (!claimed || cancelled) return
+        go('settings')
+        setStab('plan')
+        const result = await bridge.checkout('decisionMaker', '')
+        if (!result.opened) throw new Error('Stripe Checkout could not be opened.')
+        startDecisionCheckoutWatch()
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Decision Makers payment could not be opened.'
+        notify('Decision Makers payment unavailable', message, 'error')
+        window.dispatchEvent(new CustomEvent('nafran:billing-error', { detail: message }))
+      } finally { busy = false }
+    }
+    const unsubscribe = bridge.onDecisionSubscribeHandoff(() => { void openFromWebsite() })
+    void openFromWebsite()
+    return () => { cancelled = true; unsubscribe() }
+  }, [go, notify, startDecisionCheckoutWatch])
+
+  useEffect(() => {
+    if (!decisionCheckoutUntil) return
+    const bridge = window.desktop?.billing
+    if (!bridge) return
+    let cancelled = false
+    let checking = false
+    const stopWatch = () => {
+      try { window.localStorage.removeItem(DECISION_CHECKOUT_PENDING_KEY) } catch { /* Session state still clears. */ }
+      setDecisionCheckoutUntil(0)
+    }
+    const checkPayment = async () => {
+      if (cancelled || checking) return
+      if (Date.now() >= decisionCheckoutUntil) { stopWatch(); return }
+      checking = true
+      try {
+        const status = await bridge.status()
+        if (cancelled || !status.connected) return
+        updateDecisionAllowance(status.decisionMaker ?? null)
+        if (status.decisionKeyEmail && !status.decisionKeyActive) {
+          stopWatch()
+          setLicenseNextStep(`Payment confirmed. Your Decision Makers key was sent to ${status.decisionKeyEmail}. Paste it below to activate this machine.`)
+          notify('Decision Makers key sent', `Your key was emailed to ${status.decisionKeyEmail}. Activate it in Settings → Account.`, 'success')
+          go('settings')
+          setStab('acct')
+          return
+        }
+        if (status.decisionMaker?.active && status.decisionMaker.status !== 'included') {
+          stopWatch()
+          setDecisionPrompt('')
+          const until = status.decisionMaker.renewsAt ? new Date(status.decisionMaker.renewsAt).toLocaleDateString() : 'the end of this paid period'
+          notify('Decision Makers are ready', `${status.decisionMaker.monthlyRemaining} of 1,000 searches are available until ${until}.`, 'success')
+          window.dispatchEvent(new Event('nafran:billing-updated'))
+          window.dispatchEvent(new Event('nafran:decision-payment-confirmed'))
+          go('settings')
+          setStab('plan')
+        }
+      } catch { /* Keep checking while Stripe Checkout finishes. */ }
+      finally { checking = false }
+    }
+    const onFocus = () => { void checkPayment() }
+    void checkPayment()
+    const timer = window.setInterval(() => void checkPayment(), 5000)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [decisionCheckoutUntil, go, notify, updateDecisionAllowance])
 
   // Stripe Checkout runs in the user's browser. Only the billing server's paid status can move
   // this app to the licence field; opening Checkout alone must never count as a purchase.
@@ -851,9 +1020,16 @@ export function useAppValues() {
       checking = true
       try {
         const status = await bridge.status()
+        if (!cancelled && status.purchaseError) {
+          stopWatch()
+          go('settings')
+          setStab('plan')
+          window.dispatchEvent(new CustomEvent('nafran:billing-error', { detail: status.purchaseError }))
+          return
+        }
         if (!cancelled && status.connected && status.lifetime?.active) {
           stopWatch()
-          setLicenseNextStep('Payment confirmed. When your lifetime key arrives by email, paste it below to activate this machine.')
+          setLicenseNextStep(`Payment confirmed. Your lifetime license key was sent to ${status.purchaseEmail ?? 'your email'}. Paste it below to activate this machine.`)
           go('settings')
           setStab('acct')
         }
@@ -1549,6 +1725,15 @@ export function useAppValues() {
     }
   }, [db, keep, listTarget, snapshot.leads, refreshLists, flash])
 
+  const showDecisionPassPrompt = useCallback((message: string) => {
+    if (!/decision makers?.*(?:pass|searches|access|subscribe|renew)|(?:pass|searches|subscribe|renew).*decision makers?/i.test(message)) return false
+    setDecisionPrompt('Your Decision Makers allowance has ended. Buy the next Rs 1,000 pass to unlock 1,000 searches for 30 days.')
+    setView('settings')
+    setStab('plan')
+    flash('Decision Makers paused. Buy the next 30-day pass in Settings → Usage.')
+    return true
+  }, [flash])
+
   /** Queues an enrichment pass over the leads still missing the kind of contact asked for. */
   const queueEnrichment = useCallback(
     async (kind: 'email' | 'phone' | 'social' | 'decision-maker'): Promise<number> => {
@@ -1575,11 +1760,12 @@ export function useAppValues() {
         flash(`${queued} ${queued === 1 ? 'lead' : 'leads'} queued for ${label} enrichment.`)
         return queued
       } catch (error) {
-        flash(error instanceof Error ? error.message : 'The pass could not be queued.')
+        const message = error instanceof Error ? error.message : 'The pass could not be queued.'
+        if (kind !== 'decision-maker' || !showDecisionPassPrompt(message)) flash(message)
         return 0
       }
     },
-    [db, flash],
+    [db, flash, showDecisionPassPrompt],
   )
   queueEnrichmentRef.current = queueEnrichment
 
@@ -1602,11 +1788,12 @@ export function useAppValues() {
         flash(`${result.queued} ${result.queued === 1 ? 'lead' : 'leads'} queued for ${label} enrichment.`)
         return result
       } catch (error) {
-        flash(error instanceof Error ? error.message : 'The pass could not be queued.')
+        const message = error instanceof Error ? error.message : 'The pass could not be queued.'
+        if (kind !== 'decision-maker' || !showDecisionPassPrompt(message)) flash(message)
         return { queued: 0, jobId: '' }
       }
     },
-    [db, flash],
+    [db, flash, showDecisionPassPrompt],
   )
 
   /** Checks the email addresses currently represented on the Email Finder page. */
@@ -2937,6 +3124,10 @@ export function useAppValues() {
     leadsWithSocialProfiles: dashboard?.withSocial ?? ledgerWithSocial,
     namedDecisionMakers: dashboard?.decisionMakers ?? people.rows.length,
     missingDecisionMakers: people.funnel?.missing ?? 0,
+    decisionMakerSearchesRemaining: decisionAllowance?.remaining ?? null,
+    decisionMakerSearchesLimit: decisionAllowance?.limit ?? null,
+    decisionMakerPeriodEndsAt: decisionAllowance?.renewsAt ?? null,
+    decisionMakerAccessStatus: decisionAllowance?.status ?? null,
     leadsReadyToExport: dashboard?.exportReady ?? 0,
     mapsRuns: runStats.runs,
     placesCaptured: runStats.places,
@@ -2979,8 +3170,10 @@ export function useAppValues() {
     activeTab: stab,
     activeView: view,
     lifetimeCheckoutPending: lifetimeCheckoutUntil > Date.now(),
+    decisionPrompt,
     licenseNextStep,
     startLifetimeCheckoutWatch,
+    startDecisionCheckoutWatch,
     clearLicenseNextStep: () => setLicenseNextStep(''),
     chDm: chDm ? '1' : '0',
     chEmails: chEmails ? '1' : '0',
@@ -3796,7 +3989,7 @@ export function useAppValues() {
         .run(selectedLeadIds)
         .then((result) => {
           if (result.error) {
-            flash(result.error)
+            if (!showDecisionPassPrompt(result.error)) flash(result.error)
             return
           }
           flash(`${result.queued} selected lead${result.queued === 1 ? '' : 's'} queued — owner search, then top-10 email search.`)
@@ -4356,6 +4549,7 @@ export function useAppValues() {
     toast,
     notifications,
     notificationsOpen,
+    notify,
     // The generated template treats the string "0" as hidden; keep this binding string-shaped so
     // the badge and Mark all read action disappear immediately when the last item is read.
       unreadNotifications: String(notifications.filter((item) => item.unread).length),

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppValues } from './useAppValues'
 import type { DesktopApi } from '../types/desktop'
+import './settings.css'
 
 type BillingStatus = Awaited<ReturnType<DesktopApi['billing']['status']>>
 type BillingInvoice = Awaited<ReturnType<DesktopApi['billing']['invoices']>>[number]
 const money = (amount: number, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(amount / 100)
+const pkr = (amount: number) => new Intl.NumberFormat('en-PK', { maximumFractionDigits: 0 }).format(amount / 100)
 
 const card = { padding: '22px 24px', borderRadius: '22px', background: '#F5F5F4' } as const
 const muted = { color: '#5A5F5C', fontSize: '13px', lineHeight: 1.5 } as const
@@ -18,7 +20,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const [invoices, setInvoices] = useState<BillingInvoice[]>([])
   const [billingBusy, setBillingBusy] = useState(false)
   const [billingError, setBillingError] = useState('')
-  const [lifetimeEmail, setLifetimeEmail] = useState('')
   const [trialOpen, setTrialOpen] = useState(false)
   const [trialEmail, setTrialEmail] = useState('')
   const [trialBusy, setTrialBusy] = useState(false)
@@ -80,10 +81,44 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const refreshBilling = useCallback(async () => {
     setBillingError('')
     if (!billingApi) return setBilling({ configured: false, connected: false, message: 'Desktop billing bridge is unavailable.' })
-    try { setBilling(await billingApi.status()); window.dispatchEvent(new Event('nafran:billing-updated')) }
+    try {
+      const status = await billingApi.status()
+      setBilling(status)
+      window.dispatchEvent(new Event('nafran:billing-updated'))
+      return status
+    }
     catch (error) { setBilling({ configured: true, connected: false, message: error instanceof Error ? error.message : 'Billing status could not be loaded.' }) }
   }, [billingApi])
   useEffect(() => { void refreshBilling() }, [refreshBilling])
+  useEffect(() => {
+    const onFocus = () => { void refreshBilling() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refreshBilling])
+  useEffect(() => {
+    const onConfirmed = () => { void refreshBilling() }
+    window.addEventListener('nafran:decision-payment-confirmed', onConfirmed)
+    return () => window.removeEventListener('nafran:decision-payment-confirmed', onConfirmed)
+  }, [refreshBilling])
+  useEffect(() => billingApi?.onDecisionUsage?.((usage) => {
+    setBilling((current) => current.decisionMaker ? {
+      ...current,
+      decisionMaker: {
+        ...current.decisionMaker,
+        monthlyUsed: usage.used,
+        monthlyRemaining: usage.remaining,
+        renewsAt: usage.renewsAt,
+        periodId: usage.periodId,
+        active: usage.remaining > 0,
+        status: usage.remaining > 0 ? current.decisionMaker.status : current.decisionMaker.status === 'included' ? 'included_exhausted' : 'paid_exhausted',
+      },
+    } : current)
+  }), [billingApi])
+  useEffect(() => {
+    const onBillingError = (event: Event) => setBillingError((event as CustomEvent<string>).detail)
+    window.addEventListener('nafran:billing-error', onBillingError)
+    return () => window.removeEventListener('nafran:billing-error', onBillingError)
+  }, [])
   useEffect(() => {
     if (V.licenseNextStep) void refreshBilling()
   }, [V.licenseNextStep, refreshBilling])
@@ -111,29 +146,35 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   }
   const startLifetimeCheckout = async () => {
     if (!billingApi) return
+    if (!lifetimePlanReady) { setBillingError('PKR Checkout is not ready on the billing server yet. No payment was opened.'); return }
     setBillingBusy(true)
     setBillingError('')
     try {
-      const result = await billingApi.checkout('lifetime', lifetimeEmail)
+      const result = await billingApi.checkout('lifetime', '')
       if (!result.opened) throw new Error('Stripe Checkout could not be opened.')
       V.startLifetimeCheckoutWatch()
-      setBillingError('Finish payment in Stripe. The licence field will open here automatically after payment is verified.')
+      setBillingError('Enter your email and card on Stripe Checkout. Once your key is emailed, Account will open automatically.')
     } catch (error) {
-      setBillingError(error instanceof Error ? error.message : 'Stripe could not be opened.')
+      setBillingError(error instanceof Error ? error.message : 'Stripe Checkout could not be opened.')
     } finally {
       setBillingBusy(false)
     }
   }
   const startDecisionCheckout = async () => {
     if (!billingApi) return
+    if (!decisionPlanSupported) {
+      setBillingError('Decision Makers payment is paused because the connected billing server has not been updated to the Rs 1,000 plan. No payment page was opened.')
+      return
+    }
     setBillingBusy(true)
     setBillingError('')
     try {
       const result = await billingApi.checkout('decisionMaker', '')
       if (!result.opened) throw new Error('Stripe Checkout could not be opened.')
-      setBillingError('Finish the $3/month subscription in Stripe, then refresh billing here.')
+      V.startDecisionCheckoutWatch()
+      setBillingError('Complete the Rs 1,000 PKR payment in Stripe. Once verified, 1,000 Decision Maker searches will unlock here for 30 days. There is no automatic renewal.')
     } catch (error) {
-      setBillingError(error instanceof Error ? error.message : 'Subscription checkout could not be opened.')
+      setBillingError(error instanceof Error ? error.message : 'Decision Makers pass checkout could not be opened.')
     } finally { setBillingBusy(false) }
   }
   const activateLicense = async () => {
@@ -150,9 +191,13 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     setBillingError('')
     setLicenseNotice(null)
     try {
-      await billingApi.activate(key)
+      const activation = await billingApi.activate(key)
       setLicenseKey('')
-      await refreshBilling()
+      const status = await refreshBilling()
+      if (activation.kind === 'decision' && status?.decisionMaker?.active) {
+        const until = status.decisionMaker.renewsAt ? new Date(status.decisionMaker.renewsAt).toLocaleDateString() : 'the end of this pass'
+        V.notify('Decision Makers are ready', `${status.decisionMaker.monthlyRemaining} of 1,000 searches are available until ${until}.`, 'success')
+      }
       setLicenseStepNotice('')
       V.clearLicenseNextStep()
       setLicenseNotice({ kind: 'success', message: 'License activated on this machine.' })
@@ -205,38 +250,72 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     ['Social lookups', V.usedSocialLookups, V.meterSocial],
     ['Decision-maker lookups', V.usedDmLookups, V.meterDm],
   ] as const
-  const decisionPlanSupported = billing.decisionMaker?.available !== false && billing.decisionMaker?.amount === 300 && billing.decisionMaker.interval === 'month' && billing.decisionMaker.monthlyLimit === 1000
+  const lifetimePlanReady = billing.lifetime?.currency === 'pkr' && billing.lifetime.amount === 1000000 && billing.lifetime.interval === null
+  const decisionPlanSupported = billing.decisionMaker?.available !== false && billing.decisionMaker?.currency === 'pkr' && billing.decisionMaker?.amount === 100000 && billing.decisionMaker.periodDays === 30 && billing.decisionMaker.monthlyLimit === 1000
   const decisionActive = Boolean(decisionPlanSupported && billing.decisionMaker?.active)
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+  const paymentSetupMessage = billing.connected && (!lifetimePlanReady || !decisionPlanSupported)
+    ? `Payments are paused: the connected server reports ${billing.lifetime?.currency === 'pkr' ? `Rs ${pkr(billing.lifetime.amount)}` : 'an unavailable price'} for Lifetime and ${billing.decisionMaker?.currency === 'pkr' ? `Rs ${pkr(billing.decisionMaker.amount)}` : 'an unavailable price'} for Decision Makers. This app requires Rs 10,000 and Rs 1,000 respectively. The billing server needs the matching checkout update before either payment page can open.`
+    : ''
+  return <div className="settings-page">
     {licenseNotice && <div data-license-notice="1" role={licenseNotice.kind === 'error' ? 'alert' : 'status'} style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 220, display: 'flex', alignItems: 'flex-start', gap: '12px', width: 'min(400px,calc(100vw - 40px))', padding: '14px 16px', borderRadius: '16px', background: licenseNotice.kind === 'error' ? '#F9E8E5' : '#E7EFE2', border: `1px solid ${licenseNotice.kind === 'error' ? '#D78278' : '#9DB58D'}`, color: '#1C1C1C', boxShadow: '0 18px 44px -22px rgba(28,28,28,.55)', fontSize: '13px', lineHeight: 1.5 }}>
       <strong style={{ flex: 1 }}>{licenseNotice.message}</strong><button type="button" aria-label="Dismiss license notice" onClick={() => setLicenseNotice(null)} style={{ border: 0, background: 'transparent', font: 'inherit', cursor: 'pointer', lineHeight: 1 }}>×</button>
     </div>}
-    <header>
-      <h1 style={{ margin: 0, fontSize: '32px', fontWeight: 400 }}>Workspace &amp; Settings</h1>
-      <p style={{ ...muted, margin: '7px 0 0' }}>{V.workspaceName} · local workspace on this device</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px' }}><span data-billing-status="1" style={muted}>{billing.connected ? `Stripe ${billing.mode} mode connected` : billing.message}</span><button type="button" onClick={() => void refreshBilling()} style={button}>Refresh billing</button></div>
-      {billingError && <p role="status" style={muted}>{billingError}</p>}
+    <header className="settings-header">
+      <h1>Workspace &amp; Settings</h1>
+      <p>{V.workspaceName} · local workspace on this device</p>
+      <div className="settings-header-status"><span data-billing-status="1">{billing.connected ? `Stripe ${billing.mode} mode connected` : billing.message}</span><button type="button" onClick={() => void refreshBilling()}>Refresh billing</button></div>
+      {billingError && <p className="settings-billing-message" role="status">{billingError}</p>}
     </header>
-    <div data-settings="1" style={{ display: 'grid', gridTemplateColumns: 'minmax(170px,220px) minmax(0,1fr)', gap: '16px', alignItems: 'start' }}>
-      <nav data-tabs="1" data-active={V.activeTab} aria-label="Settings sections" style={{ ...card, padding: '12px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-        {tabs.map(([id, label, click]) => <button key={id} data-stab={id} type="button" onClick={click} aria-current={V.activeTab === id ? 'page' : undefined} style={{ ...button, textAlign: 'left', borderRadius: '12px', background: V.activeTab === id ? '#DDE3D6' : 'transparent' }}>{label}</button>)}
+    <div data-settings="1" className="settings-layout">
+      <nav data-tabs="1" data-active={V.activeTab} aria-label="Settings sections" className="settings-tabs">
+        {tabs.map(([id, label, click]) => <button key={id} data-stab={id} type="button" onClick={click} aria-current={V.activeTab === id ? 'page' : undefined}>{label}</button>)}
       </nav>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
+      <div className="settings-content">
         {V.tabPlan && <>
-          {billing.connected && billing.lifetime && <section data-card="1" style={card}>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>MamaLead billing</h2>
-            <p style={muted}>Prices and purchase status are verified with Stripe{billing.mode === 'test' ? ' test mode' : ''}.</p>
-            <div style={row}><span style={{ flex: 1 }}>Lifetime · unlimited Maps leads · one-time</span><strong>{money(billing.lifetime.amount, billing.lifetime.currency)}</strong><span>{billing.lifetime.active ? 'Purchased' : 'Not purchased'}</span>{!billing.lifetime.active && <form onSubmit={(event) => { event.preventDefault(); void startLifetimeCheckout() }} style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}><input aria-label="Email for lifetime key" type="email" autoComplete="email" required value={lifetimeEmail} onChange={(event) => setLifetimeEmail(event.target.value)} placeholder="Email for lifetime key" style={{ padding: '9px 12px', border: '1px solid #CBD2C6', borderRadius: '10px', background: '#FFFFFF', font: 'inherit' }} /><button type="submit" disabled={billingBusy || !billingApi || V.lifetimeCheckoutPending} style={button}>{V.lifetimeCheckoutPending ? 'Waiting for payment…' : 'Buy Lifetime'}</button></form>}</div>
-            <div style={row}><span style={{ flex: 1 }}>Decision Makers · 1,000 leads each month</span><strong>$3/month</strong><span>{decisionActive ? `${billing.decisionMaker!.monthlyRemaining} left this month` : !decisionPlanSupported ? 'Server update pending' : 'Not subscribed'}</span>{!decisionActive && <button type="button" disabled={billingBusy || !billingApi || !decisionPlanSupported || billing.license?.kind !== 'lifetime' || !billing.license?.active} onClick={() => void startDecisionCheckout()} style={button}>Subscribe</button>}</div>
-            {decisionActive && billing.decisionMaker?.renewsAt && <p style={muted}>Decision Makers renews {new Date(billing.decisionMaker.renewsAt).toLocaleDateString()}.</p>}
-            <div style={row}><span style={{ flex: 1 }}>1-day trial · up to 300 Maps leads across all keywords</span><strong>Free</strong>{billing.trial?.active ? <span>Active until {new Date(billing.trial.expiresAt!).toLocaleString()}</span> : trialSent ? <button type="button" onClick={V.goTabAcct} style={button}>Enter key in Account</button> : <button type="button" data-trial-open="1" disabled={trialBusy} onClick={() => setTrialOpen(true)} style={button}>Get 1-day trial key</button>}</div>
-            {billing.trial?.active && billing.mapsLeads?.limit != null && <p data-trial-maps-usage="1" style={{ ...muted, margin: '8px 0 0' }}>{billing.mapsLeads.used ?? 0} of {billing.mapsLeads.limit} Maps leads used · {billing.mapsLeads.remaining ?? 0} remaining across all searches.</p>}
-            {!billing.trial?.active && <p style={{ ...muted, margin: '4px 0 0' }}>Enter your email, receive a trial key, then activate it in Account. The 24 hours start at activation.</p>}
-            {!billing.trial?.active && trialOpen && (!trialSent || trialCorrecting) && <form data-trial-form="1" onSubmit={(event) => { event.preventDefault(); void requestTrial() }} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: '10px', marginTop: '12px' }}>
-              <label htmlFor="desktop-trial-email" style={{ display: 'flex', flex: '1 1 240px', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>{trialCorrecting ? 'Correct email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" ref={trialEmailInput} type="email" autoComplete="email" required value={trialEmail} onChange={(event) => setTrialEmail(event.target.value)} placeholder="you@example.com" style={{ padding: '10px', border: '1px solid #CBD2C6', borderRadius: '10px', background: '#FFFFFF', font: 'inherit' }} /></label>
-              <button type="submit" disabled={trialBusy} style={button}>{trialBusy ? 'Sending…' : trialCorrecting ? 'Send replacement key' : 'Email my 1-day key'}</button>
-            </form>}
-            {trialNotice && <p data-trial-notice="1" role="status" style={{ ...muted, margin: '10px 0 0' }}>{trialNotice}</p>}
+          {billing.connected && billing.lifetime && <section data-card="1" className="billing-stage">
+            <div className="billing-stage-heading">
+              <div><h2>MamaLead billing</h2><p>{lifetimePlanReady ? `Prices and purchase status are verified with Stripe${billing.mode === 'test' ? ' test mode' : ''}.` : 'PKR Checkout update pending on the billing server. Payment is paused until the prices match.'}</p></div>
+              <span className="billing-status-pill">{billing.lifetime.active ? 'Purchased' : lifetimePlanReady ? 'Not purchased' : 'PKR setup pending'}</span>
+            </div>
+            {paymentSetupMessage && <p data-checkout-setup-alert="1" role="status" className="billing-setup-alert">{paymentSetupMessage}</p>}
+            <div className="billing-offer">
+              <div className="billing-offer-top"><span className="billing-offer-badge"><span aria-hidden="true" className="billing-offer-dot" />LIFETIME ACCESS</span><span>Unlimited lookups · first 30 days of Decision Makers included</span></div>
+              <div className="billing-offer-body">
+                <div className="billing-offer-price-block">
+                  <div className="billing-offer-price-line"><div className="billing-offer-price"><span>Rs</span>{pkr(1000000)}</div><span className="billing-offer-price-unit">PKR · one-time</span></div>
+                  <p>Pay once for unlimited Maps, email, phone and social lookups. Your lifetime key arrives by email after payment.</p>
+                </div>
+                <div className="billing-offer-steps">
+                  <div className="billing-offer-eyebrow">HOW IT WORKS</div>
+                  <div><span>01</span> Enter your email and card on Stripe</div>
+                  <div><span>02</span> Receive your lifetime key by email</div>
+                  <div><span>03</span> Paste the key in Account to activate</div>
+                </div>
+              </div>
+              <div className="billing-offer-benefits" aria-label="Lifetime plan benefits"><span>✓ Unlimited Maps leads</span><span>✓ Unlimited email lookups</span><span>✓ Unlimited phone lookups</span><span>✓ Unlimited social lookups</span><span>✓ 1,000 Decision Maker searches in your first 30 days</span></div>
+              <div className="billing-offer-bottom">
+                {billing.lifetime.active ? <button type="button" onClick={V.goTabAcct} className="billing-offer-button">Open Account <span aria-hidden="true">↗</span></button> : <button type="button" data-lifetime-buy="1" disabled={billingBusy || !billingApi || !lifetimePlanReady} onClick={() => void startLifetimeCheckout()} className="billing-offer-button">{!lifetimePlanReady ? 'Payment setup pending' : billingBusy ? 'Opening Stripe…' : 'Buy now'} <span aria-hidden="true">↗</span></button>}
+                <p>{billing.lifetime.active ? 'Your lifetime purchase is verified. Enter the emailed key in Account to activate this machine and start your 30 included Decision Makers days.' : lifetimePlanReady ? 'Enter your email and card directly on Stripe Checkout. Your lifetime key will be sent to that email after payment.' : 'Checkout will be available after the billing server has the Rs 10,000 PKR Stripe price.'}</p>
+              </div>
+            </div>
+            <div className="billing-plan-grid">
+              <div className="billing-plan-card">
+                <div className="billing-plan-heading"><h3>Decision Makers · 1,000 searches for 30 days</h3><span className="billing-plan-pill">{decisionActive ? billing.decisionMaker?.status === 'included' ? `Included · ${billing.decisionMaker.monthlyRemaining} left` : `${billing.decisionMaker!.monthlyRemaining} left` : billing.decisionMaker?.status?.endsWith('_exhausted') ? '1,000 searches used' : billing.license?.kind === 'lifetime' && billing.license.active ? 'Next pass available' : 'Standalone pass available'}</span></div>
+                <div className="billing-plan-action"><strong>Rs 1,000<span>/30 days</span></strong>{!decisionActive && <button type="button" data-decision-subscribe="1" disabled={billingBusy || !billingApi || !decisionPlanSupported} onClick={() => billing.decisionKeyEmail && !billing.decisionKeyActive ? V.goTabAcct() : void startDecisionCheckout()}>{!decisionPlanSupported ? 'Payment setup pending' : billingBusy ? 'Opening Stripe…' : billing.decisionKeyEmail && !billing.decisionKeyActive ? 'Activate emailed key' : billing.decisionKeyActive || billing.coreLicenseActive && billing.license?.kind === 'lifetime' ? 'Subscribe again' : 'Subscribe now'}</button>}</div>
+                {decisionActive && billing.decisionMaker?.renewsAt && <p className="billing-plan-note">{billing.decisionMaker.status === 'included' ? 'Included access ends' : 'Current pass ends'} {new Date(billing.decisionMaker.renewsAt).toLocaleDateString()}. {billing.decisionMaker.monthlyRemaining} searches remain.</p>}
+                {!decisionActive && <p className="billing-plan-note">{V.decisionPrompt || (billing.license?.kind === 'lifetime' ? 'Your lifetime key includes 1,000 searches for the first 30 days. When those searches or 30 days end, buy another pass to continue.' : 'Pay securely in Stripe. This app unlocks your 1,000 Decision Maker searches after payment is verified; no separate key is emailed.')} Each pass is paid manually; there is no automatic renewal.{!decisionPlanSupported ? ' Billing connection is unavailable right now; Subscribe will show the connection error.' : ''}</p>}
+              </div>
+              <div className="billing-plan-card">
+                <div className="billing-plan-heading"><h3>1-day trial · up to 300 Maps leads across all keywords</h3>{billing.trial?.active && <span className="billing-plan-pill">Active</span>}</div>
+                <div className="billing-plan-action"><strong>Free</strong>{billing.trial?.active ? <span className="billing-plan-date">Until {new Date(billing.trial.expiresAt!).toLocaleString()}</span> : trialSent ? <button type="button" onClick={V.goTabAcct}>Enter key in Account</button> : <button type="button" data-trial-open="1" disabled={trialBusy} onClick={() => setTrialOpen(true)}>Get 1-day trial key</button>}</div>
+                {billing.trial?.active && billing.mapsLeads?.limit != null ? <p data-trial-maps-usage="1" className="billing-plan-note">{billing.mapsLeads.used ?? 0} of {billing.mapsLeads.limit} Maps leads used · {billing.mapsLeads.remaining ?? 0} remaining.</p> : <p className="billing-plan-note">Enter your email, receive a trial key, then activate it in Account. The 24 hours start at activation.</p>}
+                {!billing.trial?.active && trialOpen && (!trialSent || trialCorrecting) && <form data-trial-form="1" className="billing-trial-form" onSubmit={(event) => { event.preventDefault(); void requestTrial() }}>
+                  <label htmlFor="desktop-trial-email">{trialCorrecting ? 'Correct email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" ref={trialEmailInput} type="email" autoComplete="email" required value={trialEmail} onChange={(event) => setTrialEmail(event.target.value)} placeholder="you@example.com" /></label>
+                  <button type="submit" disabled={trialBusy}>{trialBusy ? 'Sending…' : trialCorrecting ? 'Send replacement key' : 'Email my 1-day key'}</button>
+                </form>}
+                {trialNotice && <p data-trial-notice="1" role="status" className="billing-plan-note">{trialNotice}</p>}
+              </div>
+            </div>
           </section>}
           <section data-maps-plan-guide="1" style={{ ...card, background: '#F5F5F4', border: '1px solid #E4E7DF' }}>
             <p style={{ ...muted, margin: 0, fontSize: '11px', fontWeight: 600, letterSpacing: '.16em', textTransform: 'uppercase' }}>Maps scraper allowance</p>
@@ -279,7 +358,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
         {V.tabAcct && <>
           <section data-card="1" style={card}>
             <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Nafran license</h2>
-            <p style={muted}>{billing.license?.active ? `${billing.license.kind === 'trial' ? '1-day trial' : 'Lifetime license'} active on this machine${billing.license.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license.email ? ` · ${billing.license.email}` : ''}.` : 'Paste the trial or lifetime key from your email to unlock this machine.'}</p>
+            <p style={muted}>{billing.license?.active ? `${billing.license.kind === 'trial' ? '1-day trial' : billing.license.kind === 'decision' ? billing.license.last4 ? 'Decision Makers key' : 'Decision Makers pass' : 'Lifetime license'} active on this machine${billing.license.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license.email ? ` · ${billing.license.email}` : ''}.` : 'Paste a trial or lifetime key from your email to unlock this machine. Decision Makers passes activate automatically after payment in this app.'}</p>
             {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" style={{ ...muted, margin: '10px 0', color: '#315F2D' }}>{licenseStepNotice || V.licenseNextStep}</p>}
             {trialSent && !trialCorrectionUsed && !billing.trial?.active && <button type="button" data-trial-change-email="1" onClick={() => { setTrialCorrecting(true); setTrialOpen(true); setTrialNotice(''); V.goTabPlan() }} style={{ ...button, marginBottom: '10px' }}>Wrong email? Change it</button>}
             <form onSubmit={(event) => { event.preventDefault(); void activateLicense() }} style={row}><label htmlFor="nafran-license-key">License key</label><input id="nafran-license-key" ref={licenseKeyInput} type="password" value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value); setLicenseNotice(null) }} autoComplete="off" placeholder="NF-XXXX-XXXX-…" style={{ flex: '1 1 280px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button type="submit" disabled={licenseBusy} style={button}>{licenseBusy ? 'Activating…' : 'Activate'}</button></form>

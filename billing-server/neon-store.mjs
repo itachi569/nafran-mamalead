@@ -13,6 +13,9 @@ export function createNeonStore(databaseUrl) {
         customer_id text,
         lifetime_session_id text,
         decision_subscription_id text,
+        decision_pass_session_id text,
+        decision_pass_started_at timestamptz,
+        decision_pass_expires_at timestamptz,
         pending_lifetime_session_id text,
         pending_decision_session_id text,
         license_id text,
@@ -22,11 +25,19 @@ export function createNeonStore(databaseUrl) {
     `.then(async () => {
       await sql`alter table billing_installations add column if not exists pending_lifetime_session_id text`
       await sql`alter table billing_installations add column if not exists pending_decision_session_id text`
+      await sql`alter table billing_installations add column if not exists decision_pass_session_id text`
+      await sql`alter table billing_installations add column if not exists decision_pass_started_at timestamptz`
+      await sql`alter table billing_installations add column if not exists decision_pass_expires_at timestamptz`
       await sql`alter table billing_installations add column if not exists license_id text`
       await sql`alter table billing_installations add column if not exists license_slot integer`
+      await sql`alter table billing_installations add column if not exists decision_license_id text`
+      await sql`alter table billing_installations add column if not exists decision_license_slot integer`
+      await sql`alter table billing_installations add column if not exists purchase_error text`
+      await sql`alter table billing_installations add column if not exists refunded_duplicate_session_id text`
       await sql`alter table billing_installations add column if not exists device_id text`
       await sql`alter table billing_installations add column if not exists device_platform text`
       await sql`create unique index if not exists billing_license_slot on billing_installations (license_id, license_slot) where license_id is not null and license_slot is not null`
+      await sql`create unique index if not exists billing_decision_license_slot on billing_installations (decision_license_id, decision_license_slot) where decision_license_id is not null and decision_license_slot is not null`
       await sql`
         create table if not exists billing_licenses (
           id text primary key,
@@ -69,6 +80,8 @@ export function createNeonStore(databaseUrl) {
         primary key (owner_id, period_key, subject_hash),
         unique (owner_id, period_key, slot)
       )`
+      await sql`create table if not exists billing_decision_passes (session_id text primary key, owner_id text not null, customer_id text not null, started_at timestamptz not null, expires_at timestamptz not null)`
+      await sql`create table if not exists billing_decision_licenses (id text primary key, installation_id text not null unique, purchase_session_id text not null unique, key_hash text not null unique, key_last4 text not null, encrypted_key text, email text not null unique, created_at timestamptz not null, sent_at timestamptz, revoked_at timestamptz, activated_at timestamptz)`
     }).catch((error) => { schemaReady = undefined; throw error })
     return schemaReady
   }
@@ -94,6 +107,10 @@ export function createNeonStore(databaseUrl) {
       await ready()
       if (product === 'lifetime') await sql`update billing_installations set pending_lifetime_session_id = ${sessionId} where id = ${id}`
       else await sql`update billing_installations set pending_decision_session_id = ${sessionId} where id = ${id}`
+    },
+    async markDuplicateDecision(id, sessionId) {
+      await ready()
+      await sql`update billing_installations set pending_decision_session_id = null, purchase_error = ${'This email already has a Decision Makers key. The duplicate payment was refunded; use the original key.'}, refunded_duplicate_session_id = ${sessionId} where id = ${id}`
     },
     async reserveLifetimeEmail(email, installationId) {
       await ready()
@@ -130,6 +147,11 @@ export function createNeonStore(databaseUrl) {
       await ready()
       await sql`update billing_installations set decision_subscription_id = ${subscriptionId}, pending_decision_session_id = null, customer_id = ${customerId} where id = ${id}`
     },
+    async saveDecisionPass(id, sessionId, customerId, startedAt, expiresAt) {
+      await ready()
+      await sql`insert into billing_decision_passes (session_id, owner_id, customer_id, started_at, expires_at) values (${sessionId}, ${id}, ${customerId}, ${startedAt}, ${expiresAt}) on conflict do nothing`
+      await sql`update billing_installations set decision_pass_session_id = ${sessionId}, decision_pass_started_at = ${startedAt}, decision_pass_expires_at = ${expiresAt}, pending_decision_session_id = null, customer_id = ${customerId} where id = ${id} and (pending_decision_session_id = ${sessionId} or decision_pass_session_id = ${sessionId})`
+    },
     async countDecisionUses(ownerId, periodKey) {
       await ready()
       return Number((await sql`select count(*)::int as n from billing_decision_lead_uses where owner_id = ${ownerId} and period_key = ${periodKey}`)[0]?.n ?? 0)
@@ -159,6 +181,41 @@ export function createNeonStore(databaseUrl) {
       const trial = (await sql`select t.* from billing_trial_licenses t join billing_installations i on i.license_id = t.id where i.id = ${installationId} limit 1`)[0]
       return trial ? { ...trial, kind: 'trial' } : null
     },
+    async decisionLicenseForInstallation(installationId) {
+      await ready()
+      return (await sql`select l.* from billing_decision_licenses l join billing_installations i on i.decision_license_id = l.id where i.id = ${installationId} limit 1`)[0] ?? null
+    },
+    async decisionLicenseForPurchase(installationId) {
+      await ready()
+      return (await sql`select * from billing_decision_licenses where installation_id = ${installationId} limit 1`)[0] ?? null
+    },
+    async decisionLicenseByEmail(email) {
+      await ready()
+      return (await sql`select * from billing_decision_licenses where lower(email) = ${email} limit 1`)[0] ?? null
+    },
+    async createDecisionLicense({ id, installationId, purchaseSessionId, keyHash, keyLast4, encryptedKey, email, createdAt }) {
+      await ready()
+      return (await sql`insert into billing_decision_licenses (id, installation_id, purchase_session_id, key_hash, key_last4, encrypted_key, email, created_at) values (${id}, ${installationId}, ${purchaseSessionId}, ${keyHash}, ${keyLast4}, ${encryptedKey}, ${email}, ${createdAt}) returning *`)[0]
+    },
+    async markDecisionLicenseSent(id, sentAt) {
+      await ready()
+      await sql`update billing_decision_licenses set sent_at = ${sentAt}, encrypted_key = null where id = ${id}`
+    },
+    async countDecisionLicenseActivations(licenseId) {
+      await ready()
+      return Number((await sql`select count(*)::int as n from billing_installations where decision_license_id = ${licenseId}`)[0]?.n ?? 0)
+    },
+    async attachDecisionLicense(installationId, licenseId, activatedAt, max) {
+      await ready()
+      for (let slot = 1; slot <= max; slot += 1) {
+        const updated = await sql`update billing_installations set decision_license_id = ${licenseId}, decision_license_slot = ${slot} where id = ${installationId} and not exists (select 1 from billing_installations where decision_license_id = ${licenseId} and decision_license_slot = ${slot}) returning id`
+        if (updated.length) {
+          await sql`update billing_decision_licenses set activated_at = coalesce(activated_at, ${activatedAt}) where id = ${licenseId}`
+          return true
+        }
+      }
+      return false
+    },
     async licenseForPurchase(installationId) {
       await ready()
       return (await sql`select * from billing_licenses where installation_id = ${installationId} limit 1`)[0] ?? null
@@ -168,7 +225,9 @@ export function createNeonStore(databaseUrl) {
       const paid = (await sql`select * from billing_licenses where key_hash = ${keyHash} limit 1`)[0]
       if (paid) return { ...paid, kind: 'lifetime' }
       const trial = (await sql`select * from billing_trial_licenses where key_hash = ${keyHash} limit 1`)[0]
-      return trial ? { ...trial, kind: 'trial' } : null
+      if (trial) return { ...trial, kind: 'trial' }
+      const decision = (await sql`select * from billing_decision_licenses where key_hash = ${keyHash} limit 1`)[0]
+      return decision ? { ...decision, kind: 'decision' } : null
     },
     async trialById(id) {
       await ready()

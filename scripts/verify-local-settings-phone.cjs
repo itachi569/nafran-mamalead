@@ -57,7 +57,7 @@ async function main() {
     const stripeStatus = await page.evaluate(() => window.desktop.billing.status())
     if (stripeStatus.connected) {
       const billingText = await page.locator('body').innerText()
-      check('Settings shows verified Stripe products', /\$30\.00/.test(billingText) && /\$3\.00/.test(billingText) && /Stripe test mode connected/.test(billingText))
+      check('Settings shows PKR offer and manual 30-day pass', /Rs\s*10,000/.test(billingText) && /Rs 1,000\/30 days/.test(billingText) && (stripeStatus.lifetime?.currency === 'pkr' || /PKR setup pending/.test(billingText)))
     } else {
       check('Settings explains when the billing server is offline', /Billing server|billing server|fetch failed/.test(await page.locator('[data-billing-status="1"]').innerText()))
     }

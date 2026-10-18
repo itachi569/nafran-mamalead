@@ -27,6 +27,26 @@ import {
 } from './email-verifier'
 
 const devUrl = process.env.VITE_DEV_SERVER_URL
+const decisionSubscribeLink = 'mamalead://subscribe/decision-makers'
+let pendingDecisionSubscribe = process.argv.includes(decisionSubscribeLink)
+const ownsInstance = app.requestSingleInstanceLock()
+if (!ownsInstance) app.quit()
+if (ownsInstance) {
+  const receiveSubscribeLink = (url: string) => {
+    if (url !== decisionSubscribeLink) return
+    pendingDecisionSubscribe = true
+    const window = BrowserWindow.getAllWindows()[0]
+    if (!window) return
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.focus()
+    window.webContents.send('billing:decision-subscribe-handoff')
+  }
+  app.on('second-instance', (_event, args) => {
+    if (args.includes(decisionSubscribeLink)) receiveSubscribeLink(decisionSubscribeLink)
+  })
+  app.on('open-url', (event, url) => { event.preventDefault(); receiveSubscribeLink(url) })
+}
 const runner = new ScrapeRunner()
 let enricher: EnrichmentRunner | null = null
 
@@ -443,6 +463,11 @@ function stripePage(raw: string, allowed: string[]): string {
 }
 
 ipcMain.handle('billing:status', () => billingStatus())
+ipcMain.handle('billing:claim-decision-subscribe-handoff', () => {
+  const claimed = pendingDecisionSubscribe
+  pendingDecisionSubscribe = false
+  return claimed
+})
 ipcMain.handle('billing:request-trial', (_event, payload: { email: string; replaceExisting?: boolean } | string) =>
   billingRequestTrial(typeof payload === 'string' ? payload : payload.email, typeof payload === 'string' ? false : payload.replaceExisting === true))
 ipcMain.handle('billing:checkout', async (_event, payload: { product: 'lifetime' | 'decisionMaker'; email: string }) => {
@@ -1139,7 +1164,8 @@ function queueEnrichmentForNewLeads(_names: string[]): void {
   }
 }
 
-app.whenReady().then(() => {
+if (ownsInstance) app.whenReady().then(() => {
+  if (app.isPackaged) app.setAsDefaultProtocolClient('mamalead')
   if (existsSync(savedLeadsAngelPath()) && safeStorage.isEncryptionAvailable()) {
     try {
       const saved = JSON.parse(safeStorage.decryptString(readFileSync(savedLeadsAngelPath()))) as LeadsAngelCredentials
@@ -1182,12 +1208,14 @@ app.whenReady().then(() => {
   repository.requeueInterruptedJobs(workspaceId)
   registerLocalDatabase(db, repository, (leadIds) => {
     // Imported websites are named after their host; the worker fills in the real business.
-    if (leadIds.length) void enricher?.drain()
+    if (leadIds.length) void requireActiveLicense('lifetime').then(() => enricher?.drain()).catch(() => undefined)
   }, async (channel, payload) => {
     if (channel === 'db:jobs:queue') {
       const kind = (payload as { kind?: string } | undefined)?.kind
       await requireActiveLicense(kind === 'decision-maker' || kind === 'deep' ? 'decisionMaker' : 'lifetime')
-    } else if (channel === 'db:imports:websites' || channel === 'db:imports:social' || channel === 'db:exports:write') {
+    } else if (channel === 'db:imports:websites' || channel === 'db:exports:write') {
+      try { await requireActiveLicense('lifetime') } catch { await requireActiveLicense('decisionMaker') }
+    } else if (channel === 'db:imports:social') {
       await requireActiveLicense()
     }
   })
@@ -1195,7 +1223,10 @@ app.whenReady().then(() => {
   enricher = new EnrichmentRunner(db, repository, {
     onProgress: (progress) => broadcast('enrichment:progress', progress),
     authorize: (kind, fresh) => requireActiveLicense(kind === 'deep' || kind === 'decision-maker' ? 'decisionMaker' : 'lifetime', fresh),
-    consumeDecisionLead: billingConsumeDecisionMaker,
+    consumeDecisionLead: async (leadId) => {
+      const usage = await billingConsumeDecisionMaker(leadId)
+      broadcast('billing:decision-usage', usage)
+    },
     // The window owns the DataForSEO credential: it is entered in Settings, it is read back from
     // there, and it is handed over for as long as the app is open. Nothing here writes it down.
     deepKey: () => deepApiKey,

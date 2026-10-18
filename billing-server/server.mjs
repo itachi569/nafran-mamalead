@@ -1,15 +1,23 @@
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
-import { createReadStream, mkdirSync } from 'node:fs'
+import { createReadStream, mkdirSync, readFileSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { createBillingHandler, HttpError } from './core.mjs'
 
 export function createBillingServer(options = {}) {
-  const env = options.env ?? process.env
+  const env = { ...(options.env ?? process.env) }
+  try {
+    const installerPath = readFileSync(new URL('./.installer-path', import.meta.url), 'utf8').trim()
+    if (!/^\/opt\/billing\/artifacts\/[A-Za-z0-9._-]+\.exe$/.test(installerPath)) throw new Error('The server installer path file is invalid.')
+    env.LOCAL_DOWNLOAD_PATH = installerPath
+    env.LOCAL_DOWNLOAD_FILENAME = basename(installerPath)
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
   const port = Number(env.BILLING_PORT ?? 38747)
   const dbPath = resolve(env.BILLING_DB_PATH ?? './billing-server/data/billing.db')
   mkdirSync(dirname(dbPath), { recursive: true })
@@ -17,6 +25,7 @@ export function createBillingServer(options = {}) {
   db.exec(`create table if not exists installations (
     id text primary key, token_hash text not null unique, customer_id text,
     lifetime_session_id text, decision_subscription_id text,
+    decision_pass_session_id text, decision_pass_started_at text, decision_pass_expires_at text,
     pending_lifetime_session_id text, pending_decision_session_id text, license_id text, license_slot integer, created_at text not null
   )`)
   db.exec(`create table if not exists licenses (
@@ -25,7 +34,10 @@ export function createBillingServer(options = {}) {
     activated_at text
   )`)
   db.exec('create unique index if not exists licenses_one_per_purchase on licenses (installation_id)')
-  db.exec('create unique index if not exists licenses_one_per_email on licenses (lower(email))')
+  // Older test data can contain multiple licenses for one email. The Checkout
+  // reservation table below prevents new duplicates without breaking startup.
+  const repeatedEmails = db.prepare('select 1 from licenses group by lower(email) having count(*) > 1 limit 1').get()
+  if (!repeatedEmails) db.exec('create unique index if not exists licenses_one_per_email on licenses (lower(email))')
   db.exec(`create table if not exists lifetime_checkout_emails (
     email text primary key, installation_id text not null unique,
     session_id text, customer_id text, created_at text not null default CURRENT_TIMESTAMP
@@ -52,14 +64,30 @@ export function createBillingServer(options = {}) {
     primary key (owner_id, period_key, subject_hash),
     unique (owner_id, period_key, slot)
   )`)
+  db.exec(`create table if not exists decision_passes (
+    session_id text primary key, owner_id text not null, customer_id text not null,
+    started_at text not null, expires_at text not null
+  )`)
+  db.exec(`create table if not exists decision_licenses (
+    id text primary key, installation_id text not null unique, purchase_session_id text not null unique, key_hash text not null unique,
+    key_last4 text not null, encrypted_key text, email text not null unique,
+    created_at text not null, sent_at text, revoked_at text, activated_at text
+  )`)
   const columns = new Set(db.prepare('pragma table_info(installations)').all().map((column) => column.name))
   if (!columns.has('pending_lifetime_session_id')) db.exec('alter table installations add column pending_lifetime_session_id text')
   if (!columns.has('pending_decision_session_id')) db.exec('alter table installations add column pending_decision_session_id text')
+  if (!columns.has('decision_pass_session_id')) db.exec('alter table installations add column decision_pass_session_id text')
+  if (!columns.has('decision_pass_started_at')) db.exec('alter table installations add column decision_pass_started_at text')
+  if (!columns.has('decision_pass_expires_at')) db.exec('alter table installations add column decision_pass_expires_at text')
   if (!columns.has('license_id')) db.exec('alter table installations add column license_id text')
   if (!columns.has('license_slot')) db.exec('alter table installations add column license_slot integer')
+  if (!columns.has('decision_license_id')) db.exec('alter table installations add column decision_license_id text')
+  if (!columns.has('decision_license_slot')) db.exec('alter table installations add column decision_license_slot integer')
   if (!columns.has('last_seen_at')) db.exec('alter table installations add column last_seen_at text')
   if (!columns.has('device_id')) db.exec('alter table installations add column device_id text')
   if (!columns.has('device_platform')) db.exec('alter table installations add column device_platform text')
+  if (!columns.has('purchase_error')) db.exec('alter table installations add column purchase_error text')
+  if (!columns.has('refunded_duplicate_session_id')) db.exec('alter table installations add column refunded_duplicate_session_id text')
   const licenseColumns = new Set(db.prepare('pragma table_info(licenses)').all().map((column) => column.name))
   if (!licenseColumns.has('encrypted_key')) db.exec('alter table licenses add column encrypted_key text')
   const trialColumns = new Set(db.prepare('pragma table_info(trial_licenses)').all().map((column) => column.name))
@@ -67,12 +95,16 @@ export function createBillingServer(options = {}) {
   const checkoutColumns = new Set(db.prepare('pragma table_info(lifetime_checkout_emails)').all().map((column) => column.name))
   if (!checkoutColumns.has('created_at')) db.exec('alter table lifetime_checkout_emails add column created_at text')
   db.exec('create unique index if not exists installations_license_slot on installations (license_id, license_slot) where license_id is not null and license_slot is not null')
+  db.exec('create unique index if not exists installations_decision_license_slot on installations (decision_license_id, decision_license_slot) where decision_license_id is not null and decision_license_slot is not null')
   const store = {
     create: async (id, tokenHash, createdAt, deviceId, devicePlatform) => { db.prepare('insert into installations (id, token_hash, created_at, device_id, device_platform) values (?, ?, ?, ?, ?)').run(id, tokenHash, createdAt, deviceId, devicePlatform) },
     bindDevice: async (id, deviceId, devicePlatform) => Boolean(db.prepare('update installations set device_id = ?, device_platform = coalesce(device_platform, ?) where id = ? and (device_id is null or device_id = ?)').run(deviceId, devicePlatform, id, deviceId).changes),
     byTokenHash: async (tokenHash) => db.prepare('select * from installations where token_hash = ?').get(tokenHash),
     byId: async (id) => db.prepare('select * from installations where id = ?').get(id),
     savePending: async (id, product, sessionId) => { db.prepare(product === 'lifetime' ? 'update installations set pending_lifetime_session_id = ? where id = ?' : 'update installations set pending_decision_session_id = ? where id = ?').run(sessionId, id) },
+    clearPurchaseError: async (id) => { db.prepare('update installations set purchase_error = null where id = ?').run(id) },
+    markDuplicateLifetime: async (id, sessionId) => { db.prepare('update installations set pending_lifetime_session_id = null, purchase_error = ?, refunded_duplicate_session_id = ? where id = ?').run('This email already has a lifetime account. The duplicate payment was refunded; use the original license key.', sessionId, id) },
+    markDuplicateDecision: async (id, sessionId) => { db.prepare('update installations set pending_decision_session_id = null, purchase_error = ?, refunded_duplicate_session_id = ? where id = ?').run('This email already has a Decision Makers key. The duplicate payment was refunded; use the original key.', sessionId, id) },
     reserveLifetimeEmail: async (email, installationId) => {
       const inserted = db.prepare('insert or ignore into lifetime_checkout_emails (email, installation_id, created_at) values (?, ?, ?)').run(email, installationId, new Date().toISOString()).changes > 0
       const row = db.prepare('select * from lifetime_checkout_emails where email = ? and installation_id = ?').get(email, installationId)
@@ -88,6 +120,16 @@ export function createBillingServer(options = {}) {
     lifetimeLicenseByEmail: async (email) => db.prepare('select * from licenses where lower(email) = ? limit 1').get(email),
     saveLifetime: async (id, sessionId, customerId) => { db.prepare('update installations set lifetime_session_id = ?, pending_lifetime_session_id = null, customer_id = ? where id = ?').run(sessionId, customerId, id) },
     saveDecision: async (id, subscriptionId, customerId) => { db.prepare('update installations set decision_subscription_id = ?, pending_decision_session_id = null, customer_id = ? where id = ?').run(subscriptionId, customerId, id) },
+    saveDecisionPass: async (id, sessionId, customerId, startedAt, expiresAt) => {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        db.prepare('insert or ignore into decision_passes (session_id, owner_id, customer_id, started_at, expires_at) values (?, ?, ?, ?, ?)')
+          .run(sessionId, id, customerId, startedAt, expiresAt)
+        db.prepare('update installations set decision_pass_session_id = ?, decision_pass_started_at = ?, decision_pass_expires_at = ?, pending_decision_session_id = null, customer_id = ? where id = ? and (pending_decision_session_id = ? or decision_pass_session_id = ?)')
+          .run(sessionId, startedAt, expiresAt, customerId, id, sessionId, sessionId)
+        db.exec('COMMIT')
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+    },
     countDecisionUses: async (ownerId, periodKey) => db.prepare('select count(*) as n from decision_lead_uses where owner_id = ? and period_key = ?').get(ownerId, periodKey).n,
     reserveDecisionUse: async (ownerId, periodKey, subjectHash, limit) => {
       db.exec('BEGIN IMMEDIATE')
@@ -105,12 +147,34 @@ export function createBillingServer(options = {}) {
       const trial = db.prepare('select t.* from trial_licenses t join installations i on i.license_id = t.id where i.id = ?').get(installationId)
       return trial ? { ...trial, kind: 'trial' } : null
     },
+    decisionLicenseForInstallation: async (installationId) => db.prepare('select l.* from decision_licenses l join installations i on i.decision_license_id = l.id where i.id = ?').get(installationId) ?? null,
+    decisionLicenseForPurchase: async (installationId) => db.prepare('select * from decision_licenses where installation_id = ?').get(installationId) ?? null,
+    decisionLicenseByEmail: async (email) => db.prepare('select * from decision_licenses where lower(email) = ?').get(email) ?? null,
+    createDecisionLicense: async ({ id, installationId, purchaseSessionId, keyHash, keyLast4, encryptedKey, email, createdAt }) => {
+      db.prepare('insert into decision_licenses (id, installation_id, purchase_session_id, key_hash, key_last4, encrypted_key, email, created_at) values (?, ?, ?, ?, ?, ?, ?, ?)').run(id, installationId, purchaseSessionId, keyHash, keyLast4, encryptedKey, email, createdAt)
+      return db.prepare('select * from decision_licenses where id = ?').get(id)
+    },
+    markDecisionLicenseSent: async (id, sentAt) => { db.prepare('update decision_licenses set sent_at = ?, encrypted_key = null where id = ?').run(sentAt, id) },
+    countDecisionLicenseActivations: async (licenseId) => db.prepare('select count(*) as count from installations where decision_license_id = ?').get(licenseId).count,
+    attachDecisionLicense: async (installationId, licenseId, activatedAt, max) => {
+      for (let slot = 1; slot <= max; slot += 1) {
+        try {
+          const result = db.prepare('update installations set decision_license_id = ?, decision_license_slot = ? where id = ?').run(licenseId, slot, installationId)
+          if (!result.changes) return false
+          db.prepare('update decision_licenses set activated_at = coalesce(activated_at, ?) where id = ?').run(activatedAt, licenseId)
+          return true
+        } catch (error) { if (!String(error).includes('UNIQUE constraint failed')) throw error }
+      }
+      return false
+    },
     licenseForPurchase: async (installationId) => db.prepare('select * from licenses where installation_id = ? limit 1').get(installationId),
     licenseByHash: async (keyHash) => {
       const paid = db.prepare('select * from licenses where key_hash = ?').get(keyHash)
       if (paid) return { ...paid, kind: 'lifetime' }
       const trial = db.prepare('select * from trial_licenses where key_hash = ?').get(keyHash)
-      return trial ? { ...trial, kind: 'trial' } : null
+      if (trial) return { ...trial, kind: 'trial' }
+      const decision = db.prepare('select * from decision_licenses where key_hash = ?').get(keyHash)
+      return decision ? { ...decision, kind: 'decision' } : null
     },
     trialById: async (id) => db.prepare('select * from trial_licenses where id = ?').get(id),
     trialByEmail: async (email) => db.prepare('select * from trial_licenses where email = ?').get(email),

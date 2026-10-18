@@ -19,7 +19,7 @@ const service = createBillingServer({
   },
   fetch: async (url) => {
     assert.match(url, /\/prices\/price_lifetime$/)
-    return { ok: true, json: async () => ({ active: true, currency: 'usd', unit_amount: 3000, recurring: null }) }
+    return { ok: true, json: async () => ({ active: true, currency: 'pkr', unit_amount: 1000000, recurring: null }) }
   },
   sendEmail: async (message) => { sent.push(message); return true },
 })

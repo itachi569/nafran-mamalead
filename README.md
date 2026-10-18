@@ -132,7 +132,7 @@ required to activate app features, not to download the installer. Anonymous down
 be counted; the customer's email and device become known after key activation. Device IDs and
 client checks raise the cost of casual sharing, but cannot make a client app impossible to patch.
 The server checks
-Stripe for the $30 one-time Lifetime Deal, which unlocks the core features. Decision Makers requires a separate $3/month subscription with 1,000 server-metered leads per paid billing period, shared across licensed devices. A free 1-day trial
+Stripe for the Rs 10,000 one-time Lifetime Deal, which unlocks the core features and includes 1,000 Decision Maker searches for the first 30 days after activation. Decision Makers can also be bought alone: the first Rs 1,000 payment emails a separate key for activation. Each manually purchased pass provides 1,000 server-metered searches for 30 days, shared across licensed devices. Saved alerts appear when 500 and 100 searches remain. There is no automatic renewal; a new pass can be purchased immediately when a quota is exhausted. A free 1-day trial
 key is emailed once per address and browser identity, activates on one machine, and expires 24 hours
 after first activation. The server creates hosted Checkout and portal sessions and reads real invoices. A new workspace is no longer
 marked as a paid Pro subscription, and local invoice exports no longer generate sample charges.

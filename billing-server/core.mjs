@@ -1,4 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { buildLicenseEmail } from './license-email.mjs'
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -8,6 +10,22 @@ const hash = (token) => createHash('sha256').update(token).digest('hex')
 const normalizeLicense = (value) => String(value ?? '').trim().toUpperCase().replace(/\s+/g, '')
 const licensePattern = /^NF(?:-[A-Z0-9]{4}){10}$/
 const TRIAL_MAP_LEADS_LIMIT = 300
+const INCLUDED_DECISION_DAYS = 30
+const DECISION_MONTHLY_LIMIT = 1000
+const LIFETIME_PRICE = { amount: 1000000, currency: 'pkr' }
+const DECISION_PRICE = { amount: 100000, currency: 'pkr', interval: null, periodDays: 30 }
+const testLifetimePriceFile = new URL('./.lifetime-price-test', import.meta.url)
+const configuredLifetimePrice = (env) => {
+  if (!/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY ?? '')) return env.STRIPE_PRICE_LIFETIME ?? ''
+  try {
+    const id = readFileSync(testLifetimePriceFile, 'utf8').trim()
+    if (!/^price_[A-Za-z0-9]+$/.test(id)) throw new Error('The server test Lifetime Price file is invalid.')
+    return id
+  } catch (error) {
+    if (error?.code === 'ENOENT') return env.STRIPE_PRICE_LIFETIME ?? ''
+    throw error
+  }
+}
 const createLicenseKey = () => {
   const hex = randomBytes(20).toString('hex').toUpperCase()
   return `NF-${hex.match(/.{4}/g).join('-')}`
@@ -29,7 +47,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
   const publicUrl = new URL(env.BILLING_PUBLIC_URL ?? `http://127.0.0.1:${port}`)
   const key = env.STRIPE_SECRET_KEY ?? ''
   const mode = key.includes('_live_') ? 'live' : 'test'
-  const prices = { lifetime: env.STRIPE_PRICE_LIFETIME ?? '', decisionMaker: env.STRIPE_PRICE_DECISION_MAKER ?? '' }
+  const prices = { lifetime: configuredLifetimePrice(env), decisionMaker: env.STRIPE_PRICE_DECISION_MAKER ?? '' }
   if (!/^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(key)) throw new Error('A server-side Stripe key is required.')
   if (!/^price_[A-Za-z0-9]+$/.test(prices.lifetime)) throw new Error('The Lifetime Stripe Price ID is required.')
   if (publicUrl.username || publicUrl.password || publicUrl.search || publicUrl.hash || publicUrl.pathname !== '/' ||
@@ -63,10 +81,10 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     }
   }
 
-  async function stripe(path, fields) {
+  async function stripe(path, fields, idempotencyKey) {
     const response = await stripeFetch(`https://api.stripe.com/v1/${path}`, {
       method: fields ? 'POST' : 'GET',
-      headers: { authorization: `Bearer ${key}`, ...(fields ? { 'content-type': 'application/x-www-form-urlencoded' } : {}) },
+      headers: { authorization: `Bearer ${key}`, ...(fields ? { 'content-type': 'application/x-www-form-urlencoded' } : {}), ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}) },
       body: fields ? new URLSearchParams(fields) : undefined,
       signal: AbortSignal.timeout(20_000),
     })
@@ -93,18 +111,35 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
 
   async function price(id) {
     const item = await stripe(`prices/${encodeURIComponent(id)}`)
-    if (!item.active || item.currency !== 'usd') throw new HttpError(502, 'The configured Stripe Price is not active in USD.')
+    if (!item.active || item.currency !== 'pkr') throw new HttpError(502, 'The configured Stripe Price is not active in PKR.')
     return { amount: item.unit_amount, currency: item.currency, interval: item.recurring?.interval ?? null }
   }
 
-  async function paidLifetimeSession(session, installationId) {
+  async function verifiedCheckoutCharge(session, installationId) {
     if (session?.mode !== 'payment' || session?.status !== 'complete' || session?.payment_status !== 'paid' ||
       session?.client_reference_id !== installationId || session?.livemode !== (mode === 'live') ||
-      !/^pi_[A-Za-z0-9]+$/.test(session?.payment_intent ?? '')) return false
+      !/^pi_[A-Za-z0-9]+$/.test(session?.payment_intent ?? '')) return null
     const intent = await stripe(`payment_intents/${encodeURIComponent(session.payment_intent)}`)
-    if (intent.status !== 'succeeded' || !/^ch_[A-Za-z0-9]+$/.test(intent.latest_charge ?? '')) return false
+    if (intent.status !== 'succeeded' || !/^ch_[A-Za-z0-9]+$/.test(intent.latest_charge ?? '')) return null
     const charge = await stripe(`charges/${encodeURIComponent(intent.latest_charge)}`)
-    return charge.paid === true && charge.refunded !== true && Number(charge.amount_refunded ?? 0) === 0 && charge.disputed !== true
+    return charge.paid === true && charge.refunded !== true && Number(charge.amount_refunded ?? 0) === 0 && charge.disputed !== true ? charge : null
+  }
+
+  async function paidLifetimeSession(session, installationId) {
+    return Boolean(await verifiedCheckoutCharge(session, installationId))
+  }
+
+  async function activeDecisionPass(owner) {
+    if (!owner?.decision_pass_session_id || !owner.decision_pass_started_at || !owner.decision_pass_expires_at) return null
+    const start = Date.parse(owner.decision_pass_started_at)
+    const end = Date.parse(owner.decision_pass_expires_at)
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > Date.now() || end <= Date.now() ||
+      end - start !== DECISION_PRICE.periodDays * 86_400_000) return null
+    const session = await stripe(`checkout/sessions/${encodeURIComponent(owner.decision_pass_session_id)}`)
+    if (session.customer !== owner.customer_id || session.metadata?.product !== 'decisionMaker' ||
+      Number(session.amount_total) !== DECISION_PRICE.amount || session.currency !== 'pkr' ||
+      !(await verifiedCheckoutCharge(session, owner.id))) return null
+    return { key: `pass:${session.id}`, renewsAt: new Date(end).toISOString(), source: 'paid' }
   }
 
   async function activeDecisionPeriod(owner) {
@@ -123,17 +158,37 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     return { key: `${subscription.id}:${start}`, renewsAt: new Date(end * 1000).toISOString() }
   }
 
+  function includedDecisionPeriod(license) {
+    if (!license || license.kind === 'trial' || !license.activated_at) return null
+    const activated = new Date(license.activated_at).getTime()
+    if (!Number.isFinite(activated) || activated > Date.now()) return null
+    const ends = activated + INCLUDED_DECISION_DAYS * 24 * 60 * 60 * 1000
+    if (ends <= Date.now()) return null
+    return { key: `included:${license.id}:${new Date(activated).toISOString()}`, renewsAt: new Date(ends).toISOString(), source: 'included' }
+  }
+
   async function verifiedStatus(row) {
     for (const sessionId of [row.pending_lifetime_session_id, row.pending_decision_session_id]) {
       if (!sessionId) continue
       const pending = await stripe(`checkout/sessions/${encodeURIComponent(sessionId)}`)
-      if (pending.status === 'complete' && pending.payment_status === 'paid') await reconcile(sessionId)
+      if (pending.status === 'complete' && pending.payment_status === 'paid') {
+        const purchase = await reconcile(sessionId)
+        if (purchase.product === 'lifetime' && !purchase.duplicate && pending.metadata?.checkoutFlow === 'desktop') await issueLicense(purchase)
+        if (purchase.product === 'decisionMaker' && !purchase.duplicate && pending.metadata?.checkoutFlow === 'desktop-standalone') await issueDecisionLicense(purchase)
+      }
     }
     row = await store.byId(row.id)
+    if (row.decision_pass_session_id && !row.refunded_duplicate_session_id) {
+      const unsentDecisionKey = await store.decisionLicenseForPurchase?.(row.id)
+      if (unsentDecisionKey && !unsentDecisionKey.sent_at) await issueDecisionLicense(row)
+    }
     const lifetimePrice = await price(prices.lifetime)
-    if (lifetimePrice.amount !== 3000 || lifetimePrice.interval) throw new HttpError(502, 'The configured Lifetime Price must be $30 one-time.')
+    if (lifetimePrice.amount !== LIFETIME_PRICE.amount || lifetimePrice.interval) throw new HttpError(502, 'The configured Lifetime Price must be Rs 10,000 PKR one-time.')
     let lifetimeActive = false
     const linkedLicense = typeof store.licenseForInstallation === 'function' ? await store.licenseForInstallation(row.id) : null
+    const linkedDecisionLicense = typeof store.decisionLicenseForInstallation === 'function' ? await store.decisionLicenseForInstallation(row.id) : null
+    const purchasedLicense = typeof store.licenseForPurchase === 'function' ? await store.licenseForPurchase(row.id) : null
+    const purchasedDecisionLicense = typeof store.decisionLicenseForPurchase === 'function' ? await store.decisionLicenseForPurchase(row.id) : null
     const isTrial = linkedLicense?.kind === 'trial'
     const purchaseRow = linkedLicense && !isTrial ? await store.byId(linkedLicense.installation_id) : row
     if (purchaseRow?.lifetime_session_id) {
@@ -143,26 +198,42 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const trialExpiry = isTrial && linkedLicense.expires_at ? Date.parse(linkedLicense.expires_at) : 0
     const trialActive = Boolean(isTrial && !linkedLicense.revoked_at && linkedLicense.bound_installation_id === row.id && trialExpiry > Date.now())
     const licenseActive = Boolean(linkedLicense && !linkedLicense.revoked_at && (isTrial ? trialActive : lifetimeActive))
+    const decisionPurchaseRow = linkedDecisionLicense ? await store.byId(linkedDecisionLicense.installation_id) : null
+    const decisionPurchaseSession = decisionPurchaseRow && linkedDecisionLicense?.purchase_session_id
+      ? await stripe(`checkout/sessions/${encodeURIComponent(linkedDecisionLicense.purchase_session_id)}`) : null
+    const decisionLicenseActive = Boolean(linkedDecisionLicense?.sent_at && !linkedDecisionLicense.revoked_at && decisionPurchaseRow &&
+      decisionPurchaseSession?.metadata?.product === 'decisionMaker' && decisionPurchaseSession.customer === decisionPurchaseRow.customer_id &&
+      await verifiedCheckoutCharge(decisionPurchaseSession, decisionPurchaseRow.id))
     const trialMapUsage = isTrial && typeof store.trialMapUsage === 'function'
       ? await store.trialMapUsage(linkedLicense.id, TRIAL_MAP_LEADS_LIMIT)
       : null
-    let decisionPrice = { amount: 300, currency: 'usd', interval: 'month' }
-    if (prices.decisionMaker) {
-      decisionPrice = await price(prices.decisionMaker)
-      if (decisionPrice.amount !== 300 || decisionPrice.interval !== 'month') throw new HttpError(502, 'The configured Decision Makers Price must be $3 per month.')
-    }
-    const decisionPeriod = licenseActive && !isTrial ? await activeDecisionPeriod(purchaseRow) : null
-    const used = decisionPeriod ? await store.countDecisionUses(purchaseRow.id, decisionPeriod.key) : 0
+    const standalonePeriod = decisionLicenseActive ? await activeDecisionPass(decisionPurchaseRow) : null
+    const directPeriod = row.device_id && !linkedDecisionLicense && (!linkedLicense || isTrial) ? await activeDecisionPass(row) : null
+    const lifetimePaidPeriod = licenseActive && !isTrial ? await activeDecisionPass(purchaseRow) ?? await activeDecisionPeriod(purchaseRow) : null
+    const paidDecisionPeriod = standalonePeriod ?? directPeriod ?? lifetimePaidPeriod
+    const decisionPeriod = paidDecisionPeriod ?? (licenseActive && !isTrial ? includedDecisionPeriod(linkedLicense) : null)
+    const decisionOwner = standalonePeriod ? decisionPurchaseRow : directPeriod ? row : purchaseRow
+    const used = decisionPeriod ? await store.countDecisionUses(decisionOwner.id, decisionPeriod.key) : 0
+    const decisionRemaining = decisionPeriod ? Math.max(0, DECISION_MONTHLY_LIMIT - used) : 0
+    const decisionActive = Boolean(decisionPeriod && decisionRemaining > 0)
     return {
       configured: true, connected: true, mode,
       lifetime: { ...lifetimePrice, active: lifetimeActive },
+      purchaseError: row.purchase_error ?? null,
+      purchaseEmail: purchasedLicense?.sent_at ? purchasedLicense.email : null,
+      decisionKeyEmail: purchasedDecisionLicense?.sent_at ? purchasedDecisionLicense.email : null,
       trial: { active: trialActive, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null },
+      coreLicenseActive: licenseActive,
+      decisionKeyActive: decisionLicenseActive || Boolean(directPeriod),
       mapsLeads: isTrial
         ? { used: trialMapUsage?.used ?? 0, limit: TRIAL_MAP_LEADS_LIMIT, remaining: trialActive ? trialMapUsage?.remaining ?? 0 : 0 }
         : { used: null, limit: null, remaining: null },
-      decisionMaker: { ...decisionPrice, available: Boolean(prices.decisionMaker), active: Boolean(decisionPeriod), status: decisionPeriod ? 'active' : 'not_subscribed', includedPeople: 0, monthlyLimit: 1000, monthlyUsed: used, monthlyRemaining: decisionPeriod ? Math.max(0, 1000 - used) : 0, renewsAt: decisionPeriod?.renewsAt ?? null },
+      decisionMaker: { ...DECISION_PRICE, available: true, active: decisionActive, status: decisionPeriod ? paidDecisionPeriod ? decisionActive ? 'paid' : 'paid_exhausted' : decisionActive ? 'included' : 'included_exhausted' : 'not_subscribed', ownerKind: standalonePeriod || directPeriod ? 'decision' : 'lifetime', includedPeople: 0, monthlyLimit: DECISION_MONTHLY_LIMIT, monthlyUsed: used, monthlyRemaining: decisionRemaining, renewsAt: decisionPeriod?.renewsAt ?? null, periodId: decisionPeriod ? hash(decisionPeriod.key).slice(0, 16) : null },
       hasCustomer: Boolean(purchaseRow?.customer_id),
-      license: linkedLicense ? { active: licenseActive, kind: isTrial ? 'trial' : 'lifetime', email: linkedLicense.email, last4: linkedLicense.key_last4, activatedAt: linkedLicense.activated_at ?? null, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null } : { active: false },
+      license: licenseActive && linkedLicense ? { active: true, kind: isTrial ? 'trial' : 'lifetime', email: linkedLicense.email, last4: linkedLicense.key_last4, activatedAt: linkedLicense.activated_at ?? null, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null }
+        : directPeriod ? { active: true, kind: 'decision', activatedAt: row.decision_pass_started_at, expiresAt: row.decision_pass_expires_at }
+        : linkedDecisionLicense ? { active: decisionLicenseActive, kind: 'decision', email: linkedDecisionLicense.email, last4: linkedDecisionLicense.key_last4, activatedAt: linkedDecisionLicense.activated_at ?? null, expiresAt: null }
+          : linkedLicense ? { active: false, kind: isTrial ? 'trial' : 'lifetime', email: linkedLicense.email, last4: linkedLicense.key_last4 } : { active: false },
     }
   }
 
@@ -174,29 +245,65 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const product = session.metadata?.product
     if (!['lifetime', 'decisionMaker'].includes(product)) throw new HttpError(400, 'Unknown Checkout product.')
     const items = await stripe(`checkout/sessions/${encodeURIComponent(sessionId)}/line_items?limit=1`)
-    if (items.data?.[0]?.price?.id !== prices[product]) throw new HttpError(400, 'Checkout Price does not match this product.')
+    const line = items.data?.[0]
+    if (product === 'lifetime' && line?.price?.id !== prices.lifetime) throw new HttpError(400, 'Checkout Price does not match this product.')
     if (product === 'decisionMaker') {
-      if (session.mode !== 'subscription' || session.status !== 'complete' || session.payment_status !== 'paid' ||
-        session.client_reference_id !== row.id || !/^sub_[A-Za-z0-9]+$/.test(session.subscription ?? '')) throw new HttpError(409, 'Subscription payment is not active.')
-      const ownerStatus = await verifiedStatusForDecisionCheckout(row)
-      if (!ownerStatus) throw new HttpError(403, 'A lifetime licence is required for Decision Makers.')
-      const subscription = await stripe(`subscriptions/${encodeURIComponent(session.subscription)}`)
-      if (subscription.status !== 'active' || subscription.customer !== row.customer_id || subscription.livemode !== (mode === 'live') ||
-        !subscription.items?.data?.some((entry) => entry.price?.id === prices.decisionMaker) ||
-        !/^in_[A-Za-z0-9]+$/.test(subscription.latest_invoice ?? '')) throw new HttpError(409, 'Subscription is not active.')
-      const invoice = await stripe(`invoices/${encodeURIComponent(subscription.latest_invoice)}`)
-      if (invoice.status !== 'paid' || invoice.subscription !== subscription.id) throw new HttpError(409, 'Subscription invoice is not paid.')
-      await store.saveDecision(row.id, subscription.id, row.customer_id)
-      return { ...row, product }
+      if (row.refunded_duplicate_session_id === session.id) return { ...row, product, duplicate: true }
+      const standalone = session.metadata?.checkoutFlow === 'desktop-standalone'
+      const direct = session.metadata?.checkoutFlow === 'desktop-direct' && Boolean(row.device_id)
+      if (session.mode !== 'payment' || session.status !== 'complete' || session.payment_status !== 'paid' ||
+        session.client_reference_id !== row.id || !/^cus_[A-Za-z0-9]+$/.test(session.customer ?? '') ||
+        (row.customer_id && session.customer !== row.customer_id) ||
+        session.currency !== 'pkr' || Number(session.amount_total) !== DECISION_PRICE.amount ||
+        line?.price?.currency !== 'pkr' || Number(line.price.unit_amount) !== DECISION_PRICE.amount ||
+        line.price.recurring || Number(line.quantity) !== 1) throw new HttpError(409, 'Decision Makers payment is not valid.')
+      if (!standalone && !direct && !await verifiedStatusForDecisionCheckout(row) && !await store.decisionLicenseForPurchase?.(row.id)) throw new HttpError(403, 'Activate a lifetime or Decision Makers key first.')
+      const charge = await verifiedCheckoutCharge(session, row.id)
+      if (!charge || !Number.isSafeInteger(Number(charge.created))) throw new HttpError(409, 'Decision Makers payment has not settled.')
+      if (standalone) {
+        const email = String(session.customer_details?.email || session.customer_email || '').trim().toLowerCase()
+        if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(409, 'Stripe did not provide a valid email for your Decision Makers key.')
+        const existing = await store.decisionLicenseByEmail?.(email)
+        if (existing && existing.installation_id !== row.id) {
+          await stripe('refunds', { payment_intent: session.payment_intent, reason: 'duplicate' }, `duplicate-decision-${session.id}`)
+          await store.markDuplicateDecision(row.id, session.id)
+          return { ...row, product, duplicate: true }
+        }
+      }
+      const startedAt = new Date(Number(charge.created) * 1000).toISOString()
+      const expiresAt = new Date(Date.parse(startedAt) + DECISION_PRICE.periodDays * 86_400_000).toISOString()
+      await store.saveDecisionPass(row.id, session.id, session.customer, startedAt, expiresAt)
+      return { ...row, product, checkoutFlow: session.metadata?.checkoutFlow }
     }
+    if (row.refunded_duplicate_session_id === session.id) return { ...row, product, duplicate: true }
     if (!(await paidLifetimeSession(session, row.id))) throw new HttpError(409, 'Payment is not active.')
+    const email = String(session.customer_details?.email || session.customer_email || '').trim().toLowerCase()
+    if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(409, 'Stripe did not provide a valid customer email for this purchase.')
     const reserved = typeof store.lifetimeCheckoutForInstallation === 'function' ? await store.lifetimeCheckoutForInstallation(row.id) : null
     if (reserved && (reserved.session_id !== session.id || reserved.customer_id !== session.customer ||
-      reserved.email !== String(session.customer_details?.email || session.customer_email || '').trim().toLowerCase())) {
+      reserved.email !== email)) {
       throw new HttpError(409, 'Checkout email does not match this purchase.')
     }
+    if (!reserved) {
+      const existingLicense = await store.lifetimeLicenseByEmail(email)
+      const existingCheckout = await store.lifetimeCheckoutByEmail(email)
+      if (existingLicense || (existingCheckout && existingCheckout.installation_id !== row.id)) {
+        if (typeof store.markDuplicateLifetime !== 'function') throw new HttpError(503, 'Duplicate purchase protection is unavailable.')
+        await stripe('refunds', { payment_intent: session.payment_intent, reason: 'duplicate' }, `duplicate-lifetime-${session.id}`)
+        await store.markDuplicateLifetime(row.id, session.id)
+        return { ...row, product, duplicate: true }
+      }
+      const reservation = await store.reserveLifetimeEmail(email, row.id)
+      if (!reservation) {
+        if (typeof store.markDuplicateLifetime !== 'function') throw new HttpError(503, 'Duplicate purchase protection is unavailable.')
+        await stripe('refunds', { payment_intent: session.payment_intent, reason: 'duplicate' }, `duplicate-lifetime-${session.id}`)
+        await store.markDuplicateLifetime(row.id, session.id)
+        return { ...row, product, duplicate: true }
+      }
+      await store.saveLifetimeCheckout(email, row.id, session.id, session.customer)
+    }
     await store.saveLifetime(row.id, session.id, session.customer)
-    return { ...row, product }
+    return { ...row, product, checkoutFlow: session.metadata?.checkoutFlow }
   }
 
   async function verifiedStatusForDecisionCheckout(row) {
@@ -207,7 +314,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
 
   async function sendLicenseEmail(to, licenseKey, kind = 'lifetime', deliveryId = '') {
     const download = new URL('/#download', env.APP_PUBLIC_URL || publicUrl).toString()
-    if (sendEmail) return Boolean(await sendEmail({ to, licenseKey, download, kind, deliveryId }))
+    const content = buildLicenseEmail({ to, licenseKey, kind, download })
+    if (sendEmail) return Boolean(await sendEmail({ to, licenseKey, download, kind, deliveryId, ...content }))
     const apiKey = env.RESEND_API_KEY?.trim()
     const from = env.EMAIL_FROM?.trim()
     if (!apiKey || !from) return false
@@ -217,9 +325,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       body: JSON.stringify({
         from,
         to: [to],
-        subject: kind === 'trial' ? 'Your Nafran 1-day trial key' : 'Your Nafran Leads Scraper lifetime license',
-        text: `${kind === 'trial' ? 'Your trial lasts 24 hours from its first activation on one machine.' : 'Thank you for your purchase. Your lifetime license works on up to two machines.'}\n\nLicense key: ${licenseKey}\n\nDownload the installer at ${download}, then enter the key in Nafran Leads Scraper → Settings → Account.\n`,
-        html: `<p>${kind === 'trial' ? 'Your trial lasts 24 hours from its first activation on one machine.' : 'Thank you for your purchase. Your lifetime license works on up to two machines.'}</p><p><strong>License key:</strong> <code>${escapeHtml(licenseKey)}</code></p><p><a href="${escapeHtml(download)}">Download the installer</a>, then enter the key in Nafran Leads Scraper → Settings → Account.</p>`,
+        ...content,
       }),
       signal: AbortSignal.timeout(20_000),
     })
@@ -256,6 +362,42 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     if (!emailSent) throw new HttpError(503, 'License email could not be delivered. Please try again later.')
     await store.markLicenseSent(created.id, new Date().toISOString())
     return { licenseKey, email, emailSent: true, last4: licenseKey.slice(-4), downloadAvailable: downloadConfigured() }
+  }
+
+  async function issueDecisionLicense(row) {
+    if (!store.decisionLicenseForPurchase || !store.createDecisionLicense) throw new HttpError(503, 'Decision Makers license storage is not configured.')
+    const existing = await store.decisionLicenseForPurchase(row.id)
+    if (existing) {
+      if (!existing.sent_at) {
+        const pendingKey = decryptLicenseKey(existing.encrypted_key)
+        if (!await sendLicenseEmail(existing.email, pendingKey, 'decision', existing.id).catch(() => false)) throw new HttpError(503, 'Decision Makers key email could not be delivered. Please try again later.')
+        await store.markDecisionLicenseSent(existing.id, new Date().toISOString())
+      }
+      return { email: existing.email, emailSent: true, last4: existing.key_last4 }
+    }
+    const fresh = await store.byId(row.id)
+    if (!fresh?.decision_pass_session_id) throw new HttpError(409, 'Complete the Decision Makers payment first.')
+    const session = await stripe(`checkout/sessions/${encodeURIComponent(fresh.decision_pass_session_id)}`)
+    if (!await verifiedCheckoutCharge(session, row.id)) throw new HttpError(409, 'Decision Makers payment is not active.')
+    const email = String(session.customer_details?.email || session.customer_email || '').trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(409, 'Stripe did not provide an email for the Decision Makers key.')
+    const licenseKey = createLicenseKey()
+    let created
+    try {
+      created = await store.createDecisionLicense({ id: randomUUID(), installationId: row.id, purchaseSessionId: session.id, keyHash: hash(normalizeLicense(licenseKey)), keyLast4: licenseKey.slice(-4), encryptedKey: encryptLicenseKey(licenseKey), email, createdAt: new Date().toISOString() })
+    } catch (error) {
+      if (await store.decisionLicenseForPurchase(row.id)) return issueDecisionLicense(row)
+      const ownedByAnotherBuyer = await store.decisionLicenseByEmail?.(email)
+      if (ownedByAnotherBuyer && ownedByAnotherBuyer.installation_id !== row.id) {
+        await stripe('refunds', { payment_intent: session.payment_intent, reason: 'duplicate' }, `duplicate-decision-${session.id}`)
+        await store.markDuplicateDecision(row.id, session.id)
+        return { duplicate: true, emailSent: false }
+      }
+      throw error
+    }
+    if (!await sendLicenseEmail(email, licenseKey, 'decision', created.id).catch(() => false)) throw new HttpError(503, 'Decision Makers key email could not be delivered. Please try again later.')
+    await store.markDecisionLicenseSent(created.id, new Date().toISOString())
+    return { email, emailSent: true, last4: licenseKey.slice(-4) }
   }
 
   async function issueTrial(row, rawEmail, replaceExisting = false) {
@@ -304,16 +446,29 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const license = await store.licenseByHash(hash(normalized))
     if (!license || license.revoked_at) throw new HttpError(401, 'This license key is invalid or revoked.')
     const isTrial = license.kind === 'trial'
+    const isDecision = license.kind === 'decision'
     if (isTrial) {
       if (!license.sent_at) throw new HttpError(403, 'This trial key has not been delivered.')
       if (license.expires_at && Date.parse(license.expires_at) <= Date.now()) throw new HttpError(403, 'This 1-day trial has expired.')
       if (license.bound_installation_id && license.bound_installation_id !== row.id) throw new HttpError(409, 'This trial key is already active on another machine.')
+    } else if (isDecision) {
+      if (!license.sent_at) throw new HttpError(403, 'This Decision Makers key has not been delivered.')
+      const original = await store.byId(license.installation_id)
+      const session = original && await stripe(`checkout/sessions/${encodeURIComponent(license.purchase_session_id)}`)
+      if (!original || session?.metadata?.product !== 'decisionMaker' || session.customer !== original.customer_id || !await verifiedCheckoutCharge(session, original.id)) throw new HttpError(403, 'The payment behind this Decision Makers key is not active.')
     } else {
       const originalInstallation = await store.byId(license.installation_id)
       if (!originalInstallation || !(await verifiedStatus(originalInstallation)).lifetime.active) throw new HttpError(403, 'The purchase behind this license is not active.')
     }
     const current = await store.licenseForInstallation(row.id)
+    const currentDecision = isDecision ? await store.decisionLicenseForInstallation(row.id) : null
+    if (currentDecision?.id === license.id) return { active: true, kind: 'decision', email: license.email, last4: license.key_last4, activatedAt: license.activated_at ?? null, expiresAt: null }
     if (current?.id === license.id) return { active: true, kind: isTrial ? 'trial' : 'lifetime', email: license.email, last4: license.key_last4, activatedAt: license.activated_at ?? null, expiresAt: isTrial ? license.expires_at : null }
+    if (isDecision) {
+      const max = Math.max(1, Math.min(20, Number(env.LICENSE_MAX_ACTIVATIONS ?? 2)))
+      if (await store.countDecisionLicenseActivations(license.id) >= max || !await store.attachDecisionLicense(row.id, license.id, new Date().toISOString(), max)) throw new HttpError(409, `This Decision Makers key is already active on ${max} machines.`)
+      return { active: true, kind: 'decision', email: license.email, last4: license.key_last4, activatedAt: new Date().toISOString(), expiresAt: null }
+    }
     if (isTrial) {
       const activatedAt = new Date().toISOString()
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
@@ -413,8 +568,15 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (method === 'GET' && url.pathname === '/') return page('MamaLead billing', 'Return to MamaLead to view your billing status.')
       if (method === 'GET' && url.pathname === '/cancel') return page('Checkout cancelled', 'No purchase was completed. You can return to MamaLead.')
       if (method === 'GET' && url.pathname === '/return') {
-        await reconcile(url.searchParams.get('session_id') ?? '')
-        return page('Purchase confirmed', 'Your Stripe payment was verified. Return to MamaLead and refresh Billing.')
+        const purchase = await reconcile(url.searchParams.get('session_id') ?? '')
+        if (purchase.duplicate) return page('Duplicate payment refunded', purchase.product === 'decisionMaker' ? 'This email already has a Decision Makers key. Use the original key in MamaLead.' : 'This email already has a lifetime account. Use the original license key in MamaLead.')
+        if (purchase.product === 'lifetime' && purchase.checkoutFlow === 'desktop') await issueLicense(purchase)
+        if (purchase.product === 'decisionMaker' && purchase.checkoutFlow === 'desktop-standalone') {
+          const delivered = await issueDecisionLicense(purchase)
+          return delivered.duplicate ? page('Duplicate payment refunded', 'This email already has a Decision Makers key. Use the original key in MamaLead.') : page('Decision Makers key sent', 'Your payment was verified. Your Decision Makers key was emailed to you. Open Settings → Account in MamaLead and activate it.')
+        }
+        if (purchase.product === 'decisionMaker') return page('Decision Makers ready', 'Your payment was verified. Return to MamaLead; 1,000 Decision Maker searches are available for 30 days from payment. The app will refresh automatically.')
+        return page('Purchase confirmed', 'Your Stripe payment was verified. Return to MamaLead; the app will open the license field automatically once your license key has been emailed.')
       }
       if (method === 'POST' && url.pathname === '/webhooks/stripe') {
         const raw = await readBody()
@@ -422,7 +584,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         const event = JSON.parse(raw)
         if (event.type === 'checkout.session.completed' && event.data?.object?.id) {
           const purchase = await reconcile(event.data.object.id)
-          if (purchase.product === 'lifetime') await issueLicense(purchase)
+          if (purchase.product === 'lifetime' && !purchase.duplicate) await issueLicense(purchase)
+          if (purchase.product === 'decisionMaker' && !purchase.duplicate && purchase.checkoutFlow === 'desktop-standalone') await issueDecisionLicense(purchase)
         }
         if (event.type === 'customer.subscription.deleted' && event.data?.object?.id && typeof store.revokeDecision === 'function') await store.revokeDecision(event.data.object.id)
         if (event.id && typeof store.claimWebhookEvent === 'function') await store.claimWebhookEvent(event.id)
@@ -452,7 +615,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
         const row = await installation(authorization, deviceId, devicePlatform)
         if (method === 'GET' && url.pathname === '/v1/status') {
-          if (row.license_id && !deviceId) throw new HttpError(403, 'Update the app to verify this device before using a license.')
+          if ((row.license_id || row.decision_license_id) && !deviceId) throw new HttpError(403, 'Update the app to verify this device before using a license.')
           const status = await verifiedStatus(row)
           if (typeof store.markSeen === 'function') { try { await store.markSeen(row.id, new Date().toISOString()) } catch {} }
           return json(200, status)
@@ -462,7 +625,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           const { requested } = await jsonBody(readBody)
           if (!Number.isSafeInteger(requested) || requested < 1 || requested > 1600) throw new HttpError(400, 'Request between 1 and 1,600 Maps leads.')
           const status = await verifiedStatus(row)
-          if (!status.license?.active) throw new HttpError(403, 'Activate an active trial or lifetime license first.')
+          if (!status.license?.active || !['trial', 'lifetime'].includes(status.license.kind)) throw new HttpError(403, 'Activate an active trial or lifetime license first.')
           if (status.license.kind === 'lifetime') return json(200, { reservationId: null, allowed: requested, used: null, remaining: null })
           if (typeof store.reserveTrialMapLeads !== 'function') throw new HttpError(503, 'Trial Maps limit is not configured on this server.')
           const license = await store.licenseForInstallation(row.id)
@@ -489,16 +652,17 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           const { leadId } = await jsonBody(readBody)
           if (typeof leadId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leadId)) throw new HttpError(400, 'Invalid lead identity.')
           const status = await verifiedStatus(row)
-          if (!status.license?.active || !status.decisionMaker?.active) throw new HttpError(403, 'Decision Makers requires an active $3/month subscription and lifetime licence.')
-          const linkedLicense = await store.licenseForInstallation(row.id)
-          const ownerId = linkedLicense.installation_id
+          if (!status.license?.active || !status.decisionMaker?.renewsAt) throw new HttpError(403, 'Decision Makers access has ended. Buy a new Rs 1,000 pass to continue.')
+          const linkedLicense = status.decisionMaker.ownerKind === 'decision' ? await store.decisionLicenseForInstallation(row.id) : await store.licenseForInstallation(row.id)
+          const ownerId = linkedLicense?.installation_id ?? (status.decisionMaker.ownerKind === 'decision' && row.device_id && row.decision_pass_session_id ? row.id : null)
+          if (!ownerId) throw new HttpError(403, 'Buy a Decision Makers pass or activate a lifetime key first.')
           const owner = await store.byId(ownerId)
-          const period = await activeDecisionPeriod(owner)
-          if (!period) throw new HttpError(403, 'Decision Makers subscription is not active.')
+          const period = await activeDecisionPass(owner) ?? (status.decisionMaker.ownerKind === 'lifetime' ? await activeDecisionPeriod(owner) ?? includedDecisionPeriod(linkedLicense) : null)
+          if (!period) throw new HttpError(403, 'Decision Makers access is not active.')
           const subject = hash(`${deviceId}:${leadId}`)
-          const reserved = await store.reserveDecisionUse(ownerId, period.key, subject, 1000)
-          if (!reserved) throw new HttpError(429, 'This month’s 1,000 Decision Maker leads are used. Wait for renewal.')
-          return json(200, { used: reserved.used, remaining: Math.max(0, 1000 - reserved.used), renewsAt: period.renewsAt })
+          const reserved = await store.reserveDecisionUse(ownerId, period.key, subject, DECISION_MONTHLY_LIMIT)
+          if (!reserved) throw new HttpError(429, period.source === 'included' ? 'Your included 1,000 Decision Maker searches are used. Buy a new 30-day pass in Settings → Usage to continue.' : 'Your 1,000 Decision Maker searches are used. Buy a new 30-day pass in Settings → Usage to continue.')
+          return json(200, { used: reserved.used, remaining: Math.max(0, DECISION_MONTHLY_LIMIT - reserved.used), renewsAt: period.renewsAt, periodId: hash(period.key).slice(0, 16) })
         }
         if (method === 'POST' && url.pathname === '/v1/trial') {
           const { email, replaceExisting } = await jsonBody(readBody)
@@ -508,33 +672,66 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           if (mode === 'live' && publicUrl.protocol !== 'https:') throw new HttpError(503, 'Live Checkout requires a hosted HTTPS billing URL.')
           const { product, email: rawEmail } = await jsonBody(readBody)
           if (product === 'decisionMaker') {
-            if (!prices.decisionMaker || !/^price_[A-Za-z0-9]+$/.test(prices.decisionMaker)) throw new HttpError(503, 'Decision Makers subscription is not configured.')
-            const configuredPrice = await price(prices.decisionMaker)
-            if (configuredPrice.amount !== 300 || configuredPrice.interval !== 'month') throw new HttpError(502, 'Decision Makers must be $3 per month.')
+            if (!deviceId) throw new HttpError(403, 'Open the MamaLead desktop app to subscribe to Decision Makers.')
             const status = await verifiedStatus(row)
-            if (!status.license?.active || status.license.kind !== 'lifetime') throw new HttpError(403, 'Activate a lifetime licence before subscribing to Decision Makers.')
-            const license = await store.licenseForInstallation(row.id)
-            const owner = await store.byId(license.installation_id)
-            if (!owner?.customer_id) throw new HttpError(409, 'No Stripe customer is connected to this lifetime licence.')
-            if (status.decisionMaker?.active) throw new HttpError(409, 'Decision Makers is already subscribed.')
+            const lifetimeLicense = status.license?.active && status.license.kind === 'lifetime' ? await store.licenseForInstallation(row.id) : null
+            const decisionLicense = await store.decisionLicenseForInstallation?.(row.id)
+            const direct = !lifetimeLicense && !decisionLicense && Boolean(row.device_id)
+            const standaloneNew = !lifetimeLicense && !decisionLicense && !direct
+            if (standaloneNew && await store.decisionLicenseForPurchase?.(row.id)) throw new HttpError(409, 'Your Decision Makers key was emailed to you. Activate it in Settings → Account before renewing.')
+            const owner = standaloneNew || direct ? row : await store.byId((lifetimeLicense ?? decisionLicense).installation_id)
+            if (!owner || (!standaloneNew && !direct && !owner.customer_id)) throw new HttpError(409, 'No Stripe customer is connected to this licence.')
+            if (status.decisionMaker?.active) throw new HttpError(409, status.decisionMaker.status === 'included' ? 'Your included Decision Makers searches are still available. Buy the next pass when these are used or 30 days end.' : 'This Decision Makers pass is still active. Buy the next pass when its searches are used or 30 days end.')
             if (owner.pending_decision_session_id) {
               const pending = await stripe(`checkout/sessions/${encodeURIComponent(owner.pending_decision_session_id)}`)
-              if (pending.status === 'open' && /^https:\/\/checkout\.stripe\.com\//.test(pending.url ?? '')) return json(200, { url: pending.url })
-              if (pending.status === 'complete') throw new HttpError(409, 'Subscription payment is processing. Refresh billing shortly.')
+              if (pending.status === 'open' && pending.mode === 'payment' && pending.metadata?.product === 'decisionMaker' && /^https:\/\/checkout\.stripe\.com\//.test(pending.url ?? '')) return json(200, { url: pending.url })
+              if (pending.status === 'open') await stripe(`checkout/sessions/${encodeURIComponent(pending.id)}/expire`, {})
+              if (pending.status === 'complete') throw new HttpError(409, 'Decision Makers pass payment is processing. Refresh billing shortly.')
             }
             const session = await stripe('checkout/sessions', {
-              mode: 'subscription', customer: owner.customer_id,
-              'line_items[0][price]': prices.decisionMaker, 'line_items[0][quantity]': '1',
+              mode: 'payment', ...(!owner.customer_id ? { customer_creation: 'always', 'payment_method_types[0]': 'card' } : { customer: owner.customer_id }),
+              'line_items[0][price_data][currency]': 'pkr',
+              'line_items[0][price_data][unit_amount]': String(DECISION_PRICE.amount),
+              'line_items[0][price_data][product_data][name]': 'MamaLead Decision Makers · 1,000 searches for 30 days',
+              'line_items[0][quantity]': '1',
               client_reference_id: owner.id, 'metadata[product]': product,
-              success_url: new URL('/?subscription=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || publicUrl).toString(),
+              ...(standaloneNew ? { 'metadata[checkoutFlow]': 'desktop-standalone' } : direct ? { 'metadata[checkoutFlow]': 'desktop-direct' } : {}),
+              success_url: new URL('/return?session_id={CHECKOUT_SESSION_ID}', publicUrl).toString(),
               cancel_url: new URL('/cancel', publicUrl).toString(),
             })
             if (!/^https:\/\/checkout\.stripe\.com\//.test(session.url ?? '')) throw new HttpError(502, 'Stripe did not return a Checkout URL.')
             await store.savePending(owner.id, product, session.id)
             return json(200, { url: session.url })
           }
-          if (product !== 'lifetime') throw new HttpError(400, 'Only the $30 Lifetime Deal is available.')
+          if (product !== 'lifetime') throw new HttpError(400, 'Only the Rs 10,000 PKR Lifetime Deal is available.')
           const email = String(rawEmail ?? '').trim().toLowerCase()
+          if (!email) {
+            const current = await verifiedStatus(row)
+            if (current.lifetime.active) throw new HttpError(409, 'The Lifetime Deal is already purchased for this installation.')
+            const fresh = await store.byId(row.id)
+            if (fresh.pending_lifetime_session_id) {
+              const pending = await stripe(`checkout/sessions/${encodeURIComponent(fresh.pending_lifetime_session_id)}`)
+              if (pending.status === 'open') {
+                const items = await stripe(`checkout/sessions/${encodeURIComponent(pending.id)}/line_items?limit=1`)
+                if (items.data?.[0]?.price?.id === prices.lifetime && /^https:\/\/checkout\.stripe\.com\//.test(pending.url ?? '')) return json(200, { url: pending.url })
+                await stripe(`checkout/sessions/${encodeURIComponent(pending.id)}/expire`, {})
+              }
+              if (pending.status === 'complete') throw new HttpError(409, 'A payment is processing. Refresh billing shortly.')
+            }
+            const session = await stripe('checkout/sessions', {
+              mode: 'payment', ...(row.customer_id ? { customer: row.customer_id } : { customer_creation: 'always' }),
+              'payment_method_types[0]': 'card',
+              'line_items[0][price]': prices.lifetime, 'line_items[0][quantity]': '1',
+              client_reference_id: row.id, 'metadata[product]': product, 'metadata[checkoutFlow]': 'desktop',
+              'invoice_creation[enabled]': 'true',
+              success_url: new URL('/return?session_id={CHECKOUT_SESSION_ID}', publicUrl).toString(),
+              cancel_url: new URL('/cancel', publicUrl).toString(),
+            })
+            if (!/^https:\/\/checkout\.stripe\.com\//.test(session.url ?? '')) throw new HttpError(502, 'Stripe did not return a Checkout URL.')
+            if (typeof store.clearPurchaseError === 'function') await store.clearPurchaseError(row.id)
+            await store.savePending(row.id, product, session.id)
+            return json(200, { url: session.url })
+          }
           if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address for your lifetime key.')
           if (!store.reserveLifetimeEmail || !store.lifetimeCheckoutByEmail || !store.lifetimeCheckoutForInstallation || !store.lifetimeLicenseByEmail || !store.saveLifetimeCheckout || !store.releaseLifetimeEmail) {
             throw new HttpError(503, 'Lifetime email storage is not configured.')
@@ -607,7 +804,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           const owner = linked?.kind === 'lifetime' ? await store.byId(linked.installation_id) : row
           if (!owner?.customer_id) return json(200, { invoices: [] })
           const data = await stripe(`invoices?customer=${encodeURIComponent(owner.customer_id)}&limit=100`)
-          const invoices = (data.data ?? []).map((invoice) => ({ id: invoice.id, number: invoice.number ?? '', issued: invoice.created ? new Date(invoice.created * 1000).toISOString().slice(0, 10) : '', total: invoice.total ?? 0, currency: invoice.currency ?? 'usd', status: invoice.status ?? '', url: invoice.hosted_invoice_url ?? '' }))
+          const invoices = (data.data ?? []).map((invoice) => ({ id: invoice.id, number: invoice.number ?? '', issued: invoice.created ? new Date(invoice.created * 1000).toISOString().slice(0, 10) : '', total: invoice.total ?? 0, currency: invoice.currency ?? 'pkr', status: invoice.status ?? '', url: invoice.hosted_invoice_url ?? '' }))
           return json(200, { invoices })
         }
         if (method === 'POST' && url.pathname === '/v1/license') {

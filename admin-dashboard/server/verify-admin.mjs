@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { createAdminHandler } from './admin-core.mjs'
 import { createSqliteAdminStore } from './stores.mjs'
+import { hashOwnerPassword } from './owner-password.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const billingModule = resolve(process.env.BILLING_SERVER_MODULE ?? join(here, '../../billing-server/server.mjs'))
@@ -20,23 +21,27 @@ const database = join(dir, 'billing.db')
 const sessions = new Map()
 const chargeCreated = Math.floor(Date.now() / 1000)
 let chargeRefunded = false
-const charge = () => ({ id: 'ch_mock', customer: 'cus_mock', amount: 3000, amount_captured: 3000, amount_refunded: chargeRefunded ? 3000 : 0, refunded: chargeRefunded, currency: 'usd', created: chargeCreated, paid: true, status: 'succeeded', disputed: false, payment_intent: 'pi_mock', livemode: false, billing_details: { email: 'buyer@example.test' } })
+const charge = () => ({ id: 'ch_mock', customer: 'cus_mock', amount: 1000000, amount_captured: 1000000, amount_refunded: chargeRefunded ? 1000000 : 0, refunded: chargeRefunded, currency: 'pkr', created: chargeCreated, paid: true, status: 'succeeded', disputed: false, payment_intent: 'pi_mock', livemode: false, billing_details: { email: 'buyer@example.test' } })
+const decisionCharge = () => ({ ...charge(), id: 'ch_decision', amount: 100000, amount_captured: 100000, amount_refunded: 0, refunded: false, payment_intent: 'pi_decision' })
 const fakeStripe = async (raw, request = {}) => {
   const path = new URL(raw).pathname
   const body = request.body ? new URLSearchParams(request.body) : null
   let result
-  if (path.endsWith('/prices/price_lifetime')) result = { active: true, currency: 'usd', unit_amount: 3000, recurring: null }
-  else if (path.endsWith('/prices/price_decision')) result = { active: true, currency: 'usd', unit_amount: 300, recurring: { interval: 'month' } }
+  if (path.endsWith('/prices/price_lifetime')) result = { active: true, currency: 'pkr', unit_amount: 1000000, recurring: null }
+  else if (path.endsWith('/prices/price_decision')) result = { active: true, currency: 'pkr', unit_amount: 100000, recurring: { interval: 'month' } }
   else if (path.endsWith('/checkout/sessions') && request.method === 'POST') {
-    const id = body.get('mode') === 'payment' ? 'cs_test_lifetime' : 'cs_test_decision'
-    sessions.set(id, { id, url: `https://checkout.stripe.com/c/pay/${id}`, client_reference_id: body.get('client_reference_id'), mode: body.get('mode'), metadata: { product: body.get('metadata[product]') }, status: 'open', payment_status: 'unpaid', customer: 'cus_mock', customer_details: { email: 'buyer@example.test' }, payment_intent: id === 'cs_test_lifetime' ? 'pi_mock' : null, subscription: id === 'cs_test_decision' ? 'sub_mock' : null, livemode: false, amount_total: id === 'cs_test_lifetime' ? 3000 : 300, currency: 'usd' })
+    const id = body.get('metadata[product]') === 'decisionMaker' ? 'cs_test_decision' : 'cs_test_lifetime'
+    sessions.set(id, { id, url: `https://checkout.stripe.com/c/pay/${id}`, client_reference_id: body.get('client_reference_id'), mode: body.get('mode'), metadata: { product: body.get('metadata[product]'), checkoutFlow: body.get('metadata[checkoutFlow]') }, status: 'open', payment_status: 'unpaid', customer: 'cus_mock', customer_details: { email: 'buyer@example.test' }, payment_intent: id === 'cs_test_lifetime' ? 'pi_mock' : 'pi_decision', subscription: null, livemode: false, amount_total: id === 'cs_test_lifetime' ? 1000000 : 100000, currency: 'pkr' })
     result = { id, url: sessions.get(id).url }
-  } else if (/\/checkout\/sessions\/cs_test_\w+\/line_items$/.test(path)) result = { data: [{ price: { id: path.includes('decision') ? 'price_decision' : 'price_lifetime' } }] }
+  } else if (/\/checkout\/sessions\/cs_test_\w+\/line_items$/.test(path)) result = { data: [{ price: path.includes('decision') ? { currency: 'pkr', unit_amount: 100000, recurring: null } : { id: 'price_lifetime' }, quantity: 1 }] }
   else if (/\/checkout\/sessions\/cs_test_\w+$/.test(path)) result = sessions.get(path.split('/').at(-1))
   else if (path.endsWith('/payment_intents/pi_mock')) result = { status: 'succeeded', latest_charge: 'ch_mock' }
+  else if (path.endsWith('/payment_intents/pi_decision')) result = { status: 'succeeded', latest_charge: 'ch_decision' }
   else if (path.endsWith('/charges/ch_mock')) result = charge()
-  else if (path === '/v1/charges') result = { data: new URL(raw).searchParams.get('customer') === 'cus_mock' ? [charge()] : [], has_more: false }
-  else if (path.endsWith('/subscriptions/sub_mock')) result = { status: 'active', livemode: false, items: { data: [{ quantity: 1, price: { currency: 'usd', unit_amount: 300, recurring: { interval: 'month' } } }] } }
+  else if (path.endsWith('/charges/ch_decision')) result = decisionCharge()
+  else if (path === '/v1/charges') result = { data: new URL(raw).searchParams.get('customer') === 'cus_mock' ? [...(sessions.get('cs_test_decision')?.status === 'complete' ? [decisionCharge()] : []), charge()] : [], has_more: false }
+  else if (path.endsWith('/subscriptions/sub_mock')) result = { id: 'sub_mock', customer: 'cus_mock', status: 'active', livemode: false, latest_invoice: 'in_mock', items: { data: [{ current_period_start: chargeCreated - 3600, current_period_end: chargeCreated + 2592000, quantity: 1, price: { id: 'price_decision', currency: 'pkr', unit_amount: 100000, recurring: { interval: 'month' } } }] } }
+  else if (path.endsWith('/invoices/in_mock')) result = { id: 'in_mock', status: 'paid', subscription: 'sub_mock' }
   else throw new Error(`Unexpected Stripe request: ${path}`)
   return { ok: true, json: async () => result }
 }
@@ -62,7 +67,8 @@ try {
   await bill('/v1/checkout', buyer, 'POST', { product: 'lifetime' })
   Object.assign(sessions.get('cs_test_lifetime'), { status: 'complete', payment_status: 'paid' })
   await fetch(base + '/return?session_id=cs_test_lifetime')
-  const { licenseKey } = (await bill('/v1/license', buyer, 'POST')).body
+  const licenseKey = sentMessages.find((message) => message.kind === 'lifetime')?.licenseKey
+  check('billing flow: lifetime key is emailed after Checkout', /^NF-(?:[A-Z0-9]{4}-){9}[A-Z0-9]{4}$/.test(licenseKey ?? ''))
   const link = await bill('/v1/download-link', buyer, 'POST')
   const grant = new URL(link.body.url).searchParams.get('grant')
   check('billing flow: protected download still redirects for a paid buyer', (await fetch(`${base}/v1/download?grant=${encodeURIComponent(grant)}`, { redirect: 'manual' })).status === 302)
@@ -83,8 +89,11 @@ try {
 
   // 2. Admin API over the same database, read-only.
   const ownerToken = randomBytes(32).toString('base64url')
+  const ownerEmail = 'owner@gmail.com'
+  const ownerPassword = 'correct-horse-battery-staple'
+  const ownerPasswordHash = await hashOwnerPassword(ownerPassword)
   const sessionSecret = randomBytes(32).toString('base64url')
-  const adminEnv = { ...billingEnv, ADMIN_TOKEN_SHA256: createHash('sha256').update(ownerToken).digest('hex'), ADMIN_SESSION_SECRET: sessionSecret }
+  const adminEnv = { ...billingEnv, ADMIN_TOKEN_SHA256: createHash('sha256').update(ownerToken).digest('hex'), ADMIN_OWNER_EMAIL: ownerEmail, ADMIN_PASSWORD_HASH: ownerPasswordHash, ADMIN_SESSION_SECRET: sessionSecret }
   store = await createSqliteAdminStore(database)
   const admin = createAdminHandler({ env: adminEnv, store, fetch: fakeStripe })
   const call = async (url, o = {}) => {
@@ -94,6 +103,16 @@ try {
   }
 
   check('every admin endpoint requires sign-in', (await Promise.all(['summary', 'users', 'revenue', 'purchases', 'licenses', 'activations', 'health'].map((p) => call(`/admin/api/${p}`)))).every((r) => r.status === 401))
+  const authConfig = await call('/admin/api/auth-config')
+  check('public sign-in configuration reveals no credentials', authConfig.status === 200 && authConfig.body.emailLoginEnabled === true && authConfig.body.tokenLoginEnabled === true && !authConfig.body.email && !authConfig.body.passwordHash)
+  check('wrong email or password is rejected', (await call('/admin/api/session', { method: 'POST', body: { email: 'other@gmail.com', password: ownerPassword }, ip: '10.0.0.8' })).status === 401 && (await call('/admin/api/session', { method: 'POST', body: { email: ownerEmail, password: 'wrong-password' }, ip: '10.0.0.8' })).status === 401)
+  const emailLogin = await call('/admin/api/session', { method: 'POST', body: { email: '  OWNER@GMAIL.COM ', password: ownerPassword }, ip: '10.0.0.8' })
+  const emailCookie = emailLogin.headers['set-cookie']?.split(';')[0]
+  check('Gmail and password sign-in opens an HttpOnly owner session', emailLogin.status === 200 && /HttpOnly/.test(emailLogin.headers['set-cookie']) && (await call('/admin/api/session', { cookie: emailCookie })).status === 200)
+  const passwordOnly = createAdminHandler({ env: { ...adminEnv, ADMIN_ALLOW_TOKEN_LOGIN: '0' }, store, fetch: fakeStripe })
+  const passwordOnlyCall = async (payload, cookieHeader) => passwordOnly.handle({ method: 'POST', url: '/admin/api/session', cookie: cookieHeader, ip: '10.0.0.11', readBody: async () => JSON.stringify(payload) })
+  check('email-only mode disables the old owner token without locking out Gmail sign-in', (await passwordOnlyCall({ token: ownerToken })).status === 401 && (await passwordOnlyCall({ email: ownerEmail, password: ownerPassword })).status === 200)
+  check('changing sign-in method invalidates previously issued sessions', (await passwordOnly.handle({ method: 'GET', url: '/admin/api/session', cookie: emailCookie, ip: '10.0.0.12' })).status === 401)
   check('a wrong bearer token is rejected', (await call('/admin/api/summary', { auth: 'Bearer wrong-token-wrong-token-wrong', ip: '10.0.0.9' })).status === 401)
   for (let i = 0; i < 5; i += 1) await call('/admin/api/session', { method: 'POST', body: { token: `bad-${i}-xxxxxxxxxxxxxxxxxxxxxxxx` }, ip: '10.0.0.7' })
   check('repeated bad sign-ins are throttled', (await call('/admin/api/session', { method: 'POST', body: { token: ownerToken }, ip: '10.0.0.7' })).status === 429)
@@ -117,12 +136,12 @@ try {
 
   const revenue = await call('/admin/api/revenue', { cookie })
   const month = new Date(chargeCreated * 1000).toISOString().slice(0, 7)
-  check('revenue: $30.00 net from the Stripe test charge', revenue.body.available && revenue.body.net === 3000 && revenue.body.gross === 3000 && revenue.body.refunded === 0 && revenue.body.lifetimeSales === 1)
-  check('revenue: monthly series has the sale in the right month', revenue.body.months.length === 12 && revenue.body.months.find((m) => m.key === month)?.net === 3000)
+  check('revenue: Rs 10,000 PKR net from the Stripe test charge', revenue.body.available && revenue.body.currency === 'pkr' && revenue.body.net === 1000000 && revenue.body.gross === 1000000 && revenue.body.refunded === 0 && revenue.body.lifetimeSales === 1)
+  check('revenue: monthly series has the sale in the right month', revenue.body.months.length === 12 && revenue.body.months.find((m) => m.key === month)?.net === 1000000)
   check('revenue: payment row is masked', revenue.body.payments[0].id === '…h_mock' && revenue.body.payments[0].email === 'b••••@example.test' && revenue.body.payments[0].status === 'paid')
   chargeRefunded = true
   const refundedRevenue = await call('/admin/api/revenue?refresh=1', { cookie })
-  check('revenue: a refund brings net revenue to $0', refundedRevenue.body.net === 0 && refundedRevenue.body.refunded === 3000 && refundedRevenue.body.payments[0].status === 'refunded')
+  check('revenue: a refund brings net revenue to Rs 0', refundedRevenue.body.net === 0 && refundedRevenue.body.refunded === 1000000 && refundedRevenue.body.payments[0].status === 'refunded')
   chargeRefunded = false
   const liveAdmin = createAdminHandler({ env: { ...adminEnv, STRIPE_SECRET_KEY: 'sk_live_placeholder' }, store, fetch: async () => { throw new Error('must not call Stripe') } })
   const liveRevenue = JSON.parse((await liveAdmin.handle({ method: 'GET', url: '/admin/api/revenue', authorization: `Bearer ${ownerToken}`, ip: '127.0.0.2' })).body)
@@ -146,7 +165,7 @@ try {
 
   check('verify requires the admin request header', (await call('/admin/api/purchases/verify', { method: 'POST', cookie, body: { id: row.id } })).status === 403)
   const verified = await call('/admin/api/purchases/verify', { method: 'POST', cookie, csrf: '1', body: { id: row.id } })
-  check('verify reads the payment from Stripe (test)', verified.status === 200 && verified.body.paid && !verified.body.refunded && verified.body.amount === 3000 && !verified.body.livemode)
+  check('verify reads the payment from Stripe (test)', verified.status === 200 && verified.body.paid && !verified.body.refunded && verified.body.amount === 1000000 && verified.body.currency === 'pkr' && !verified.body.livemode)
 
   const trialInstall = (await bill('/v1/installations', null, 'POST')).body.token
   check('billing flow: a 1-day trial key is sent', (await bill('/v1/trial', trialInstall, 'POST', { email: 'trial@example.test' })).status === 200 && sentMessages.at(-1)?.kind === 'trial')
@@ -154,12 +173,28 @@ try {
   check('billing flow: the trial activates on its first machine', (await bill('/v1/activate', trialInstall, 'POST', { licenseKey: trialKey }, 'd'.repeat(64))).status === 200)
   const trialSummary = await call('/admin/api/summary', { cookie })
   const trialUsers = await call('/admin/api/users?filter=licensed', { cookie })
-  check('admin shows trial use without counting it as a paid license', trialSummary.body.counts.trials === 1 && trialSummary.body.counts.licenses === 1 && trialSummary.body.usage.licensed === 3 && trialUsers.body.rows.some((r) => r.licenseType === 'trial' && r.licensed))
+  check('admin shows sent, activated and active trials without counting them as paid licenses', trialSummary.body.counts.trials === 1 && trialSummary.body.counts.trialActivated === 1 && trialSummary.body.counts.trialActive === 1 && trialSummary.body.counts.licenses === 1 && trialSummary.body.usage.licensed === 3 && trialUsers.body.rows.some((r) => r.licenseType === 'trial' && r.licensed))
+
+  const secondTrialInstall = (await bill('/v1/installations', null, 'POST')).body.token
+  check('a second person can receive a trial key without activating it', (await bill('/v1/trial', secondTrialInstall, 'POST', { email: 'second-trial@example.test' })).status === 200)
+  const secondTrialKey = sentMessages.at(-1).licenseKey
+  const twoTrials = await call('/admin/api/summary', { cookie })
+  check('dashboard separates trial keys sent from trial activations', twoTrials.body.counts.trials === 2 && twoTrials.body.counts.trialActivated === 1 && twoTrials.body.counts.trialActive === 1)
+
+  check('the buyer has an included Decision Makers month before buying a pass', (await bill('/v1/status', desktopA, 'GET', undefined, devices[0])).body.decisionMaker.status === 'included')
+  billing.db.prepare('update licenses set activated_at = ?').run(new Date(Date.now() - 31 * 86_400_000).toISOString())
+  check('Decision Makers manual pass Checkout starts for the lifetime owner', (await bill('/v1/checkout', desktopA, 'POST', { product: 'decisionMaker' }, devices[0])).status === 200)
+  Object.assign(sessions.get('cs_test_decision'), { status: 'complete', payment_status: 'paid' })
+  await fetch(base + '/return?session_id=cs_test_decision')
+  const addonSummary = await call('/admin/api/summary', { cookie })
+  check('dashboard counts the paid Decision Makers pass separately', addonSummary.body.counts.addons === 1 && addonSummary.body.counts.purchases === 1 && addonSummary.body.counts.trials === 2)
+  const addonRevenue = await call('/admin/api/revenue?refresh=1', { cookie })
+  check('Stripe confirms a PKR 1,000 manual payment without automatic renewal', addonRevenue.body.activeSubs === 0 && addonRevenue.body.mrr === 0 && addonRevenue.body.net === 1100000 && addonRevenue.body.payments.some((payment) => payment.amount === 100000))
 
   const all = bodies.join('\n')
   const db = new DatabaseSync(database, { readOnly: true })
   const hashes = [...db.prepare('select token_hash as h from installations').all(), ...db.prepare('select key_hash as h from licenses').all()].map((r) => r.h)
-  check('no license key, tokens, hashes, Stripe ids or secrets appear in any admin response', ![licenseKey, trialKey, trialInstall, buyer, desktopA, desktopB, desktopC, ownerToken, sessionSecret, grant, ...Object.values(secrets), ...hashes, 'token_hash', 'key_hash', 'buyer@example.test', 'trial@example.test', 'cus_mock', 'ch_mock', 'pi_mock', 'cs_test_lifetime'].some((value) => all.includes(value)))
+  check('no license key, tokens, hashes, Stripe ids or secrets appear in any admin response', ![licenseKey, trialKey, secondTrialKey, trialInstall, secondTrialInstall, buyer, desktopA, desktopB, desktopC, ownerToken, ownerEmail, ownerPassword, ownerPasswordHash, sessionSecret, grant, ...Object.values(secrets), ...hashes, 'token_hash', 'key_hash', 'buyer@example.test', 'trial@example.test', 'second-trial@example.test', 'cus_mock', 'ch_mock', 'pi_mock', 'cs_test_lifetime'].some((value) => all.includes(value)))
   check('the admin store cannot write to the billing database', (() => { try { db.exec("update licenses set revoked_at = 'x'"); return false } catch { return true } })())
   db.close()
   check('license enforcement is unchanged after admin use', (await bill('/v1/status', desktopA, 'GET', undefined, devices[0])).body.license.active === true && (await bill('/v1/activate', desktopC, 'POST', { licenseKey }, devices[2])).status === 409)

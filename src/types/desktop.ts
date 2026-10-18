@@ -488,16 +488,24 @@ export interface DesktopApi {
       connected: boolean
       mode?: 'test' | 'live'
       message?: string
+      purchaseError?: string | null
+      purchaseEmail?: string | null
+      decisionKeyEmail?: string | null
+      coreLicenseActive?: boolean
+      decisionKeyActive?: boolean
       lifetime?: { amount: number; currency: string; interval: null; active: boolean }
       trial?: { active: boolean; expiresAt: string | null }
       mapsLeads?: { used: number | null; limit: number | null; remaining: number | null }
-      decisionMaker?: { amount: number; currency: string; interval: string | null; available?: boolean; active: boolean; status: string; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null }
+      decisionMaker?: { amount: number; currency: string; interval: string | null; periodDays?: number; available?: boolean; active: boolean; status: string; ownerKind?: 'decision' | 'lifetime'; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null; periodId?: string | null }
       hasCustomer?: boolean
-      license?: { active: boolean; kind?: 'trial' | 'lifetime'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
+      license?: { active: boolean; kind?: 'trial' | 'lifetime' | 'decision'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
     }>
+    claimDecisionSubscribeHandoff: () => Promise<boolean>
+    onDecisionSubscribeHandoff: (listener: () => void) => () => void
+    onDecisionUsage: (listener: (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => void) => () => void
     requestTrial: (email: string, replaceExisting?: boolean) => Promise<{ emailSent: boolean; message: string }>
     checkout: (product: 'lifetime' | 'decisionMaker', email: string) => Promise<{ opened: boolean }>
-    activate: (licenseKey: string) => Promise<{ active: boolean; email?: string; last4?: string; activatedAt?: string | null }>
+    activate: (licenseKey: string) => Promise<{ active: boolean; kind?: 'trial' | 'lifetime' | 'decision'; email?: string; last4?: string; activatedAt?: string | null }>
     portal: () => Promise<{ opened: boolean }>
     invoices: () => Promise<{ id: string; number: string; issued: string; total: number; currency: string; status: string; url: string }[]>
     openInvoice: (url: string) => Promise<{ opened: boolean }>

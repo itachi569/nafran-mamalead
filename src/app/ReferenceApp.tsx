@@ -178,7 +178,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <circle cx="15" cy="8" r="2.2"></circle>
                     <circle cx="9" cy="16" r="2.2"></circle>
                   </svg>
-                  <span style={{flex: "1"}}>Settings</span>
+                  <span style={{flex: "1"}}>Settings &amp; Billing</span>
                   <span data-tail="1" aria-hidden="true" style={{color: "#6C766F"}}>→</span>
                   <span data-arrow="1" aria-hidden="true" style={{placeItems: "center", width: "30px", height: "30px", borderRadius: "999px", fontSize: "12px", flex: "none"}}>↘</span>
                 </button>

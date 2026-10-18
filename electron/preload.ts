@@ -218,6 +218,10 @@ const desktop = {
     ipcRenderer.invoke('app:info'),
   billing: {
     status: () => call('billing:status'),
+    claimDecisionSubscribeHandoff: () => call('billing:claim-decision-subscribe-handoff'),
+    onDecisionSubscribeHandoff: (listener: () => void): Unsubscribe => subscribe('billing:decision-subscribe-handoff', listener),
+    onDecisionUsage: (listener: (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => void): Unsubscribe =>
+      subscribe('billing:decision-usage', listener),
     requestTrial: (email: string, replaceExisting = false) => call('billing:request-trial', { email, replaceExisting }),
     checkout: (product: 'lifetime' | 'decisionMaker', email: string) => call('billing:checkout', { product, email }),
     activate: (licenseKey: string) => call('billing:activate', licenseKey),

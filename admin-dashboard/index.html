@@ -77,10 +77,21 @@
       <section aria-labelledby="login-title" style="align-self: center; width: 100%; max-width: 460px; margin: 32px 0; padding: 32px; border-radius: 28px; background: #FFFFFF;">
         <span aria-hidden="true" style="width: 52px; height: 52px; border-radius: 50%; background: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1C1C1C" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="12" r="3.5"></circle><path d="M11.5 12H21M18 12v3M21 12v2"></path></svg></span>
         <h2 id="login-title" style="margin: 18px 0 0; font-size: 24px; font-weight: 500; letter-spacing: -.02em;">Owner sign-in</h2>
-        <p style="margin: 8px 0 0; font-size: 13.5px; line-height: 1.55; color: #4E534C;">Paste your private owner token. The server checks it and returns an HttpOnly session cookie. This page does not keep the token.</p>
+        <p style="margin: 8px 0 0; font-size: 13.5px; line-height: 1.55; color: #4E534C;">Sign in to view downloads, trials, purchases and licenses. Your session stays in a secure browser cookie.</p>
         <form onSubmit="{{ onLogin }}" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
-          <input type="password" autocomplete="current-password" aria-label="Owner token" placeholder="Owner token" value="{{ loginToken }}" onChange="{{ onLoginInput }}" style="height: 50px; padding: 0 18px; border-radius: 999px; border: 0; background: #EFEFEF; font-size: 14px; color: #1C1C1C;">
+          <sc-if value="{{ loginUseEmail }}" hint-placeholder-val="{{ true }}">
+            <label for="owner-email" style="font-size: 12px; color: #4E534C;">Gmail address</label>
+            <input id="owner-email" type="email" autocomplete="username" required aria-label="Owner Gmail address" placeholder="you@gmail.com" value="{{ loginEmail }}" onChange="{{ onLoginEmailInput }}" style="height: 50px; padding: 0 18px; border-radius: 999px; border: 0; background: #EFEFEF; font-size: 14px; color: #1C1C1C;">
+            <label for="owner-password" style="font-size: 12px; color: #4E534C;">Password</label>
+            <input id="owner-password" type="password" autocomplete="current-password" required aria-label="Owner password" placeholder="Your password" value="{{ loginPassword }}" onChange="{{ onLoginPasswordInput }}" style="height: 50px; padding: 0 18px; border-radius: 999px; border: 0; background: #EFEFEF; font-size: 14px; color: #1C1C1C;">
+          </sc-if>
+          <sc-if value="{{ loginUseToken }}" hint-placeholder-val="{{ false }}">
+            <input type="password" autocomplete="off" required aria-label="Owner token" placeholder="Owner token" value="{{ loginToken }}" onChange="{{ onLoginInput }}" style="height: 50px; padding: 0 18px; border-radius: 999px; border: 0; background: #EFEFEF; font-size: 14px; color: #1C1C1C;">
+          </sc-if>
           <button type="submit" disabled="{{ loginBusy }}" style="height: 50px; border-radius: 999px; border: 0; background: #1C1C1C; color: #FFFFFF; font-size: 14px; font-weight: 500; cursor: pointer;">Sign in</button>
+          <sc-if value="{{ showLoginSwitch }}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{ onToggleLoginMethod }}" style="align-self: center; padding: 6px 10px; border: 0; background: transparent; color: #3F5D38; font-size: 12px; cursor: pointer;">{{ loginSwitchLabel }}</button>
+          </sc-if>
           <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
             <p role="alert" style="margin: 0; font-size: 13px; color: #8A2F28;">{{ loginError }}</p>
           </sc-if>
@@ -112,6 +123,22 @@
           </button>
         </sc-for>
       </div>
+      <section aria-labelledby="customer-activity-title" style="padding: 22px; border-radius: 26px; background: #FFFFFF;">
+        <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; margin-bottom: 16px;">
+          <h2 id="customer-activity-title" style="margin: 0; font-size: 19px; font-weight: 500;">Customer activity</h2>
+          <span style="font-size: 12px; color: #5F645C;">{{ customerActivityUpdated }}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px;">
+          <sc-for list="{{ customerActivity }}" as="a" hint-placeholder-count="4">
+            <div style="min-width: 0; padding: 18px; border-radius: 18px; background: #F4F5F2; border: 1px solid #E6E8E3;">
+              <span style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;"><span style="font-size: 13px; font-weight: 500;">{{ a.label }}</span><span style="font-size: 10px; color: #4E534C; text-align: right;">{{ a.tag }}</span></span>
+              <strong style="display: block; margin: 14px 0 9px; font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -.04em;">{{ a.value }}</strong>
+              <span style="display: block; font-size: 12px; line-height: 1.45; color: #5F645C;">{{ a.sub }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin: 14px 2px 0; font-size: 12px; line-height: 1.5; color: #5F645C;">Free downloads count installer downloads, not unique people. Trial counts begin when a key email is sent; Lifetime and Decision Makers payments are shown separately.</p>
+      </section>
       <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch;">
         <section aria-labelledby="chart-title" style="flex: 2 1 480px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 16px;">
           <div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 20px;">
@@ -429,7 +456,7 @@ const VIEWS = [
   { id: 'email', label: 'Email' }, { id: 'health', label: 'Health' },
 ];
 const DAY = 86400000;
-const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const PKR = new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', maximumFractionDigits: 0 });
 
 class Component extends DCLogic {
   state = {
@@ -437,15 +464,20 @@ class Component extends DCLogic {
     rev: { status: 'idle', data: null, message: '' },
     filters: { revenue: 'all', users: 'all', purchases: 'all', licenses: 'all', activations: 'all', email: 'all', health: 'all' },
     width: typeof window === 'undefined' ? 1200 : window.innerWidth,
-    loginToken: '', loginError: '', loginBusy: false, probing: false, verify: {}, verifying: null,
+    loginToken: '', loginEmail: '', loginPassword: '', loginMethod: 'email', loginMethods: null,
+    loginError: '', loginBusy: false, probing: false, verify: {}, verifying: null,
   };
 
   componentDidMount() {
     this.onResize = () => this.setState({ width: window.innerWidth });
     window.addEventListener('resize', this.onResize);
+    this.activityTimer = window.setInterval(() => {
+      if (!this.isFixture() && !document.hidden && this.state.conn === 'ok') this.refreshActivity();
+    }, 30000);
     this.load();
+    if (!this.isFixture()) this.loadLoginMethods();
   }
-  componentWillUnmount() { window.removeEventListener('resize', this.onResize); }
+  componentWillUnmount() { window.removeEventListener('resize', this.onResize); window.clearInterval(this.activityTimer); }
   componentDidUpdate(prev) { if (prev.dataSource !== this.props.dataSource || prev.apiBase !== this.props.apiBase) this.load(); }
 
   isFixture() { return (this.props.dataSource ?? 'live') === 'fixture'; }
@@ -468,6 +500,13 @@ class Component extends DCLogic {
     return body;
   }
 
+  async loadLoginMethods() {
+    try {
+      const methods = await this.api('/admin/api/auth-config');
+      this.setState({ loginMethods: methods, loginMethod: methods.emailLoginEnabled ? 'email' : 'token' });
+    } catch { /* The normal connection banner handles an unavailable API. */ }
+  }
+
   async load() {
     if (this.isFixture()) {
       this.setState({ conn: 'fixture', data: Component.fixture(), rev: { status: 'ok', data: Component.fixtureRevenue(), message: '' }, error: '', verify: {} });
@@ -482,6 +521,15 @@ class Component extends DCLogic {
     } catch (e) { this.setState({ conn: e.kind ?? 'error', error: e.message, data: null, rev: { status: 'idle', data: null, message: '' } }); }
   }
 
+  async refreshActivity() {
+    try {
+      const summary = await this.api('/admin/api/summary');
+      this.setState((state) => state.conn === 'ok' && state.data ? { data: { ...state.data, summary } } : null);
+    } catch (error) {
+      if (error.kind === 'unauthorized') this.load();
+    }
+  }
+
   async loadRevenue(refresh) {
     if (this.isFixture()) return;
     this.setState((s) => ({ rev: { ...s.rev, status: 'loading' } }));
@@ -493,9 +541,11 @@ class Component extends DCLogic {
 
   async login(event) {
     event.preventDefault();
-    const token = this.state.loginToken;
-    this.setState({ loginBusy: true, loginError: '', loginToken: '' });
-    try { await this.api('/admin/api/session', { method: 'POST', body: { token } }); this.setState({ loginBusy: false }); this.load(); }
+    const body = this.state.loginMethod === 'token'
+      ? { token: this.state.loginToken }
+      : { email: this.state.loginEmail, password: this.state.loginPassword };
+    this.setState({ loginBusy: true, loginError: '', loginToken: '', loginPassword: '' });
+    try { await this.api('/admin/api/session', { method: 'POST', body }); this.setState({ loginBusy: false }); this.load(); }
     catch (e) { this.setState({ loginBusy: false, loginError: e.message }); }
   }
 
@@ -518,7 +568,7 @@ class Component extends DCLogic {
     this.setState({ verifying: id });
     try {
       const result = this.isFixture()
-        ? { id, amount: 3000, currency: 'usd', livemode: false, paid: true, refunded: false, disputed: false }
+        ? { id, amount: 1000000, currency: 'pkr', livemode: false, paid: true, refunded: false, disputed: false }
         : await this.api('/admin/api/purchases/verify', { method: 'POST', body: { id } });
       this.setState((s) => ({ verifying: null, verify: { ...s.verify, [id]: result } }));
     } catch (e) { this.setState((s) => ({ verifying: null, verify: { ...s.verify, [id]: { error: e.message } } })); }
@@ -549,9 +599,9 @@ class Component extends DCLogic {
     return {
       summary: {
         mode: 'test', cap: 2,
-        counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, addons: 0, licenses: 1, revoked: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
+        counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, addons: 0, licenses: 1, revoked: 0, trials: 0, trialActivated: 0, trialActive: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
         usage: { tracking: true, registered: 4, desktop: 2, checkout: 1, unseen: 1, licensed: 2, active24h: 1, active7d: 1, active30d: 1 },
-        downloads: { tracking: true, total: 1, buyers: 1, last30d: 1, last: at },
+        downloads: { tracking: true, total: 1, public: 0, buyers: 1, last30d: 1, last: at },
         webhooks: { count: 0, last: null },
         installer: { storage: 'local-url', filename: 'Nafran-Leads-Scraper-Setup.exe', signing: true, ready: false, detail: 'DOWNLOAD_URL is only honoured while billing runs on localhost.' },
         email: { provider: 'none' },
@@ -574,11 +624,11 @@ class Component extends DCLogic {
     const now = new Date();
     const months = Array.from({ length: 12 }, (_, i) => ({ key: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + i, 1)).toISOString().slice(0, 7), net: 0 }));
     const hit = months.find((m) => m.key === at.toISOString().slice(0, 7));
-    if (hit) hit.net = 3000;
+    if (hit) hit.net = 1000000;
     return {
-      available: true, mode: 'test', currency: 'usd', gross: 3000, refunded: 0, net: 3000, lifetimeSales: 1, lifetimeNet: 3000,
+      available: true, mode: 'test', currency: 'pkr', gross: 1000000, refunded: 0, net: 1000000, lifetimeSales: 1, lifetimeNet: 1000000,
       addonCharges: 0, addonNet: 0, disputed: 0, otherCurrency: 0, activeSubs: 0, mrr: 0, months, paymentCount: 1, partial: false, truncated: false,
-      payments: [{ id: '…h_mock', created: at.toISOString(), product: 'lifetime', amount: 3000, refunded: 0, currency: 'usd', status: 'paid', email: 'b••••@example.test' }],
+      payments: [{ id: '…h_mock', created: at.toISOString(), product: 'lifetime', amount: 1000000, refunded: 0, currency: 'pkr', status: 'paid', email: 'b••••@example.test' }],
     };
   }
 
@@ -589,8 +639,8 @@ class Component extends DCLogic {
     const days = Math.floor((Date.now() - Date.parse(v)) / DAY);
     return days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 30 ? `${days} days ago` : this.date(v);
   }
-  money(cents) { return cents == null ? '—' : USD.format(cents / 100); }
-  compact(cents) { const v = cents / 100; return v >= 1000 ? `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `$${Math.round(v)}`; }
+  money(cents, currency = 'pkr') { return cents == null ? '—' : currency === 'pkr' ? PKR.format(cents / 100) : new Intl.NumberFormat('en-US', { style: 'currency', currency: String(currency).toUpperCase() }).format(cents / 100); }
+  compact(cents) { const v = cents / 100; return v >= 1000 ? `Rs ${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `Rs ${Math.round(v)}`; }
   match(row, fields) {
     const q = this.state.q.trim().toLowerCase();
     return !q || fields.some((f) => String(row[f] ?? '').toLowerCase().includes(q));
@@ -664,7 +714,7 @@ class Component extends DCLogic {
     const live = (r?.mode ?? s?.mode) === 'live';
 
     const revenueCard = r
-      ? { value: this.money(r.net), tag: live ? 'Stripe live' : 'Stripe test', sub: `Gross ${this.money(r.gross)} · Refunds ${this.money(r.refunded)}`, foot: live ? `${r.paymentCount} charges` : 'Test mode. Not real money.', mrr: `MRR ${this.money(r.mrr)}` }
+      ? { value: this.money(r.net), tag: live ? 'Stripe live' : 'Stripe test', sub: `Gross ${this.money(r.gross)} · Refunds ${this.money(r.refunded)}`, foot: live ? `${r.paymentCount} charges` : 'Test mode. Not real money.', mrr: `Decision passes ${this.money(r.addonNet)}` }
       : { value: '—', tag: s ? (s.mode === 'missing' ? 'Stripe not set' : `Stripe ${s.mode}`) : 'Stripe', sub: this.revText(), foot: '', mrr: '' };
     revenueCard.go = nav.revenue.go;
 
@@ -672,6 +722,13 @@ class Component extends DCLogic {
       { label: 'Paying customers', tag: 'Lifetime', go: nav.purchases.go, ...(c ? { value: String(c.customers ?? c.purchases), of: '', pct: pct(c.addons, c.customers), sub: `${c.addons} with Decision Maker add-on` } : off) },
       { label: 'Active users · 7 days', tag: 'Desktop app', go: nav.users.go, ...(u ? (u.tracking ? { value: String(u.active7d), of: `/ ${u.desktop}`, pct: pct(u.active7d, u.desktop), sub: `Last 24h ${u.active24h} · last 30 days ${u.active30d}` } : { value: '—', of: '', pct: '0%', sub: 'Needs the billing-server update' }) : off) },
       { label: 'Licensed machines', tag: `Max ${cap} each`, go: nav.activations.go, ...(c ? { value: String(c.slotsUsed), of: `/ ${c.slotsTotal}`, pct: pct(c.slotsUsed, c.slotsTotal), sub: `${c.licenses} license${c.licenses === 1 ? '' : 's'} issued` } : off) },
+    ];
+    const dl = s?.downloads;
+    const customerActivity = [
+      { label: 'Free downloads', tag: 'Installer', value: dl?.tracking ? String(dl.public ?? 0) : '—', sub: dl?.tracking ? `${dl.total ?? 0} total downloads, including licensed links` : 'Download tracking unavailable' },
+      { label: '1-day trial keys', tag: 'Free', value: c ? String(c.trials ?? 0) : '—', sub: c ? `${c.trialActivated ?? 0} activated · ${c.trialActive ?? 0} active now` : 'Trial data unavailable' },
+      { label: 'Lifetime buyers', tag: 'Checkout records', value: c ? String(c.purchases) : '—', sub: 'Completed checkouts; check Revenue for refunds' },
+      { label: 'Decision Makers', tag: 'Paid passes', value: c ? String(c.addons) : '—', sub: '30-day passes recorded after payment' },
     ];
 
     const chart = this.chart();
@@ -715,7 +772,6 @@ class Component extends DCLogic {
     ];
 
     const inst = s?.installer;
-    const dl = s?.downloads;
     const privateStorage = inst && ['blob', 'local-file'].includes(inst.storage);
     const instTone = !inst ? 'neutral' : privateStorage ? (inst.ready ? 'ok' : 'warn') : inst.storage === 'local-url' ? 'warn' : 'missing';
     const installer = {
@@ -760,7 +816,7 @@ class Component extends DCLogic {
       .map((x) => { const t = TONE[x.state] ?? TONE.neutral; return { label: x.label, detail: x.detail, dot: t.dot, state: t.word, stateFg: t.fg }; });
 
     return {
-      revenueCard, stats, chart, chartEmpty, usersBreak,
+      revenueCard, stats, customerActivity, customerActivityUpdated: s?.generatedAt ? `Updated ${new Date(s.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · refreshes every 30 sec` : 'Refresh to see current counts', chart, chartEmpty, usersBreak,
       payments, paymentsShow: payments.length > 0, paymentsEmpty,
       gauge, licenseLegend, installer,
       slotsCaption: `Max ${cap} machines per license`, slotPreview, slotPreviewShow: slotPreview.length > 0, slotEmpty,
@@ -794,7 +850,7 @@ class Component extends DCLogic {
       const notes = [];
       if (r?.partial) notes.push('Some Stripe objects could not be read, so totals may be low.');
       if (r?.truncated) notes.push('Only the first 300 customers are counted.');
-      if (r?.otherCurrency) notes.push(`${r.otherCurrency} non-USD charges are not included.`);
+      if (r?.otherCurrency) notes.push(`${r.otherCurrency} non-PKR charges are not included.`);
       out = {
         title: 'Revenue',
         intro: live ? 'Live Stripe revenue for customers recorded by the billing server.' : 'Stripe test-mode revenue. These are test payments, not real money. The same view shows live revenue once live payments are approved and ADMIN_ALLOW_LIVE_READS=1 is set.',
@@ -802,8 +858,8 @@ class Component extends DCLogic {
           kpi('Net revenue', this.money(r.net), live ? 'After refunds' : 'Test mode, after refunds', true),
           kpi('Gross', this.money(r.gross), `${r.paymentCount} charge${r.paymentCount === 1 ? '' : 's'}`),
           kpi('Refunds', this.money(r.refunded), r.disputed ? `${r.disputed} disputed` : 'No disputes'),
-          kpi('Lifetime sales', String(r.lifetimeSales), `${this.money(r.lifetimeNet)} net at $30`),
-          kpi('Decision Maker MRR', this.money(r.mrr), `${r.activeSubs} active subscription${r.activeSubs === 1 ? '' : 's'}`),
+          kpi('Lifetime sales', String(r.lifetimeSales), `${this.money(r.lifetimeNet)} net at Rs 10,000`),
+          kpi('Decision pass revenue', this.money(r.addonNet), 'Manual 30-day payments'),
         ] : [],
         showChart: Boolean(r),
         chips: this.chips('revenue', defs, all, Boolean(r)),
@@ -813,7 +869,7 @@ class Component extends DCLogic {
           const [word, tone] = PAY[p.status] ?? ['Unknown', 'neutral'];
           return { cells: [
             this.cell(this.date(p.created)), this.cell(p.email || 'Email not on file', `Charge ${p.id}`),
-            this.cell(p.product === 'lifetime' ? 'Lifetime Deal' : 'Decision Maker add-on', p.product === 'lifetime' ? 'One-time' : 'Monthly'),
+            this.cell(p.product === 'lifetime' ? 'Lifetime Deal' : 'Decision Maker pass', p.product === 'lifetime' ? 'One-time' : '30 days'),
             this.cell(this.money(p.amount)), this.cell(p.refunded ? this.money(p.refunded) : '—'), this.pill(word, tone),
           ] };
         }),
@@ -880,7 +936,7 @@ class Component extends DCLogic {
           if (r.status !== 'paid') stripeCell = this.cell('—', 'Nothing to verify');
           else if (mode !== 'test' && conn !== 'fixture') stripeCell = this.cell('—', 'Test mode only');
           else if (v?.error) stripeCell = this.cell('Check failed', v.error);
-          else if (v) stripeCell = this.pill(`${this.money(v.amount)} · ${v.refunded ? 'Refunded' : v.disputed ? 'Disputed' : v.paid ? 'Paid' : 'Not paid'}`, v.refunded || v.disputed || !v.paid ? 'error' : 'ok');
+          else if (v) stripeCell = this.pill(`${this.money(v.amount, v.currency)} · ${v.refunded ? 'Refunded' : v.disputed ? 'Disputed' : v.paid ? 'Paid' : 'Not paid'}`, v.refunded || v.disputed || !v.paid ? 'error' : 'ok');
           else stripeCell = { isText: false, isPill: false, isButton: true, text: this.state.verifying === r.id ? 'Checking…' : 'Verify', busy: this.state.verifying === r.id, go: () => this.verifyPurchase(r.id) };
           return { cells: [
             this.cell(r.email || 'Email not on file yet', `Install ${r.id}`),
@@ -994,11 +1050,11 @@ class Component extends DCLogic {
     const mode = data?.summary?.mode;
     const banners = {
       loading: { tag: 'LOADING', text: 'Contacting the admin API…', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#EFEFEF', tagFg: '#1C1C1C' },
-      unreachable: { tag: 'SETUP NEEDED', text: 'No admin API answered here, so nothing below is live. Run node website/admin/server/local-server.mjs and open http://127.0.0.1:38750/admin/, or deploy api/admin.mjs after the hosted setup.', bg: '#1C1C1C', fg: '#F0F0F0', tagBg: '#C8D5BB', tagFg: '#1C1C1C', retry: true },
-      unauthorized: { tag: 'SIGN IN', text: 'The admin API is running. Data stays hidden until the server accepts your owner token.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#C8D5BB', tagFg: '#1C1C1C' },
+      unreachable: { tag: 'SETUP NEEDED', text: 'No admin API answered here, so nothing below is live. Start the admin-dashboard/server/local-server.mjs service and open its /admin/ URL.', bg: '#1C1C1C', fg: '#F0F0F0', tagBg: '#C8D5BB', tagFg: '#1C1C1C', retry: true },
+      unauthorized: { tag: 'SIGN IN', text: 'The admin API is running. Data stays hidden until you sign in as the owner.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#C8D5BB', tagFg: '#1C1C1C' },
       unavailable: { tag: 'SETUP NEEDED', text: `${this.state.error} The billing tables appear after the billing server handles its first request.`, bg: '#1C1C1C', fg: '#F0F0F0', tagBg: '#C8D5BB', tagFg: '#1C1C1C', retry: true },
       error: { tag: 'ERROR', text: this.state.error, bg: '#F6E3E0', fg: '#5C1F1A', tagBg: '#7A2A22', tagFg: '#FFFFFF', retry: true },
-      fixture: { tag: 'TEST FIXTURE', text: 'Sample rows that mirror the verify-admin.mjs scenario: one $30 Stripe test purchase, one license, two activations, one download. They are not real sales or customers.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#1C1C1C', tagFg: '#C8D5BB' },
+      fixture: { tag: 'TEST FIXTURE', text: 'Sample rows: one Rs 10,000 Stripe test purchase, one license, two activations, one download. They are not real sales or customers.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#1C1C1C', tagFg: '#C8D5BB' },
     };
     let banner = banners[conn];
     if (conn === 'ok' && mode === 'live') banner = { tag: 'LIVE KEY', text: 'A live Stripe key is configured. This dashboard stays read-only. Switch back to test keys until live payments are approved.', bg: '#F3ECD9', fg: '#3D300C', tagBg: '#5C4813', tagFg: '#FFFFFF' };
@@ -1015,8 +1071,16 @@ class Component extends DCLogic {
       banner: banner ? { show: true, retry: Boolean(banner.retry), ...banner } : { show: false },
       signedIn: conn === 'ok', onLogout: () => this.logout(),
       showLogin: conn === 'unauthorized',
-      loginToken: this.state.loginToken, loginBusy: this.state.loginBusy, loginError: this.state.loginError,
-      onLoginInput: (e) => this.setState({ loginToken: e.target.value }), onLogin: (e) => this.login(e),
+      loginToken: this.state.loginToken, loginEmail: this.state.loginEmail, loginPassword: this.state.loginPassword,
+      loginUseEmail: this.state.loginMethod === 'email', loginUseToken: this.state.loginMethod === 'token',
+      showLoginSwitch: Boolean(this.state.loginMethods?.emailLoginEnabled && this.state.loginMethods?.tokenLoginEnabled),
+      loginSwitchLabel: this.state.loginMethod === 'email' ? 'Use owner token instead' : 'Use Gmail and password instead',
+      loginBusy: this.state.loginBusy, loginError: this.state.loginError,
+      onLoginInput: (e) => this.setState({ loginToken: e.target.value }),
+      onLoginEmailInput: (e) => this.setState({ loginEmail: e.target.value }),
+      onLoginPasswordInput: (e) => this.setState({ loginPassword: e.target.value }),
+      onToggleLoginMethod: () => this.setState((state) => ({ loginMethod: state.loginMethod === 'email' ? 'token' : 'email', loginError: '', loginPassword: '', loginToken: '' })),
+      onLogin: (e) => this.login(e),
       isOverview: view === 'overview' && conn !== 'unauthorized',
       isDetail: view !== 'overview' && conn !== 'unauthorized',
       ...this.overview(nav),

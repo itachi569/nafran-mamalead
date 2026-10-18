@@ -1,4 +1,16 @@
-# MamaLead self-hosted test deployment — 14 October 2026 (Pakistan time)
+# MamaLead self-hosted test deployment
+
+## 18 October 2026: version 1.4.9 deployed to the fleet server
+
+The current website, billing API, owner dashboard, and Windows installer are deployed to the fleet server. The website is live at `https://mamalead.com/`, the owner dashboard at `https://admin.mamalead.com/admin/`, and the Windows installer at `https://api.mamalead.com/v1/download?platform=windows`. All four application services restarted and remained active. The billing API health endpoint returned HTTP 200 in Stripe **test mode**. The admin sign-in configuration returned email login enabled and token login disabled.
+
+The 1.4.9 installer is 336,342,145 bytes. Its server-side SHA-256 is `EA7640AE2D8E76488F434446CE3181DEE0AF4617AABEC9EB99C0875CE7C0DA4C`, matching the local build. The public download returned HTTP 200 with that size and filename, and its first bytes were a Windows executable header. Public website and dashboard HTML matched the deployed files exactly after removing Cloudflare's injected analytics beacon. Before deployment, a SQLite backup and source/site archive were saved on the server.
+
+Local verification passed 113 billing checks, 50 dashboard checks, the admin login UI, website Decision Makers checkout, TypeScript type checking, and packaged Windows tests for Lifetime and Decision Makers flows. A live test-mode installation registration and billing status check succeeded without a payment. The Lifetime test price is PKR 10,000. No live card charge or owner password sign-in was performed in this deployment check.
+
+The Windows installer is unsigned, so Windows SmartScreen can still warn. Mac installers are not in this release; the public API reports Mac unavailable and the website labels those downloads as coming soon. The test-mode deployment does not accept live card payments.
+
+## Earlier deployment record — 14 October 2026 (Pakistan time)
 
 ## Version 1.4.1 public installer and device binding
 
