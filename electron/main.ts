@@ -122,14 +122,17 @@ function readUpdateFeedUrl(): string {
 }
 
 const updateFeedUrl = readUpdateFeedUrl()
-const updateDisabledMessage = !updateFeedUrl
+const storeManagedUpdates = process.windowsStore === true
+const updateDisabledMessage = storeManagedUpdates
+  ? 'Updates are managed automatically by Microsoft Store.'
+  : !updateFeedUrl
   ? 'Auto-updates are not configured for this build.'
   : 'Update checks are available in the installed app.'
 let updateState: UpdateState = {
-  state: app.isPackaged && updateFeedUrl ? 'idle' : 'disabled',
+  state: app.isPackaged && updateFeedUrl && !storeManagedUpdates ? 'idle' : 'disabled',
   version: null,
   percent: null,
-  message: app.isPackaged && updateFeedUrl ? 'Updates are ready to check.' : updateDisabledMessage,
+  message: app.isPackaged && updateFeedUrl && !storeManagedUpdates ? 'Updates are ready to check.' : updateDisabledMessage,
 }
 
 function updateStatus(): UpdateState {
@@ -147,7 +150,7 @@ function setUpdateState(patch: Partial<UpdateState>): UpdateState {
 }
 
 function configureAutoUpdater(): void {
-  if (!app.isPackaged || !updateFeedUrl) return
+  if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return
 
   autoUpdater.setFeedURL({ provider: 'generic', url: updateFeedUrl })
   autoUpdater.autoDownload = false
@@ -167,7 +170,7 @@ function configureAutoUpdater(): void {
 }
 
 async function checkForUpdate(): Promise<UpdateState> {
-  if (!app.isPackaged || !updateFeedUrl) return setUpdateState({ state: 'disabled', message: updateDisabledMessage })
+  if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return setUpdateState({ state: 'disabled', message: updateDisabledMessage })
   if (updateState.state === 'checking' || updateState.state === 'downloading' || updateState.state === 'ready') return updateStatus()
   setUpdateState({ state: 'checking', version: null, percent: null, message: 'Checking for a newer version…' })
   try {
@@ -495,7 +498,7 @@ ipcMain.handle('billing:openInvoice', async (_event, raw: string) => {
 ipcMain.handle('updates:status', () => updateStatus())
 ipcMain.handle('updates:check', () => checkForUpdate())
 ipcMain.handle('updates:download', async () => {
-  if (!app.isPackaged || !updateFeedUrl) return setUpdateState({ state: 'disabled', message: updateDisabledMessage })
+  if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return setUpdateState({ state: 'disabled', message: updateDisabledMessage })
   if (updateState.state !== 'available') return updateStatus()
   try {
     setUpdateState({ state: 'downloading', message: 'Downloading the update…', percent: 0 })

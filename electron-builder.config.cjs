@@ -4,6 +4,10 @@ const { updateFeedUrl } = require('./scripts/update-feed-url.cjs')
 const feedUrl = updateFeedUrl()
 const requireCodeSigning = process.env.REQUIRE_CODE_SIGNING === '1'
 const requireNotarization = process.env.REQUIRE_NOTARIZATION === '1'
+const isStoreBuild = process.env.MAMALEAD_STORE_BUILD === '1'
+const storeIdentityName = process.env.MAMALEAD_STORE_IDENTITY_NAME?.trim()
+const storePublisher = process.env.MAMALEAD_STORE_PUBLISHER?.trim()
+const storePublisherDisplayName = process.env.MAMALEAD_STORE_PUBLISHER_DISPLAY_NAME?.trim()
 const hasMacNotarizationCredentials = Boolean(
   (process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) ||
     (process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID) ||
@@ -13,6 +17,12 @@ const hasMacNotarizationCredentials = Boolean(
 if (requireNotarization && !hasMacNotarizationCredentials) {
   throw new Error(
     'REQUIRE_NOTARIZATION=1 but no Apple notarization credentials were supplied. Configure APPLE_API_KEY/APPLE_API_KEY_ID/APPLE_API_ISSUER, APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID, or APPLE_KEYCHAIN/APPLE_KEYCHAIN_PROFILE.',
+  )
+}
+
+if (isStoreBuild && (!storeIdentityName || !storePublisher || !storePublisherDisplayName)) {
+  throw new Error(
+    'MAMALEAD_STORE_BUILD=1 requires MAMALEAD_STORE_IDENTITY_NAME, MAMALEAD_STORE_PUBLISHER, and MAMALEAD_STORE_PUBLISHER_DISPLAY_NAME from Partner Center.',
   )
 }
 
@@ -35,8 +45,20 @@ module.exports = {
     // instead of silently producing an unsigned installer with REQUIRE_CODE_SIGNING=1.
     ...(requireCodeSigning ? { signAndEditExecutable: true } : {}),
   },
+  appx: {
+    applicationId: 'MamaLead',
+    identityName: storeIdentityName || 'MamaLead.Preflight',
+    publisher: storePublisher || 'CN=MamaLead Preflight',
+    publisherDisplayName: storePublisherDisplayName || 'MamaLead',
+    displayName: 'MamaLead',
+    backgroundColor: '#F7F4EC',
+    languages: ['en-US'],
+    minVersion: '10.0.17763.0',
+    maxVersionTested: '10.0.26100.0',
+    capabilities: ['runFullTrust'],
+  },
   ...(requireCodeSigning ? { forceCodeSigning: true } : {}),
-  ...(feedUrl
+  ...(!isStoreBuild && feedUrl
     ? {
         publish: {
           provider: 'generic',

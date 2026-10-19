@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MamaLead Privacy Policy</title>
+  <meta name="description" content="Privacy policy for the MamaLead desktop application and website.">
+  <link rel="icon" type="image/png" href="/img/mamalead-favicon.png?v=2">
+  <style>
+    @font-face { font-family: Satoshi; src: url("/fonts/satoshi-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+    @font-face { font-family: Satoshi; src: url("/fonts/satoshi-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+    @font-face { font-family: Satoshi; src: url("/fonts/satoshi-700.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #1c1c1c; background: #efefef; font-family: Satoshi, "Helvetica Neue", Arial, sans-serif; line-height: 1.65; }
+    a { color: #31472c; }
+    .wash { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(60vw 46vh at 4% 5%, rgba(169,188,155,.45), transparent 64%), radial-gradient(58vw 52vh at 96% 28%, rgba(200,213,187,.45), transparent 66%); }
+    header, main, footer { position: relative; z-index: 1; }
+    header { border-bottom: 1px solid rgba(28,28,28,.08); background: rgba(239,239,239,.78); backdrop-filter: blur(18px); }
+    .bar { max-width: 980px; margin: 0 auto; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; color: #1c1c1c; text-decoration: none; font-weight: 700; }
+    .brand img { width: 36px; height: 36px; border-radius: 10px; }
+    .back { padding: 9px 15px; border-radius: 999px; background: #1c1c1c; color: white; text-decoration: none; font-size: 13px; }
+    main { max-width: 980px; margin: 0 auto; padding: 64px 24px 90px; }
+    .hero { max-width: 760px; }
+    .eyebrow { font-size: 11px; letter-spacing: .16em; color: #4b5548; }
+    h1 { margin: 14px 0 0; font-size: clamp(40px, 7vw, 72px); line-height: 1; letter-spacing: -.045em; }
+    .lead { margin: 22px 0 0; font-size: 17px; color: #3e443d; }
+    .updated { margin: 16px 0 0; font-size: 13px; color: #626762; }
+    .grid { margin-top: 44px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    section { padding: 26px; border-radius: 22px; background: rgba(255,255,255,.72); border: 1px solid rgba(255,255,255,.9); box-shadow: 0 28px 60px -50px rgba(28,28,28,.4); }
+    section.wide { grid-column: 1 / -1; }
+    h2 { margin: 0; font-size: 20px; line-height: 1.25; }
+    p { margin: 12px 0 0; }
+    ul { margin: 12px 0 0; padding-left: 20px; }
+    li + li { margin-top: 7px; }
+    footer { max-width: 980px; margin: 0 auto; padding: 0 24px 38px; font-size: 13px; color: #606560; }
+  </style>
+</head>
+<body>
+  <div class="wash"></div>
+  <header>
+    <div class="bar">
+      <a class="brand" href="/"><img src="/img/mamalead-favicon.png?v=2" alt="">MamaLead</a>
+      <a class="back" href="/">Back to MamaLead</a>
+    </div>
+  </header>
+  <main>
+    <div class="hero">
+      <div class="eyebrow">PRIVACY POLICY</div>
+      <h1>Your data, explained clearly.</h1>
+      <p class="lead">MamaLead is a local-first desktop application. Lead records, saved lists, run history and exports are kept on your computer unless you choose to send information to a third-party feature.</p>
+      <p class="updated">Effective date: 19 October 2026</p>
+    </div>
+
+    <div class="grid">
+      <section>
+        <h2>Information kept on your device</h2>
+        <ul>
+          <li>Your leads database, lists, run history and exports.</li>
+          <li>Your dedicated Google browser profile and its Google session cookies when you choose to sign in.</li>
+          <li>License installation tokens and API credentials, protected with the operating system's secure storage where supported.</li>
+        </ul>
+        <p>MamaLead does not receive your Google password. Sign-in takes place on Google's page.</p>
+      </section>
+
+      <section>
+        <h2>Information processed by MamaLead services</h2>
+        <ul>
+          <li>Email address used to request a trial, buy a license or receive a license key.</li>
+          <li>A one-way hashed device identifier and a short operating-system label for activation and device limits.</li>
+          <li>License, purchase, activation and entitlement records.</li>
+          <li>Maps lead and Decision Makers usage counters needed to enforce plan limits. Decision Makers usage sends a hashed subject reference, not the lead record.</li>
+          <li>Basic service logs needed for security, reliability and abuse prevention.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Payments and email</h2>
+        <p>Card details are entered on Stripe Checkout and are handled by Stripe. MamaLead receives purchase status, customer and transaction references, invoice information and the checkout email needed to deliver access.</p>
+        <p>Transactional license and trial emails are delivered through Resend. Resend receives the recipient email address and the content of that message.</p>
+      </section>
+
+      <section>
+        <h2>Optional AI and enrichment services</h2>
+        <p>Nafran Assist is optional and uses the API credential you configure. When you send a message, that message, recent chat messages and the workspace summary shown to the assistant are sent directly from your device to the configured AI provider, which is Cerebras by default.</p>
+        <p>Optional enrichment providers process only the data you choose to submit under their own terms and privacy policies.</p>
+      </section>
+
+      <section>
+        <h2>Why we process information</h2>
+        <ul>
+          <li>Issue and verify trials, licenses and paid passes.</li>
+          <li>Prevent duplicate claims, enforce device and usage limits, and protect the service from abuse.</li>
+          <li>Send purchase, trial and license messages.</li>
+          <li>Provide support and maintain service reliability.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Retention and deletion</h2>
+        <p>Local data remains on your device until you delete it or uninstall the app and remove its application-data folder. Service records are kept for as long as needed to provide the license or pass, meet accounting and security requirements, resolve disputes and prevent duplicate or abusive use.</p>
+        <p>You may request access, correction or deletion of personal information we control. Some transaction or anti-fraud records may be retained where legally or operationally required.</p>
+      </section>
+
+      <section>
+        <h2>Security</h2>
+        <p>License traffic uses HTTPS. Device identifiers are hashed before transmission, server credentials are not included in the app, and local secrets use operating-system encryption where available. No method of storage or transmission can be guaranteed completely secure.</p>
+      </section>
+
+      <section>
+        <h2>Your responsibilities</h2>
+        <p>You are responsible for the sources you access, the information you collect, and compliance with applicable laws and third-party terms. Use of Google services is also subject to <a href="https://policies.google.com/terms" rel="noopener">Google's Terms</a> and <a href="https://policies.google.com/privacy" rel="noopener">Google's Privacy Policy</a>.</p>
+      </section>
+
+      <section class="wide">
+        <h2>Contact and policy updates</h2>
+        <p>For privacy questions or requests, email <a href="mailto:billing@nafran.co">billing@nafran.co</a>. We may update this policy as the product changes. The effective date above identifies the current version.</p>
+      </section>
+    </div>
+  </main>
+  <footer>© 2026 MamaLead. A Nafran Leads product.</footer>
+</body>
+</html>

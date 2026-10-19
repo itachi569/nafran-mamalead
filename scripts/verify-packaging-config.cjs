@@ -15,6 +15,10 @@ function load(overrides = {}) {
     'APPLE_API_KEY',
     'APPLE_API_KEY_ID',
     'APPLE_API_ISSUER',
+    'MAMALEAD_STORE_BUILD',
+    'MAMALEAD_STORE_IDENTITY_NAME',
+    'MAMALEAD_STORE_PUBLISHER',
+    'MAMALEAD_STORE_PUBLISHER_DISPLAY_NAME',
   ]
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]))
   for (const name of names) {
@@ -44,6 +48,20 @@ check('macOS exposes DMG and ZIP targets', local.mac.target.includes('dmg') && l
 check('Linux exposes AppImage and DEB targets', local.linux.target.includes('AppImage') && local.linux.target.includes('deb'))
 check('macOS hardened runtime is enabled', local.mac.hardenedRuntime === true)
 check('local builds do not require unavailable signing credentials', local.forceCodeSigning !== true)
+check('Store package uses full trust and the MamaLead application id', local.appx.capabilities.includes('runFullTrust') && local.appx.applicationId === 'MamaLead')
+
+const store = load({
+  MAMALEAD_STORE_BUILD: '1',
+  MAMALEAD_STORE_IDENTITY_NAME: 'Reserved.MamaLead',
+  MAMALEAD_STORE_PUBLISHER: 'CN=Store Publisher',
+  MAMALEAD_STORE_PUBLISHER_DISPLAY_NAME: 'MamaLead',
+  LEADSNAP_UPDATE_URL: 'https://updates.example.test/nafran/',
+})
+check('Store package reads Partner Center identity', store.appx.identityName === 'Reserved.MamaLead' && store.appx.publisher === 'CN=Store Publisher')
+check('Store package leaves updates to Microsoft Store', store.publish === undefined)
+check('Store package rejects missing Partner Center identity', (() => {
+  try { load({ MAMALEAD_STORE_BUILD: '1' }); return false } catch (error) { return /requires MAMALEAD_STORE_IDENTITY_NAME/.test(error.message) }
+})())
 
 const signed = load({ REQUIRE_CODE_SIGNING: '1', REQUIRE_NOTARIZATION: '1', WIN_CSC_LINK: 'configured-in-ci', APPLE_ID: 'ci@example.test', APPLE_APP_SPECIFIC_PASSWORD: 'ci-password', APPLE_TEAM_ID: 'TEAM123456' })
 check('release builds can require code signing', signed.forceCodeSigning === true)
