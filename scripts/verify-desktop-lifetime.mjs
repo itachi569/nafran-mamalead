@@ -67,7 +67,7 @@ try {
   const env = { ...process.env, LEADSNAP_BILLING_API_URL: origin, APPDATA: join(directory, 'appdata') }
   delete env.ELECTRON_RUN_AS_NODE
   desktop = await electron.launch(packaged ? {
-    executablePath: resolve(root, 'release/win-unpacked/Nafran Leads Scraper.exe'),
+    executablePath: resolve(root, 'release/win-unpacked/MamaLead.exe'),
     args: [`--user-data-dir=${join(directory, 'profile')}`], env, timeout: 60_000,
   } : {
     cwd: root, args: ['.', `--user-data-dir=${join(directory, 'profile')}`], env, timeout: 60_000,

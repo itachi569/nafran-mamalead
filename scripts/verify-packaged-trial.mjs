@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { _electron as electron } from 'playwright'
 
-const executablePath = resolve(import.meta.dirname, '../release/win-unpacked/Nafran Leads Scraper.exe')
+const executablePath = resolve(import.meta.dirname, '../release/win-unpacked/MamaLead.exe')
 const directory = mkdtempSync(join(tmpdir(), 'nafran-packaged-trial-'))
 let desktop
 try {

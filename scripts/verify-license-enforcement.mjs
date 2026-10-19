@@ -108,7 +108,7 @@ try {
   available = true
   const before = localStatusRequests
   packaged = await electron.launch({
-    executablePath: resolve('release/win-unpacked/Nafran Leads Scraper.exe'),
+    executablePath: resolve('release/win-unpacked/MamaLead.exe'),
     args: [`--user-data-dir=${join(dir, 'packaged-profile')}`],
     env: { ...process.env, LEADSNAP_BILLING_API_URL: origin, APPDATA: join(dir, 'packaged-appdata') },
     timeout: 90000,

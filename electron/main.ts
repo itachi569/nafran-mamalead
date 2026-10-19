@@ -428,7 +428,7 @@ function createWindow(): void {
     minWidth: 980,
     minHeight: 680,
     backgroundColor: '#ededde',
-    title: 'Nafran Leads Scraper',
+    title: 'MamaLead',
     show: false,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),

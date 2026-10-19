@@ -22,7 +22,7 @@ async function main() {
   const env = { ...process.env, APPDATA: join(directory, 'appdata') }
   delete env.ELECTRON_RUN_AS_NODE
   desktop = await _electron.launch({
-    ...(packaged ? { executablePath: join(root, 'release', 'win-unpacked', 'Nafran Leads Scraper.exe') } : { cwd: root }),
+    ...(packaged ? { executablePath: join(root, 'release', 'win-unpacked', 'MamaLead.exe') } : { cwd: root }),
     args: packaged ? [`--user-data-dir=${join(directory, 'profile')}`] : ['.', `--user-data-dir=${join(directory, 'profile')}`],
     env,
     timeout: 60_000,

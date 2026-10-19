@@ -5,7 +5,7 @@ const { mkdtempSync } = require('node:fs')
 const { join } = require('node:path')
 const { tmpdir } = require('node:os')
 
-const EXE = join(process.cwd(), 'release', 'win-unpacked', 'Nafran Leads Scraper.exe')
+const EXE = join(process.cwd(), 'release', 'win-unpacked', 'MamaLead.exe')
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function main() {

@@ -10,10 +10,16 @@ if (process.platform !== 'darwin') throw new Error('This check must run on macOS
 const release = resolve(import.meta.dirname, '../release')
 const appFolder = readdirSync(release, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
-  .map((entry) => join(release, entry.name, 'Nafran Leads Scraper.app'))
+  .map((entry) => join(release, entry.name, 'MamaLead.app'))
   .find(existsSync)
 if (!appFolder) throw new Error('The packaged Mac .app was not found.')
-const executablePath = join(appFolder, 'Contents', 'MacOS', 'Nafran Leads Scraper')
+const infoPath = join(appFolder, 'Contents', 'Info.plist')
+const bundleName = spawnSync('plutil', ['-extract', 'CFBundleName', 'raw', '-o', '-', infoPath], { encoding: 'utf8' })
+assert.equal(bundleName.status, 0, bundleName.stderr)
+assert.equal(bundleName.stdout.trim(), 'MamaLead')
+assert.equal(existsSync(join(appFolder, 'Contents', 'Resources', 'icon.icns')), true)
+console.log('PASS  Mac app bundle is named MamaLead and includes its custom icon')
+const executablePath = join(appFolder, 'Contents', 'MacOS', 'MamaLead')
 const directory = mkdtempSync(join(tmpdir(), 'nafran-mac-smoke-'))
 let desktop
 try {

@@ -26,7 +26,7 @@ try {
   for (const name of ['CEREBRAS_API_KEY', 'CEREBRAS_API_KEY_FILE', 'NAFRAN_ASSIST_API_KEY', 'NAFRAN_ASSIST_API_KEY_FILE', 'OPENAI_API_KEY', 'OPENAI_API_KEY_FILE']) delete env[name]
   const packaged = process.env.NAFRAN_TEST_PACKAGED === '1'
   desktop = await electron.launch(packaged ? {
-    executablePath: resolve(root, 'release/win-unpacked/Nafran Leads Scraper.exe'),
+    executablePath: resolve(root, 'release/win-unpacked/MamaLead.exe'),
     args: [`--user-data-dir=${join(directory, 'profile')}`], env, timeout: 60_000,
   } : { cwd: root, args: ['.', `--user-data-dir=${join(directory, 'profile')}`], env, timeout: 60_000 })
   const page = await desktop.firstWindow()

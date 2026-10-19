@@ -50,7 +50,7 @@ try {
   delete env.ELECTRON_RUN_AS_NODE
   const packaged = process.env.NAFRAN_TEST_PACKAGED === '1'
   desktop = await electron.launch(packaged ? {
-    executablePath: resolve(root, 'release/win-unpacked/Nafran Leads Scraper.exe'),
+    executablePath: resolve(root, 'release/win-unpacked/MamaLead.exe'),
     args: [`--user-data-dir=${join(directory, 'profile')}`], env, timeout: 60_000,
   } : { cwd: root, args: ['.', `--user-data-dir=${join(directory, 'profile')}`], env, timeout: 60_000 })
   if (packaged) await desktop.evaluate((_, mockOrigin) => {
