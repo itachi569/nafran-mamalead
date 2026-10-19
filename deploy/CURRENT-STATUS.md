@@ -1,5 +1,17 @@
 # MamaLead self-hosted test deployment
 
+## 19 October 2026: MamaLead 1.4.10 branding release
+
+The desktop product name is now **MamaLead**. The Windows installer and both Mac test DMGs use the new MamaLead green `m` icon based on the supplied brand logo. The Mac `.app` bundle is named `MamaLead.app`; its packaged icon and bundle name, Chromium startup, trial, and licence activation passed the [Apple Silicon and Intel CI run](https://github.com/itachi569/nafran-mamalead/actions/runs/39211000902). The unsigned [Windows CI build](https://github.com/itachi569/nafran-mamalead/actions/runs/39213090553) also passed, and the fresh local Windows installer launched and passed the packaged UI check. The package name and app ID remain stable so existing local app data and licence identity are retained.
+
+The public website shows MamaLead 1.4.10. All three public download URLs return HTTP 200 with the correct filename and length; the first 4 KiB streamed over public HTTPS matched the files on the server:
+
+- Windows: `https://api.mamalead.com/v1/download?platform=windows` — 333,589,059 bytes; SHA-256 `4E4DAE04FF280767F25A2AB541C6F00D97C8CD8DBBA24E599F27CC2ADCC8807F`.
+- Mac Apple Silicon: `https://api.mamalead.com/v1/download?platform=mac-arm64` — 405,890,665 bytes; SHA-256 `5B14AD8D29D79F190D3178E3975A8EF55C78FEBD1DF9B9BFB0A450BA6CF93918`.
+- Mac Intel: `https://api.mamalead.com/v1/download?platform=mac-x64` — 423,831,676 bytes; SHA-256 `9020BFC821755CA633CEA4432320A8A9ECD9D0F3E871F7F89616985DECA5A6B7`.
+
+The billing API remained healthy in Stripe **test mode**, download options reported all platforms available, and the admin sign-in page returned HTTP 200. The prior website and download path files are saved under `/home/ahmed/deploy-staging/1.4.10/rollback/`. These Mac builds remain unsigned, so macOS may warn on first launch.
+
 ## 19 October 2026: Subscribe handoff and Mac test installers
 
 The website's Decision Makers Subscribe button now opens `mamalead://subscribe/decision-makers`. The desktop app handles that link by opening its device-bound Rs 1,000 Stripe Checkout. The site renderer replaces card elements after page load, so the website now uses a delegated click handler and reapplies download links after each render. If the browser remains active without opening the app, Windows visitors are sent to the public installer download after a short delay; Mac visitors are taken to the Mac chip selector. Browser focus is only a best-effort way to detect an installed app, so the page also shows a clear fallback message.
