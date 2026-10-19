@@ -3,6 +3,7 @@
 const required = process.env.REQUIRE_CODE_SIGNING === '1'
 const requireNotarization = process.env.REQUIRE_NOTARIZATION === '1'
 const requireLinuxSigning = process.env.REQUIRE_LINUX_SIGNING === '1'
+const windowsSigningMethod = String(process.env.WINDOWS_SIGNING_METHOD ?? '').trim().toLowerCase()
 
 function present(...names) {
   return names.some((name) => String(process.env[name] ?? '').trim().length > 0)
@@ -23,7 +24,17 @@ if (!required && !requireNotarization && !requireLinuxSigning) {
 }
 
 if (process.platform === 'win32' && required) {
-  if (!present('WIN_CSC_LINK', 'CSC_LINK')) fail('Windows signing requires WIN_CSC_LINK or CSC_LINK')
+  if (windowsSigningMethod === 'artifact-signing') {
+    if (!allPresent(
+      'AZURE_CLIENT_ID',
+      'AZURE_TENANT_ID',
+      'AZURE_SUBSCRIPTION_ID',
+      'AZURE_ARTIFACT_SIGNING_ENDPOINT',
+      'AZURE_ARTIFACT_SIGNING_ACCOUNT',
+      'AZURE_ARTIFACT_SIGNING_PROFILE',
+    )) fail('Azure Artifact Signing requires OIDC IDs, endpoint, account and certificate profile')
+    else console.log('PASS  Azure Artifact Signing configuration is present')
+  } else if (!present('WIN_CSC_LINK', 'CSC_LINK')) fail('Windows signing requires WIN_CSC_LINK or CSC_LINK')
   else console.log('PASS  Windows signing certificate is configured')
 }
 

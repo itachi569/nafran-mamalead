@@ -21,11 +21,12 @@ jobs:
   windows:
     if: ${{ inputs.unsigned_windows_test || !inputs.unsigned_mac_test }}
     runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
     env:
-      REQUIRE_CODE_SIGNING: ${{ inputs.unsigned_windows_test && '0' || '1' }}
+      REQUIRE_CODE_SIGNING: '0'
       REQUIRE_UPDATE_FEED: ${{ inputs.unsigned_windows_test && '0' || '1' }}
-      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       LEADSNAP_UPDATE_URL: ${{ secrets.LEADSNAP_UPDATE_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -34,11 +35,88 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run package:win -- --publish never
+      - name: Build unsigned Windows test installer
+        if: ${{ inputs.unsigned_windows_test }}
+        run: npm run package:win -- --publish never
+      - name: Check Artifact Signing configuration
+        if: ${{ !inputs.unsigned_windows_test }}
+        env:
+          REQUIRE_CODE_SIGNING: '1'
+          WINDOWS_SIGNING_METHOD: artifact-signing
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+        run: npm run release:signing:check
+      - name: Build unpacked Windows app
+        if: ${{ !inputs.unsigned_windows_test }}
+        run: npm run package:win:dir
+      - name: Sign in to Azure with GitHub OIDC
+        if: ${{ !inputs.unsigned_windows_test }}
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Sign application binaries with Azure Artifact Signing
+        if: ${{ !inputs.unsigned_windows_test }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\release\win-unpacked
+          files-folder-filter: exe,dll
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Build installer from signed application
+        if: ${{ !inputs.unsigned_windows_test }}
+        run: npm run package:win:from-dir
+      - name: Locate Windows installer
+        if: ${{ !inputs.unsigned_windows_test }}
+        id: windows-installer
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem release -File -Filter 'MamaLead Setup *.exe')
+          if ($files.Count -ne 1) { throw "Expected one MamaLead installer, found $($files.Count)." }
+          "path=$($files[0].FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Sign Windows installer with Azure Artifact Signing
+        if: ${{ !inputs.unsigned_windows_test }}
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ steps.windows-installer.outputs.path }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Refresh signed update metadata
+        if: ${{ !inputs.unsigned_windows_test }}
+        run: npm run package:win:refresh-update
+      - name: Verify Artifact Signing signatures
+        if: ${{ !inputs.unsigned_windows_test }}
+        shell: pwsh
+        run: |
+          $targets = @()
+          $targets += (Resolve-Path 'release\win-unpacked\MamaLead.exe').Path
+          $targets += '${{ steps.windows-installer.outputs.path }}'
+          foreach ($target in $targets) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $target
+            if ($signature.Status -ne 'Valid') { throw "Invalid signature on $target: $($signature.StatusMessage)" }
+            Write-Host "VALID $target — $($signature.SignerCertificate.Subject)"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: nafran-windows-installer
-          path: release/*
+          path: |
+            release/MamaLead Setup *.exe
+            release/*.blockmap
+            release/latest.yml
 
   macos:
     if: ${{ !inputs.unsigned_windows_test }}
