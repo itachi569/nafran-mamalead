@@ -7,6 +7,10 @@ on:
         description: Build an unsigned Mac installer for private testing
         type: boolean
         default: false
+      unsigned_windows_test:
+        description: Build an unsigned Windows installer for private testing
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -15,11 +19,11 @@ permissions:
 
 jobs:
   windows:
-    if: ${{ !inputs.unsigned_mac_test }}
+    if: ${{ inputs.unsigned_windows_test || !inputs.unsigned_mac_test }}
     runs-on: windows-latest
     env:
-      REQUIRE_CODE_SIGNING: '1'
-      REQUIRE_UPDATE_FEED: '1'
+      REQUIRE_CODE_SIGNING: ${{ inputs.unsigned_windows_test && '0' || '1' }}
+      REQUIRE_UPDATE_FEED: ${{ inputs.unsigned_windows_test && '0' || '1' }}
       WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
       WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       LEADSNAP_UPDATE_URL: ${{ secrets.LEADSNAP_UPDATE_URL }}
@@ -37,6 +41,7 @@ jobs:
           path: release/*
 
   macos:
+    if: ${{ !inputs.unsigned_windows_test }}
     strategy:
       fail-fast: false
       matrix:
@@ -107,7 +112,7 @@ jobs:
             release/latest-mac.yml
 
   linux:
-    if: ${{ !inputs.unsigned_mac_test }}
+    if: ${{ !inputs.unsigned_mac_test && !inputs.unsigned_windows_test }}
     runs-on: ubuntu-latest
     env:
       REQUIRE_LINUX_SIGNING: '1'
