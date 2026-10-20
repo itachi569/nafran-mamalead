@@ -1,5 +1,22 @@
 # MamaLead self-hosted test deployment
 
+## 20 October 2026: signed Windows 1.4.11 released
+
+Windows **1.4.11** is live at `https://api.mamalead.com/v1/download?platform=windows`. The app executable and installer passed Azure Artifact Signing verification with publisher **Nafran LTD** in [the successful release workflow](https://github.com/itachi569/nafran-mamalead/actions/runs/39426159488), tag `v1.4.11-release3-windows`, application commit `e008d3e44d7b6c8d9b460bcfd573693b6140ddf8`.
+
+- Public installer: 333,926,032 bytes; SHA-256 `2770ff43cf0232cbf85f88ebdf8e947db123f718099f3a41e6b0aef30b28535b`.
+- A full download from the public API matched that hash and returned Windows Authenticode status **Valid**, subject `CN=Nafran LTD, O=Nafran LTD, L=London, C=GB`, with a Microsoft timestamp.
+- The HTTPS generic update feed is `https://mamalead.com/updates/windows/`. `latest.yml` and the installer SHA-512 match. The public installer range request returned HTTP 206 with the correct first 16 bytes. The app pins the expected updater publisher to Nafran LTD and disables multiple-range requests.
+- The signed binary, blockmap and metadata are stored under `/opt/billing/artifacts/windows-updates/`; `/opt/billing/artifacts/MamaLead-Setup-1.4.11.exe` is a hard link to the signed binary. `.installer-path` now selects it. Rollback files remain under `/home/ahmed/deploy-staging/1.4.11/rollback/`.
+- Website version labels distinguish Windows 1.4.11 from Mac test 1.4.10. Apple Silicon/Intel guidance and trial-card instructions are retained. Both Mac downloads remain unsigned test builds.
+- All four application services were active after publication. Public API health remains `{"ok":true,"mode":"test"}` and all download platforms report available.
+
+The initial Azure login failure was fixed by matching GitHub's actual OIDC subject including immutable owner/repository IDs. A later build signed successfully but hit the GitHub Actions artifact storage quota. The final workflow saves signed binaries as draft GitHub Release assets instead; no old artifacts were deleted. Server downloads matched both the GitHub asset SHA-256 digests and the signed installer SHA-512 recorded by CI before publication.
+
+During feed installation the landing service briefly failed because new files did not retain the service user's read ACL. Explicit read permissions were added and public HTTP 200 was verified before release publication. Deployment instructions now document this requirement.
+
+Code signing establishes the verified publisher; it does not guarantee that Windows SmartScreen will never show a reputation warning. Existing builds without an update feed need a manual installation of this signed release first. Payments remain in Stripe test mode.
+
 ## 19 October 2026: MamaLead 1.4.10 branding release
 
 The desktop product name is now **MamaLead**. The Windows installer and both Mac test DMGs use the new MamaLead green `m` icon based on the supplied brand logo. The Mac `.app` bundle is named `MamaLead.app`; its packaged icon and bundle name, Chromium startup, trial, and licence activation passed the [Apple Silicon and Intel CI run](https://github.com/itachi569/nafran-mamalead/actions/runs/39211000902). The unsigned [Windows CI build](https://github.com/itachi569/nafran-mamalead/actions/runs/39213090553) also passed, and the fresh local Windows installer launched and passed the packaged UI check. The package name and app ID remain stable so existing local app data and licence identity are retained.

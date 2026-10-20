@@ -34,7 +34,7 @@
     }
     const macNote = document.querySelector('[data-mac-download-note]')
     if (macNote && (downloadOptions?.macArm64 || downloadOptions?.macX64)) {
-      const message = 'Mac test builds are available. macOS may show a security warning on first open.'
+      const message = 'Mac test builds (v1.4.10) are available. macOS may show a security warning on first open.'
       if (macNote.textContent !== message) macNote.textContent = message
     }
     const status = document.querySelector('[data-decision-handoff-status]')
