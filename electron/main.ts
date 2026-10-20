@@ -152,7 +152,7 @@ function setUpdateState(patch: Partial<UpdateState>): UpdateState {
 function configureAutoUpdater(): void {
   if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return
 
-  autoUpdater.setFeedURL({ provider: 'generic', url: updateFeedUrl })
+  autoUpdater.setFeedURL({ provider: 'generic', url: updateFeedUrl, useMultipleRangeRequest: false })
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.on('checking-for-update', () => setUpdateState({ state: 'checking', message: 'Checking for a newer version…', percent: null }))
