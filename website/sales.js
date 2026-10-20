@@ -32,10 +32,10 @@
       link.style.background = '#1C1C1C'
       link.style.color = '#FFFFFF'
     }
-    const macStatus = document.querySelector('[data-mac-download-status]')
-    if (macStatus && (downloadOptions?.macArm64 || downloadOptions?.macX64)) {
-      const message = 'Choose Apple Silicon or Intel in About This Mac. These unsigned test builds may show a macOS security warning on first open.'
-      if (macStatus.textContent !== message) macStatus.textContent = message
+    const macNote = document.querySelector('[data-mac-download-note]')
+    if (macNote && (downloadOptions?.macArm64 || downloadOptions?.macX64)) {
+      const message = 'Mac test builds are available. macOS may show a security warning on first open.'
+      if (macNote.textContent !== message) macNote.textContent = message
     }
     const status = document.querySelector('[data-decision-handoff-status]')
     if (status && status.textContent !== statusMessage) status.textContent = statusMessage

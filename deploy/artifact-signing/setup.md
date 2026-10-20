@@ -27,7 +27,7 @@ Supported endpoint examples include:
 ## GitHub OIDC identity
 
 1. The single-tenant Microsoft Entra app `MamaLead GitHub Actions Artifact Signing` is registered in tenant `9d680105-00fa-400e-9c66-35ce29c3d84e` (client ID `a1b48f5a-4378-4a80-baf0-740418dd2cc6`). It has no client secret.
-2. Its federated credential trusts only `repo:itachi569/nafran-mamalead:environment:windows-release` from GitHub's OIDC issuer.
+2. Its federated credential trusts only `repo:itachi569@285477093/nafran-mamalead@1417685662:environment:windows-release` from GitHub's OIDC issuer. This is the exact subject emitted by this repository, including immutable owner/repository IDs; the legacy name-only subject does not match.
 3. The `windows-release` GitHub environment allows `v*` tags only. The Windows job must set `environment: windows-release` so its OIDC subject matches the trust.
 4. The app's service principal has **Artifact Signing Certificate Profile Signer** only at the `MamaLead` profile scope.
 5. These values are stored as `windows-release` environment secrets:
@@ -50,7 +50,7 @@ The Windows job fails before signing if any required value is missing. Download 
 
 ## Fleet server publication
 
-The landing service uses `deploy/landing-server.mjs` as `/opt/billing/landing/server.mjs`, with `deploy/windows-update-feed.mjs` beside it. It serves a strict allowlist from `/opt/billing/artifacts/windows-updates` at `/updates/windows/`; metadata is not cached, and artifacts support single byte ranges. The app disables multiple-range requests.
+The landing service uses `deploy/landing-server.mjs` as `/opt/billing/landing/server.mjs`, with `deploy/windows-update-feed.mjs` beside it. It serves a strict allowlist from `/opt/billing/artifacts/windows-updates` at `/updates/windows/`; metadata is not cached, and artifacts support single byte ranges. The app disables multiple-range requests. When installing files as `ahmed`, explicitly grant the service user `nafran-billing` read access with `setfacl -m u:nafran-billing:r <files>` and traversal access on the feed directory with `setfacl -m u:nafran-billing:rx <directory>` before restarting. `install -m 640` does not retain the destination ACL.
 
 For each release, upload the signed installer and its refreshed blockmap into the feed directory first, retaining the original filenames from `latest.yml`. Verify their hashes, then atomically publish `latest.yml` last. Keep prior versioned artifacts for existing updater clients. Create a copy or hard link named `/opt/billing/artifacts/MamaLead-Setup-<version>.exe`, atomically update `/opt/billing/app/.installer-path`, and restart only `nafran-billing.service` with `sudo fleet-dev restart mamalead nafran-billing`.
 
