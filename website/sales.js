@@ -7,8 +7,8 @@
     : 'https://api.mamalead.com'
   const api = (path) => new URL(path, billingOrigin).toString()
   const macDownloads = {
-    'mac-arm64': { key: 'macArm64', label: 'Mac test build · Apple Silicon' },
-    'mac-x64': { key: 'macX64', label: 'Mac test build · Intel' },
+    'mac-arm64': { key: 'macArm64', label: 'Download for Mac · Apple Silicon' },
+    'mac-x64': { key: 'macX64', label: 'Download for Mac · Intel' },
   }
   const isMac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent)
   let downloadOptions = null
@@ -34,7 +34,7 @@
     }
     const macNote = document.querySelector('[data-mac-download-note]')
     if (macNote && (downloadOptions?.macArm64 || downloadOptions?.macX64)) {
-      const message = 'Mac test builds (v1.4.10) are available. macOS may show a security warning on first open.'
+      const message = 'Mac v1.4.11 · Open the DMG and drag MamaLead to Applications. Apple verification is pending; macOS may show a security warning on first open.'
       if (macNote.textContent !== message) macNote.textContent = message
     }
     const status = document.querySelector('[data-decision-handoff-status]')

@@ -1,5 +1,43 @@
 # MamaLead self-hosted test deployment
 
+## 20 October 2026: full Mac 1.4.11 releases published
+
+The full **Mac 1.4.11** desktop application is now available for Apple Silicon
+and Intel. Both native architecture builds succeeded in
+[run 39474379664](https://github.com/itachi569/nafran-mamalead/actions/runs/39474379664)
+at commit `f1b87e82c894ba794c46cf29162dd86263e32286`, tag `mac-v1.4.11`.
+The workflow produces DMG and ZIP packages including bundled Chromium and
+stores them, with CI SHA-256 manifests, in draft GitHub Release `418725339`.
+
+Both DMGs were deployed to the fleet server. A complete download through each
+public URL matched the staged artifact, GitHub asset digest, and CI checksum:
+
+- Apple Silicon: `https://api.mamalead.com/v1/download?platform=mac-arm64`
+  — 405,890,788 bytes; SHA-256
+  `e925f65d7840983426a878a8fd150be3d78ec49f450516984e59f9ab6992d3b4`.
+- Intel: `https://api.mamalead.com/v1/download?platform=mac-x64`
+  — 423,832,003 bytes; SHA-256
+  `70966577c5484f6bafd25bf56618ba4087161f8c954db615cd638c76bc6d7d62`.
+
+The website buttons now say **Download for Mac · Apple Silicon** and
+**Download for Mac · Intel**. The chip-selection guidance remains, and the
+download note gives the version, DMG installation steps and pending Apple
+verification. The public `sales.js` matched the deployed copy exactly.
+Rollback files are in `/home/ahmed/deploy-staging/mac-1.4.11/rollback/`.
+
+Apple Developer ID signing and notarization are **pending at the user's
+request**. These full release packages are not Apple-verified; security
+warnings or first-launch blocking remain possible. Mac automatic updates
+remain disabled. This release performed compilation, packaging and download
+integrity checks; no fresh Mac runtime or installation tests were run.
+See [Mac release process](mac-release.md).
+
+The existing signed Windows 1.4.11 download and update feed are unchanged.
+The repository-required local Windows rebuild also completed; that unsigned
+local rebuild was retained separately and the verified signed release was
+restored to `release/` to prevent accidental unsigned distribution.
+The billing service remains healthy in Stripe **test mode**.
+
 ## 20 October 2026: signed Windows 1.4.11 released
 
 Windows **1.4.11** is live at `https://api.mamalead.com/v1/download?platform=windows`. The app executable and installer passed Azure Artifact Signing verification with publisher **Nafran LTD** in [the successful release workflow](https://github.com/itachi569/nafran-mamalead/actions/runs/39426159488), tag `v1.4.11-release3-windows`, application commit `e008d3e44d7b6c8d9b460bcfd573693b6140ddf8`.
