@@ -41,6 +41,7 @@ module.exports = {
   },
   win: {
     ...packageJson.build.win,
+    signtoolOptions: { publisherName: 'Nafran LTD' },
     // electron-builder discovers WIN_CSC_LINK/CSC_LINK automatically. CI can opt into failing
     // instead of silently producing an unsigned installer with REQUIRE_CODE_SIGNING=1.
     ...(requireCodeSigning ? { signAndEditExecutable: true } : {}),
@@ -63,6 +64,7 @@ module.exports = {
         publish: {
           provider: 'generic',
           url: feedUrl,
+          useMultipleRangeRequest: false,
         },
       }
     : {}),

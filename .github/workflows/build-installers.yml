@@ -11,6 +11,10 @@ on:
         description: Build an unsigned Windows installer for private testing
         type: boolean
         default: false
+      windows_only:
+        description: Build only the signed Windows release (use a v* tag)
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -28,7 +32,7 @@ jobs:
     env:
       REQUIRE_CODE_SIGNING: '0'
       REQUIRE_UPDATE_FEED: ${{ inputs.unsigned_windows_test && '0' || '1' }}
-      LEADSNAP_UPDATE_URL: ${{ secrets.LEADSNAP_UPDATE_URL }}
+      LEADSNAP_UPDATE_URL: ${{ vars.WINDOWS_UPDATE_URL || secrets.LEADSNAP_UPDATE_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -108,7 +112,8 @@ jobs:
           $targets += '${{ steps.windows-installer.outputs.path }}'
           foreach ($target in $targets) {
             $signature = Get-AuthenticodeSignature -LiteralPath $target
-            if ($signature.Status -ne 'Valid') { throw "Invalid signature on $target: $($signature.StatusMessage)" }
+            if ($signature.Status -ne 'Valid') { throw "Invalid signature on ${target}: $($signature.StatusMessage)" }
+            if ($signature.SignerCertificate.Subject -notmatch '(^|, )CN=Nafran LTD(,|$)') { throw "Unexpected publisher on ${target}" }
             Write-Host "VALID $target — $($signature.SignerCertificate.Subject)"
           }
       - uses: actions/upload-artifact@v4
@@ -120,7 +125,7 @@ jobs:
             release/latest.yml
 
   macos:
-    if: ${{ !inputs.unsigned_windows_test }}
+    if: ${{ !inputs.unsigned_windows_test && !inputs.windows_only && !endsWith(github.ref, '-windows') }}
     strategy:
       fail-fast: false
       matrix:
@@ -191,7 +196,7 @@ jobs:
             release/latest-mac.yml
 
   linux:
-    if: ${{ !inputs.unsigned_mac_test && !inputs.unsigned_windows_test }}
+    if: ${{ !inputs.unsigned_mac_test && !inputs.unsigned_windows_test && !inputs.windows_only && !endsWith(github.ref, '-windows') }}
     runs-on: ubuntu-latest
     env:
       REQUIRE_LINUX_SIGNING: '1'

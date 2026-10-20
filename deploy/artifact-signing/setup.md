@@ -38,12 +38,22 @@ Supported endpoint examples include:
    - `AZURE_ARTIFACT_SIGNING_ENDPOINT`
    - `AZURE_ARTIFACT_SIGNING_ACCOUNT`
    - `AZURE_ARTIFACT_SIGNING_PROFILE`
-7. Add `LEADSNAP_UPDATE_URL` as a GitHub secret before running the full signed-release workflow if it is not already configured.
+7. The Windows environment variable `WINDOWS_UPDATE_URL` points to `https://mamalead.com/updates/windows/`. `LEADSNAP_UPDATE_URL` remains a fallback for other release environments.
 
 No Azure client secret or certificate private key is stored in GitHub. OIDC issues a short-lived workflow credential.
 
 ## Release
 
-Run the **Build installers** workflow without selecting either unsigned-test option, or push a release tag. The Windows job fails before signing if any required value is missing. Download `nafran-windows-installer` only after both signature checks pass.
+Push a `v<version>-windows` tag to build only the signed Windows release. For example, `v1.4.11-windows` builds package version `1.4.11`; the tag suffix selects the platform and does not change the app version. A manual run on an allowed tag can also select `windows_only`. Other `v*` tags retain the all-platform workflow and require the separate Apple and Linux credentials. Do not select an unsigned-test option for a public Windows release.
+
+The Windows job fails before signing if any required value is missing. Download `nafran-windows-installer` only after both signature checks pass for publisher Nafran LTD.
+
+## Fleet server publication
+
+The landing service uses `deploy/landing-server.mjs` as `/opt/billing/landing/server.mjs`, with `deploy/windows-update-feed.mjs` beside it. It serves a strict allowlist from `/opt/billing/artifacts/windows-updates` at `/updates/windows/`; metadata is not cached, and artifacts support single byte ranges. The app disables multiple-range requests.
+
+For each release, upload the signed installer and its refreshed blockmap into the feed directory first, retaining the original filenames from `latest.yml`. Verify their hashes, then atomically publish `latest.yml` last. Keep prior versioned artifacts for existing updater clients. Create a copy or hard link named `/opt/billing/artifacts/MamaLead-Setup-<version>.exe`, atomically update `/opt/billing/app/.installer-path`, and restart only `nafran-billing.service` with `sudo fleet-dev restart mamalead nafran-billing`.
+
+Before changes, save the existing landing server and installer path under `~/deploy-staging/<version>/rollback/`. After publication verify the public feed, byte-range response, installer signature, download endpoint, and API health. The feed contains no credentials or customer data.
 
 Artifact Signing gives the installer a verified publisher identity. Microsoft states that SmartScreen reputation still builds over time, so an early signed release can continue to show a warning until the publisher or file has sufficient reputation.
