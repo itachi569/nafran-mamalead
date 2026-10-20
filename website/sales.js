@@ -7,8 +7,8 @@
     : 'https://api.mamalead.com'
   const api = (path) => new URL(path, billingOrigin).toString()
   const macDownloads = {
-    'mac-arm64': { key: 'macArm64', label: 'Download for Mac · Apple Silicon' },
-    'mac-x64': { key: 'macX64', label: 'Download for Mac · Intel' },
+    'mac-arm64': { key: 'macArm64', label: 'Download for Mac · Apple Silicon', hint: 'Newer Macs · M1 or newer' },
+    'mac-x64': { key: 'macX64', label: 'Download for Mac · Intel', hint: 'Older Macs · Intel processor' },
   }
   const isMac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent)
   let downloadOptions = null
@@ -26,7 +26,21 @@
       if (!link || !downloadOptions?.[choice.key]) continue
       const href = api(`/v1/download?platform=${platform}`)
       if (link.href !== href) link.href = href
-      if (link.textContent !== choice.label) link.textContent = choice.label
+      let title = link.querySelector('[data-download-title]')
+      let hint = link.querySelector('[data-download-hint]')
+      if (!title || !hint) {
+        title = document.createElement('span')
+        title.dataset.downloadTitle = ''
+        hint = document.createElement('span')
+        hint.dataset.downloadHint = ''
+        link.replaceChildren(title, hint)
+      }
+      if (title.textContent !== choice.label) title.textContent = choice.label
+      if (hint.textContent !== choice.hint) hint.textContent = choice.hint
+      hint.style.cssText = 'font-size: 12px; font-weight: 400; line-height: 1.4; color: #C8D5BB;'
+      link.style.flexDirection = 'column'
+      link.style.gap = '4px'
+      link.style.textAlign = 'center'
       link.removeAttribute('aria-disabled')
       link.style.cursor = 'pointer'
       link.style.background = '#1C1C1C'
