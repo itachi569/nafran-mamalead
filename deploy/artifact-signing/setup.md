@@ -2,16 +2,9 @@
 
 MamaLead uses the official `azure/artifact-signing-action@v2` workflow with GitHub OpenID Connect. The pipeline builds the unpacked app, signs its executable files, creates the NSIS installer, signs the installer, verifies both signatures, and refreshes the updater blockmap and SHA-512 metadata.
 
-## Public Trust eligibility
+## Public Trust profile
 
-The certificate profile must be **Public Trust** to establish a Windows publisher identity for a publicly downloaded installer. Public Trust Test and Private Trust profiles do not provide general Windows trust.
-
-Microsoft currently limits Public Trust identity validation:
-
-- Individual developers: United States or Canada.
-- Organizations: United States, Canada, European Union, United Kingdom, Australia, New Zealand, Japan, South Korea, Singapore, Switzerland, Norway, or Israel.
-
-A Pakistan-based individual or Pakistan-registered organization cannot currently complete Public Trust validation. Do not enter an inaccurate country, legal entity, address, or identity. Use Artifact Signing only if the actual Azure billing identity or legal organization is eligible.
+The **MamaLead** profile is **Public Trust**, created with Nafran LTD's completed UK public organization identity validation. Its publisher subject is `CN=Nafran LTD, O=Nafran LTD, L=London, C=GB`. Public Trust Test and Private Trust profiles do not provide general Windows trust.
 
 ## Azure resources
 
@@ -33,18 +26,19 @@ Supported endpoint examples include:
 
 ## GitHub OIDC identity
 
-1. Create a Microsoft Entra application/service principal for GitHub Actions.
-2. Add a federated credential for repository `itachi569/nafran-mamalead` and the branch, tag, or protected GitHub environment used for release builds.
-3. Assign that service principal the **Artifact Signing Certificate Profile Signer** role on the certificate profile scope.
-4. Add these GitHub repository secrets:
+1. The single-tenant Microsoft Entra app `MamaLead GitHub Actions Artifact Signing` is registered in tenant `9d680105-00fa-400e-9c66-35ce29c3d84e` (client ID `a1b48f5a-4378-4a80-baf0-740418dd2cc6`). It has no client secret.
+2. Its federated credential trusts only `repo:itachi569/nafran-mamalead:environment:windows-release` from GitHub's OIDC issuer.
+3. The `windows-release` GitHub environment allows `v*` tags only. The Windows job must set `environment: windows-release` so its OIDC subject matches the trust.
+4. The app's service principal has **Artifact Signing Certificate Profile Signer** only at the `MamaLead` profile scope.
+5. These values are stored as `windows-release` environment secrets:
    - `AZURE_CLIENT_ID`
    - `AZURE_TENANT_ID`
    - `AZURE_SUBSCRIPTION_ID`
-   - `LEADSNAP_UPDATE_URL`
-5. Add these GitHub repository variables:
+6. These values are stored as `windows-release` environment variables:
    - `AZURE_ARTIFACT_SIGNING_ENDPOINT`
    - `AZURE_ARTIFACT_SIGNING_ACCOUNT`
    - `AZURE_ARTIFACT_SIGNING_PROFILE`
+7. Add `LEADSNAP_UPDATE_URL` as a GitHub secret before running the full signed-release workflow if it is not already configured.
 
 No Azure client secret or certificate private key is stored in GitHub. OIDC issues a short-lived workflow credential.
 

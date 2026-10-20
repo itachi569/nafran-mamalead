@@ -20,6 +20,7 @@ permissions:
 jobs:
   windows:
     if: ${{ inputs.unsigned_windows_test || !inputs.unsigned_mac_test }}
+    environment: windows-release
     runs-on: windows-latest
     permissions:
       contents: read
