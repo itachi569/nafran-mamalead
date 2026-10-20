@@ -1,0 +1,77 @@
+name: Build Mac release
+
+on:
+  push:
+    tags: ['mac-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          test "$GITHUB_REF_NAME" = "mac-v$version"
+          if gh release view "$GITHUB_REF_NAME" --json isDraft > "$RUNNER_TEMP/existing.json" 2>/dev/null; then
+            node -e "if (!require(process.argv[1]).isDraft) process.exit(1)" "$RUNNER_TEMP/existing.json"
+          else
+            printf '%s\n' "MamaLead $version for Apple Silicon and Intel Macs." \
+              "Full desktop release. Apple Developer ID signing and notarization are pending; macOS may block first launch." \
+              "Automatic Mac updates are disabled until a signed and notarized release is available." \
+              "Server publication follows successful builds and artifact verification." > "$RUNNER_TEMP/notes.txt"
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft \
+              --title "MamaLead $version for Mac" --notes-file "$RUNNER_TEMP/notes.txt"
+          fi
+
+  macos:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    env:
+      REQUIRE_CODE_SIGNING: '0'
+      REQUIRE_NOTARIZATION: '0'
+      REQUIRE_UPDATE_FEED: '0'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      LEADSNAP_UPDATE_URL: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build full Mac release
+        run: npm run package:mac -- --${{ matrix.arch }} --publish never --config.artifactName='MamaLead-${version}-mac-${arch}.${ext}'
+      - name: Record release hashes and upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          cd release
+          dmg="MamaLead-$version-mac-$RELEASE_ARCH.dmg"
+          zip="MamaLead-$version-mac-$RELEASE_ARCH.zip"
+          test -s "$dmg"
+          test -s "$zip"
+          shasum -a 256 "$dmg" "$zip" > "SHA256SUMS-$RELEASE_ARCH.txt"
+          cat "SHA256SUMS-$RELEASE_ARCH.txt"
+          gh release upload "$GITHUB_REF_NAME" "$dmg" "$zip" "SHA256SUMS-$RELEASE_ARCH.txt" --clobber
