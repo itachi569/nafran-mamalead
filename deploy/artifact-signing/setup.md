@@ -46,7 +46,9 @@ No Azure client secret or certificate private key is stored in GitHub. OIDC issu
 
 Push a `v<version>-windows` tag to build only the signed Windows release. For example, `v1.4.11-windows` builds package version `1.4.11`; the tag suffix selects the platform and does not change the app version. A manual run on an allowed tag can also select `windows_only`. Other `v*` tags retain the all-platform workflow and require the separate Apple and Linux credentials. Do not select an unsigned-test option for a public Windows release.
 
-The Windows job fails before signing if any required value is missing. Download `nafran-windows-installer` only after both signature checks pass for publisher Nafran LTD.
+The Windows job fails before signing if any required value is missing. Signed installers are stored as **draft GitHub Release assets** on the build tag after both signature checks pass for publisher Nafran LTD. The Windows job has repository `contents: write` solely to create this draft and upload its three assets. A rerun may replace draft assets but refuses to overwrite a published release. Unsigned tests still use Actions artifacts with seven-day retention.
+
+GitHub Actions artifact storage reached its quota on 20 October 2026 after a successfully signed build. Release assets avoid that Actions artifact storage dependency; no old artifacts were deleted.
 
 ## Fleet server publication
 

@@ -27,7 +27,7 @@ jobs:
     environment: windows-release
     runs-on: windows-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
     env:
       REQUIRE_CODE_SIGNING: '0'
@@ -116,9 +116,32 @@ jobs:
             if ($signature.SignerCertificate.Subject -notmatch '(^|, )CN=Nafran LTD(,|$)') { throw "Unexpected publisher on ${target}" }
             Write-Host "VALID $target — $($signature.SignerCertificate.Subject)"
           }
+      - name: Save signed installers as draft release assets
+        if: ${{ !inputs.unsigned_windows_test }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if (-not $tag.StartsWith('v')) { throw 'Signed releases require a version tag.' }
+          $existing = gh release view $tag --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'Refusing to replace a published release.' }
+          } else {
+            $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            "Windows x64 installer signed by Nafran LTD. Includes update metadata and blockmap. Server publication is performed after artifact verification." | Set-Content "$env:RUNNER_TEMP/release-notes.txt"
+            gh release create $tag --verify-tag --draft --title "MamaLead $version for Windows" --notes-file "$env:RUNNER_TEMP/release-notes.txt"
+            if ($LASTEXITCODE -ne 0) { throw 'Draft release creation failed.' }
+          }
+          $files = @(Get-ChildItem release -File | Where-Object { $_.Name -like 'MamaLead Setup *.exe' -or $_.Name -like '*.blockmap' -or $_.Name -eq 'latest.yml' })
+          if ($files.Count -ne 3) { throw 'Expected installer, blockmap, and latest.yml.' }
+          gh release upload $tag @($files.FullName) --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Signed release asset upload failed.' }
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.unsigned_windows_test }}
         with:
           name: nafran-windows-installer
+          retention-days: 7
           path: |
             release/MamaLead Setup *.exe
             release/*.blockmap
