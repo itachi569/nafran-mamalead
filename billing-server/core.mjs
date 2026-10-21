@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { buildLicenseEmail } from './license-email.mjs'
+import { createAssistService } from './assist.mjs'
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -554,6 +555,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     try { return raw ? JSON.parse(raw) : {} } catch { throw new HttpError(400, 'Invalid JSON.') }
   }
 
+  const assist = createAssistService({ env, store, ErrorType: HttpError })
+
   async function handle({ method, url: rawUrl, authorization, deviceId: rawDeviceId, devicePlatform: rawDevicePlatform, stripeSignature, readBody = async () => '' }) {
     try {
       const url = new URL(rawUrl, publicUrl)
@@ -614,6 +617,12 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
         const row = await installation(authorization, deviceId, devicePlatform)
+        if (method === 'GET' && url.pathname === '/v1/assist/status') return json(200, assist.configuration())
+        if (method === 'POST' && url.pathname === '/v1/assist/chat') {
+          const payload = await jsonBody(readBody)
+          const status = await verifiedStatus(row)
+          return json(200, await assist.chat(row, status, payload))
+        }
         if (method === 'GET' && url.pathname === '/v1/status') {
           if ((row.license_id || row.decision_license_id) && !deviceId) throw new HttpError(403, 'Update the app to verify this device before using a license.')
           const status = await verifiedStatus(row)

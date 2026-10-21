@@ -1,7 +1,7 @@
 {
   "name": "nafran-leads-scraper",
   "private": true,
-  "version": "1.4.11",
+  "version": "1.4.12",
   "description": "Local-first Google Maps lead scraper and enrichment desktop app.",
   "author": {
     "name": "Nafran Leads",
@@ -70,7 +70,14 @@
     "appId": "com.nafran.leadsscraper",
     "productName": "MamaLead",
     "icon": "build/mamalead-icon.png",
-    "protocols": [{ "name": "MamaLead", "schemes": ["mamalead"] }],
+    "protocols": [
+      {
+        "name": "MamaLead",
+        "schemes": [
+          "mamalead"
+        ]
+      }
+    ],
     "directories": {
       "output": "release"
     },

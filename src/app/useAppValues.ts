@@ -874,7 +874,7 @@ export function useAppValues() {
         setMsgs(withBot)
         return
       }
-      if (!bridge?.chat) throw new Error('Nafran Assist is available in the Electron app once an AI provider key is configured.')
+      if (!bridge?.chat) throw new Error('Nafran Assist is available in the MamaLead desktop app with an internet connection.')
       let context = assistantContextRef.current
       if (/decision\s*makers?|dm\s*searches?/i.test(trimmed)) {
         try {

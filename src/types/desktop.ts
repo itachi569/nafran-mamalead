@@ -514,8 +514,6 @@ export interface DesktopApi {
   /** AI support chat; the provider credential remains in Electron's main process. */
   assist: {
     status: () => Promise<{ configured: boolean; savedOnDevice: boolean }>
-    saveKey: (key: string) => Promise<{ configured: boolean; savedOnDevice: boolean }>
-    removeKey: () => Promise<{ configured: boolean; savedOnDevice: boolean }>
     test: () => Promise<{ connected: boolean; model: string }>
     chat: (input: {
       messages?: { role: 'user' | 'assistant'; content: string }[]

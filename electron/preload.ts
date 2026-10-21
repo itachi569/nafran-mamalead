@@ -231,8 +231,6 @@ const desktop = {
   },
   assist: {
     status: (): Promise<{ configured: boolean; savedOnDevice: boolean }> => call('assist:status'),
-    saveKey: (key: string): Promise<{ configured: boolean; savedOnDevice: boolean }> => call('assist:save-key', key),
-    removeKey: (): Promise<{ configured: boolean; savedOnDevice: boolean }> => call('assist:remove-key'),
     test: (): Promise<{ connected: boolean; model: string }> => call('assist:test'),
     chat: (input: {
       messages?: { role: 'user' | 'assistant'; content: string }[]

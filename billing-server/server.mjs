@@ -106,7 +106,19 @@ export function createBillingServer(options = {}) {
   if (!checkoutColumns.has('created_at')) db.exec('alter table lifetime_checkout_emails add column created_at text')
   db.exec('create unique index if not exists installations_license_slot on installations (license_id, license_slot) where license_id is not null and license_slot is not null')
   db.exec('create unique index if not exists installations_decision_license_slot on installations (decision_license_id, decision_license_slot) where decision_license_id is not null and decision_license_slot is not null')
+  db.exec('create table if not exists assist_usage (bucket text primary key, used integer not null, expires_at integer)')
   const store = {
+    reserveAssistUsage: async (buckets) => {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        db.prepare('delete from assist_usage where expires_at is not null and expires_at < ?').run(Date.now())
+        const usage = buckets.map(({ key }) => db.prepare('select used from assist_usage where bucket = ?').get(key)?.used ?? 0)
+        if (usage.some((used, i) => used >= buckets[i].limit)) { db.exec('COMMIT'); return null }
+        for (const bucket of buckets) db.prepare('insert into assist_usage (bucket, used, expires_at) values (?, 1, ?) on conflict(bucket) do update set used = used + 1').run(bucket.key, bucket.expires)
+        db.exec('COMMIT')
+        return usage.map((used, i) => buckets[i].limit - used - 1)
+      } catch (error) { db.exec('ROLLBACK'); throw error }
+    },
     create: async (id, tokenHash, createdAt, deviceId, devicePlatform) => { db.prepare('insert into installations (id, token_hash, created_at, device_id, device_platform) values (?, ?, ?, ?, ?)').run(id, tokenHash, createdAt, deviceId, devicePlatform) },
     bindDevice: async (id, deviceId, devicePlatform) => Boolean(db.prepare('update installations set device_id = ?, device_platform = coalesce(device_platform, ?) where id = ? and (device_id is null or device_id = ?)').run(deviceId, devicePlatform, id, deviceId).changes),
     byTokenHash: async (tokenHash) => db.prepare('select * from installations where token_hash = ?').get(tokenHash),

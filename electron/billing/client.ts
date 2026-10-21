@@ -90,7 +90,7 @@ function tokenPath(): string {
   return join(directory, `billing-installation-${scope}.enc`)
 }
 
-async function request<T>(path: string, method = 'GET', body?: unknown, token?: string): Promise<T> {
+async function request<T>(path: string, method = 'GET', body?: unknown, token?: string, timeoutMs = 20_000): Promise<T> {
   const base = billingUrl()
   if (!base) throw new Error('Billing server is not configured for this build.')
   const device = deviceIdentity()
@@ -100,7 +100,7 @@ async function request<T>(path: string, method = 'GET', body?: unknown, token?: 
       ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     redirect: 'error',
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(timeoutMs),
   })
   const result = await response.json() as T & { error?: string }
   if (!response.ok) throw new Error(result.error || `Billing server returned ${response.status}.`)
@@ -163,14 +163,14 @@ export async function requireActiveLicense(feature: LicensedFeature = 'lifetime'
       ? (coreActive && status.lifetime?.active || decisionKeyActive)
       : coreActive && (status.lifetime?.active || status.trial?.active)
     if (feature === 'decisionMaker' && !entitlement && status.trial?.active) {
-      throw new LicenseAccessError('Decision Makers access needs a separate 30-day pass. Open Settings → Usage to buy 1,000 searches for Rs 1,000.')
+      throw new LicenseAccessError('Decision Makers access needs a separate 30-day pass. Open Settings â†’ Usage to buy 1,000 searches for Rs 1,000.')
     }
     if (!status.connected || !entitlement || (feature === 'lifetime' && status.trial?.active && status.trial.expiresAt && Date.parse(status.trial.expiresAt) <= Date.now())) {
-      throw new LicenseAccessError(feature === 'decisionMaker' ? 'Activate a Decision Makers or lifetime key in Settings → Account before using this feature.' : 'Activate an active 1-day trial or lifetime Nafran license in Settings → Account before using this feature.')
+      throw new LicenseAccessError(feature === 'decisionMaker' ? 'Activate a Decision Makers or lifetime key in Settings â†’ Account before using this feature.' : 'Activate an active 1-day trial or lifetime Nafran license in Settings â†’ Account before using this feature.')
     }
     if (feature === 'decisionMaker' && !(status.decisionMaker?.active && status.decisionMaker.monthlyRemaining > 0 && status.decisionMaker.available !== false && status.decisionMaker.currency === 'pkr' && status.decisionMaker.amount === 100000 &&
       status.decisionMaker.periodDays === 30 && status.decisionMaker.monthlyLimit === 1000)) {
-      throw new LicenseAccessError('Decision Makers access needs a new 30-day pass. Open Settings → Usage to buy 1,000 searches for Rs 1,000.')
+      throw new LicenseAccessError('Decision Makers access needs a new 30-day pass. Open Settings â†’ Usage to buy 1,000 searches for Rs 1,000.')
     }
   } catch (error) {
     if (error instanceof LicenseAccessError) throw error
@@ -238,4 +238,12 @@ export async function billingInvoices(): Promise<BillingInvoice[]> {
   if (!billingUrl()) return []
   const result = await request<{ invoices: BillingInvoice[] }>('/v1/invoices', 'GET', undefined, await installationToken())
   return result.invoices
+}
+
+/** Server-managed AI reuses the device-bound installation identity. */
+export async function billingAssistStatus(): Promise<{ configured: boolean; savedOnDevice: boolean }> {
+  return request('/v1/assist/status', 'GET', undefined, await installationToken())
+}
+export async function billingAssistChat(payload: unknown): Promise<{ text: string; model: string }> {
+  return request('/v1/assist/chat', 'POST', payload, await installationToken(), 45_000)
 }

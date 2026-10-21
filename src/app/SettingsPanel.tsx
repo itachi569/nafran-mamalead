@@ -34,7 +34,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const [licenseBusy, setLicenseBusy] = useState(false)
   const [licenseNotice, setLicenseNotice] = useState<{ kind: 'error' | 'success'; message: string } | null>(null)
   const [assistConfigured, setAssistConfigured] = useState(false)
-  const [assistKey, setAssistKey] = useState('')
   const [assistBusy, setAssistBusy] = useState(false)
   const [assistNote, setAssistNote] = useState('')
   useEffect(() => {
@@ -42,17 +41,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     void assistApi.status().then((status) => setAssistConfigured(status.configured))
       .catch((error) => setAssistNote(error instanceof Error ? error.message : 'Nafran Assist status is unavailable.'))
   }, [V.tabAcct, assistApi])
-  const saveAssistKey = async () => {
-    if (!assistApi?.saveKey) return
-    setAssistBusy(true)
-    try {
-      const result = await assistApi.saveKey(assistKey)
-      setAssistConfigured(result.configured)
-      setAssistKey('')
-      setAssistNote('Nafran Assist key saved securely on this device. Use Test connection to check it.')
-    } catch (error) { setAssistNote(error instanceof Error ? error.message : 'The AI key could not be saved.') }
-    finally { setAssistBusy(false) }
-  }
   const testAssist = async () => {
     if (!assistApi?.test) return
     setAssistBusy(true)
@@ -61,16 +49,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       const result = await assistApi.test()
       setAssistNote(`Nafran Assist is working on this device (${result.model}).`)
     } catch (error) { setAssistNote(error instanceof Error ? error.message : 'Nafran Assist could not connect.') }
-    finally { setAssistBusy(false) }
-  }
-  const removeAssistKey = async () => {
-    if (!assistApi?.removeKey) return
-    setAssistBusy(true)
-    try {
-      const result = await assistApi.removeKey()
-      setAssistConfigured(result.configured)
-      setAssistNote(result.configured ? 'A process environment key is still configured.' : 'Nafran Assist key removed from this device.')
-    } catch (error) { setAssistNote(error instanceof Error ? error.message : 'The AI key could not be removed.') }
     finally { setAssistBusy(false) }
   }
   useEffect(() => {
@@ -377,13 +355,11 @@ export function SettingsPanel({ V }: { V: AppValues }) {
           </section>
           <section data-card="1" data-assist-settings="1" style={card}>
             <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Nafran Assist</h2>
-            <p style={muted}>{assistConfigured ? 'AI key configured on this device.' : 'Add a Cerebras API key to enable AI answers on this device.'} Each installation needs its own key.</p>
+            <p style={muted}>{assistConfigured ? 'Nafran Assist connects through the MamaLead server. No personal API key is needed.' : 'Server AI is currently unavailable. Connect to the internet and try again.'}</p>
+            <p style={muted}>Includes 5 setup-help messages per device. Active trials receive 25 messages per day; active paid plans receive 100 per day, shared across the licence. Daily allowances reset at 00:00 UTC.</p>
+            <p style={muted}>Your chat messages and a limited workspace summary are sent through our server to the AI provider. Lead records are not included automatically.</p>
             <div style={row}>
-              <label htmlFor="nafran-assist-key">Cerebras API key</label>
-              <input id="nafran-assist-key" type="password" value={assistKey} onChange={(event) => setAssistKey(event.target.value)} autoComplete="off" placeholder="Paste your key" style={{ flex: '1 1 250px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} />
-              <button type="button" disabled={assistBusy || !assistKey.trim()} onClick={() => void saveAssistKey()} style={button}>Save key</button>
-              <button type="button" disabled={assistBusy || !assistConfigured} onClick={() => void testAssist()} style={button}>Test connection</button>
-              {assistConfigured && <button type="button" disabled={assistBusy} onClick={() => void removeAssistKey()} style={button}>Remove key</button>}
+              <button type="button" disabled={assistBusy} onClick={() => void testAssist()} style={button}>Check AI connection</button>
             </div>
             {assistNote && <p data-assist-settings-note="1" role="status" style={muted}>{assistNote}</p>}
           </section>

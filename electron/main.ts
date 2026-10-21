@@ -11,10 +11,10 @@ import { registerLocalDatabase } from './db/ipc'
 import { EnrichmentRunner } from './enrichment/runner'
 import { checkKey } from './enrichment/dataforseo'
 import { isUsableEmail, isUsablePerson } from './enrichment/website'
-import { readApifyCredential, readAssistCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
+import { readApifyCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
 import { askAssist, type AssistChatRequest } from './assist'
 import { readLeadsAngelBundle, verifyEmailAddressesWithLeadsAngel, type LeadsAngelCredentials } from './leadsangel'
-import { billingActivate, billingCheckout, billingConsumeDecisionMaker, billingHeartbeatMaps, billingInvoices, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
+import { billingAssistStatus, billingActivate, billingCheckout, billingConsumeDecisionMaker, billingHeartbeatMaps, billingInvoices, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
 import {
   DEFAULT_APIFY_EMAIL_ACTOR,
   parseApifyEmailResult,
@@ -524,52 +524,11 @@ ipcMain.handle('notifications:show', (_event, payload: { title?: string; body?: 
   return { shown: true }
 })
 
-/**
- * Nafran Assist talks to the configured OpenAI-compatible provider from the main process. Keeping
- * this IPC boundary here prevents an API key from entering the renderer bundle or a page's
- * JavaScript context.
- */
-function assistSecretPaths(): { encrypted: string; legacy: string } {
-  const directory = join(app.getPath('userData'), 'secrets')
-  return { encrypted: join(directory, 'cerebras.key.enc'), legacy: join(directory, 'cerebras.key') }
-}
-
-function savedAssistKey(): string {
-  const { encrypted } = assistSecretPaths()
-  if (!existsSync(encrypted)) return ''
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is unavailable on this device.')
-  try { return safeStorage.decryptString(readFileSync(encrypted)).trim() }
-  catch { throw new Error('Saved Nafran Assist key could not be opened on this device. Add it again in Settings → Account.') }
-}
-
-ipcMain.handle('assist:status', () => {
-  const paths = assistSecretPaths()
-  const configured = Boolean(savedAssistKey() || readAssistCredential(paths.legacy).value)
-  return { configured, savedOnDevice: existsSync(paths.encrypted) || existsSync(paths.legacy) }
-})
-ipcMain.handle('assist:save-key', (_event, rawKey: string) => {
-  const key = String(rawKey ?? '').trim()
-  if (key.length < 20 || key.length > 512 || /\s/.test(key)) throw new Error('Enter a valid Cerebras API key.')
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('Secure storage is unavailable on this device.')
-  const paths = assistSecretPaths()
-  mkdirSync(join(app.getPath('userData'), 'secrets'), { recursive: true })
-  writeFileSync(paths.encrypted, safeStorage.encryptString(key), { mode: 0o600 })
-  return { configured: true, savedOnDevice: true }
-})
-ipcMain.handle('assist:remove-key', () => {
-  const paths = assistSecretPaths()
-  for (const path of [paths.encrypted, paths.legacy]) if (existsSync(path)) unlinkSync(path)
-  return { configured: Boolean(readAssistCredential().value), savedOnDevice: false }
-})
-ipcMain.handle('assist:test', () => {
-  const paths = assistSecretPaths()
-  return askAssist({ messages: [{ role: 'user', content: 'Say hello in one short sentence.' }] }, paths.legacy, savedAssistKey())
-    .then(({ model }) => ({ connected: true, model }))
-})
-ipcMain.handle('assist:chat', (_event, payload: AssistChatRequest = {}) => {
-  const paths = assistSecretPaths()
-  return askAssist(payload, paths.legacy, savedAssistKey())
-})
+/** Nafran Assist uses the authenticated server; no provider key is distributed. */
+ipcMain.handle('assist:status', () => billingAssistStatus())
+ipcMain.handle('assist:test', () => askAssist({ messages: [{ role: 'user', content: 'Say hello in one short sentence.' }] })
+  .then(({ model }) => ({ connected: true, model })))
+ipcMain.handle('assist:chat', (_event, payload: AssistChatRequest = {}) => askAssist(payload))
 
 type EmailValiditySummary = {
   configured: boolean
