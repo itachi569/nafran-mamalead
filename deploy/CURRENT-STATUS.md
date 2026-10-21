@@ -1,5 +1,31 @@
 # MamaLead self-hosted test deployment
 
+## 21 October 2026: Decision Makers 1.4.13
+
+Windows 1.4.13 is published on the existing API download URL and Windows update
+feed. Application source: `e23d7a05ddab5689cc325eec903c54b3e0d5b744`, tag
+`v1.4.13-windows`, [signed CI run 39570510949](https://github.com/itachi569/nafran-mamalead/actions/runs/39570510949).
+Installer size: 333,894,184 bytes. SHA-256:
+`4c19a5327d7b424331ade333099dc116bba0e824c5428303b3ffa1e8e5ff8ca0`.
+
+This fixes the standalone Decision Makers entitlement used to start a scan,
+follows published Team/About pages, extracts multiple people, scopes the page
+and direct PDF/Excel exports to the current import, and resets the view after
+successful saving. Repeated scans update existing people instead of duplicating
+them. Development and freshly packaged Electron workflow checks passed,
+including cancelled/failed saves and empty websites. The real Buffer page
+returned five names; website coverage is not guaranteed. See
+[workflow and verification notes](decision-makers-1.4.13.md).
+
+Azure app and installer signature checks passed, and server artifacts matched
+GitHub digests and the signed CI installer hash. Website HTML and update-feed
+metadata matched their deployed files. The complete public installer download
+matched SHA-256 and feed SHA-512; Windows Authenticode returned **Valid** for
+`CN=Nafran LTD, O=Nafran LTD, L=London, C=GB`. Rollback copies are in
+`/home/ahmed/deploy-staging/1.4.13/rollback/`. Only installer selection and static
+website version changed on the server; AI and admin cancellation remain active.
+Stripe remains in test mode and Mac downloads remain hidden.
+
 ## 21 October 2026: owner Lifetime cancellation
 
 The live owner dashboard now offers **Licenses → Cancel Lifetime** with a
