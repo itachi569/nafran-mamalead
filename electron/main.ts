@@ -1045,7 +1045,12 @@ ipcMain.handle('enrichment:start', async () => {
 // then asks the runner to take that one-site job first, so a long background queue cannot delay the
 // result the user is looking at.
 ipcMain.handle('enrichment:prioritize', async (_event, payload: { jobId?: string } = {}) => {
-  await requireActiveLicense()
+  const { db } = openDatabase()
+  const job = payload.jobId ? db.one<{ kind: string }>(
+    'select kind from enrichment_jobs where workspace_id = ? and id = ?', [db.ensureWorkspace().id, payload.jobId],
+  ) : null
+  if (payload.jobId && !job) throw new Error('The requested scan job was not found.')
+  await requireActiveLicense(job?.kind === 'decision-maker' || job?.kind === 'deep' ? 'decisionMaker' : 'lifetime')
   void enricher?.prioritize(payload.jobId)
   return { started: true }
 })

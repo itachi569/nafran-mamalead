@@ -33,6 +33,8 @@ export interface FoundPerson {
   linkedinUrl: string
   /** Where the name came from, shown beside it so a person can be judged rather than trusted. */
   evidence: string
+  email?: string
+  phone?: string
 }
 
 export interface WebsiteFindings {
@@ -133,8 +135,11 @@ function readableHtml(html: string): string {
     html
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<\/?(?:h[1-6]|p|div|section|article|li|br|tr)\b[^>]*>/gi, '\n')
       .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' '),
+      .replace(/[^\S\n]+/g, ' ')
+      .replace(/ *\n */g, '\n')
+      .replace(/\n+/g, '\n'),
   ).trim()
 }
 
@@ -161,11 +166,14 @@ function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFin
     fullName: person.fullName,
     title: person.title,
     linkedinUrl: person.linkedinUrl,
-    evidence: 'schema.org Person markup',
+    email: person.email,
+    phone: person.phone,
+    evidence: pageUrl,
   }))
-  const prosePerson = findPerson(text)
-  if (prosePerson && !people.some((person) => person.fullName.toLowerCase() === prosePerson.fullName.toLowerCase())) {
-    people.push({ ...prosePerson, linkedinUrl: '', evidence: 'named beside a role on the site' })
+  for (const person of findPeople(text)) {
+    if (!people.some((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())) {
+      people.push({ ...person, linkedinUrl: '', email: '', phone: '', evidence: pageUrl })
+    }
   }
 
   return { emails, phones, socials: socialLinksFromHtml(html, pageUrl), people }
@@ -239,15 +247,20 @@ const PERSON_NOISE =
  * heading or a service is rejected rather than stored as a person.
  */
 function findPerson(text: string): { fullName: string; title: string } | null {
+  return findPeople(text)[0] ?? null
+}
+
+function findPeople(text: string): { fullName: string; title: string }[] {
   const pattern =
-    /([A-Z][a-z]+(?:[^\S\n]+[A-Z][a-z'-]+){0,2})[^\S\n]*[\n·|][^\S\n]*(Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)(?![A-Za-z])/g
+    /([A-Z][a-z]+(?:[^\S\n]+[A-Z][a-z'-]+){1,3})[^\S\n]*(?:[\n·|—–]| - )\s*(CEO|CFO|CTO|COO|CMO|Chief Executive Officer|Managing Director|Co-Founder|Co-founder|Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)(?![A-Za-z])/g
+  const people: { fullName: string; title: string }[] = []
   for (const match of text.matchAll(pattern)) {
     const fullName = match[1].trim()
     const title = match[2].trim()
     if (!isUsablePerson(fullName, title)) continue
-    return { fullName, title }
+    if (!people.some((person) => person.fullName.toLowerCase() === fullName.toLowerCase())) people.push({ fullName, title })
   }
-  return null
+  return people
 }
 
 /** The role vocabulary, as a pattern that can be matched anywhere in a block of text. */
@@ -314,8 +327,8 @@ interface PageHarvest {
  * as prose. Handles the three shapes sites actually publish: a Person node, an Organization whose
  * employee or founder points at one, and a graph of nodes referencing each other by id.
  */
-function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; email: string; linkedinUrl: string }[] {
-  const found: { fullName: string; title: string; email: string; linkedinUrl: string }[] = []
+function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; email: string; phone: string; linkedinUrl: string }[] {
+  const found: { fullName: string; title: string; email: string; phone: string; linkedinUrl: string }[] = []
   const seen = new Set<string>()
 
   const readPerson = (node: Record<string, unknown>): void => {
@@ -329,7 +342,8 @@ function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; 
       fullName: name,
       title,
       email: typeof node.email === 'string' ? node.email.replace(/^mailto:/i, '').trim() : '',
-      linkedinUrl: typeof node.sameAs === 'string' && /linkedin\.com\/in\//i.test(node.sameAs) ? node.sameAs : '',
+      phone: typeof node.telephone === 'string' ? node.telephone.trim() : '',
+      linkedinUrl: (Array.isArray(node.sameAs) ? node.sameAs : [node.sameAs]).find((url): url is string => typeof url === 'string' && /^https?:\/\/(?:www\.)?linkedin\.com\/in\//i.test(url)) ?? '',
     })
   }
 
@@ -361,6 +375,71 @@ function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; 
 
 export class WebsiteEnricher {
   private browser: Browser | null = null
+
+  /** Follow the site's own team/about links; one credit still covers one website. */
+  async inspectPeople(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
+    const findings: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], pagesRead: [], error: null }
+    let origin: URL
+    try { origin = new URL(website) } catch { return { ...findings, error: 'Invalid website address.' } }
+    const host = origin.hostname.replace(/^www\./i, '')
+    const pending = [origin.href]
+    const visited = new Set<string>()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 30_000)
+    const onAbort = () => controller.abort()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    try {
+      while (pending.length && visited.size < 5 && !controller.signal.aborted) {
+        const url = pending.shift()!
+        if (visited.has(url)) continue
+        visited.add(url)
+        try {
+          const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8_000)]),
+            headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': 'MamaLead contact scanner/1.4' } })
+          if (!response.ok) throw new Error(`Website returned HTTP ${response.status}.`)
+          const pageUrl = response.url || url
+          if (new URL(pageUrl).hostname.replace(/^www\./i, '') !== host) continue
+          const html = (await response.text()).slice(0, 2_000_000)
+          const found = contactFindingsFromHtml(html, pageUrl)
+          findings.pagesRead.push(pageUrl)
+          findings.emails.push(...found.emails)
+          findings.phones.push(...found.phones)
+          findings.socials.push(...found.socials)
+          for (const person of found.people) {
+            const existing = findings.people.find((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())
+            if (!existing) findings.people.push(person)
+            else {
+              for (const field of ['title', 'email', 'phone', 'linkedinUrl'] as const) if (!existing[field] && person[field]) existing[field] = person[field]
+            }
+          }
+          const links = Array.from(html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi))
+            .map((match) => {
+              try {
+                const target = new URL(decodeHtml(match[1]), pageUrl)
+                const label = readableHtml(match[2]).replace(/\s+/g, ' ').trim()
+                const pathMatch = /(?:^|[/_-])(?:team|people|leadership|management|staff)(?:[/_.-]|$)/i.test(target.pathname)
+                const aboutMatch = /(?:^|[/_-])(?:about|contact)(?:[/_.-]|$)/i.test(target.pathname)
+                const labelMatch = /^(?:(?:meet|about) (?:our |the )?|our )?(?:team|people|leadership|management|staff|about us|contact us)$/i.test(label)
+                return { target, rank: pathMatch ? 3 : aboutMatch ? 2 : labelMatch ? 1 : 0 }
+              } catch { return null }
+            }).filter((link): link is { target: URL; rank: number } => Boolean(link?.rank))
+            .sort((a, b) => b.rank - a.rank)
+          for (const { target } of links) {
+            try {
+              target.hash = ''
+              if (!/^https?:$/.test(target.protocol) || target.hostname.replace(/^www\./i, '') !== host || visited.has(target.href) || pending.includes(target.href)) continue
+              if (pending.length + visited.size < 5) pending.push(target.href)
+            } catch { /* Ignore malformed links. */ }
+          }
+        } catch (error) {
+          if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
+          if (!findings.pagesRead.length) findings.error = error instanceof Error ? error.message : 'Website could not be read.'
+        }
+      }
+      if (findings.pagesRead.length) findings.error = null
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort) }
+    return findings
+  }
 
   private async launch(): Promise<Browser> {
     // Headed runs are slower but far less likely to be served a challenge by a small business

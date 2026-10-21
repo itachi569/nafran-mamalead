@@ -270,7 +270,9 @@ export class EnrichmentRunner {
 
       const inspect = kind === 'social'
         ? this.enricher.inspectSocialFast(lead.website, signal)
-        : kind === 'email' || kind === 'phone' || kind === 'decision-maker'
+        : kind === 'decision-maker'
+          ? this.enricher.inspectPeople(lead.website, signal)
+        : kind === 'email' || kind === 'phone'
           ? this.enricher.inspectContactFast(lead.website, signal)
           : this.enricher.inspect(lead.website, signal)
       const findings = await waitForAbort(inspect, signal)
@@ -332,6 +334,8 @@ export class EnrichmentRunner {
             leadId,
             fullName: person.fullName,
             title: person.title,
+            email: person.email,
+            phone: person.phone,
             linkedinUrl: person.linkedinUrl,
             source: person.evidence || 'website',
           })

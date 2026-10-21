@@ -13,7 +13,7 @@ import type { Repository } from '../db/repository'
 const logoAsset = join(__dirname, 'assets', 'mamalead-original.jpeg')
 const watermarkAsset = join(__dirname, 'assets', 'mamalead-watermark.png')
 
-export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles'
+export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles' | 'people'
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf'
 
 export interface ExportRequest {
@@ -25,7 +25,7 @@ export interface ExportRequest {
   columns: string[]
   fileName: string
   format?: ExportFormat
-  /** Exact leads currently shown by Social Profiles; only their saved links are exported. */
+  /** Exact leads selected by the finder; an empty selection never falls back to all leads. */
   leadIds?: string[]
   /** Applied to the whole database for a filtered lead export, not just rendered rows. */
   leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'
@@ -155,6 +155,24 @@ function rowsFor(
     }
   }
 
+  if (request.kind === 'people') {
+    const ids = [...new Set(request.leadIds ?? [])]
+    const leads = new Map(ids.map((id) => [id, repository.getLead(workspaceId, id)]))
+    const rows = ids.flatMap((id) => repository.listDecisionMakers(workspaceId, [id]))
+      .filter((person) => leads.get(String(person.lead_id)))
+      .map((person) => {
+        const lead = leads.get(String(person.lead_id))!
+        return { ...person, name: lead.name, website: lead.website }
+      })
+    return { columns: {
+      'Business name': (row) => text(row.name), Domain: LEAD_COLUMNS.Domain,
+      'Decision maker': (row) => text(row.full_name), Role: (row) => text(row.title),
+      Email: (row) => text(row.email), Phone: (row) => text(row.phone),
+      LinkedIn: (row) => text(row.linkedin_url), Source: (row) => text(row.source),
+      'Saved date': (row) => shortDate(row.created_at),
+    }, rows }
+  }
+
   const rows = [] as ReturnType<Repository['listLeads']>['rows']
   const wanted = Math.max(0, request.limit)
   while (rows.length < wanted) {
@@ -225,7 +243,7 @@ export function buildExport(
 }
 
 function exportTitle(kind: ExportKind): string {
-  return kind === 'profiles' ? 'Social Profiles' : kind === 'runs' ? 'Run History' : kind === 'invoices' ? 'Invoices' : 'Leads'
+  return kind === 'people' ? 'Decision Makers' : kind === 'profiles' ? 'Social Profiles' : kind === 'runs' ? 'Run History' : kind === 'invoices' ? 'Invoices' : 'Leads'
 }
 
 async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> {

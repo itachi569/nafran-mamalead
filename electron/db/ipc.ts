@@ -250,7 +250,7 @@ export function registerLocalDatabase(
       repository.recordExport({ ...payload, workspaceId: workspace.id }),
     // The only handler that reaches the file system, so it is the only one that needs the window
     // its save dialog should hang off.
-    'db:exports:write': (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles'; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) =>
+    'db:exports:write': (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people'; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) =>
       writeExport(BrowserWindow.fromWebContents(event.sender), repo, current, payload),
 
     'db:coverage:email': () => ({ totals: repository.emailCoverage(workspace.id), bands: repository.emailConfidence(workspace.id) }),

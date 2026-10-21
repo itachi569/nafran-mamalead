@@ -1531,6 +1531,11 @@ export function useAppValues() {
     funnel: null,
   })
   const [suggestions, setSuggestions] = useState<CandidateRow[]>([])
+  // Decision Makers starts empty and owns the exact websites in the current import.
+  const dmSession = useRef({ generation: 0, leadIds: [] as string[] })
+  const [dmSessionLeads, setDmSessionLeads] = useState<StoredLead[]>([])
+  const [dmExportBusy, setDmExportBusy] = useState(false)
+  const dmExportLock = useRef(false)
   const [imports, setImports] = useState<{
     batches: Record<string, unknown>[]
     websiteBatches: Record<string, unknown>[]
@@ -1783,7 +1788,7 @@ export function useAppValues() {
         const result = await db.jobs.queue(kind, leadIds)
         // A finder action is an explicit foreground request. Wake the worker now instead of
         // waiting for the next background tick or an unrelated job to finish.
-        void (window.desktop?.enrichment?.prioritize?.(result.jobId) ?? window.desktop?.enrichment?.start?.())
+        await (window.desktop?.enrichment?.prioritize?.(result.jobId) ?? window.desktop?.enrichment?.start?.())
         const label = kind === 'email' ? 'email' : kind === 'phone' ? 'phone' : 'decision maker'
         flash(`${result.queued} ${result.queued === 1 ? 'lead' : 'leads'} queued for ${label} enrichment.`)
         return result
@@ -2280,7 +2285,7 @@ export function useAppValues() {
     const delimiter = DELIMS[delim]?.[1] === '.tsv' ? 'tsv' : 'csv'
     try {
       const result = await db.exports.write({
-        kind: (expMode === 'runs' || expMode === 'invoices' ? expMode : 'leads') as 'leads' | 'runs' | 'invoices',
+        kind: expMode === 'runs' || expMode === 'invoices' ? expMode : 'leads',
         limit: liveScope.n,
         delimiter,
         columns,
@@ -2337,15 +2342,20 @@ export function useAppValues() {
   /** The named contacts and the funnel behind them, read in one call. */
   const refreshPeople = useCallback(async () => {
     if (!db) return
+    const session = dmSession.current
     try {
-      const [rows, funnel, candidates] = await Promise.all([
+      const [rows, funnel, candidates, sessionLeads] = await Promise.all([
         db.people.ledger(),
         db.people.funnel(),
         // Dismissed suggestions come back too: a decided card shows its outcome and can be undone.
         db.people.candidates(true),
+        Promise.all(session.leadIds.map((id) => db.leads.get(id))),
       ])
       setPeople({ rows: rows as DecisionMakerRow[], funnel })
       setSuggestions(candidates)
+      if (session.generation === dmSession.current.generation) {
+        setDmSessionLeads(sessionLeads.filter((lead): lead is StoredLead => Boolean(lead)))
+      }
     } catch {
       // Leaving the last good value on screen beats clearing the page on a read failure.
     }
@@ -2988,48 +2998,97 @@ export function useAppValues() {
     resultSelector: '[data-flistcard="phone"]',
   })
 
+  const dmScope = new Set(dmSession.current.leadIds)
+  const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id))
+  const dmSuggestions = suggestions.filter((person) => dmScope.has(person.lead_id))
+  const dmMatchedIds = new Set(dmPeopleRows.map((person) => person.lead_id))
+  const dmLinkedinIds = new Set(dmPeopleRows.filter((person) => person.linkedin_url).map((person) => person.lead_id))
+  const dmPeople = { rows: dmPeopleRows, funnel: {
+    total: dmSessionLeads.length, withWebsite: dmSessionLeads.filter((lead) => lead.website).length,
+    withLinkedin: dmLinkedinIds.size, named: dmMatchedIds.size, matched: dmMatchedIds.size,
+    missing: dmSessionLeads.length - dmMatchedIds.size,
+  } }
   const dmFinder = useFinderScan({
-    rows: snapshot.leads.map((lead) => {
-      const named = people.rows.filter((person) => person.lead_id === lead.id)
+    rows: dmSessionLeads.map((lead) => {
+      const named = dmPeopleRows.filter((person) => person.lead_id === lead.id)
       return {
         leadId: lead.id,
         domain: hostOf(lead.website),
-        scanned: Boolean(lead.lastScannedAt),
-        items: named.map((person) => ({ t: person.full_name, k: person.title || 'Role not stated' })),
+        scanned: Boolean(lead.last_scanned_at),
+        items: named.map((person) => ({ t: person.full_name, k: [person.title || 'Role not stated', person.email, person.phone, person.linkedin_url].filter(Boolean).join(' · ') })),
         statusLabel: named.length ? `${named.length} named` : 'No named contact',
       }
     }),
     mode: 'review',
-    queue: (leadIds) => queueLeads('decision-maker', leadIds),
+    queue: async (leadIds) => {
+      const result = await queueLeads('decision-maker', leadIds)
+      if (leadIds.length && !result.jobId) throw new Error('The Decision Maker scan could not start.')
+      return result
+    },
     jobStatus: (jobId) => db?.jobs.status(jobId) ?? Promise.resolve(null),
-    refresh: () => void refreshPeople(),
+    refresh: refreshPeople,
     ringSource: () => [
-      { name: 'Scraped', count: people.funnel?.total ?? 0 },
-      { name: 'Website read', count: people.funnel?.withWebsite ?? 0 },
-      { name: 'LinkedIn found', count: people.funnel?.withLinkedin ?? 0 },
-      { name: 'Person named', count: people.funnel?.matched ?? 0 },
+      { name: 'Websites', count: dmSessionLeads.length },
+      { name: 'Website read', count: dmSessionLeads.filter((lead) => lead.last_scanned_at).length },
+      { name: 'LinkedIn found', count: dmLinkedinIds.size },
+      { name: 'Person named', count: dmMatchedIds.size },
     ],
     actionLabel: 'Review suggestions',
-    runningLabel: () => 'Reading what is already on file…',
-    doneLabel: (scanned) =>
-      scanned
-        ? `${scanned} lead${scanned === 1 ? '' : 's'} named so far. Suggestions below still need a decision.`
-        : 'Nothing named yet. Review suggestions reads the addresses and pages already on file.',
+    runningLabel: () => 'Reading the imported websites for published people and roles…',
+    doneLabel: () => `${dmPeopleRows.length} named contact${dmPeopleRows.length === 1 ? '' : 's'} found across ${dmSessionLeads.length} imported website${dmSessionLeads.length === 1 ? '' : 's'}. Unpublished details stay blank.`,
     onStart: () => void buildSuggestions(),
-    onExport: () => openExport('leads', 0),
-    // Keep Decision Makers consistent with Email and Phone: when the pass settles,
-    // bring the finder list itself into view below the coverage/result card.
-    resultSelector: '[data-flistcard="dm"]',
+    onExport: () => void runDecisionExport('xlsx'),
+    // Bring this import's people and direct export buttons into view after the pass settles.
+    resultSelector: '[data-fres="dm"]',
   })
+
+  const runDecisionExport = async (format: 'xlsx' | 'pdf') => {
+    if (!db || dmExportLock.current || dmFinder.scanning) return
+    const session = { ...dmSession.current, leadIds: [...dmSession.current.leadIds] }
+    if (!dmPeopleRows.length || !session.leadIds.length) { flash('Scan websites to find people before exporting.'); return }
+    dmExportLock.current = true
+    setDmExportBusy(true)
+    try {
+      const result = await db.exports.write({ kind: 'people', format, limit: dmPeopleRows.length,
+        delimiter: 'csv', fileName: `decision-makers.${format}`, leadIds: session.leadIds,
+        columns: ['Business name', 'Domain', 'Decision maker', 'Role', 'Email', 'Phone', 'LinkedIn', 'Source', 'Saved date'],
+      })
+      if (!result || result.rows === 0) return
+      if (session.generation === dmSession.current.generation) {
+        dmSession.current = { generation: session.generation + 1, leadIds: [] }
+        setDmSessionLeads([])
+        setDmBlocker('All blockers')
+        setDmContactLimit(40)
+        dmFinder.reset()
+        void refreshPeople()
+        void refreshLists()
+      }
+      flash(`Saved ${result.rows} contact${result.rows === 1 ? '' : 's'} to ${result.fileName}. Ready for the next scan.`)
+    } catch (error) { flash(error instanceof Error ? error.message : 'The export could not be saved. Your scan is still available.') }
+    finally { dmExportLock.current = false; setDmExportBusy(false) }
+  }
 
   const runFinderImport = useCallback(
     (page: 'email' | 'phone' | 'dm', lines: string[]): void => {
       if (!db || !lines.length) return
       setImpOpen(false)
       setImpValue('')
+      const dmGeneration = page === 'dm' ? dmSession.current.generation + 1 : null
+      if (dmGeneration !== null) {
+        dmSession.current = { generation: dmGeneration, leadIds: [] }
+        setDmSessionLeads([])
+        setDmContactLimit(40)
+        setDmBlockerLimit(40)
+        setDmBlocker('All blockers')
+        dmFinder.reset()
+      }
       void (async () => {
         try {
           const result = await db.imports.websites(lines)
+          if (dmGeneration !== null) {
+            if (dmGeneration !== dmSession.current.generation) return
+            dmSession.current = { generation: dmGeneration, leadIds: [...new Set(result.leadIds)] }
+          }
           const field = document.querySelector<HTMLTextAreaElement>('[data-imptext="1"]')
           if (field) field.value = ''
           // Refresh the lead snapshot and the active finder in parallel. The old sequential
@@ -3037,13 +3096,13 @@ export function useAppValues() {
           // worker could even start.
           await Promise.all([
             refreshLists(),
-            // Decision Makers reads its lead scope from the scraper snapshot, so include the
-            // reload before starting the pass, while allowing it to run beside the other reads.
+            // Refresh workspace previews alongside the explicit imported-site scope.
             reload(),
             page === 'email' ? email.refresh() : Promise.resolve(),
             page === 'phone' ? refreshPhone() : Promise.resolve(),
             page === 'dm' ? refreshPeople() : Promise.resolve(),
           ])
+          if (dmGeneration !== null && dmGeneration !== dmSession.current.generation) return
           const finder = page === 'email' ? emailFinder : page === 'phone' ? phoneFinder : dmFinder
           finder.scanImported(result.leadIds)
           flash(`${result.leadIds.length} website${result.leadIds.length === 1 ? '' : 's'} selected for ${page === 'email' ? 'email' : page === 'phone' ? 'phone' : 'decision maker'} lookup.`)
@@ -3095,11 +3154,11 @@ export function useAppValues() {
    * themselves and the count the footer states — and the count has to be the rows' own length.
    */
   const dmBlockerRows = (() => {
-    const withPeople = new Set(people.rows.map((person) => person.lead_id))
-    const blocked = snapshot.leads.filter((lead) => !withPeople.has(lead.id))
+    const withPeople = new Set(dmPeople.rows.map((person) => person.lead_id))
+    const blocked = dmSessionLeads.filter((lead) => !withPeople.has(lead.id))
     return blocked
       .map((lead) => {
-        const blocker = !lead.website ? 'No website' : lead.lastScannedAt ? 'No people listed' : 'Pending'
+        const blocker = !lead.website ? 'No website' : lead.last_scanned_at ? 'No people listed' : 'Pending'
         return {
           name: lead.name,
           domain: hostOf(lead.website) || 'No website found',
@@ -3906,7 +3965,7 @@ export function useAppValues() {
     queueEmail: () => void queueEnrichment('email'),
     queuePhone: () => void queueEnrichment('phone'),
     queueSocial: () => void queueEnrichment('social'),
-    queueDecisionMakers: () => void queueEnrichment('decision-maker'),
+    queueDecisionMakers: () => dmFinder.scanImported(dmSession.current.leadIds),
     // The deep pass, which the design prices at one credit per lead: one paid search each, for the
     // people a site does not name. It needs the user's own DataForSEO key, so the button says what
     // is missing rather than quietly doing nothing.
@@ -3959,11 +4018,11 @@ export function useAppValues() {
         flash('Saved LeadsAngel license removed.')
       }).catch((error) => flash(error instanceof Error ? error.message : 'LeadsAngel license could not be removed.'))
     },
-    dmLeadLimit: Math.min(deepLeadLimit, Math.max(1, snapshot.total)),
-    dmLeadLimitMax: Math.max(1, snapshot.total),
-    dmLeadAvailable: snapshot.total,
-    dmSelectedLabel: snapshot.total
-      ? `${Math.min(deepLeadLimit, snapshot.total)} of ${snapshot.total} captured leads selected`
+    dmLeadLimit: Math.min(deepLeadLimit, Math.max(1, dmSessionLeads.length)),
+    dmLeadLimitMax: Math.max(1, dmSessionLeads.length),
+    dmLeadAvailable: dmSessionLeads.length,
+    dmSelectedLabel: dmSessionLeads.length
+      ? `${Math.min(deepLeadLimit, dmSessionLeads.length)} of ${dmSessionLeads.length} imported websites selected`
       : 'No captured leads yet',
     onDmLeadLimitInput: (event: React.ChangeEvent<HTMLInputElement>) => {
       const parsed = Number.parseInt(event.currentTarget.value, 10)
@@ -3980,9 +4039,9 @@ export function useAppValues() {
         flash('Add a DataForSEO key in Settings → Account before running a deep pass.')
         return
       }
-      const selectedLeadIds = snapshot.leads.slice(0, Math.max(1, Math.min(deepLeadLimit, snapshot.leads.length))).map((lead) => lead.id)
+      const selectedLeadIds = dmSessionLeads.slice(0, Math.max(1, Math.min(deepLeadLimit, dmSessionLeads.length))).map((lead) => lead.id)
       if (!selectedLeadIds.length) {
-        flash('Capture Google Maps leads first, then choose how many to send to Decision Makers.')
+        flash('Import websites into Decision Makers first, then choose how many to enrich.')
         return
       }
       void bridge
@@ -4043,14 +4102,14 @@ export function useAppValues() {
     })(),
     // Decision Makers. The cards are the people actually found, and the funnel counts how many
     // leads reached each step of the match.
-    dmMatched: people.funnel?.matched ?? 0,
-    dmNamed: people.rows.length,
-    dmMissing: people.funnel?.missing ?? 0,
-    dmCoveragePct: people.funnel?.total ? Math.round(((people.funnel.matched ?? 0) / people.funnel.total) * 100) : 0,
+    dmMatched: dmPeople.funnel?.matched ?? 0,
+    dmNamed: dmPeople.rows.length,
+    dmMissing: dmPeople.funnel?.missing ?? 0,
+    dmCoveragePct: dmPeople.funnel?.total ? Math.round(((dmPeople.funnel.matched ?? 0) / dmPeople.funnel.total) * 100) : 0,
     // A person can only be named once their company page was read, so the leads with a LinkedIn
     // profile are the population the match works from.
-    dmPeopleListed: people.funnel?.withLinkedin ?? 0,
-    dmRows: people.rows.slice(0, dmContactLimit).map((person) => ({
+    dmPeopleListed: dmPeople.funnel?.withLinkedin ?? 0,
+    dmRows: dmPeople.rows.slice(0, dmContactLimit).map((person) => ({
       ini: initialsOf(person.full_name),
       name: person.full_name,
       title: person.title || 'Role not stated',
@@ -4067,20 +4126,20 @@ export function useAppValues() {
       /** True when the card offers a LinkedIn profile, which is what its button points at. */
       showProfile: person.linkedin_url ? '1' : '',
     })),
-    dmTotal: people.funnel?.total ?? 0,
-    dmWithLinkedin: people.funnel?.withLinkedin ?? 0,
-    dmWithWebsite: people.funnel?.withWebsite ?? 0,
-    dmShowingLabel: `${Math.min(people.rows.length, dmContactLimit)} of the ${people.rows.length} named contacts found so far.`,
-    dmShowing: people.rows.length,
-    dmShowAllLabel: `Show all ${people.rows.length.toLocaleString('en-GB')}`,
+    dmTotal: dmPeople.funnel?.total ?? 0,
+    dmWithLinkedin: dmPeople.funnel?.withLinkedin ?? 0,
+    dmWithWebsite: dmPeople.funnel?.withWebsite ?? 0,
+    dmShowingLabel: dmSessionLeads.length ? `${Math.min(dmPeople.rows.length, dmContactLimit)} of ${dmPeople.rows.length} named contacts from the current scan.` : 'Import websites to start a new scan. Earlier searches remain saved in All Leads.',
+    dmShowing: dmPeople.rows.length,
+    dmShowAllLabel: `Show all ${dmPeople.rows.length.toLocaleString('en-GB')}`,
     // Only offered while there are more named contacts than the grid is drawing.
-    dmMoreContactsOn: people.rows.length > dmContactLimit ? '1' : '',
+    dmMoreContactsOn: dmPeople.rows.length > dmContactLimit ? '1' : '',
     showAllDmContacts: () => setDmContactLimit((current) => current + 40),
     // The seniority mix: the roles the named contacts actually carry, most common first. A title
     // the design never listed is still a real title, so it is grouped rather than dropped.
     dmSeniority: (() => {
       const counts = new Map<string, number>()
-      for (const person of people.rows) {
+      for (const person of dmPeople.rows) {
         const title = person.title.trim() || 'Role not stated'
         counts.set(title, (counts.get(title) ?? 0) + 1)
       }
@@ -4088,7 +4147,7 @@ export function useAppValues() {
         .sort((a, b) => Number(b.count) - Number(a.count))
         .slice(0, 6)
     })(),
-    dmSeniorityNote: `Titles across the ${people.rows.length} match${people.rows.length === 1 ? '' : 'es'}.`,
+    dmSeniorityNote: `Titles across the ${dmPeople.rows.length} match${dmPeople.rows.length === 1 ? '' : 'es'}.`,
     /**
      * The five stages a lead must clear, with what each one cost.
      *
@@ -4097,32 +4156,32 @@ export function useAppValues() {
      * number chosen to make the row add up. The bars are each stage's share of the leads scraped.
      */
     dmStages: (() => {
-      const total = people.funnel?.total ?? 0
-      const withWebsite = people.funnel?.withWebsite ?? 0
-      const withLinkedin = people.funnel?.withLinkedin ?? 0
-      const listed = people.funnel?.named ?? 0
-      const matched = people.funnel?.matched ?? 0
+      const total = dmPeople.funnel?.total ?? 0
+      const withWebsite = dmPeople.funnel?.withWebsite ?? 0
+      const read = dmSessionLeads.filter((lead) => lead.last_scanned_at).length
+      const listed = dmPeople.funnel?.named ?? 0
+      const matched = dmPeople.funnel?.matched ?? 0
       const share = (count: number) => `${total ? Math.round((count / total) * 100) : 0}%`
       return [
-        { count: String(total), label: 'Leads scraped', loss: '', width: share(total) },
+        { count: String(total), label: 'Websites imported', loss: '', width: share(total) },
         { count: String(withWebsite), label: 'Have a website', loss: `−${total - withWebsite} no website`, width: share(withWebsite) },
-        { count: String(withLinkedin), label: 'LinkedIn company page found', loss: `−${withWebsite - withLinkedin} no company page`, width: share(withLinkedin) },
-        { count: String(listed), label: 'People listed on the page', loss: `−${withLinkedin - listed} page had no people`, width: share(listed) },
+        { count: String(read), label: 'Websites read', loss: `${Math.max(0, withWebsite - read)} awaiting scan`, width: share(read) },
+        { count: String(listed), label: 'Websites with named people', loss: `${Math.max(0, read - listed)} without a published name`, width: share(listed) },
         { count: String(matched), label: 'Named decision maker matched', loss: `−${Math.max(0, listed - matched)} still pending`, width: share(matched) },
       ]
     })(),
     /** The lead-level answer to "why not this one": what blocked each lead that has no contact. */
     dmBlockers: dmBlockerRows,
     dmBlockersShowing: dmBlockerRows.length,
-    dmBlockerShowAllLabel: `Show all ${(people.funnel?.missing ?? 0).toLocaleString('en-GB')}`,
+    dmBlockerShowAllLabel: `Show all ${(dmPeople.funnel?.missing ?? 0).toLocaleString('en-GB')}`,
     // Only offered while there is more of the blocked list than the page is drawing.
-    dmBlockerMoreOn: (people.funnel?.missing ?? 0) > dmBlockerRows.length ? '1' : '',
+    dmBlockerMoreOn: (dmPeople.funnel?.missing ?? 0) > dmBlockerRows.length ? '1' : '',
     showAllDmBlockers: () => setDmBlockerLimit((current) => current + 40),
-    dmBlockerNote: `${(people.funnel?.missing ?? 0).toLocaleString('en-GB')} leads with no named contact, grouped by what blocked them.`,
+    dmBlockerNote: `${(dmPeople.funnel?.missing ?? 0).toLocaleString('en-GB')} leads with no named contact, grouped by what blocked them.`,
     dmBlockerFilter: (event: React.ChangeEvent<HTMLSelectElement>) => setDmBlocker(event.currentTarget.value),
     // Suggested contacts. These are leads, not facts, so they sit apart from the confirmed people
     // and each one carries the evidence it came from.
-    dmSuggestions: suggestions.map((suggestion) => ({
+    dmSuggestions: dmSuggestions.map((suggestion) => ({
       id: suggestion.id,
       ini: initialsOf(suggestion.full_name),
       name: suggestion.full_name,
@@ -4134,7 +4193,7 @@ export function useAppValues() {
     })),
     // The suggestion cards the new design draws: a decision is offered on a pending card and its
     // outcome on a resolved one, which is what puts Confirm/Dismiss and Undo on different cards.
-    dmSugRows: suggestions.map((suggestion) => {
+    dmSugRows: dmSuggestions.map((suggestion) => {
       const state = suggestion.status === 'dismissed' ? 'dismissed' : 'pending'
       return {
         state,
@@ -4160,20 +4219,24 @@ export function useAppValues() {
     // The badge counts what still needs a decision: a card that has been dealt with carries its
     // outcome and an Undo, so counting it as "awaiting review" would be a lie about the list.
     dmSugBadge: (() => {
-      const waiting = suggestions.filter((suggestion) => suggestion.status !== 'dismissed').length
+      const waiting = dmSuggestions.filter((suggestion) => suggestion.status !== 'dismissed').length
       return `${waiting} awaiting review`
     })(),
-    dmSugEmpty: suggestions.length ? '0' : '1',
+    dmSugEmpty: dmSuggestions.length ? '0' : '1',
     // The three finder pages: one scan object each, built above from the page's own data.
     fEmail: { ...emailFinder, rows: emailTableRows, count: emailFinder.count, rowsCount: emailFinder.rowsCount },
     fPhone: phoneFinder,
     fDm: dmFinder,
-    dmSuggestionEmpty: suggestions.length === 0 ? '1' : '0',
-    dmSuggestionHint: suggestions.length
+    exportDmExcel: () => void runDecisionExport('xlsx'),
+    exportDmPdf: () => void runDecisionExport('pdf'),
+    dmExportDisabled: dmExportBusy || dmFinder.scanning || dmPeopleRows.length === 0,
+    dmExportBusy,
+    dmSuggestionEmpty: dmSuggestions.length === 0 ? '1' : '0',
+    dmSuggestionHint: dmSuggestions.length
       ? ''
       : 'Nothing suggested yet. Look for suggestions reads the addresses and company pages already on file, then lists the names it can infer so you can confirm or dismiss each one.',
-    dmSuggestionNote: suggestions.length
-      ? `${suggestions.length} name${suggestions.length === 1 ? '' : 's'} inferred from what is on file. Confirm one to move it into the named contacts above.`
+    dmSuggestionNote: dmSuggestions.length
+      ? `${dmSuggestions.length} name${dmSuggestions.length === 1 ? '' : 's'} inferred from what is on file. Confirm one to move it into the named contacts above.`
       : 'Names inferred from addresses and company pages, kept apart from confirmed contacts until you check them.',
     buildSuggestions: () => void buildSuggestions(),
     // Website Lookup. The page reports what the last import did and previews the leads it made.

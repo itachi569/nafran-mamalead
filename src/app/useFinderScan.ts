@@ -98,6 +98,7 @@ export interface FinderScan<Row = FinderSourceRow> {
   scanBadge: string
   scanLabel: string
   exit: () => void
+  reset: () => void
   exportScan: () => void
   rings: FinderRing[]
   rows: FinderRowOf<Row>[]
@@ -116,7 +117,7 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
   /** Reads one scan job, so another page's queued work cannot hold this result open. */
   jobStatus?: (jobId: string) => Promise<{ status: 'queued' | 'running' | 'done' | 'failed' } | null>
   /** Re-reads the page's data. Rings and rows are read after every refresh. */
-  refresh: () => void
+  refresh: () => void | Promise<void>
   /** The counts behind the rings, in the order they are drawn. */
   ringSource: () => { name: string; count: number }[]
   /** The action button's own words: "Verify all", "Check numbers", "Review suggestions". */
@@ -167,6 +168,8 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   const [rowCursor, setRowCursor] = useState(0)
   const [ringFill, setRingFill] = useState(0)
   const timers = useRef<number[]>([])
+  const generation = useRef(0)
+  const [failure, setFailure] = useState('')
 
   // The source changes identity on every render — it is built from live data — so it is read
   // through a ref and never used as an effect dependency.
@@ -273,6 +276,8 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
    */
   const start = useCallback((leadIds: string[], fromImport: boolean) => {
     const current = sourceRef.current
+    const request = ++generation.current
+    setFailure('')
     clearTimers()
     setScanOn(true)
     setRowCursor(0)
@@ -291,19 +296,22 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       }
       // An imported site needs a real people pass before the Decision Makers result can settle.
       setRunning(true)
-      void current.queue(uniqueIds).then((result) => {
+      void current.queue(uniqueIds).then(async (result) => {
+        if (request !== generation.current) return
         setQueued(result.queued)
         if (result.jobId) setJobId(result.jobId)
         else {
-          current.refresh()
+          await current.refresh()
+          if (request !== generation.current) return
           setRunning(false)
           setRingFill(1)
         }
-      })
+      }).catch(() => { if (request === generation.current) { setFailure('The scan could not start. Check your plan and try again.'); setRunning(false) } })
       return
     }
     setRunning(true)
-    void current.queue(uniqueIds).then((result) => {
+    void current.queue(uniqueIds).then(async (result) => {
+      if (request !== generation.current) return
       setQueued(result.queued)
       if (result.jobId) {
         setJobId(result.jobId)
@@ -311,10 +319,11 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       }
       // Nothing was queued (for example, every row lacked a website): finish cleanly and leave the
       // scoped rows visible instead of showing a spinner that can never receive a job update.
-      current.refresh()
+      await current.refresh()
+      if (request !== generation.current) return
       setRunning(false)
       setRingFill(1)
-    })
+    }).catch(() => { if (request === generation.current) { setFailure('The scan could not start. Try again.'); setRunning(false) } })
   }, [clearTimers])
 
   const act = useCallback(() => start(actionRows.map((row) => row.leadId), false), [actionRows, start])
@@ -343,9 +352,9 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   // puts the way out of the scan back on screen — a spinner with no exit is a page you cannot leave.
   useEffect(() => {
     if (!running) return
-    const timer = window.setTimeout(() => setRunning(false), 90_000)
+    const timer = window.setTimeout(() => { setFailure('The scan is taking longer than expected. Refresh to see saved results.'); setRunning(false) }, Math.max(90_000, queued * 60_000))
     return () => window.clearTimeout(timer)
-  }, [running])
+  }, [running, queued])
 
   // The pass is over when this page's own job is done. Looking at the global queue made an Email
   // scan wait behind an unrelated Phone or website job, and could leave its result card open.
@@ -365,7 +374,9 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
           timer = window.setTimeout(() => void poll(), 450)
           return
         }
-        sourceRef.current.refresh()
+        await sourceRef.current.refresh()
+        if (cancelled) return
+        if (status.status === 'failed') setFailure('The scan could not finish. Any saved results are shown below; check your connection and plan before retrying.')
         setRunning(false)
         setRingFill(1)
       } catch {
@@ -448,9 +459,11 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         off: String(Math.round(CIRCUMFERENCE - arc * fill)),
       }
     })
-  }, [scanned, running, ringFill])
+  }, [scanned, running, ringFill, source])
 
   const exit = useCallback(() => {
+    generation.current += 1
+    setFailure('')
     clearTimers()
     setScanOn(false)
     setRunning(false)
@@ -460,6 +473,13 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     setScopeIds(null)
     setImported(false)
   }, [clearTimers])
+
+  const reset = useCallback(() => {
+    exit()
+    setTerm('')
+    setFilter('all')
+    setHistOpen(false)
+  }, [exit])
 
   const showFilter = useCallback((value: string) => {
     exit()
@@ -474,7 +494,11 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     const selector = sourceRef.current.resultSelector
     if (!selector) return
     const frame = window.requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(selector)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const target = document.querySelector<HTMLElement>(selector)
+      if (!target) return
+      const toolbarHeight = Math.max(0, ...Array.from(document.querySelectorAll<HTMLElement>('[data-socbar]'), (bar) => bar.getBoundingClientRect().height))
+      target.style.scrollMarginTop = `${toolbarHeight + 32}px`
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [running, scanOn])
@@ -514,10 +538,11 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     scanOn,
     scanning: running,
     scanDone: scanOn && !running,
-    scanSub: running ? source.runningLabel(queued) : source.doneLabel(scanned),
-    scanBadge: running ? source.runningLabel(queued) : source.doneLabel(scanned),
-    scanLabel: running ? source.runningLabel(queued) : source.doneLabel(scanned),
+    scanSub: failure || (running ? source.runningLabel(queued) : source.doneLabel(scanned)),
+    scanBadge: failure || (running ? source.runningLabel(queued) : source.doneLabel(scanned)),
+    scanLabel: failure || (running ? source.runningLabel(queued) : source.doneLabel(scanned)),
     exit,
+    reset,
     exportScan: () => sourceRef.current.onExport(),
     rings,
     rows,

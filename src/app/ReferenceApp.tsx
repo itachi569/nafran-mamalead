@@ -2441,7 +2441,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <>
                       <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "16px", padding: "8px 8px 8px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
                         <span style={{flex: "1", minWidth: "180px", fontSize: "13px", fontWeight: "500"}}>{V.fDm.scanLabel}</span>
-                        <button type="button" onClick={V.fDm.exit} style={{height: "32px", padding: "0 14px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}} data-exitscan="1">Show all leads</button>
+                        <button type="button" onClick={V.fDm.refresh} style={{height: "32px", padding: "0 14px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}} data-exitscan="1">Refresh results</button>
                       </div>
                       </>
                     ) : null}
@@ -2470,19 +2470,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   </section>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
-                      <h2 data-fres="dm" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>People found</h2>
-                      {shows(V.fDm.scanDone) ? (
-                        <>
-                        <button type="button" onClick={V.fDm.exportScan} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)", animation: "lsPanelIn .35s cubic-bezier(.22,1,.36,1) both"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M12 4v10"></path>
-                            <path d="M8 10.5l4 4 4-4"></path>
-                            <path d="M4.5 18.5h15"></path>
-                          </svg>
-                          Export
-                        </button>
-                        </>
-                      ) : null}
+                      <h2 data-fres="dm" style={{scrollMarginTop: "130px", margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>People found</h2>
+
                     </div>
                     <ul style={{listStyle: "none", margin: "14px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
                       {(V.fDm.rows ?? []).map((w, __iw) => (
@@ -2520,6 +2509,11 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </Fragment>
                       ))}
                     </ul>
+                    <div data-dm-export-options="1" style={{display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "20px", paddingTop: "18px", borderTop: "1px solid #DEDFDC"}}>
+                      <button type="button" disabled={V.dmExportDisabled} onClick={V.exportDmExcel} style={{padding: "12px 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#FFFFFF", fontFamily: "inherit", fontSize: "13.5px", cursor: V.dmExportDisabled ? "default" : "pointer", opacity: V.dmExportDisabled ? .5 : 1}}>Download Excel (.xlsx)</button>
+                      <button type="button" disabled={V.dmExportDisabled} onClick={V.exportDmPdf} style={{padding: "12px 22px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", cursor: V.dmExportDisabled ? "default" : "pointer", opacity: V.dmExportDisabled ? .5 : 1}}>Download PDF</button>
+                      {V.dmExportBusy ? <span role="status" style={{alignSelf: "center", fontSize: "13px"}}>Saving export…</span> : null}
+                    </div>
                   </section>
                   </>
                 ) : null}
@@ -2605,14 +2599,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.dmShowingLabel}</p>
                         </div>
                         <div style={{display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto", flexWrap: "wrap"}}>
-                          <button type="button" onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M12 4v10"></path>
-                              <path d="M8 10.5l4 4 4-4"></path>
-                              <path d="M4.5 18.5h15"></path>
-                            </svg>
-                            Export
-                          </button>
+
                           {shows(V.dmMoreContactsOn) ? (
                             <>
                             <button type="button" data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer"}} onClick={V.showAllDmContacts}>{V.dmShowAllLabel}</button>

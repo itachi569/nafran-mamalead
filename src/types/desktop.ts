@@ -439,7 +439,7 @@ export interface LocalApi {
     }) => Promise<{ id: string }>
     /** Writes the file and reports where it landed; null when the save dialog is cancelled. */
     write: (input: {
-      kind: 'leads' | 'runs' | 'invoices' | 'profiles'
+      kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people'
       limit: number
       delimiter: string
       columns: string[]

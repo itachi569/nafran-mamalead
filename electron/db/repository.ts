@@ -1284,16 +1284,33 @@ export class Repository {
     linkedinUrl?: string
     source?: string
   }): { id: string } {
-    const id = randomUUID()
     const lead = this.db.one<{ workspace_id: string }>('select workspace_id from leads where id = ?', [input.leadId])
+    const workspaceId = lead?.workspace_id ?? input.workspaceId
+    const fullName = input.fullName.trim().replace(/\s+/g, ' ')
+    const existing = this.db.one<{ id: string }>(
+      'select id from decision_makers where workspace_id = ? and lead_id = ? and lower(trim(full_name)) = lower(?) limit 1',
+      [workspaceId, input.leadId, fullName],
+    )
+    if (existing) {
+      // Re-scans enrich the same contact without duplicating it or erasing published details.
+      this.db.run(
+        `update decision_makers set title = coalesce(nullif(?, ''), title),
+         email = coalesce(nullif(?, ''), email), phone = coalesce(nullif(?, ''), phone),
+         linkedin_url = coalesce(nullif(?, ''), linkedin_url), source = coalesce(nullif(?, ''), source)
+         where id = ?`,
+        [input.title ?? '', input.email ?? '', input.phone ?? '', input.linkedinUrl ?? '', input.source ?? '', existing.id],
+      )
+      return { id: existing.id }
+    }
+    const id = randomUUID()
     this.db.run(
       `insert into decision_makers (id, lead_id, workspace_id, full_name, title, email, phone, linkedin_url, source, created_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.leadId,
-        lead?.workspace_id ?? input.workspaceId,
-        input.fullName,
+        workspaceId,
+        fullName,
         input.title ?? '',
         input.email ?? '',
         input.phone ?? '',
