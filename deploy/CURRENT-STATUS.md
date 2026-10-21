@@ -1,5 +1,36 @@
 # MamaLead self-hosted test deployment
 
+## 21 October 2026: server AI 1.4.12 and Windows-only website
+
+Nafran Assist now calls Cerebras through the authenticated MamaLead billing
+server. The owner's provider key is private on the server; customers install
+1.4.12 and do not supply an API key. An actual authenticated desktop-client
+chat returned an answer. See [AI operations](assist-server.md) for limits,
+privacy and rollback. Stripe payments remain in **test mode**.
+
+Application source: `d7bc83833c204843f6d98556e0c492c270a87c33`.
+
+- Windows: tag `v1.4.12-windows`, [CI run 39556459677](https://github.com/itachi569/nafran-mamalead/actions/runs/39556459677).
+  Public installer: 333,901,440 bytes; SHA-256
+  `e73fdb806452934f5eef8dc8602ef4b7181a7624b1f0c745b476176d07252a86`.
+  The full public download matched and Authenticode returned Valid for
+  `CN=Nafran LTD, O=Nafran LTD, L=London, C=GB`. Update feed selects 1.4.12.
+- Mac: tag `mac-v1.4.12`, [CI run 39556459438](https://github.com/itachi569/nafran-mamalead/actions/runs/39556459438).
+  Apple Silicon DMG: 405,905,370 bytes, SHA-256
+  `e549b1589c6b30c231f5a6700046123f17b8eeff5976ee88139f3dba2b47b502`.
+  Intel DMG: 423,814,372 bytes, SHA-256
+  `fd8176dd099b8d7f89fe06ccf38daa96cc3dbc61de35bf1dd8877a4674425586`.
+  Both full public downloads matched CI/GitHub digests. Apple signing and
+  notarization remain pending; no fresh Mac runtime test was performed.
+
+At the owner's subsequent request, the website now offers **Windows only**.
+All Mac download buttons and visible Mac guidance were removed. Header/hero
+and download heading say **Download for Windows**. Mac source, workflow,
+release assets and backend routes are retained; see
+[restoration notes](mac-downloads-paused.md). Public index.html and sales.js
+matched the deployed source after publication. Website privacy describes the
+AI server flow and the Windows installer note identifies Nafran LTD.
+
 ## 20 October 2026: full Mac 1.4.11 releases published
 
 The full **Mac 1.4.11** desktop application is now available for Apple Silicon

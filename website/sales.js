@@ -6,12 +6,7 @@
     ? scriptApi
     : 'https://api.mamalead.com'
   const api = (path) => new URL(path, billingOrigin).toString()
-  const macDownloads = {
-    'mac-arm64': { key: 'macArm64', label: 'Download for Mac · Apple Silicon', hint: 'Newer Macs · M1 or newer' },
-    'mac-x64': { key: 'macX64', label: 'Download for Mac · Intel', hint: 'Older Macs · Intel processor' },
-  }
-  const isMac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent)
-  let downloadOptions = null
+  const isWindows = /Win/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent)
   let statusMessage = ''
 
   // The landing page renderer can replace its cards after this script runs.
@@ -21,36 +16,6 @@
       const href = api('/v1/download?platform=windows')
       if (link.href !== href) link.href = href
     })
-    for (const [platform, choice] of Object.entries(macDownloads)) {
-      const link = document.querySelector(`[data-public-download="${platform}"]`)
-      if (!link || !downloadOptions?.[choice.key]) continue
-      const href = api(`/v1/download?platform=${platform}`)
-      if (link.href !== href) link.href = href
-      let title = link.querySelector('[data-download-title]')
-      let hint = link.querySelector('[data-download-hint]')
-      if (!title || !hint) {
-        title = document.createElement('span')
-        title.dataset.downloadTitle = ''
-        hint = document.createElement('span')
-        hint.dataset.downloadHint = ''
-        link.replaceChildren(title, hint)
-      }
-      if (title.textContent !== choice.label) title.textContent = choice.label
-      if (hint.textContent !== choice.hint) hint.textContent = choice.hint
-      hint.style.cssText = 'font-size: 12px; font-weight: 400; line-height: 1.4; color: #C8D5BB;'
-      link.style.flexDirection = 'column'
-      link.style.gap = '4px'
-      link.style.textAlign = 'center'
-      link.removeAttribute('aria-disabled')
-      link.style.cursor = 'pointer'
-      link.style.background = '#1C1C1C'
-      link.style.color = '#FFFFFF'
-    }
-    const macNote = document.querySelector('[data-mac-download-note]')
-    if (macNote && (downloadOptions?.macArm64 || downloadOptions?.macX64)) {
-      const message = 'Mac v1.4.11 · Open the DMG and drag MamaLead to Applications. Apple verification is pending; macOS may show a security warning on first open.'
-      if (macNote.textContent !== message) macNote.textContent = message
-    }
     const status = document.querySelector('[data-decision-handoff-status]')
     if (status && status.textContent !== statusMessage) status.textContent = statusMessage
   }
@@ -61,20 +26,15 @@
     queueMicrotask(() => { reconcileQueued = false; reconcile() })
   }).observe(document.documentElement, { childList: true, subtree: true })
   reconcile()
-  if (document.querySelector('[data-public-download="mac-arm64"]')) {
-    fetch(api('/v1/download-options'), { cache: 'no-store' })
-      .then((response) => response.ok ? response.json() : null)
-      .then((options) => { downloadOptions = options; reconcile() })
-      .catch(() => {})
-  }
+
 
   const setStatus = (message) => { statusMessage = message; reconcile() }
   let cancelHandoff = null
   const showDownload = () => {
     document.getElementById('download')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     window.location.hash = 'download'
-    if (isMac) {
-      setStatus('Choose Apple Silicon or Intel in Downloads, then install MamaLead and click Subscribe again.')
+    if (!isWindows) {
+      setStatus('Downloads are currently available for Windows 10 / 11 (64-bit). Open this page on a Windows computer to install MamaLead.')
       return
     }
     setStatus('Starting the Windows installer download. After installing MamaLead, click Subscribe again.')
