@@ -54,3 +54,4 @@ website/node_modules/
 
 # Server-only AI credential
 billing-server/.assist-api-key
+billing-server/.admin-license-key

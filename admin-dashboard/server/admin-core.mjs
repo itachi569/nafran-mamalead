@@ -1,8 +1,8 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { normalizeOwnerEmail, validOwnerPasswordHash, verifyOwnerPassword } from './owner-password.mjs'
 
-// Read-only owner API over the existing billing tables. It never writes billing rows,
-// never returns token_hash / key_hash / full license keys, and never sends email.
+// Owner API with read-only views and an optional narrow Lifetime cancellation bridge.
+// Never returns token_hash / key_hash / full license keys, and never sends email.
 
 export class AdminError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -38,7 +38,7 @@ function respond(status, body, headers = {}) {
   }
 }
 
-export function createAdminHandler({ env = process.env, store, fetch: outbound = fetch, probeBlob = null }) {
+export function createAdminHandler({ env = process.env, store, fetch: outbound = fetch, probeBlob = null, cancelLifetime = null }) {
   const ownerHash = /^[0-9a-f]{64}$/i.test(env.ADMIN_TOKEN_SHA256 ?? '') ? Buffer.from(env.ADMIN_TOKEN_SHA256, 'hex') : null
   const tokenLoginEnabled = Boolean(ownerHash && env.ADMIN_ALLOW_TOKEN_LOGIN !== '0')
   const ownerEmail = normalizeOwnerEmail(env.ADMIN_OWNER_EMAIL)
@@ -116,6 +116,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
 
   const licenseRows = (d) => d.licenses.map((l) => ({
     id: short(l.id), last4: l.key_last4, email: email(l.email), created: iso(l.created_at),
+    actionId: cancelLifetime ? l.id : null,
     sentAt: iso(l.sent_at), revokedAt: iso(l.revoked_at), activatedAt: iso(l.activated_at),
     slotsUsed: (d.attached.get(l.id) ?? []).length, cap,
   })).sort(newest)
@@ -360,6 +361,23 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         throw new AdminError(401, 'Owner sign-in required.')
       }
       if (method !== 'GET' && csrf !== '1') throw new AdminError(403, 'Missing admin request header.')
+
+      if (method === 'POST' && path === '/admin/api/licenses/cancel') {
+        if (!cancelLifetime) throw new AdminError(503, 'Lifetime cancellation is not configured on this server.')
+        const input = await body(readBody)
+        if (!input || typeof input.id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(input.id) ||
+            typeof input.last4 !== 'string' || input.last4.length !== 4 || input.confirmation !== 'CANCEL LIFETIME' ||
+            typeof input.reason !== 'string' || input.reason.trim().length < 3 || input.reason.length > 300) {
+          throw new AdminError(400, 'Confirm the licence and provide a reason (3–300 characters).')
+        }
+        try {
+          return respond(200, await cancelLifetime({ id: input.id, last4: input.last4, confirmation: input.confirmation,
+            reason: input.reason.trim(), actor: bearer ? 'owner-token' : ownerEmail || 'owner' }))
+        } catch (error) {
+          const safe = [400, 404, 409].includes(error.status)
+          throw new AdminError(safe ? error.status : 503, safe ? error.message : 'Cancellation could not be confirmed. Refresh the licence status before retrying.')
+        }
+      }
 
       if (method === 'GET' && path === '/admin/api/session') return respond(200, { ok: true, mode })
       if (method === 'GET' && path === '/admin/api/health') {

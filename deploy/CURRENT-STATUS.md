@@ -1,5 +1,23 @@
 # MamaLead self-hosted test deployment
 
+## 21 October 2026: owner Lifetime cancellation
+
+The live owner dashboard now offers **Licenses → Cancel Lifetime** with a
+reason and last-four-character confirmation. It revokes the exact selected
+Lifetime key for every bound device and records an atomic audit entry.
+Stripe payments/refunds and independently licensed plans are unchanged.
+The admin DB view remains read-only; an authenticated billing writer listens
+only on loopback port 38749. Its private credential is outside Git.
+
+Source syntax checks passed. Both services restarted successfully, the public
+admin HTML matched the deployed source, and public billing health and admin
+login configuration returned successfully. No customer licence was cancelled
+during deployment; no new automated or end-to-end cancellation tests were run.
+No desktop source changed, so users do not need another installer for this
+admin feature. Access changes apply at the next server licence check (the
+desktop caches successful checks for up to 15 seconds; ongoing work may finish).
+See [admin operation and rollback](../admin-dashboard/README.md).
+
 ## 21 October 2026: server AI 1.4.12 and Windows-only website
 
 Nafran Assist now calls Cerebras through the authenticated MamaLead billing

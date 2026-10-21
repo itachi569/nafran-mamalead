@@ -422,9 +422,28 @@
         <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #5F645C;">{{ detail.footnote }}</p>
       </section>
     </sc-if>
+    <sc-if value="{{ cancellation.show }}" hint-placeholder-val="{{ false }}">
+      <section id="cancel-lifetime-panel" aria-label="Cancel Lifetime plan" style="padding: 24px; border-radius: 22px; border: 1px solid #C0574B; background: #FFF8F6; display: flex; flex-direction: column; gap: 14px;">
+        <h2 style="margin: 0; font-size: 22px;">Cancel Lifetime plan</h2>
+        <p style="margin: 0; font-size: 14px;">{{ cancellation.customer }}</p>
+        <p style="margin: 0; font-size: 13px; line-height: 1.6;">This cancels this key on every linked device, including Decision Maker access attached to this Lifetime licence. Access stops at the next server licence check; work already running may finish. This does not issue a Stripe refund or cancel a separately licensed plan. Cancellation cannot be undone here.</p>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">Reason (3–300 characters)
+          <textarea id="cancel-lifetime-reason" value="{{ cancellation.reason }}" onChange="{{ cancellation.onReason }}" disabled="{{ cancellation.busy }}" maxLength="300" rows="2" style="font: inherit; padding: 12px; border: 1px solid #C7CBC3; border-radius: 10px;"></textarea>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">{{ cancellation.confirmLabel }}
+          <input value="{{ cancellation.confirm }}" onChange="{{ cancellation.onConfirm }}" disabled="{{ cancellation.busy }}" maxLength="4" autoComplete="off" style="font: inherit; padding: 12px; border: 1px solid #C7CBC3; border-radius: 10px; max-width: 180px;" />
+        </label>
+        <p role="alert" style="margin: 0; color: #7A2A22; font-size: 13px;">{{ cancellation.error }}</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+          <button type="button" onClick="{{ cancellation.submit }}" disabled="{{ cancellation.disabled }}" style="padding: 12px 20px; border: 0; border-radius: 999px; background: #7A2A22; color: #FFFFFF; font: inherit; cursor: pointer;">{{ cancellation.button }}</button>
+          <button type="button" onClick="{{ cancellation.close }}" disabled="{{ cancellation.busy }}" style="padding: 12px 20px; border: 1px solid #C7CBC3; border-radius: 999px; background: #FFFFFF; font: inherit; cursor: pointer;">Keep plan</button>
+        </div>
+      </section>
+    </sc-if>
+    <p role="status" style="margin: 0; color: #2F4A28; font-size: 14px;">{{ cancellation.message }}</p>
     <footer style="padding: 4px 4px 12px; font-size: 12px; color: #5F645C; display: flex; flex-wrap: wrap; gap: 6px 18px;">
       <span>Nafran Leads Scraper · MamaLead owner dashboard</span>
-      <span>Read-only. Full license keys, tokens and API keys never leave the server.</span>
+      <span>Owner controls. Full license keys, tokens and API keys never leave the server.</span>
     </footer>
   </main>
 </div>
@@ -466,6 +485,7 @@ class Component extends DCLogic {
     width: typeof window === 'undefined' ? 1200 : window.innerWidth,
     loginToken: '', loginEmail: '', loginPassword: '', loginMethod: 'email', loginMethods: null,
     loginError: '', loginBusy: false, probing: false, verify: {}, verifying: null,
+    cancelTarget: null, cancelReason: '', cancelConfirm: '', cancelBusy: false, cancelError: '', cancelMessage: '',
   };
 
   componentDidMount() {
@@ -552,7 +572,31 @@ class Component extends DCLogic {
   async logout() {
     if (this.isFixture()) return;
     try { await this.api('/admin/api/session', { method: 'DELETE' }); } catch {}
-    this.setState({ conn: 'unauthorized', data: null, error: 'Signed out.', rev: { status: 'idle', data: null, message: '' } });
+    this.setState({ conn: 'unauthorized', data: null, error: 'Signed out.', cancelTarget: null, cancelMessage: '', rev: { status: 'idle', data: null, message: '' } });
+  }
+
+  openCancellation(row) {
+    if (this.isFixture() || !row.actionId || row.revokedAt || this.state.cancelBusy) return;
+    this.setState({ cancelTarget: row, cancelReason: '', cancelConfirm: '', cancelError: '', cancelMessage: '' });
+    window.setTimeout(() => {
+      document.getElementById('cancel-lifetime-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('cancel-lifetime-reason')?.focus({ preventScroll: true });
+    }, 100);
+  }
+
+  async cancelLifetime() {
+    const { cancelTarget: target, cancelReason: reason, cancelConfirm: confirm, cancelBusy } = this.state;
+    if (this.isFixture() || cancelBusy || !target?.actionId || confirm.trim().toUpperCase() !== target.last4 || reason.trim().length < 3 || reason.length > 300) return;
+    this.setState({ cancelBusy: true, cancelError: '' });
+    try {
+      const result = await this.api('/admin/api/licenses/cancel', { method: 'POST', body: {
+        id: target.actionId, last4: confirm.trim().toUpperCase(), reason: reason.trim(), confirmation: 'CANCEL LIFETIME',
+      } });
+      this.setState({ cancelTarget: null, cancelBusy: false, cancelMessage: `Lifetime key …${target.last4} ${result.alreadyCancelled ? 'was already cancelled' : 'has been cancelled'}. All linked devices lose access at their next licence check. No refund was issued.` });
+      await this.load();
+    } catch (error) {
+      this.setState({ cancelBusy: false, cancelError: error.message });
+    }
   }
 
   async probe() {
@@ -962,16 +1006,19 @@ class Component extends DCLogic {
         title: 'Licenses',
         intro: 'One key per Lifetime purchase. Only a hash and the last four characters are stored; the full key is shown once to the buyer and is never available here.',
         chips: this.chips('licenses', defs, all, Boolean(data)),
-        columns: ['Key', 'Customer', 'Issued', 'Email', 'Activations', 'Status'],
-        grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr)',
+        columns: ['Key', 'Customer', 'Issued', 'Email', 'Activations', 'Status', 'Action'],
+        grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr) minmax(125px,1fr)',
         rows: rows.map((r) => ({ cells: [
           this.cell(`…${r.last4}`, `License ${r.id}`), this.cell(r.email), this.cell(this.date(r.created)),
           this.pill(r.sentAt ? 'Sent' : 'Not sent', r.sentAt ? 'ok' : 'warn'),
           this.cell(`${r.slotsUsed} / ${r.cap}`, r.activatedAt ? `First ${this.date(r.activatedAt)}` : 'Never activated'),
-          this.pill(r.revokedAt ? 'Revoked' : 'Active', r.revokedAt ? 'error' : 'ok'),
+          this.pill(r.revokedAt ? 'Cancelled' : 'Active', r.revokedAt ? 'error' : 'ok'),
+          r.revokedAt ? this.cell('Cancelled', this.date(r.revokedAt)) : r.actionId && !this.isFixture()
+            ? { isButton: true, text: 'Cancel Lifetime', busy: this.state.cancelBusy, go: () => this.openCancellation(r) }
+            : this.cell('Unavailable'),
         ] })),
         empty: !data ? notConnected : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No licenses issued yet', text: 'A key is issued after a paid Lifetime checkout returns to the site.' },
-        footnote: 'Revocation is enforced by the billing server. This dashboard does not revoke or reissue keys.',
+        footnote: 'Cancel Lifetime disables the key on all linked devices at their next server check. A reason and key confirmation are required. No Stripe refund is issued.',
       };
     } else if (view === 'activations') {
       const flat = (data?.activations ?? []).flatMap((r) => r.slots.map((sl) => ({ ...sl, license: r.license, email: r.email, revoked: r.revoked })));
@@ -1057,7 +1104,7 @@ class Component extends DCLogic {
       fixture: { tag: 'TEST FIXTURE', text: 'Sample rows: one Rs 10,000 Stripe test purchase, one license, two activations, one download. They are not real sales or customers.', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#1C1C1C', tagFg: '#C8D5BB' },
     };
     let banner = banners[conn];
-    if (conn === 'ok' && mode === 'live') banner = { tag: 'LIVE KEY', text: 'A live Stripe key is configured. This dashboard stays read-only. Switch back to test keys until live payments are approved.', bg: '#F3ECD9', fg: '#3D300C', tagBg: '#5C4813', tagFg: '#FFFFFF' };
+    if (conn === 'ok' && mode === 'live') banner = { tag: 'LIVE KEY', text: 'A live Stripe key is configured. Lifetime cancellations affect real customer access. Payments and refunds are not changed by cancellation.', bg: '#F3ECD9', fg: '#3D300C', tagBg: '#5C4813', tagFg: '#FFFFFF' };
     return {
       wide: !narrow, narrow, nav, navList,
       ownerName, ownerInitial: ownerName.slice(0, 1).toUpperCase(),
@@ -1085,6 +1132,18 @@ class Component extends DCLogic {
       isDetail: view !== 'overview' && conn !== 'unauthorized',
       ...this.overview(nav),
       detail: this.detail(),
+      cancellation: {
+        show: Boolean(this.state.cancelTarget) && conn === 'ok',
+        customer: this.state.cancelTarget ? `${this.state.cancelTarget.email} · Lifetime key …${this.state.cancelTarget.last4} · License ${this.state.cancelTarget.id}` : '',
+        reason: this.state.cancelReason, confirm: this.state.cancelConfirm,
+        confirmLabel: `Type ${this.state.cancelTarget?.last4 ?? 'the last four key characters'} to confirm`,
+        busy: this.state.cancelBusy, error: this.state.cancelError, message: this.state.cancelMessage,
+        button: this.state.cancelBusy ? 'Cancelling…' : 'Confirm cancellation',
+        disabled: this.state.cancelBusy || this.state.cancelReason.trim().length < 3 || this.state.cancelReason.length > 300 || this.state.cancelConfirm.trim().toUpperCase() !== this.state.cancelTarget?.last4,
+        onReason: (event) => this.setState({ cancelReason: event.target.value }),
+        onConfirm: (event) => this.setState({ cancelConfirm: event.target.value }),
+        submit: () => this.cancelLifetime(), close: () => { if (!this.state.cancelBusy) this.setState({ cancelTarget: null, cancelError: '' }); },
+      },
     };
   }
 }

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { createBillingHandler, HttpError } from './core.mjs'
+import { createLicenseAdminServer } from './admin-licenses.mjs'
 
 export function createBillingServer(options = {}) {
   const env = { ...(options.env ?? process.env) }
@@ -344,7 +345,12 @@ export function createBillingServer(options = {}) {
     if (result.body instanceof ReadableStream) Readable.fromWeb(result.body).on('error', () => res.destroy()).pipe(res)
     else res.end(result.body)
   })
-  return { server, db, port, close: () => { server.close(); db.close() } }
+  const licenseAdmin = createLicenseAdminServer(db)
+  if (licenseAdmin) {
+    server.once('listening', () => licenseAdmin.listen(38749, '127.0.0.1'))
+    server.once('close', () => licenseAdmin.close())
+  }
+  return { server, db, port, close: () => { server.close(); licenseAdmin?.close(); db.close() } }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {

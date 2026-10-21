@@ -6,6 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createAdminHandler } from './admin-core.mjs'
 import { createSqliteAdminStore } from './stores.mjs'
+import { createLicenseWriter } from './license-writer.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const files = {
@@ -68,7 +69,7 @@ function privateRuntimeEnv(base) {
 
 export async function createAdminServer({ env = process.env, fetch: outbound, store } = {}) {
   const adminStore = store ?? await createSqliteAdminStore(resolve(env.BILLING_DB_PATH ?? './billing-server/data/billing.db'))
-  const handler = createAdminHandler({ env, store: adminStore, fetch: outbound })
+  const handler = createAdminHandler({ env, store: adminStore, fetch: outbound, cancelLifetime: createLicenseWriter() })
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, 'http://127.0.0.1').pathname
     if (req.method === 'GET' && files[path]) {
