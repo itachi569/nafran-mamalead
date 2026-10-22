@@ -1,5 +1,22 @@
 # MamaLead self-hosted test deployment
 
+## 22 October 2026: audited Windows 1.4.14 and refreshed website
+
+Windows 1.4.14 is now selected by the public download endpoint and updater feed.
+It includes the audited Maps total cap, finder/search fixes, saved-list updates
+and the new Trial/Lifetime welcome notice. The website now describes these
+workflows and uses 15 current light-mode screenshots with fictional sample data.
+The existing page design and Windows-only download presentation are retained.
+
+Application source `f072da0b4002217d6178cbea1b49272943af5a49`, signed CI
+[run 39758738882](https://github.com/itachi569/nafran-mamalead/actions/runs/39758738882).
+Both CI signatures passed for Nafran LTD; staged hashes matched GitHub and CI.
+The full public installer matched SHA-256/feed SHA-512 and Windows Authenticode
+returned Valid for Nafran LTD. Public HTML and all 15 screenshot hashes matched.
+Final packaged-app audit, Decision Makers flow, local/public website checks and
+service health passed. Stripe remains in test mode. See
+[release details and rollback](release-1.4.14.md).
+
 ## 21 October 2026: Decision Makers 1.4.13
 
 Windows 1.4.13 is published on the existing API download URL and Windows update

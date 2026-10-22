@@ -1,9 +1,10 @@
-# Local 1.4.14 changes — not deployed
+# 1.4.14 app changes and local audit
 
-The owner explicitly requested no server deployment until they ask. Do not tag a
-release, publish these installers, update the live website version or change the
-server download pointer as part of this local work. The public release remains
-1.4.13.
+These changes were initially kept local at the owner's request. On 22 October
+2026 the owner explicitly authorised updating the website and deploying the
+latest application. The signed public release is now 1.4.14; see
+[release and deployment details](release-1.4.14.md). The unsigned local build is
+not the public installer.
 
 ## Maps limit
 
@@ -95,5 +96,5 @@ Additional local UI changes:
   or Lifetime access. Its button opens the Usage tab; dismissal lasts for the
   current session. Active Trial/Lifetime devices do not show the notice.
 - The packaged app was inspected with an isolated profile for the notice,
-  billing navigation, dismissal and active-licence suppression. Public website
-  downloads have not been updated with these local changes.
+  billing navigation, dismissal and active-licence suppression. These changes
+  are included in the subsequently authorised signed Windows release.
