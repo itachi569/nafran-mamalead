@@ -52,11 +52,9 @@ try {
   const macPage = await browser.newPage({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/130.0 Safari/537.36' })
   await macPage.route('https://api.mamalead.com/v1/download-options', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ windows: true, macArm64: true, macX64: true }) }))
   await macPage.goto(`http://127.0.0.1:${server.address().port}/#download`)
-  await macPage.waitForFunction(() => ['mac-arm64', 'mac-x64'].every((platform) => {
-    const link = document.querySelector(`[data-public-download="${platform}"]`)
-    return link?.href.includes(`/v1/download?platform=${platform}`) && link.textContent.includes('Mac test build')
-  }))
-  assert.match(await macPage.locator('[data-mac-download-status]').innerText(), /unsigned test builds/)
+  await macPage.locator('[data-public-download="windows"][data-dc-tpl]').waitFor()
+  assert.equal(await macPage.locator('[data-public-download^="mac"]').count(), 0)
+  assert.match(await macPage.locator('#download').innerText(), /Windows 10 \/ 11, 64-bit/)
   await macPage.close()
   console.log('PASS  website Subscribe opens the app or falls back to installer download, with manual Decision Makers pass rules')
 } finally {
