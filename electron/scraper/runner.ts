@@ -92,8 +92,8 @@ export class ScrapeRunner {
     this.controller?.abort()
     const provider = this.activeProvider as unknown as Closable | null
     await provider?.close?.().catch(() => undefined)
-    this.controller = null
-    this.activeProvider = null
+    // The run owns these references until its promise settles. Clearing them here permits a
+    // second run while the cancelled provider is still unwinding.
   }
 
   async providers(): Promise<{ id: ProviderId; label: string; requiresBrowser: boolean }[]> {
@@ -102,6 +102,7 @@ export class ScrapeRunner {
   }
 
   start(options: RunOptions = {}): RunHandle {
+    if (this.busy) throw new Error('A scrape is already running.')
     const runId = newRunId()
     // The window sends keywords, location and a result cap, and nothing about language or region.
     // Those default to the United Kingdom, which meant every search — Lahore, Karachi, anywhere —
@@ -121,6 +122,7 @@ export class ScrapeRunner {
       ...(options.executablePath ? { executablePath: options.executablePath } : {}),
     })
     const providerId = options.provider ?? 'mock'
+    const runTarget = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length)
     const startedAt = new Date().toISOString()
     const started = Date.now()
     const controller = new AbortController()
@@ -154,12 +156,17 @@ export class ScrapeRunner {
       try {
         if (!query.keywords.length) throw new Error('Add at least one keyword before starting a run.')
         const provider = await resolveProvider(providerId, options.context)
+        if (controller.signal.aborted) throw new DOMException('Scrape cancelled', 'AbortError')
         this.activeProvider = provider
         emit('running', `${provider.label} starting · ${query.keywords.length} keyword${query.keywords.length === 1 ? '' : 's'}`, 0)
         const providerLeads = await provider.run(
           query,
           (progress) => {
-            if (progress.lead) collected.push(progress.lead)
+            if (controller.signal.aborted) return
+            if (progress.lead) {
+              if (collected.length >= runTarget) return
+              collected.push(progress.lead)
+            }
             options.onProgress?.({
               runId,
               provider: providerId,
@@ -167,7 +174,7 @@ export class ScrapeRunner {
               keywordIndex: progress.keywordIndex ?? 0,
               keywordTotal: progress.keywordTotal ?? query.keywords.length,
               found: collected.length,
-              target: progress.target ?? Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length),
+              target: Math.min(progress.target ?? runTarget, runTarget),
               status: progress.status ?? 'running',
               at: new Date().toISOString(),
               message: progress.message,
@@ -178,7 +185,8 @@ export class ScrapeRunner {
           },
           controller.signal,
         )
-        if (!collected.length) collected.push(...providerLeads)
+        if (controller.signal.aborted) throw new DOMException('Scrape cancelled', 'AbortError')
+        if (!collected.length) collected.push(...providerLeads.slice(0, runTarget))
         options.onLeads?.(collected)
         emit('done', `Finished · ${collected.length} lead${collected.length === 1 ? '' : 's'} captured`, collected.length)
       } catch (caught) {

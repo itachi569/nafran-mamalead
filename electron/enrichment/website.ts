@@ -48,12 +48,12 @@ export interface WebsiteFindings {
 }
 
 const SOCIAL_HOSTS: [RegExp, FoundSocial['platform']][] = [
-  [/instagram\.com$/i, 'instagram'],
-  [/facebook\.com$/i, 'facebook'],
-  [/linkedin\.com$/i, 'linkedin'],
-  [/tiktok\.com$/i, 'tiktok'],
-  [/youtube\.com$|youtu\.be$/i, 'youtube'],
-  [/twitter\.com$|(^|\.)x\.com$/i, 'x'],
+  [/(^|\.)instagram\.com$/i, 'instagram'],
+  [/(^|\.)facebook\.com$/i, 'facebook'],
+  [/(^|\.)linkedin\.com$/i, 'linkedin'],
+  [/(^|\.)tiktok\.com$/i, 'tiktok'],
+  [/(^|\.)youtube\.com$/i, 'youtube'],
+  [/(^|\.)(twitter|x)\.com$/i, 'x'],
 ]
 
 /**
@@ -80,14 +80,32 @@ function socialFrom(href: string): FoundSocial | null {
   } catch {
     return null
   }
-  const host = url.host.replace(/^www\./i, '')
+  if (!['http:', 'https:'].includes(url.protocol)) return null
+  const host = url.hostname.replace(/^www\./i, '')
   for (const [pattern, platform] of SOCIAL_HOSTS) {
     if (!pattern.test(host)) continue
     // The first path segment is the handle, except for the shapes that put a keyword first.
     const segments = url.pathname.split('/').filter(Boolean)
+    const first = segments[0]?.toLowerCase() ?? ''
+    // Share widgets, posts, login pages and platform home pages are not business profiles.
+    const excluded: Partial<Record<FoundSocial['platform'], string[]>> = {
+      facebook: ['sharer', 'sharer.php', 'share.php', 'share', 'dialog', 'plugins', 'login', 'login.php', 'watch', 'reel', 'help'],
+      instagram: ['p', 'reel', 'reels', 'stories', 'accounts', 'explore', 'share'],
+      linkedin: ['sharing', 'sharearticle', 'feed', 'posts', 'login', 'signup'],
+      x: ['intent', 'share', 'search', 'home', 'login', 'i'],
+      youtube: ['watch', 'shorts', 'embed', 'playlist', 'results', 'feed'],
+      tiktok: ['embed', 'login', 'discover', 'tag'],
+    }
+    if (!first || excluded[platform]?.includes(first)) return null
+    if (platform === 'facebook' && first === 'profile.php') {
+      const id = url.searchParams.get('id')
+      if (!id || !/^\d+$/.test(id)) return null
+      return { platform, handle: id, profileUrl: `${url.origin}${url.pathname}?id=${id}` }
+    }
     const handle = segments[0] && !['company', 'in', 'pages', 'profile.php', 'c', 'channel', 'user'].includes(segments[0])
       ? segments[0]
       : (segments[1] ?? '')
+    if (!handle) return null
     return { platform, handle, profileUrl: `${url.origin}${url.pathname}`.replace(/\/$/, '') }
   }
   return null
@@ -118,7 +136,8 @@ function socialLinksFromHtml(html: string, baseHref: string): FoundSocial[] {
 
   for (const match of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)) add(match[1])
   // JSON-LD sameAs values and escaped page fragments can carry a profile without an anchor.
-  for (const match of html.matchAll(/https?:\/\/(?:www\.)?(?:instagram\.com|facebook\.com|linkedin\.com|tiktok\.com|youtube\.com|youtu\.be|twitter\.com|x\.com)[^\s"'<>\\]*/gi)) add(match[0])
+  const unescaped = decodeHtml(html.replace(/\\\//g, '/'))
+  for (const match of unescaped.matchAll(/https?:\/\/(?:www\.)?(?:instagram\.com|facebook\.com|linkedin\.com|tiktok\.com|youtube\.com|youtu\.be|twitter\.com|x\.com)[^\s"'<>\\]*/gi)) add(match[0])
 
   const found = new Map<string, FoundSocial>()
   for (const href of candidates) {

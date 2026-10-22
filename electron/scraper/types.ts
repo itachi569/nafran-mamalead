@@ -6,7 +6,7 @@ export interface ScrapeQuery {
   keywords: string[]
   location: string
   maxResultsPerKeyword: number
-  /** Server-approved ceiling for the whole run; null means no plan ceiling. */
+  /** Whole-run ceiling, limited by both the user's selection and server allowance. */
   maxResultsTotal?: number | null
   language: string
   region: string

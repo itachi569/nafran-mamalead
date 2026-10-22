@@ -121,6 +121,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
 
         for (let slot = 0; slot < entries.length; slot += 1) {
           this.assertLive(signal)
+          if (leads.length >= runTarget) break
           const entry = entries[slot]
           const detail = await this.readDetail(page, entry, query)
           const name = detail.name || entry.name

@@ -29,7 +29,6 @@ import {
   DEMO_NOTES,
   EXP_MODES,
   LABELS,
-  LIST_TARGETS,
   VIEW_NAMES,
   type LeadRow,
 } from './referenceData'
@@ -41,7 +40,7 @@ import { districtsFor, townOf } from './districts'
 import { PACE_LIMITS, paceToMs, readScraperSettings, storeScraperSettings, type ScraperSettings } from './scraperSettings'
 import { paintTheme, readStoredTheme, storeTheme } from './theme'
 import { useEmailPage } from './useEmailPage'
-import { useFinderScan } from './useFinderScan'
+import { matchesFinderSearch, useFinderScan } from './useFinderScan'
 import { SCRAPER_HEADLESS, useScraper } from './useScraper'
 import { useSocialPage, type SocialPage } from './useSocialPage'
 
@@ -597,7 +596,8 @@ export function useAppValues() {
   const [expScope, setExpScope] = useState(0)
   const [expCols, setExpCols] = useState(() => EXP_MODES.leads.cols.map((column) => ({ label: column[0], on: column[1] })))
   const [keep, setKeep] = useState<boolean[]>(DEFAULT_KEEP)
-  const [listTarget, setListTarget] = useState(0)
+  const [listTarget, setListTarget] = useState('')
+  const [newListName, setNewListName] = useState('')
   const [leadFilter, setLeadFilter] = useState(0)
   /** What is typed in the ledger's own search box: it narrows the rows beside it. */
   const [leadSearch, setLeadSearch] = useState('')
@@ -1189,6 +1189,7 @@ export function useAppValues() {
       keywords: capped,
       location: districtSearches.length ? `${town}` : location,
       maxResultsPerKeyword: maxResults,
+      maxResultsTotal: maxResults,
       // The Settings toggle wins; the build-time default only applies until one is chosen.
       headless: !scraperSettings.visible,
       minDelayMs: pace.minDelayMs,
@@ -1487,6 +1488,8 @@ export function useAppValues() {
   const [lists, setLists] = useState<StoredList[]>([])
   const [usage, setUsage] = useState<{ used: number; limit: number; daysLeft: number; renewsOn: string } | null>(null)
   const [mapsAllowance, setMapsAllowance] = useState<{ kind: 'trial' | 'lifetime'; used: number; remaining: number } | null>(null)
+  const [showPlanWelcome, setShowPlanWelcome] = useState(false)
+  const [planWelcomeDismissed, setPlanWelcomeDismissed] = useState(false)
   // The two switches on the billing-preferences card. There is no billing provider to honour them,
   // but they are the user's own settings, so they flip and stay flipped for the session rather than
   // looking like a control that is broken.
@@ -1686,6 +1689,7 @@ export function useAppValues() {
     if (!window.desktop?.billing) return
     try {
       const status = await window.desktop.billing.status()
+      setShowPlanWelcome(!(status.license?.active && (status.license.kind === 'trial' || status.license.kind === 'lifetime')))
       if (!status.connected || !status.license?.active) return setMapsAllowance(null)
       if (status.license.kind === 'lifetime') return setMapsAllowance({ kind: 'lifetime', used: 0, remaining: 0 })
       if (status.license.kind === 'trial' && status.mapsLeads?.limit === 300) {
@@ -1703,7 +1707,12 @@ export function useAppValues() {
    * which only exist once leads have actually been scraped.
    */
   const saveToList = useCallback(async () => {
-    const listName = LIST_TARGETS[listTarget][0].replace(/&amp;/g, '&')
+    const existing = lists.find((list) => list.id === listTarget)
+    const listName = existing?.name ?? newListName.trim()
+    if (!listName) {
+      flash('Enter a name for your new list first.')
+      return
+    }
     const chosen = snapshot.leads.filter((_, index) => keep[index])
     if (!chosen.length) {
       flash('Bookmark a few leads first — nothing selected yet.')
@@ -1714,12 +1723,14 @@ export function useAppValues() {
       return
     }
     try {
-      const { id } = await db.lists.create(listName)
+      const { id } = existing ?? await db.lists.create(listName)
       const { added, skipped } = await db.lists.add(
         id,
         chosen.map((lead) => lead.id),
       )
       await refreshLists()
+      setListTarget(id)
+      setNewListName('')
       flash(
         added === 0
           ? `${skipped} already in ${listName} — nothing new to add.`
@@ -1728,7 +1739,7 @@ export function useAppValues() {
     } catch (error) {
       flash(error instanceof Error ? error.message : 'The leads could not be saved.')
     }
-  }, [db, keep, listTarget, snapshot.leads, refreshLists, flash])
+  }, [db, keep, listTarget, lists, newListName, snapshot.leads, refreshLists, flash])
 
   const showDecisionPassPrompt = useCallback((message: string) => {
     if (!/decision makers?.*(?:pass|searches|access|subscribe|renew)|(?:pass|searches|subscribe|renew).*decision makers?/i.test(message)) return false
@@ -2491,16 +2502,6 @@ export function useAppValues() {
   const found = snapshot.found
   const keywordCount = keywords.length
 
-  /**
-   * The searches a run would make right now: every keyword, once per district when a split is on.
-   * `runScrape` trims this to the runner's own ceiling, and the progress counter has to agree with
-   * what the run will actually do rather than with the full cross-product.
-   */
-  const runTerms = districtSearches.length
-    ? keywords.flatMap((keyword) => districtSearches.map((district) => `${keyword} ${district}`))
-    : keywords
-  const runTermCount = Math.min(8, runTerms.length)
-
   const mode = EXP_MODES[expMode] ?? EXP_MODES.leads
   const scope = mode.scopes[expScope] ?? mode.scopes[0]
   const columnsOn = expCols.filter((column) => column.on).length
@@ -2903,6 +2904,7 @@ export function useAppValues() {
     rows: email.rows.map((row) => ({
       leadId: row.leadId,
       domain: row.domain === '—' ? '' : row.domain,
+      searchText: row.name,
       scanned: scannedIds.has(row.leadId),
       items: row.found.map((address) => ({ t: address.value, k: address.page })),
       validityStatuses: row.found.map((address) => address.validationStatus ?? 'unchecked'),
@@ -2964,6 +2966,7 @@ export function useAppValues() {
     rows: phone.rows.map((row) => ({
       leadId: row.id,
       domain: hostOf(row.website),
+      searchText: `${row.name} ${row.address} ${row.areaCode} ${row.phone}`,
       scanned: Boolean(row.lastScannedAt),
       items: row.found.map((number) => ({ t: number.value, k: pageLabelOf(number.page) })),
       // The phone ledger's own words for a row: the kind of line, or that there is none.
@@ -3014,6 +3017,7 @@ export function useAppValues() {
       return {
         leadId: lead.id,
         domain: hostOf(lead.website),
+        searchText: lead.name,
         scanned: Boolean(lead.last_scanned_at),
         items: named.map((person) => ({ t: person.full_name, k: [person.title || 'Role not stated', person.email, person.phone, person.linkedin_url].filter(Boolean).join(' · ') })),
         statusLabel: named.length ? `${named.length} named` : 'No named contact',
@@ -3040,7 +3044,12 @@ export function useAppValues() {
     onExport: () => void runDecisionExport('xlsx'),
     // Bring this import's people and direct export buttons into view after the pass settles.
     resultSelector: '[data-fres="dm"]',
+    filterItemsOnSearch: true,
   })
+
+  const dmVisibleLeadIds = new Set(dmFinder.rows.map((row) => row.leadId))
+  const dmVisiblePeople = dmPeopleRows.filter((person) => dmVisibleLeadIds.has(person.lead_id) &&
+    matchesFinderSearch([person.full_name, person.title, person.lead_name, person.lead_website, person.email, person.phone, person.linkedin_url].filter(Boolean).join(' '), dmFinder.q))
 
   const runDecisionExport = async (format: 'xlsx' | 'pdf') => {
     if (!db || dmExportLock.current || dmFinder.scanning) return
@@ -3318,13 +3327,10 @@ export function useAppValues() {
       pick: () => emailFinder.showFilter(item.key),
     })),
     verifyEmailValidity: () => void verifyEmailValidity(),
-    // During a run the ceiling is what this run set out to collect, so the counter can never
-    // report more mapped than the target. Between runs it describes the next run — the same
-    // "keywords × results" total the worker will report — rather than pairing the session's found
-    // count with the whole file, which read as a nonsense like "8 of 200 mapped".
+    // The next run shares one total cap across all keywords and selected areas.
     foundLabel: snapshot.running
       ? `${found} of ${Math.max(found, snapshot.target || found)} mapped`
-      : `0 of ${Math.max(1, maxResults * Math.max(1, runTermCount))} mapped`,
+      : `0 of ${Math.max(1, maxResults)} mapped`,
     goDashboard: () => go('dashboard'),
     goDm: () => go('dm'),
     goEmail: () => go('email'),
@@ -3334,6 +3340,13 @@ export function useAppValues() {
     goPhone: () => go('phone'),
     goRuns: () => go('runs'),
     goSettings: () => go('settings'),
+    showPlanWelcome: showPlanWelcome && !planWelcomeDismissed,
+    dismissPlanWelcome: () => setPlanWelcomeDismissed(true),
+    openWelcomeBilling: () => {
+      go('settings')
+      setStab('plan')
+      setPlanWelcomeDismissed(true)
+    },
     goSocial: () => go('social'),
     logout,
     goTabAcct: () => setStab('acct'),
@@ -4109,7 +4122,7 @@ export function useAppValues() {
     // A person can only be named once their company page was read, so the leads with a LinkedIn
     // profile are the population the match works from.
     dmPeopleListed: dmPeople.funnel?.withLinkedin ?? 0,
-    dmRows: dmPeople.rows.slice(0, dmContactLimit).map((person) => ({
+    dmRows: dmVisiblePeople.slice(0, dmContactLimit).map((person) => ({
       ini: initialsOf(person.full_name),
       name: person.full_name,
       title: person.title || 'Role not stated',
@@ -4129,11 +4142,11 @@ export function useAppValues() {
     dmTotal: dmPeople.funnel?.total ?? 0,
     dmWithLinkedin: dmPeople.funnel?.withLinkedin ?? 0,
     dmWithWebsite: dmPeople.funnel?.withWebsite ?? 0,
-    dmShowingLabel: dmSessionLeads.length ? `${Math.min(dmPeople.rows.length, dmContactLimit)} of ${dmPeople.rows.length} named contacts from the current scan.` : 'Import websites to start a new scan. Earlier searches remain saved in All Leads.',
-    dmShowing: dmPeople.rows.length,
-    dmShowAllLabel: `Show all ${dmPeople.rows.length.toLocaleString('en-GB')}`,
+    dmShowingLabel: dmSessionLeads.length ? `${Math.min(dmVisiblePeople.length, dmContactLimit)} of ${dmVisiblePeople.length} matching contacts from the current scan.` : 'Import websites to start a new scan. Earlier searches remain saved in All Leads.',
+    dmShowing: dmVisiblePeople.length,
+    dmShowAllLabel: `Show all ${dmVisiblePeople.length.toLocaleString('en-GB')}`,
     // Only offered while there are more named contacts than the grid is drawing.
-    dmMoreContactsOn: dmPeople.rows.length > dmContactLimit ? '1' : '',
+    dmMoreContactsOn: dmVisiblePeople.length > dmContactLimit ? '1' : '',
     showAllDmContacts: () => setDmContactLimit((current) => current + 40),
     // The seniority mix: the roles the named contacts actually carry, most common first. A title
     // the design never listed is still a real title, so it is grouped rather than dropped.
@@ -4337,12 +4350,15 @@ export function useAppValues() {
         open: () => go('maps'),
       }
     }),
-    listTargets: LIST_TARGETS.map((target, index) => ({
-      label: target[0],
-      count: target[1] ? String(target[1]) : '',
-      on: listTarget === index ? '1' : '0',
-      pick: () => setListTarget(index),
-    })),
+    listTargets: [...lists.map((list) => ({
+      label: list.name,
+      count: String(list.members),
+      on: listTarget === list.id ? '1' : '0',
+      pick: () => setListTarget(list.id),
+    })), { label: 'New list', count: '', on: lists.some((list) => list.id === listTarget) ? '0' : '1', pick: () => setListTarget('') }],
+    newListVisible: !lists.some((list) => list.id === listTarget),
+    newListName,
+    onNewListName: (event: React.ChangeEvent<HTMLInputElement>) => setNewListName(event.currentTarget.value),
     liveDot: snapshot.running ? '1' : '0',
     mailNote: mailSent
       ? 'Sent — the transcript and your last run summary are on the way.'

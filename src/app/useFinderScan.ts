@@ -37,6 +37,8 @@ export interface FinderSourceRow {
   /** The lead the row belongs to, so the action can ask for exactly the rows on the page. */
   leadId: string
   domain: string
+  /** Additional published fields searched with the domain and result items. */
+  searchText?: string
   /** Whether a finder has read this lead's site. */
   scanned: boolean
   /** What was found there, each item labelled with the page it came off. */
@@ -132,6 +134,8 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
   onExport: () => void
   /** Results card to bring into view after the pass finishes. */
   resultSelector?: string
+  /** People results can narrow individual contacts as well as their website row. */
+  filterItemsOnSearch?: boolean
 }
 
 const CIRCUMFERENCE = 276.5
@@ -139,8 +143,11 @@ const RING_STEP_MS = 260
 const ROW_REVEAL_MS = 420
 
 /** Search normalization so "Northern  Spine" finds "Northern Spine & Sports Clinic". */
-function matches(haystack: string, needle: string): boolean {
+export function matchesFinderSearch(haystack: string, needle: string): boolean {
   if (!needle) return true
+  if (/^[+\d\s().-]+$/.test(needle) && needle.replace(/\D/g, '').length >= 4) {
+    return haystack.replace(/\D/g, '').includes(needle.replace(/\D/g, ''))
+  }
   const field = haystack.toLowerCase().replace(/[^a-z0-9@.]+/g, ' ')
   const terms = needle.toLowerCase().split(/[^a-z0-9@.]+/).filter(Boolean)
   return terms.every((term) => field.includes(term))
@@ -247,8 +254,8 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   const actionRows = useMemo(
     () =>
       source.rows.filter((row) => {
-        const haystack = `${row.domain} ${row.statusLabel} ${row.items.map((item) => `${item.t} ${item.k}`).join(' ')}`
-        if (!matches(haystack, term)) return false
+        const haystack = `${row.searchText ?? ''} ${row.domain} ${row.statusLabel} ${row.items.map((item) => `${item.t} ${item.k}`).join(' ')}`
+        if (!matchesFinderSearch(haystack, term)) return false
         // "Review suggestions" is a people list action. Keep the normal toolbar
         // action scoped to rows that already have a named person; an imported
         // website uses scanImported() with its explicit lead ids and is allowed
@@ -287,6 +294,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     const uniqueIds = Array.from(new Set(leadIds))
     setScopeIds(uniqueIds)
     setImported(fromImport)
+    if (fromImport) { setTerm(''); setFilter('all') }
     if (!fromImport) current.onStart?.()
     if (current.mode === 'review') {
       // Reading suggestions visits nothing, so there is no pass to watch.
@@ -403,9 +411,8 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   const visible = useMemo(() => {
     const base = scanOn ? scopedRows : sourceRows
     return base.filter((row) => {
-      if (imported) return true
-      const haystack = `${row.domain} ${row.statusLabel} ${row.items.map((item) => `${item.t} ${item.k}`).join(' ')}`
-      if (!matches(haystack, term)) return false
+      const haystack = `${row.searchText ?? ''} ${row.domain} ${row.statusLabel} ${row.items.map((item) => `${item.t} ${item.k}`).join(' ')}`
+      if (!matchesFinderSearch(haystack, term)) return false
       if (filter === 'done') return row.scanned
       if (filter === 'valid' || filter === 'invalid' || filter === 'risky' || filter === 'unknown' || filter === 'unchecked') {
         return row.validityStatuses?.includes(filter) ?? false
@@ -431,13 +438,15 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         domain: row.domain || 'No website',
         scanning: running && !row.scanned,
         scanLabel: running && !row.scanned ? 'Scanning…' : '',
-        items: row.items,
+        items: source.filterItemsOnSearch && term
+          ? row.items.filter((item) => matchesFinderSearch(`${row.searchText ?? ''} ${row.domain} ${item.t} ${item.k}`, term))
+          : row.items,
         none: !running && row.items.length === 0,
         pill: row.scanned ? 'done' : running ? 'scanning' : 'pending',
         status: row.scanned ? 'Done' : running ? 'Scanning' : row.statusLabel || 'Pending',
         onThisSite: row.items.length > 0,
       })),
-    [revealed, running],
+    [revealed, running, source.filterItemsOnSearch, term],
   )
 
   const scanned = useMemo(

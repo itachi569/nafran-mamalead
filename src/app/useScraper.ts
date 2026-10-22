@@ -17,6 +17,8 @@ export interface StartOptions {
   keywords: string[]
   location: string
   maxResultsPerKeyword: number
+  /** One ceiling shared by all keywords and districts. */
+  maxResultsTotal?: number | null
   headless: boolean
   /** Randomised wait between visiting each place, in milliseconds. */
   minDelayMs?: number
@@ -48,7 +50,7 @@ export interface ScrapeSnapshot {
   total: number
   /** Changes after each database refresh, including updates to existing leads. */
   revision: number
-  /** What this run set out to collect: keywords × results per keyword. 0 before anything runs. */
+  /** The effective total ceiling for this run. 0 before anything runs. */
   target: number
   leads: Lead[]
   message: string
@@ -169,12 +171,13 @@ export function useScraper(): {
         : null
       setSnapshot((current) => ({
         ...current,
-        leads,
+        // A background database refresh must not replace the active run with saved history.
+        leads: current.running ? current.leads : leads,
         total: firstPage.total,
         revision: current.revision + 1,
-        found: firstPage.total,
-        target: firstPage.total,
-        message: firstPage.total
+        found: current.running ? current.found : firstPage.total,
+        target: current.running ? current.target : firstPage.total,
+        message: current.running ? current.message : firstPage.total
           ? `${firstPage.total} lead${firstPage.total === 1 ? '' : 's'} on file`
           : current.message,
         request:
@@ -260,6 +263,7 @@ export function useScraper(): {
               ),
             ),
             maxResultsPerKeyword: summary.query.maxResultsPerKeyword,
+            maxResultsTotal: summary.query.maxResultsTotal,
             headless: summary.query.headless,
           },
         }
@@ -271,7 +275,7 @@ export function useScraper(): {
       .last()
       .then((last) => {
         if (!last) return
-        setSnapshot((current) => ({
+        setSnapshot((current) => current.running ? current : ({
           ...current,
           leads: current.leads.length ? current.leads : last.leads.slice(0, 200),
           found: current.total || current.found || last.leads.length,
@@ -282,6 +286,7 @@ export function useScraper(): {
             keywords: last.query.keywords,
             location: last.query.location,
             maxResultsPerKeyword: last.query.maxResultsPerKeyword,
+            maxResultsTotal: last.query.maxResultsTotal,
             headless: last.query.headless,
           },
         }))
@@ -328,6 +333,7 @@ export function useScraper(): {
             keywords: options.keywords,
             location: options.location,
             maxResultsPerKeyword: options.maxResultsPerKeyword,
+            maxResultsTotal: options.maxResultsTotal,
             headless: options.headless,
             minDelayMs: options.minDelayMs,
             maxDelayMs: options.maxDelayMs,
@@ -350,7 +356,7 @@ export function useScraper(): {
         return
       }
 
-      const simulated = options.keywords.length * options.maxResultsPerKeyword
+      const simulated = Math.min(options.maxResultsTotal ?? Infinity, options.keywords.length * options.maxResultsPerKeyword)
       setSnapshot((current) => ({
         ...current,
         running: true,
@@ -365,7 +371,7 @@ export function useScraper(): {
       const at = (delay: number, update: Partial<ScrapeSnapshot>) => {
         timers.current.push(window.setTimeout(() => setSnapshot((current) => ({ ...current, ...update })), delay))
       }
-      for (let step = 1; step <= 8; step += 1) at(320 + step * 430, { found: step })
+      for (let step = 1; step <= Math.min(8, simulated); step += 1) at(320 + step * 430, { found: step })
       at(700, { stPhone: 'run' })
       at(1150, { stEmail: 'run' })
       at(1600, { stSocial: 'run' })

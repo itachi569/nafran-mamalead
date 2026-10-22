@@ -27,7 +27,7 @@ const colors = async (page) => page.evaluate(() => {
 try {
   const env = { ...process.env, APPDATA: join(directory, 'appdata') }
   delete env.ELECTRON_RUN_AS_NODE
-  desktop = await electron.launch({ args: ['.'], cwd: repo, env, timeout: 60_000 })
+  desktop = await electron.launch({ args: ['.', `--user-data-dir=${join(directory, 'profile')}`], cwd: repo, env, timeout: 60_000 })
   const page = await desktop.firstWindow()
   await page.locator('h2').filter({ hasText: 'Scrape Volume' }).first().waitFor()
   const light = await colors(page)

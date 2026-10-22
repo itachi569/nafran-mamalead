@@ -49,6 +49,8 @@ export interface ScrapeQuery {
   keywords: string[]
   location: string
   maxResultsPerKeyword: number
+  /** Total cap across every keyword and area in this run. */
+  maxResultsTotal?: number | null
   language: string
   region: string
   headless: boolean

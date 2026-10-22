@@ -349,11 +349,15 @@ check('building twice does not duplicate', repo.buildSuggestions(workspace.id).s
 check('candidate totals are reported', repo.candidateTotals(workspace.id).suggested === candidates.length)
 
 // The confirmed table is only ever written to by a confirmation.
-const beforeConfirm = repo.decisionMakerLedger(workspace.id).length
+const beforeConfirm = repo.decisionMakerLedger(workspace.id)
 const toConfirm = candidates.find((c) => c.full_name === 'Ruth Ellery')
 const confirmed = repo.confirmCandidate(workspace.id, toConfirm.id)
 check('a suggestion can be confirmed', confirmed.confirmed)
-check('confirming writes a real named contact', repo.decisionMakerLedger(workspace.id).length === beforeConfirm + 1)
+const afterConfirm = repo.decisionMakerLedger(workspace.id)
+const alreadyNamed = beforeConfirm.some((row) => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name)
+check('confirming stores the named contact without duplicating an existing person',
+  afterConfirm.length === beforeConfirm.length + (alreadyNamed ? 0 : 1) &&
+  afterConfirm.some((row) => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name && row.email === toConfirm.email))
 check('and removes it from the suggestions', !repo.listCandidates(workspace.id).some((c) => c.id === toConfirm.id))
 
 const toDismiss = repo.listCandidates(workspace.id)[0]

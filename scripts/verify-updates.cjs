@@ -28,14 +28,16 @@ async function main() {
     check('development check stays disabled', checkResult?.state === 'disabled', JSON.stringify(checkResult))
 
     await page.click('[data-view="settings"]')
+    await page.click('[data-stab="acct"]')
     await page.waitForTimeout(700)
-    const cardVisible = await page.locator('[data-updates-card="1"]').isVisible()
+    const card = page.locator('section').filter({ has: page.getByRole('heading', { name: 'App updates', exact: true }) })
+    const cardVisible = await card.isVisible()
     check('settings shows the app updates card', cardVisible)
     if (cardVisible) {
-      check('settings explains the disabled development state', /not configured|installed app/i.test(await page.textContent('[data-update-message="1"]')))
-      check('update action is available for a manual check', await page.locator('[data-update-action="1"]').isEnabled())
-      await page.click('[data-update-action="1"]')
-      check('manual check keeps the disabled state clear', /not configured|installed app/i.test(await page.textContent('[data-update-message="1"]')))
+      check('settings explains the disabled development state', /not configured|installed app/i.test(await card.innerText()))
+      check('update action is available for a manual check', await card.getByRole('button').isEnabled())
+      await card.getByRole('button').click()
+      check('manual check keeps the disabled state clear', /not configured|installed app/i.test(await card.innerText()))
     }
   } finally {
     await app.close()

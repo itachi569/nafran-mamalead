@@ -285,6 +285,16 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 ) : null}
               </div>
             </header>
+            {V.showPlanWelcome ? (
+              <section data-plan-welcome="1" aria-label="Trial and Lifetime access" style={{display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px", padding: "16px 18px", borderRadius: "18px", background: "#C8D5BB", color: "#1C1C1C"}}>
+                <div role="status" style={{flex: "1 1 260px"}}>
+                  <strong style={{display: "block", fontSize: "14px", fontWeight: "600"}}>Welcome to MamaLead</strong>
+                  <p style={{margin: "4px 0 0", fontSize: "13px", lineHeight: "1.5"}}>Start your 1-day free trial or get Lifetime access in Settings &amp; Billing.</p>
+                </div>
+                <button type="button" data-plan-welcome-open="1" onClick={V.openWelcomeBilling} style={{border: "0", borderRadius: "999px", padding: "11px 17px", background: "#1C1C1C", color: "#F5F5F4", fontFamily: "inherit", fontSize: "13px", fontWeight: "600", cursor: "pointer"}}>Open Settings &amp; Billing</button>
+                <button type="button" aria-label="Dismiss trial and Lifetime notice" onClick={V.dismissPlanWelcome} style={{display: "grid", placeItems: "center", width: "30px", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: "#1C1C1C", fontSize: "22px", cursor: "pointer"}}>×</button>
+              </section>
+            ) : null}
             {shows(V.isDashboard) ? (
               <>
               <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
@@ -901,12 +911,13 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           <span style={{display: "block", marginTop: "7px", fontSize: "12px", color: "#5A5F5C"}}>Leave blank to use your current location.</span>
                         </label>
                         <div>
-                          <span style={{display: "block", fontSize: "12.5px", color: "#4A4F4B", marginBottom: "7px"}}>Max results</span>
+                          <span style={{display: "block", fontSize: "12.5px", color: "#4A4F4B", marginBottom: "7px"}}>Max results per run</span>
                           <div style={{display: "flex", alignItems: "center", gap: "8px"}}>
                             <button type="button" onClick={V.decMax} aria-label="Fewer results" data-step="1" style={{display: "grid", placeItems: "center", width: "40px", height: "40px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "17px", cursor: "pointer", transition: "background .25s linear"}}>−</button>
                             <span style={{minWidth: "56px", textAlign: "center", fontSize: "19px", fontWeight: "500"}}>{V.maxResults}</span>
                             <button type="button" onClick={V.incMax} aria-label="More results" data-step="1" style={{display: "grid", placeItems: "center", width: "40px", height: "40px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "17px", cursor: "pointer", transition: "background .25s linear"}}>+</button>
                           </div>
+                          <span style={{display: "block", marginTop: "7px", fontSize: "12px", color: "#5A5F5C"}}>Maximum total across all keywords and selected areas. Stops at this limit, or earlier if fewer leads are available.</span>
                         </div>
                         <div style={{marginTop: "6px", paddingTop: "18px", borderTop: "1px solid #E4E5E2"}}>
                           <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Enrichment</div>
@@ -1333,7 +1344,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         <circle cx="11" cy="11" r="6.5"></circle>
                         <path d="M16 16l4.5 4.5"></path>
                       </svg>
-                      <input data-socq="1" type="search" onInput={V.onSocInput} onKeyDown={V.onSocKey} onBlur={V.onSocBlur} placeholder="Search name, domain, handle or profile URL…" aria-label="Search profiles" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} data-socsearch="1" value={V.socQ} />
+                      <input data-socq="1" type="search" onInput={V.onSocInput} onKeyDown={V.onSocKey} onBlur={V.onSocBlur} placeholder="Search saved social profiles…" aria-label="Search saved social profiles" aria-describedby="saved-social-search-help" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} data-socsearch="1" value={V.socQ} />
                     </div>
                     <span style={{position: "relative", display: "block"}}>
                       <select onChange={V.onSocState} aria-label="Profile state" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}} data-socfilter="1">
@@ -1373,6 +1384,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.shCount}</span>
                     </button>
                   </div>
+                  <p id="saved-social-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved profile by business, domain, handle or profile URL. Filters the current list.</p>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
                     <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
                     {(V.socHist ?? []).map((h, __ih) => (
@@ -1553,7 +1565,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         <circle cx="11" cy="11" r="6.5"></circle>
                         <path d="M16 16l4.5 4.5"></path>
                       </svg>
-                      <input data-fq="email" type="search" onInput={V.fEmail.onInput} onKeyDown={V.fEmail.onKey} onBlur={V.fEmail.onBlur} placeholder="Search business, domain or email address…" aria-label="Search business, domain or email address" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fEmail.q} />
+                      <input data-fq="email" type="search" onInput={V.fEmail.onInput} onKeyDown={V.fEmail.onKey} onBlur={V.fEmail.onBlur} placeholder="Search saved emails…" aria-label="Search saved emails" aria-describedby="saved-email-search-help" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fEmail.q} />
                     </div>
                     <span style={{position: "relative", display: "block"}}>
                       <select onChange={V.fEmail.onState} aria-label="Filter rows" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
@@ -1608,6 +1620,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fEmail.count}</span>
                     </button>
                   </div>
+                  <p id="saved-email-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved email by business, domain or email address. Filters the current list.</p>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
                     <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
                     {(V.fEmail.hist ?? []).map((h, __ih) => (
@@ -1620,6 +1633,16 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     ))}
                     <span data-fcount="email" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.emailShowing} rows on screen</span>
                   </div>
+                  {V.emailValidityProgressState !== 'idle' ? (
+                    <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginTop: "12px", padding: "10px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
+                      <span role="status" data-email-validity-progress="1" style={{flex: "1", fontSize: "13px", color: "#1C1C1C"}}>{V.emailValidityProgressText}</span>
+                      {V.emailValidityBusy === '1' ? (
+                        <button type="button" data-email-validity-cancel="1" onClick={V.cancelEmailValidity} disabled={V.emailValidityProgressState === 'cancelling'} style={{height: "34px", padding: "0 14px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", cursor: "pointer"}}>
+                          {V.emailValidityProgressState === 'cancelling' ? 'Stopping…' : 'Stop checking'}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 {shows(V.fEmail.scanOn) ? (
                   <>
@@ -2016,7 +2039,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         <circle cx="11" cy="11" r="6.5"></circle>
                         <path d="M16 16l4.5 4.5"></path>
                       </svg>
-                      <input data-fq="phone" type="search" onInput={V.fPhone.onInput} onKeyDown={V.fPhone.onKey} onBlur={V.fPhone.onBlur} placeholder="Search business, area or number…" aria-label="Search business, area or number" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fPhone.q} />
+                      <input data-fq="phone" type="search" onInput={V.fPhone.onInput} onKeyDown={V.fPhone.onKey} onBlur={V.fPhone.onBlur} placeholder="Search saved phone numbers…" aria-label="Search saved phone numbers" aria-describedby="saved-phone-search-help" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fPhone.q} />
                     </div>
                     <span style={{position: "relative", display: "block"}}>
                       <select onChange={V.fPhone.onState} aria-label="Filter rows" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
@@ -2063,6 +2086,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fPhone.count}</span>
                     </button>
                   </div>
+                  <p id="saved-phone-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved number by business, area or phone number. Filters the current list.</p>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
                     <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
                     {(V.fPhone.hist ?? []).map((h, __ih) => (
@@ -2363,7 +2387,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         <circle cx="11" cy="11" r="6.5"></circle>
                         <path d="M16 16l4.5 4.5"></path>
                       </svg>
-                      <input data-fq="dm" type="search" onInput={V.fDm.onInput} onKeyDown={V.fDm.onKey} onBlur={V.fDm.onBlur} placeholder="Search person, role or business…" aria-label="Search person, role or business" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fDm.q} />
+                      <input data-fq="dm" type="search" onInput={V.fDm.onInput} onKeyDown={V.fDm.onKey} onBlur={V.fDm.onBlur} placeholder="Search saved decision makers…" aria-label="Search saved decision makers" aria-describedby="saved-dm-search-help" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fDm.q} />
                     </div>
                     <span style={{position: "relative", display: "block"}}>
                       <select onChange={V.fDm.onState} aria-label="Filter rows" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
@@ -2411,6 +2435,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fDm.count}</span>
                     </button>
                   </div>
+                  <p id="saved-dm-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved contact by person, role or business. Filters the current list.</p>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
                     <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
                     {(V.fDm.hist ?? []).map((h, __ih) => (
@@ -3237,6 +3262,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             </button>
                           </Fragment>
                         ))}
+                        {V.newListVisible ? <input aria-label="New list name" value={V.newListName} onChange={V.onNewListName} maxLength={120} placeholder="Name your list" style={{width: "min(100%,240px)", height: "36px", padding: "0 14px", border: "1px solid #555956", borderRadius: "999px", background: "#252625", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px"}} /> : null}
                       </div>
                     </div>
                     <button type="button" onClick={V.saveToList} data-cta="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "46px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>

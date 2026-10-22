@@ -799,11 +799,13 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
   let quota: Awaited<ReturnType<typeof billingReserveMaps>> | undefined
   let handle: ReturnType<ScrapeRunner['start']>
   try {
-    quota = await billingReserveMaps(query.maxResultsPerKeyword * query.keywords.length)
+    const requestedTotal = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length)
+    quota = await billingReserveMaps(requestedTotal)
     if (runner.busy) throw new Error('A scrape is already running.')
     handle = runner.start({
     provider: request?.provider,
-    query: { ...request?.query, maxResultsTotal: quota.allowed },
+    // A billing allowance can lower the requested limit, never increase it.
+    query: { ...request?.query, maxResultsTotal: Math.min(requestedTotal, quota.allowed) },
     context,
     executablePath,
     onProgress: (progress) => broadcast('scraper:progress', progress),
