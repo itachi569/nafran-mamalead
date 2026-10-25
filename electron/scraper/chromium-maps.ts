@@ -151,6 +151,9 @@ export class ChromiumMapsProvider implements ScraperProvider {
             provider: this.id,
             capturedAt: new Date().toISOString(),
           }
+          if ((query.websiteFilter === 'has' && !lead.website) || (query.websiteFilter === 'none' && lead.website)) {
+            await this.pause(query,signal); continue
+          }
           leads.push(lead)
           sink({
             status: 'running',
@@ -334,7 +337,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
     if (!(await feed.count())) return []
     await page.waitForSelector('a.hfpxzc', { timeout: 20_000 }).catch(() => undefined)
 
-    const limit = Math.min(query.maxResultsPerKeyword, (query.maxResultsTotal ?? Infinity) - alreadyFound)
+    const limit = query.websiteFilter && query.websiteFilter !== "any" ? 200 : Math.min(query.maxResultsPerKeyword, (query.maxResultsTotal ?? Infinity) - alreadyFound)
     let stagnant = 0
     let loaded = 0
     for (let pass = 0; pass < 40 && loaded < limit && stagnant < 3; pass += 1) {

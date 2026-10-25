@@ -7,6 +7,7 @@
 //
 // Nothing here writes to the database; it returns findings and the caller decides what to keep.
 import { chromium, type Browser } from 'playwright'
+import { parse, serialize, type DefaultTreeAdapterMap } from 'parse5'
 
 export interface FoundEmail {
   value: string
@@ -38,6 +39,7 @@ export interface FoundPerson {
 }
 
 export interface WebsiteFindings {
+  addresses?: string[]
   emails: FoundEmail[]
   phones: FoundPhone[]
   socials: FoundSocial[]
@@ -114,6 +116,8 @@ function socialFrom(href: string): FoundSocial | null {
 /** Basic entity decoding is enough for hrefs and JSON-LD URLs without loading a browser. */
 function decodeHtml(value: string): string {
   return value
+    .replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (_, code: string) => { const value=parseInt(code.replace(/^x/i,''), /^x/i.test(code)?16:10); return value>0 && value<=0x10ffff ? String.fromCodePoint(value) : '' })
+    .replace(/&nbsp;/gi, ' ').replace(/&middot;/gi, '·').replace(/&ndash;/gi, '–').replace(/&mdash;/gi, '—')
     .replace(/&amp;/gi, '&')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
@@ -162,6 +166,40 @@ function readableHtml(html: string): string {
   ).trim()
 }
 
+/** Keep published physical addresses, including multiple offices. Never infer an address. */
+export function addressesFromHtml(html: string): string[] {
+  const found = new Set<string>()
+  const add = (value: string) => {
+    const clean = readableHtml(value).replace(/\s+/g, ' ').replace(/,\s*,/g, ',').trim()
+    if (clean.length >= 12 && clean.length <= 450 && !/@|https?:|cookie|copyright/i.test(clean)) found.add(clean)
+  }
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(visit)
+    if (!value || typeof value !== 'object') return
+    const node = value as Record<string, unknown>
+    if (node.streetAddress) add(['streetAddress','addressLocality','addressRegion','postalCode','addressCountry'].map(k => typeof node[k] === 'string' ? node[k] : '').filter(Boolean).join(', '))
+    Object.values(node).forEach(visit)
+  }
+  for (const match of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { visit(JSON.parse(match[1])) } catch { /* Invalid optional structured data. */ }
+  }
+  for (const match of html.matchAll(/<address\b[^>]*>([\s\S]*?)<\/address>/gi)) add(match[1])
+  const lines = readableHtml(html).split('\n').map(v => v.trim()).filter(Boolean)
+  for (let i=0; i<lines.length; i++) {
+    const line=lines[i]
+    if (line.length <= 180 && !/^(?:near|the|a |we |our )/i.test(line) && !/\b(?:has|have|was|were|practised|founded|since|whose|under|before)\b/i.test(line) && /\d/.test(line) && /\b(?:street|road|avenue|lane|floor|suite|building|plaza|block|chambers|tower|clifton|pechs|house|office|sector|dha|gulberg|markaz)\b/i.test(line) && !/phone|fax|tel:|whatsapp|@/i.test(line)) {
+      const next=lines[i+1] ?? ''
+      add(line + (/karachi|lahore|islamabad|london|pakistan|united kingdom/i.test(next) && next.length<120 && !/@|tel|phone|fax/i.test(next) && !/^(?:\d|(?:no\.?|office|suite|house|plot)\s*\d)/i.test(next) ? ', '+next : ''))
+    }
+  }
+  return uniqueAddresses(Array.from(found))
+}
+
+function uniqueAddresses(addresses: string[]): string[] {
+  const key=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'')
+  return addresses.filter((value,i)=>!addresses.some((other,j)=>j!==i && key(other).includes(key(value)) && (key(other).length>key(value).length || j<i))).slice(0,12)
+}
+
 /** Finds contact details already in the first server response, without starting Chromium. */
 function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFindings, 'error' | 'pagesRead'> {
   const origin = new URL(pageUrl)
@@ -181,6 +219,23 @@ function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFin
     .map((value) => ({ value, page: pageUrl }))
 
   const jsonLd = Array.from(html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi), (match) => decodeHtml(match[1]))
+  const structuredContacts = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(structuredContacts); return }
+    if (!value || typeof value!=='object') return
+    const node=value as Record<string,unknown>
+    for(const raw of Array.isArray(node.email)?node.email:[node.email]) {
+      if(typeof raw!=='string')continue
+      const email=cleanEmails([raw.replace(/^mailto:/i,'')])[0]
+      if(email && !emails.some(item=>item.value===email))emails.push({value:email,score:scoreEmail(email,siteHost),page:pageUrl})
+    }
+    for(const raw of Array.isArray(node.telephone)?node.telephone:[node.telephone]) {
+      if(typeof raw!=='string')continue
+      const phone=normalisePhone(raw)
+      if(phone.replace(/\D/g,'').length>=9 && !phones.some(item=>item.value===phone))phones.push({value:phone,page:pageUrl})
+    }
+    Object.values(node).forEach(structuredContacts)
+  }
+  for(const block of jsonLd){try{structuredContacts(JSON.parse(block))}catch{/* Ignore invalid optional markup. */}}
   const people = peopleFromJsonLd(jsonLd).map((person) => ({
     fullName: person.fullName,
     title: person.title,
@@ -195,7 +250,25 @@ function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFin
     }
   }
 
-  return { emails, phones, socials: socialLinksFromHtml(html, pageUrl), people }
+  // Associate a mailbox only when the site explicitly names its owner beside the link.
+  // A generic firm mailbox is never assigned to every person in a team.
+  for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']mailto:([^"'?<>]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const label = readableHtml(match[2]).replace(/\s+/g, ' ').trim()
+    const address = cleanEmails([decodeHtml(match[1])])[0]
+    if (!address || label.split(/\s+/).length<2 || !isUsablePerson(label, '')) continue
+    const person = people.find(saved => saved.fullName.toLowerCase() === label.toLowerCase())
+    if (person && !person.email) person.email = address
+    else if (!person) people.push({ fullName: label, title: '', email: address, phone: '', linkedinUrl: '', evidence: pageUrl })
+  }
+
+  attachPeopleCards(html, pageUrl, people)
+  // Person fields may exist only in structured data, outside visible text/mailto links.
+  for (const person of people) {
+    if (person.email && isUsableEmail(person.email) && !emails.some(item=>item.value===person.email)) emails.push({value:person.email,score:scoreEmail(person.email,siteHost),page:pageUrl})
+    if (person.phone && !phones.some(item=>item.value===normalisePhone(person.phone!))) phones.push({value:normalisePhone(person.phone),page:pageUrl})
+  }
+
+  return { addresses: addressesFromHtml(html), emails, phones, socials: socialLinksFromHtml(html, pageUrl), people }
 }
 
 /**
@@ -225,7 +298,7 @@ export function scoreEmail(value: string, siteHost: string): number {
 export function normalisePhone(raw: string): string {
   const digits = raw.replace(/[^\d+]/g, '')
   if (digits.startsWith('+44')) return `+44 ${digits.slice(3).replace(/(\d{3})(\d{3})(\d+)/, '$1 $2 $3')}`.trim()
-  if (digits.startsWith('0') && digits.length >= 10) return `+44 ${digits.slice(1).replace(/(\d{3})(\d{3})(\d+)/, '$1 $2 $3')}`.trim()
+  // A local number could belong to Pakistan, the UK or another country. Keep its prefix.
   return digits
 }
 
@@ -247,16 +320,60 @@ export function isUsablePerson(fullName: string, title: string): boolean {
   const words = name.split(/\s+/)
   if (words.length > 4) return false
   // Each word is capitalised, or a lowercase particle that only appears inside a name.
-  return words.every((word, index) => /^[A-Z][a-z'-]*$/.test(word) || (index > 0 && /^(van|von|de|der|den|la|le|al|bin|mac|mc|da|di)$/.test(word)))
+  return words.every((word, index) => /^\p{Lu}[\p{L}'’.-]*$/u.test(word) || (index > 0 && /^(van|von|de|der|den|la|le|al|bin|ibn|ur|ul|el|mac|mc|da|di)$/.test(word)))
 }
 
 function isContactLink(href: string, text: string): boolean {
   return /contact|about|team|staff|our-people|meet|clinic|practice|book/i.test(`${href} ${text}`)
 }
 
+/** Attach direct contacts only within one person's own card, never from a shared footer. */
+function attachPeopleCards(html: string, pageUrl: string, people: FoundPerson[]): void {
+  type Node = DefaultTreeAdapterMap['node']
+  type Element = DefaultTreeAdapterMap['element']
+  const elements: Element[] = []
+  const walk = (node: Node): void => {
+    if ('tagName' in node) elements.push(node)
+    if ('childNodes' in node) node.childNodes.forEach(walk)
+  }
+  walk(parse(html))
+  const attr = (node: Element, key: string) => node.attrs.find(item=>item.name===key)?.value ?? ''
+  const nameOf = (node: Element) => readableHtml(serialize(node)).replace(/\s+/g,' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'').replace(/,?\s+(?:Esq\.?|PhD|M\.D\.)$/i,'')
+  const headings = elements.filter(node=>/^h[1-4]$/.test(node.tagName) || attr(node,'itemprop')==='name' || /(?:^|\s)(?:nm|name|(?:person|team|member|staff)[_-]name)(?:\s|$)/i.test(attr(node,'class')))
+  const isNameHeading = (name: string) => name.split(/\s+/).length>=2 && isUsablePerson(name,'') && name.match(ROLE_ANYWHERE)?.[0]!==name
+  for (const heading of headings) {
+    const name=nameOf(heading)
+    if (!isNameHeading(name)) continue
+    let person=people.find(item=>item.fullName.toLowerCase()===name.toLowerCase())
+    let parent=heading.parentNode
+    for(let depth=0; parent && depth<4; depth++,parent=parent.parentNode) {
+      if (!('tagName' in parent) || /^(?:body|html|main|footer|header|nav)$/.test(parent.tagName)) break
+      if (!/^(?:div|article|li|section)$/.test(parent.tagName)) continue
+      const block=serialize(parent)
+      const text=readableHtml(block)
+      if(text.length>10000) break
+      const otherPerson=people.some(item=>item.fullName.toLowerCase()!==name.toLowerCase() && text.toLowerCase().includes(item.fullName.toLowerCase()))
+      const otherHeading=headings.some(item=>item!==heading && isNameHeading(nameOf(item)) && nameOf(item)!==name && (()=>{let ancestor=item.parentNode;while(ancestor){if(ancestor===parent)return true;ancestor='parentNode' in ancestor ? ancestor.parentNode : null}return false})())
+      if(otherPerson || otherHeading) break
+      const title=text.match(ROLE_ANYWHERE)?.[0] ?? person?.title ?? ''
+      if(!person && !title) continue
+      if(!person) { person={fullName:name,title,email:'',phone:'',linkedinUrl:'',evidence:pageUrl};people.push(person) }
+      if(!person.title || title.length>person.title.length && title.includes(person.title))person.title=title
+      const email=cleanEmails(Array.from(block.matchAll(/href\s*=\s*["']mailto:([^"'?<>\s]+)/gi),m=>decodeHtml(m[1]))).find(value=>! /^(?:info|hello|contact|office|admin|support|sales|reception|enquiries)@/i.test(value))
+      const tel=block.match(/href\s*=\s*["']tel:([^"'<>]+)/i)?.[1]
+      const phone=tel ? normalisePhone(decodeHtml(tel)) : ''
+      const linkedin=Array.from(block.matchAll(/href\s*=\s*["']([^"']+)["']/gi),m=>decodeHtml(m[1])).find(url=>/^https?:\/\/(?:[a-z]+\.)?linkedin\.com\/in\//i.test(url))
+      if(email && !person.email)person.email=email
+      if(phone.replace(/\D/g,'').length>=9 && !person.phone)person.phone=phone
+      if(linkedin && !person.linkedinUrl)person.linkedinUrl=linkedin
+      if(email || phone || linkedin) break
+    }
+  }
+}
+
 /** Link text and marketing copy that reads like a name beside a role but is neither. */
 const PERSON_NOISE =
-  /^(read more|learn more|find out|contact us|book now|view profile|see more|hair removal|our team|meet the|more info|get in touch|about us|click here|book online|our services)$/i
+  /^(read more|learn more|find out|contact us|book now|view profile|see more|hair removal|our team|our people|meet our team|meet the|more info|get in touch|about us|click here|book online|our services|email us|email me|send email|call us|call me|contact details)$/i
 
 /**
  * Finds the first credible "Name — Role" pair on a page.
@@ -284,7 +401,7 @@ function findPeople(text: string): { fullName: string; title: string }[] {
 
 /** The role vocabulary, as a pattern that can be matched anywhere in a block of text. */
 const ROLE_ANYWHERE = new RegExp(
-  String.raw`\b(Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)\b`,
+  String.raw`\b(CEO|CFO|CTO|COO|CMO|Chief Executive Officer|Managing Director|Managing Partner|Senior Partner|Co-Founder|Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Attorney|Lawyer|Barrister|Advocate|Solicitor|Associate|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)\b`,
 )
 
 function cleanEmails(values: string[]): string[] {
@@ -351,7 +468,7 @@ function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; 
   const seen = new Set<string>()
 
   const readPerson = (node: Record<string, unknown>): void => {
-    const name = typeof node.name === 'string' ? node.name.replace(/\s+/g, ' ').trim() : ''
+    const name = typeof node.name === 'string' ? node.name.replace(/\s+/g, ' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'') : ''
     const title = typeof node.jobTitle === 'string' ? node.jobTitle.replace(/\s+/g, ' ').trim() : ''
     if (!name || !isUsablePerson(name, title)) return
     const key = name.toLowerCase()
@@ -376,10 +493,7 @@ function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; 
     const type = node['@type']
     const types = Array.isArray(type) ? type.map(String) : [String(type ?? '')]
     if (types.some((entry) => /^Person$/i.test(entry))) readPerson(node)
-    for (const key of ['employee', 'founder', 'member', 'author', 'alumni']) {
-      if (node[key]) visit(node[key])
-    }
-    if (node['@graph']) visit(node['@graph'])
+    Object.values(node).forEach(value=>{if(value && typeof value==='object')visit(value)})
   }
 
   for (const block of blocks) {
@@ -397,6 +511,7 @@ export class WebsiteEnricher {
 
   /** Follow the site's own team/about links; one credit still covers one website. */
   async inspectPeople(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
+    if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
     const findings: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], pagesRead: [], error: null }
     let origin: URL
     try { origin = new URL(website) } catch { return { ...findings, error: 'Invalid website address.' } }
@@ -404,11 +519,11 @@ export class WebsiteEnricher {
     const pending = [origin.href]
     const visited = new Set<string>()
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 30_000)
+    const timer = setTimeout(() => controller.abort(), 45_000)
     const onAbort = () => controller.abort()
     signal?.addEventListener('abort', onAbort, { once: true })
     try {
-      while (pending.length && visited.size < 5 && !controller.signal.aborted) {
+      while (pending.length && visited.size < 12 && !controller.signal.aborted) {
         const url = pending.shift()!
         if (visited.has(url)) continue
         visited.add(url)
@@ -421,6 +536,7 @@ export class WebsiteEnricher {
           const html = (await response.text()).slice(0, 2_000_000)
           const found = contactFindingsFromHtml(html, pageUrl)
           findings.pagesRead.push(pageUrl)
+          findings.addresses = [...new Set([...(findings.addresses ?? []), ...(found.addresses ?? [])])]
           findings.emails.push(...found.emails)
           findings.phones.push(...found.phones)
           findings.socials.push(...found.socials)
@@ -428,18 +544,20 @@ export class WebsiteEnricher {
             const existing = findings.people.find((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())
             if (!existing) findings.people.push(person)
             else {
-              for (const field of ['title', 'email', 'phone', 'linkedinUrl'] as const) if (!existing[field] && person[field]) existing[field] = person[field]
+              if ((!existing.email && person.email) || (!existing.phone && person.phone)) existing.evidence=person.evidence
+              for (const field of ['title', 'email', 'phone', 'linkedinUrl'] as const) if ((!existing[field] || field==='title' && person.title.includes(existing.title)) && person[field]) existing[field] = person[field]
             }
           }
-          const links = Array.from(html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi))
+          const links = Array.from(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi))
             .map((match) => {
               try {
                 const target = new URL(decodeHtml(match[1]), pageUrl)
                 const label = readableHtml(match[2]).replace(/\s+/g, ' ').trim()
-                const pathMatch = /(?:^|[/_-])(?:team|people|leadership|management|staff)(?:[/_.-]|$)/i.test(target.pathname)
-                const aboutMatch = /(?:^|[/_-])(?:about|contact)(?:[/_.-]|$)/i.test(target.pathname)
+                const pathMatch = /(?:^|[/_-])(?:team|people|leadership|management|staff|lawyers|attorneys|professionals|profile|bio)(?:[/_.-]|$)/i.test(target.pathname)
+                const aboutMatch = /(?:^|[/_-])(?:about|contact|locations|offices)(?:[/_.-]|$)/i.test(target.pathname)
                 const labelMatch = /^(?:(?:meet|about) (?:our |the )?|our )?(?:team|people|leadership|management|staff|about us|contact us)$/i.test(label)
-                return { target, rank: pathMatch ? 3 : aboutMatch ? 2 : labelMatch ? 1 : 0 }
+                const personLink = /team|people|lawyers|attorneys|professionals/i.test(new URL(pageUrl).pathname) && label.split(/\s+/).length>=2 && isUsablePerson(label,'')
+                return { target, rank: aboutMatch ? 4 : pathMatch ? 3 : personLink ? 2 : labelMatch ? 1 : 0 }
               } catch { return null }
             }).filter((link): link is { target: URL; rank: number } => Boolean(link?.rank))
             .sort((a, b) => b.rank - a.rank)
@@ -447,7 +565,7 @@ export class WebsiteEnricher {
             try {
               target.hash = ''
               if (!/^https?:$/.test(target.protocol) || target.hostname.replace(/^www\./i, '') !== host || visited.has(target.href) || pending.includes(target.href)) continue
-              if (pending.length + visited.size < 5) pending.push(target.href)
+              if (pending.length + visited.size < 12) pending.push(target.href)
             } catch { /* Ignore malformed links. */ }
           }
         } catch (error) {
@@ -456,6 +574,10 @@ export class WebsiteEnricher {
         }
       }
       if (findings.pagesRead.length) findings.error = null
+      findings.emails=Array.from(new Map(findings.emails.map(item=>[item.value,item])).values())
+      findings.phones=Array.from(new Map(findings.phones.map(item=>[item.value,item])).values())
+      findings.socials=Array.from(new Map(findings.socials.map(item=>[item.profileUrl,item])).values())
+      findings.addresses=uniqueAddresses(findings.addresses ?? [])
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort) }
     return findings
   }
@@ -504,7 +626,7 @@ export class WebsiteEnricher {
         signal: controller.signal,
         headers: {
           accept: 'text/html,application/xhtml+xml',
-          'user-agent': 'Nafran Leads contact scanner/1.3',
+          'user-agent': 'MamaLead contact scanner/1.5',
         },
       })
       if (!response.ok) {
@@ -528,49 +650,57 @@ export class WebsiteEnricher {
 
   /** Fast email, phone and decision-maker pass over the server HTML of a site. */
   async inspectContactFast(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
-    const findings: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], pagesRead: [], error: null }
+    const result: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], addresses: [], pagesRead: [], error: null }
     let origin: URL
-    try {
-      origin = new URL(website)
-    } catch {
-      findings.error = `"${website}" is not a usable web address.`
-      return findings
+    try { origin = new URL(website) } catch { return { ...result, error: 'Enter a valid website URL.' } }
+    const combined = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(45_000)])
+    const sameSite = (raw: string): string | null => {
+      try { const u = new URL(decodeHtml(raw), origin); u.hash = ''; return /^https?:$/.test(u.protocol) && u.host.replace(/^www\./i,'') === origin.host.replace(/^www\./i,'') ? u.href : null } catch { return null }
     }
-
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4_500)
-    const onAbort = () => controller.abort()
-    signal?.addEventListener('abort', onAbort, { once: true })
-    try {
-      const response = await fetch(origin.href, {
-        redirect: 'follow',
-        signal: controller.signal,
-        headers: {
-          accept: 'text/html,application/xhtml+xml',
-          'user-agent': 'Nafran Leads contact scanner/1.3',
-        },
-      })
-      if (!response.ok) {
-        findings.error = `${origin.host} returned HTTP ${response.status}.`
-        return findings
+    const read = async (url: string): Promise<string> => {
+      if (combined.aborted) throw new DOMException('Cancelled', 'AbortError')
+      // Validate every redirect before sending a request to its destination.
+      for (let redirects=0; redirects<4; redirects++) {
+        if (!sameSite(url)) return ''
+        const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.any([combined, AbortSignal.timeout(5000)]), headers: { 'user-agent': 'MamaLead contact scanner/1.5' } })
+        if (response.status >=300 && response.status <400) { const next=sameSite(new URL(response.headers.get('location') || '',url).href); if (!next) return ''; url=next; continue }
+        if (!response.ok || Number(response.headers.get('content-length') ?? 0)>2_000_000) return ''
+        const reader=response.body?.getReader(); if (!reader) return ''
+        const decoder=new TextDecoder(); let text=''; let bytes=0
+        try { while (true) { const chunk=await reader.read(); if(chunk.done)break; bytes+=chunk.value.length; if(bytes>2_000_000)break; text+=decoder.decode(chunk.value,{stream:true}) } } finally { await reader.cancel() }
+        return text+decoder.decode()
       }
-      const html = await response.text()
-      if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      const pageUrl = response.url || origin.href
-      const contacts = contactFindingsFromHtml(html, pageUrl)
-      findings.pagesRead.push(pageUrl)
-      findings.emails = contacts.emails
-      findings.phones = contacts.phones
-      findings.socials = contacts.socials
-      findings.people = contacts.people
-    } catch (error) {
-      if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      findings.error = error instanceof Error ? error.message : `${origin.host} could not be fetched.`
-    } finally {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
+      return ''
     }
-    return findings
+    const queue=[origin.href]; const seen=new Set<string>()
+    const append=(raw:string) => { const url=sameSite(raw); if(url && !seen.has(url) && !queue.includes(url) && queue.length<12)queue.push(url) }
+    try {
+      const robots=await read(new URL('/robots.txt',origin).href).catch(()=>'')
+      const maps=Array.from(robots.matchAll(/^Sitemap:\s*(\S+)/gim),m=>m[1])
+      if (!maps.length) maps.push(new URL('/sitemap.xml',origin).href, new URL('/sitemap_index.xml',origin).href)
+      const visitedMaps=new Set<string>()
+      while(maps.length && visitedMaps.size<4 && !combined.aborted){
+        const map=sameSite(maps.shift()!); if(!map || visitedMaps.has(map))continue; visitedMaps.add(map)
+        const xml=await read(map).catch(()=>'')
+        for(const match of xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?([^<\]]+)/gi)) {
+          const url=sameSite(match[1].trim()); if(!url)continue
+          if(/contact|reach-us|get-in-touch|locations|offices/i.test(new URL(url).pathname))append(url)
+          else if(/sitemapindex/i.test(xml.slice(0,1000)) && /page|sitemap/i.test(url) && maps.length<4) maps.push(url)
+        }
+      }
+      while(queue.length && seen.size<6 && !combined.aborted){
+        const url=queue.shift()!; if(seen.has(url))continue; seen.add(url)
+        const html=await read(url).catch(()=>''); if(!html)continue
+        const found=contactFindingsFromHtml(html,url);result.pagesRead.push(url)
+        result.emails.push(...found.emails);result.phones.push(...found.phones);result.socials.push(...found.socials);result.people.push(...found.people);result.addresses!.push(...(found.addresses ?? []))
+        for(const link of html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) if(/contact|reach us|get in touch|locations|offices/i.test(link[1]+' '+readableHtml(link[2])))append(new URL(link[1],url).href)
+      }
+      result.emails=Array.from(new Map(result.emails.map(v=>[v.value,v])).values())
+      result.phones=Array.from(new Map(result.phones.map(v=>[v.value,v])).values())
+      result.addresses=uniqueAddresses(result.addresses ?? [])
+      if(!result.pagesRead.length) result.error='The website could not be read. Try again or check its URL.'
+    } finally { if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError') }
+    return result
   }
 
   /** Reads one lead's site and reports what it published. */
@@ -632,6 +762,7 @@ export class WebsiteEnricher {
       }
 
       const absorb = (data: PageHarvest, url: string): string[] => {
+        findings.addresses = [...new Set([...(findings.addresses ?? []), ...addressesFromHtml(data.html)])]
         // Structured people first: they carry a name and a title as data.
         for (const person of peopleFromJsonLd(data.jsonLd)) {
           const key = person.fullName.toLowerCase()
@@ -640,7 +771,7 @@ export class WebsiteEnricher {
               fullName: person.fullName,
               title: person.title,
               linkedinUrl: person.linkedinUrl,
-              evidence: 'schema.org Person markup',
+              evidence: 'schema.org Person markup', email: person.email, phone: person.phone,
             })
           }
         }
@@ -658,7 +789,7 @@ export class WebsiteEnricher {
                 fullName: label,
                 title: role,
                 linkedinUrl: '',
-                evidence: `${entry.address} published beside their name`,
+                evidence: `${entry.address} published beside their name`, email: isUsableEmail(entry.address) ? entry.address : undefined,
               })
             }
           }

@@ -17,6 +17,7 @@ export interface BillingStatus {
   decisionKeyActive?: boolean
   lifetime?: { amount: number; currency: string; interval: null; active: boolean }
   trial?: { active: boolean; expiresAt: string | null }
+  trialRequest?: { requested: boolean; email: string | null; canChangeEmail: boolean }
   mapsLeads?: { used: number | null; limit: number | null; remaining: number | null }
   decisionMaker?: { amount: number; currency: string; interval: string | null; periodDays?: number; available?: boolean; active: boolean; status: string; ownerKind?: 'decision' | 'lifetime'; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null; periodId?: string | null }
   hasCustomer?: boolean
@@ -166,7 +167,7 @@ export async function requireActiveLicense(feature: LicensedFeature = 'lifetime'
       throw new LicenseAccessError('Decision Makers access needs a separate 30-day pass. Open Settings â†’ Usage to buy 1,000 searches for Rs 1,000.')
     }
     if (!status.connected || !entitlement || (feature === 'lifetime' && status.trial?.active && status.trial.expiresAt && Date.parse(status.trial.expiresAt) <= Date.now())) {
-      throw new LicenseAccessError(feature === 'decisionMaker' ? 'Activate a Decision Makers or lifetime key in Settings â†’ Account before using this feature.' : 'Activate an active 1-day trial or lifetime Nafran license in Settings â†’ Account before using this feature.')
+      throw new LicenseAccessError(feature === 'decisionMaker' ? 'Activate a Decision Makers or lifetime key in Settings â†’ Account before using this feature.' : 'Activate an active 1-day trial or lifetime MamaLead license in Settings â†’ Account before using this feature.')
     }
     if (feature === 'decisionMaker' && !(status.decisionMaker?.active && status.decisionMaker.monthlyRemaining > 0 && status.decisionMaker.available !== false && status.decisionMaker.currency === 'pkr' && status.decisionMaker.amount === 100000 &&
       status.decisionMaker.periodDays === 30 && status.decisionMaker.monthlyLimit === 1000)) {
@@ -228,7 +229,7 @@ export async function billingPortal(): Promise<string> {
 
 export async function billingActivate(licenseKey: string): Promise<{ active: boolean; email?: string; last4?: string; activatedAt?: string | null }> {
   const key = licenseKey.trim()
-  if (!key) throw new Error('Enter your Nafran license key first.')
+  if (!key) throw new Error('Enter your MamaLead license key first.')
   const result = await request<{ active: boolean; email?: string; last4?: string; activatedAt?: string | null }>('/v1/activate', 'POST', { licenseKey: key }, await installationToken())
   verifiedLicense = null
   return result

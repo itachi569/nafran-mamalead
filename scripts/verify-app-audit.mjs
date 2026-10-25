@@ -92,10 +92,15 @@ try {
 
   for (const view of ['social', 'email', 'phone', 'website']) {
     await page.click(`[data-view="${view}"]`)
-    await page.getByRole('button', { name: 'Import websites', exact: true }).first().click()
-    await page.locator('[data-imptext="1"]').fill(`${view}.fixture.test`)
-    await page.locator('[data-socimpgo="1"]').click()
-    await page.locator('[data-impmodal="1"]').waitFor({ state: 'hidden' })
+    if(view==='website') {
+      await page.getByLabel('Websites to look up').fill(`${view}.fixture.test`)
+      await page.getByRole('button',{name:'Start lookup',exact:true}).click()
+    } else {
+      await page.getByRole('button', { name: 'Import websites', exact: true }).first().click()
+      await page.locator('[data-imptext="1"]').fill(`${view}.fixture.test`)
+      await page.locator('[data-socimpgo="1"]').click()
+      await page.locator('[data-impmodal="1"]').waitFor({ state: 'hidden' })
+    }
     if (view === 'social') {
       await page.locator('[data-soclist] a[data-social-profile-link*="123456789"]').waitFor({ timeout: 30000 })
       await page.locator('[data-soclist] a[data-social-profile-link*="auditclinic"]').waitFor()

@@ -243,16 +243,16 @@ export function createBillingServer(options = {}) {
     createTrial: async ({ id, installationId, keyHash, keyLast4, email, createdAt }) => {
       db.prepare('insert into trial_licenses (id, installation_id, key_hash, key_last4, email, created_at) values (?, ?, ?, ?, ?, ?)').run(id, installationId, keyHash, keyLast4, email, createdAt)
     },
-    replaceUnactivatedTrial: async ({ id, installationId, keyHash, keyLast4, email }) => Boolean(db.prepare(`
-      update trial_licenses set key_hash = ?, key_last4 = ?, email = ?, sent_at = null, correction_count = 1
-      where id = ? and installation_id = ? and correction_count = 0 and sent_at is not null
+    replaceUnactivatedTrial: async ({ id, installationId, keyHash, keyLast4, email, previousHash }) => Boolean(db.prepare(`
+      update trial_licenses set key_hash = ?, key_last4 = ?, email = ?, sent_at = null, correction_count = correction_count + 1
+      where id = ? and installation_id = ? and key_hash = ? and sent_at is not null
         and activated_at is null and bound_installation_id is null and revoked_at is null
-    `).run(keyHash, keyLast4, email, id, installationId).changes),
+    `).run(keyHash, keyLast4, email, id, installationId, previousHash).changes),
     restoreTrialCorrection: async ({ id, replacementHash, previous }) => Boolean(db.prepare(`
-      update trial_licenses set key_hash = ?, key_last4 = ?, email = ?, sent_at = ?, correction_count = 0
-      where id = ? and key_hash = ? and correction_count = 1 and sent_at is null
+      update trial_licenses set key_hash = ?, key_last4 = ?, email = ?, sent_at = ?, correction_count = ?
+      where id = ? and key_hash = ? and sent_at is null
         and activated_at is null and bound_installation_id is null
-    `).run(previous.key_hash, previous.key_last4, previous.email, previous.sent_at, id, replacementHash).changes),
+    `).run(previous.key_hash, previous.key_last4, previous.email, previous.sent_at, previous.correction_count ?? 0, id, replacementHash).changes),
     markTrialSent: async (id, sentAt) => { db.prepare('update trial_licenses set sent_at = ? where id = ?').run(sentAt, id) },
     deleteUnsentTrial: async (id) => { db.prepare('delete from trial_licenses where id = ? and sent_at is null').run(id) },
     activateTrial: async (installationId, trialId, activatedAt, expiresAt) => {

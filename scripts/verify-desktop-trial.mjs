@@ -8,6 +8,7 @@ import { createBillingServer } from '../billing-server/server.mjs'
 const root = resolve(import.meta.dirname, '..')
 const directory = mkdtempSync(join(tmpdir(), 'nafran-desktop-trial-'))
 const sent = []
+let failDelivery = false
 const service = createBillingServer({
   env: {
     STRIPE_SECRET_KEY: 'sk_test_desktoptrial',
@@ -21,12 +22,16 @@ const service = createBillingServer({
     assert.match(url, /\/prices\/price_lifetime$/)
     return { ok: true, json: async () => ({ active: true, currency: 'pkr', unit_amount: 1000000, recurring: null }) }
   },
-  sendEmail: async (message) => { sent.push(message); return true },
+  sendEmail: async (message) => { if (failDelivery) return false; sent.push(message); return true },
 })
 let desktop
 try {
   await new Promise((resolve, reject) => service.server.once('error', reject).listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${service.server.address().port}`
+  const other = await (await fetch(`${origin}/v1/installations`, {method:'POST'})).json()
+  const otherTrial = await fetch(`${origin}/v1/trial`, {method:'POST',headers:{authorization:`Bearer ${other.token}`,'content-type':'application/json'},body:JSON.stringify({email:'already-used@example.test'})})
+  assert.equal(otherTrial.status,200)
+  sent.length = 0
   const packaged = process.env.NAFRAN_TEST_PACKAGED === '1'
   const env = { ...process.env, LEADSNAP_BILLING_API_URL: origin, APPDATA: join(directory, 'appdata') }
   delete env.ELECTRON_RUN_AS_NODE
@@ -50,10 +55,17 @@ try {
   await page.locator('[data-trial-open="1"]').click()
   assert.equal(await page.locator('[data-trial-form="1"] input[type="email"]').count(), 1)
   console.log('PASS  trial row opens the email request form')
+  await page.locator('#desktop-trial-email').fill('already-used@example.test')
+  await page.getByRole('button',{name:'Send trial key',exact:true}).click()
+  await page.locator('[data-trial-change-email="1"]').click()
+  assert.equal(await page.locator('#desktop-trial-email').inputValue(),'')
+  assert.equal(await page.locator('[data-trial-notice]').count(),0)
+  assert.ok(await page.getByRole('button',{name:'Send trial key',exact:true}).isVisible())
+  assert.equal(sent.length,0)
 
   const email = `desktop-trial-${Date.now()}@example.test`
   await page.locator('#desktop-trial-email').fill(email)
-  await page.getByRole('button', { name: 'Email my 1-day key' }).click()
+  await page.getByRole('button', { name: 'Send trial key', exact: true }).click()
   await page.locator('[data-stab="acct"][aria-current="page"]').waitFor({ timeout: 15_000 })
   await page.locator('[data-license-next-step="1"]').getByText(`Trial key sent to ${email}`, { exact: false }).waitFor()
   assert.equal(await page.locator('#nafran-license-key').evaluate((element) => element === document.activeElement), true)
@@ -71,23 +83,43 @@ try {
   await page.locator('[data-trial-change-email="1"]').click()
   await page.locator('[data-stab="plan"][aria-current="page"]').waitFor()
   await page.locator('[data-trial-form="1"]').waitFor()
+  assert.equal(await page.locator('#desktop-trial-email').inputValue(), '')
+  await page.locator('#desktop-trial-email').fill(email)
+  await page.getByRole('button', { name: 'Send replacement key' }).click()
+  await page.locator('[data-trial-notice]').getByText('A trial key has already been requested.', {exact:false}).waitFor()
+  assert.doesNotMatch(await page.locator('[data-trial-notice]').innerText(), /Error invoking remote method/)
   const correctedEmail = `corrected-${Date.now()}@example.test`
   await page.locator('#desktop-trial-email').fill(correctedEmail)
+  assert.equal(await page.locator('[data-trial-notice]').count(), 0)
   await page.getByRole('button', { name: 'Send replacement key' }).click()
   await page.locator('[data-stab="acct"][aria-current="page"]').waitFor()
   assert.equal(sent.length, 2)
   assert.equal(sent[1].to, correctedEmail)
   assert.notEqual(sent[1].licenseKey, sent[0].licenseKey)
-  assert.equal(await page.locator('[data-trial-change-email="1"]').count(), 0)
+  assert.equal(await page.locator('[data-trial-change-email="1"]').count(), 1)
   assert.match(await page.locator('[data-license-next-step="1"]').innerText(), /previous key is no longer valid/i)
-  const anotherCorrection = await page.evaluate(() => window.desktop.billing.requestTrial('third@example.test', true)
-    .then(() => 'unexpected success').catch((error) => String(error.message)))
-  assert.match(anotherCorrection, /can no longer be changed/i)
-  assert.equal(sent.length, 2)
-  console.log('PASS  wrong-email button returns to the form, sends one replacement, then returns to Account')
+  // Leaving Settings remounts its state; eligibility must be restored from the server.
+  await page.locator('[data-view="dashboard"]').click()
+  await page.locator('[data-view="settings"]').click()
+  await page.locator('[data-stab="plan"]').click()
+  await page.locator('[data-trial-change-email="1"]').click()
+  assert.equal(await page.locator('#desktop-trial-email').inputValue(), '')
+  await page.locator('#desktop-trial-email').fill('third@example.test')
+  await page.getByRole('button', { name: 'Send replacement key' }).click()
+  await page.locator('[data-stab="acct"][aria-current="page"]').waitFor()
+  assert.equal(sent.length, 3)
+  const pending = await page.evaluate(() => window.desktop.billing.status())
+  assert.equal(pending.trialRequest.email, 'third@example.test')
+  assert.equal(pending.trialRequest.canChangeEmail, true)
+  failDelivery = true
+  const failedDelivery = await page.evaluate(() => window.desktop.billing.requestTrial('delivery-failed@example.test', true).catch(error => String(error.message)))
+  assert.match(failedDelivery, /could not be delivered/)
+  assert.equal((await page.evaluate(() => window.desktop.billing.status())).trialRequest.email,'third@example.test')
+  failDelivery = false
+  console.log('PASS  duplicate email has Change email, reset clears errors, repeated pre-activation changes work, failed delivery restores the old key')
 
   await page.getByRole('button', { name: 'Activate', exact: true }).click()
-  await page.locator('[data-license-notice="1"]').getByText('Enter your Nafran license key first.').waitFor()
+  await page.locator('[data-license-notice="1"]').getByText('Enter your MamaLead license key first.').waitFor()
   console.log('PASS  empty license shows a top error notice')
 
   await page.locator('#nafran-license-key').fill(sent[0].licenseKey)
@@ -95,13 +127,17 @@ try {
   await page.locator('[data-license-notice="1"]').getByText('Invalid license key. Check the key in your email and try again.').waitFor()
   console.log('PASS  replacement invalidates the key sent to the wrong email')
 
-  await page.locator('#nafran-license-key').fill(sent[1].licenseKey)
+  await page.locator('#nafran-license-key').fill(sent[2].licenseKey)
   await page.getByRole('button', { name: 'Activate', exact: true }).click()
   await page.locator('[data-license-notice="1"]').getByText('License activated on this machine.').waitFor()
   await page.getByText('1-day trial active on this machine', { exact: false }).waitFor({ timeout: 15_000 })
   const status = await page.evaluate(() => window.desktop.billing.status())
   assert.equal(status.trial?.active, true)
   assert.equal(status.license?.kind, 'trial')
+  assert.equal(status.trialRequest.canChangeEmail, false)
+  const usedTrialChange = await page.evaluate(() => window.desktop.billing.requestTrial('used-trial@example.test', true).catch(error => String(error.message)))
+  assert.match(usedTrialChange,/already activated or closed/)
+  assert.equal(sent.length,3)
   console.log('PASS  emailed key activates the 24-hour trial on this device')
 
   await page.evaluate(() => { window.__trialTestDoneRunId = ''; window.desktop.scraper.onDone((summary) => { window.__trialTestDoneRunId = summary.runId }) })
@@ -126,7 +162,7 @@ try {
   await page.waitForFunction((runId) => window.__trialTestDoneRunId === runId, secondRun.runId)
   console.log('PASS  another keyword shares the same 300-lead allowance')
 
-  const trialRow = service.db.prepare('select id, bound_installation_id from trial_licenses limit 1').get()
+  const trialRow = service.db.prepare('select id, bound_installation_id from trial_licenses where bound_installation_id is not null limit 1').get()
   service.db.prepare('insert into trial_map_runs (id, trial_id, installation_id, reserved, delivered, lease_until, created_at) values (?, ?, ?, ?, ?, ?, ?)')
     .run('test-backfill', trialRow.id, trialRow.bound_installation_id, 290, 290, new Date(Date.now() + 60_000).toISOString(), new Date().toISOString())
   const cappedRun = await page.evaluate(() => window.desktop.scraper.start({

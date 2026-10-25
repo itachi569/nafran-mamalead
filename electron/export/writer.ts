@@ -158,7 +158,7 @@ function rowsFor(
   if (request.kind === 'people') {
     const ids = [...new Set(request.leadIds ?? [])]
     const leads = new Map(ids.map((id) => [id, repository.getLead(workspaceId, id)]))
-    const rows = ids.flatMap((id) => repository.listDecisionMakers(workspaceId, [id]))
+    const rows = repository.decisionMakerLedger(workspaceId).filter(person=>leads.has(person.lead_id))
       .filter((person) => leads.get(String(person.lead_id)))
       .map((person) => {
         const lead = leads.get(String(person.lead_id))!
@@ -168,6 +168,10 @@ function rowsFor(
       'Business name': (row) => text(row.name), Domain: LEAD_COLUMNS.Domain,
       'Decision maker': (row) => text(row.full_name), Role: (row) => text(row.title),
       Email: (row) => text(row.email), Phone: (row) => text(row.phone),
+      'Business emails': (row) => text(row.business_emails),
+      'Business phones': (row) => [...new Set([text(row.lead_phone), ...text(row.business_phones).split('\n')].filter(Boolean))].join('\n'),
+      'Business address': (row) => text(row.lead_address),
+      'Published social links': (row) => text(row.published_socials),
       LinkedIn: (row) => text(row.linkedin_url), Source: (row) => text(row.source),
       'Saved date': (row) => shortDate(row.created_at),
     }, rows }
@@ -175,7 +179,14 @@ function rowsFor(
 
   const rows = [] as ReturnType<Repository['listLeads']>['rows']
   const wanted = Math.max(0, request.limit)
-  while (rows.length < wanted) {
+  // Explicit selections must not fall back to the first N rows in the whole database.
+  if (request.leadIds !== undefined) {
+    for (const id of [...new Set(request.leadIds)].slice(0, wanted)) {
+      const lead = repository.getLead(workspaceId, id)
+      if (lead) rows.push(lead)
+    }
+  }
+  while (request.leadIds === undefined && rows.length < wanted) {
     const page = repository.listLeads(workspaceId, {
       limit: Math.min(500, wanted - rows.length),
       offset: rows.length,
@@ -295,7 +306,8 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
 
   table.values.forEach((values, index) => {
     const row = sheet.getRow(index + 5)
-    row.height = Math.min(60, Math.max(25, values.some((value) => value.length > 70) ? 42 : 25))
+    const wrappedLines = Math.max(1, ...values.map((value, column) => value.split(/\r?\n/).reduce((total, line) => total + Math.max(1, Math.ceil(line.length / Math.max(10, Number(sheet.getColumn(column + 1).width ?? 25) - 2))), 0)))
+    row.height = kind === 'people' ? Math.min(409, Math.max(30, wrappedLines * 14 + 10)) : Math.min(60, Math.max(25, values.some((value) => value.length > 70) ? 42 : 25))
     row.alignment = { vertical: 'middle', wrapText: true }
     row.font = { name: 'Aptos', size: 10, color: { argb: 'FF1C1C1C' } }
     row.eachCell((cell, columnNumber) => {
@@ -348,7 +360,58 @@ function pdfCellLines(value: string, font: PDFFont, size: number, width: number)
   return lines
 }
 
+/** People exports use labelled records so every address and URL stays readable and paginates. */
+async function buildPeoplePdf(table: ExportTable): Promise<Buffer> {
+  const pdf=await PDFDocument.create()
+  pdf.setTitle('MamaLead - Decision Makers');pdf.setAuthor('MamaLead')
+  const font=await pdf.embedFont(StandardFonts.Helvetica)
+  const bold=await pdf.embedFont(StandardFonts.HelveticaBold)
+  const logo=await pdf.embedJpg(readFileSync(logoAsset))
+  const width=842,height=595,margin=36,valueX=190,lineHeight=13
+  let y=0
+  const newPage=()=>{
+    const page=pdf.addPage([width,height])
+    page.drawRectangle({x:0,y:height-74,width,height:74,color:rgb(.11,.11,.11)})
+    page.drawText('mamalead',{x:margin,y:height-32,size:19,font:bold,color:rgb(1,1,1)})
+    page.drawText(`DECISION MAKERS | ${table.values.length} CONTACTS`,{x:margin,y:height-53,size:9,font,color:rgb(.78,.84,.73)})
+    page.drawImage(logo,{x:width/2-180,y:100,width:360,height:360,opacity:.055})
+    y=height-96
+    return page
+  }
+  let page=newPage()
+  const nameIndex=table.columns.indexOf('Decision maker')
+  const heading=(name:string,continued=false)=>{
+    page.drawRectangle({x:margin,y:y-27,width:width-margin*2,height:27,color:rgb(.78,.84,.73)})
+    page.drawText(pdfText(name+(continued?' (continued)':'')),{x:margin+10,y:y-18,size:11,font:bold,color:rgb(.11,.11,.11)})
+    y-=38
+  }
+  for(const [index,row] of table.values.entries()) {
+    const name=`${index+1}. ${row[nameIndex] || 'Named contact'}`
+    if(y<150)page=newPage()
+    heading(name)
+    for(const [column,value] of row.entries()) {
+      if(column===nameIndex)continue
+      const lines=(value || 'Not published').split(/\r?\n/).flatMap(part=>pdfCellLines(part,font,9,width-margin-valueX-12))
+      let offset=0
+      while(offset<lines.length) {
+        if(y<76){page=newPage();heading(name,true)}
+        const fit=Math.max(1,Math.floor((y-48)/lineHeight))
+        const chunk=lines.slice(offset,offset+fit)
+        const label=table.columns[column]+(offset?' (cont.)':'')
+        pdfCellLines(label,bold,8.5,valueX-margin-16).forEach((line,i)=>page.drawText(line,{x:margin,y:y-i*11,size:8.5,font:bold,color:rgb(.30,.34,.29)}))
+        chunk.forEach((line,i)=>page.drawText(line,{x:valueX,y:y-i*lineHeight,size:9,font,color:rgb(.12,.15,.13)}))
+        y-=Math.max(2,chunk.length)*lineHeight+5
+        offset+=chunk.length
+      }
+    }
+    y-=16
+  }
+  pdf.getPages().forEach((sheet,index)=>sheet.drawText(`mamalead | Decision Makers | Page ${index+1} of ${pdf.getPageCount()}`,{x:margin,y:20,size:8,font,color:rgb(.38,.43,.38)}))
+  return Buffer.from(await pdf.save())
+}
+
 async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
+  if(kind==='people')return buildPeoplePdf(table)
   const pdf = await PDFDocument.create()
   pdf.setTitle(`MamaLead - ${exportTitle(kind)}`)
   pdf.setAuthor('MamaLead')

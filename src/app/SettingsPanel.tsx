@@ -15,7 +15,6 @@ const button = { border: 0, borderRadius: '999px', padding: '9px 15px', backgrou
 
 export function SettingsPanel({ V }: { V: AppValues }) {
   const billingApi = window.desktop?.billing
-  const assistApi = window.desktop?.assist
   const [billing, setBilling] = useState<BillingStatus>({ configured: false, connected: false, message: 'Checking Stripe billing…' })
   const [invoices, setInvoices] = useState<BillingInvoice[]>([])
   const [billingBusy, setBillingBusy] = useState(false)
@@ -25,7 +24,9 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const [trialBusy, setTrialBusy] = useState(false)
   const [trialSent, setTrialSent] = useState(false)
   const [trialCorrecting, setTrialCorrecting] = useState(false)
-  const [trialCorrectionUsed, setTrialCorrectionUsed] = useState(false)
+  const [trialEmailConflict, setTrialEmailConflict] = useState(false)
+  const [trialChangeBlocked, setTrialChangeBlocked] = useState(false)
+  const [trialEmailReset, setTrialEmailReset] = useState(0)
   const [trialNotice, setTrialNotice] = useState('')
   const trialEmailInput = useRef<HTMLInputElement>(null)
   const [licenseStepNotice, setLicenseStepNotice] = useState('')
@@ -33,35 +34,36 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const licenseKeyInput = useRef<HTMLInputElement>(null)
   const [licenseBusy, setLicenseBusy] = useState(false)
   const [licenseNotice, setLicenseNotice] = useState<{ kind: 'error' | 'success'; message: string } | null>(null)
-  const [assistConfigured, setAssistConfigured] = useState(false)
-  const [assistBusy, setAssistBusy] = useState(false)
-  const [assistNote, setAssistNote] = useState('')
-  useEffect(() => {
-    if (!V.tabAcct || !assistApi?.status) return
-    void assistApi.status().then((status) => setAssistConfigured(status.configured))
-      .catch((error) => setAssistNote(error instanceof Error ? error.message : 'Nafran Assist status is unavailable.'))
-  }, [V.tabAcct, assistApi])
-  const testAssist = async () => {
-    if (!assistApi?.test) return
-    setAssistBusy(true)
-    setAssistNote('Checking the AI connection…')
-    try {
-      const result = await assistApi.test()
-      setAssistNote(`Nafran Assist is working on this device (${result.model}).`)
-    } catch (error) { setAssistNote(error instanceof Error ? error.message : 'Nafran Assist could not connect.') }
-    finally { setAssistBusy(false) }
-  }
   useEffect(() => {
     if (!licenseNotice) return
     const timer = window.setTimeout(() => setLicenseNotice(null), 6000)
     return () => window.clearTimeout(timer)
   }, [licenseNotice])
+  useEffect(() => {
+    const jump = V.billingJump
+    if (!jump || (jump.target === 'license' ? !V.tabAcct : !V.tabPlan)) return
+    if (jump.target === 'trial' && !trialOpen) { setTrialOpen(true); return }
+    // Billing cards arrive asynchronously. Keep the requested destination until it exists.
+    const section = document.getElementById(`${jump.target}-section`)
+    if (!section) return
+    const timer = window.setTimeout(() => {
+      section.scrollIntoView({behavior:'smooth',block:jump.target === 'lifetime' ? 'start' : 'center'})
+      const focus = jump.target === 'trial' ? trialEmailInput.current : jump.target === 'license' ? licenseKeyInput.current : section.querySelector<HTMLElement>('[data-lifetime-buy]:not(:disabled)') ?? section
+      focus?.focus({preventScroll:true})
+      V.clearBillingJump()
+    },150)
+    return () => window.clearTimeout(timer)
+  },[V.billingJump,V.tabPlan,V.tabAcct,V.clearBillingJump,billing.connected,billing.lifetime,trialOpen])
   const refreshBilling = useCallback(async () => {
     setBillingError('')
     if (!billingApi) return setBilling({ configured: false, connected: false, message: 'Desktop billing bridge is unavailable.' })
     try {
       const status = await billingApi.status()
       setBilling(status)
+      if (status.trialRequest) {
+        setTrialSent(status.trialRequest.requested)
+        setTrialChangeBlocked(status.trialRequest.requested && !status.trialRequest.canChangeEmail)
+      }
       window.dispatchEvent(new Event('nafran:billing-updated'))
       return status
     }
@@ -104,11 +106,11 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     if (V.tabAcct && (licenseStepNotice || V.licenseNextStep)) licenseKeyInput.current?.focus()
   }, [V.tabAcct, V.licenseNextStep, licenseStepNotice])
   useEffect(() => {
-    if (V.tabPlan && trialOpen && trialCorrecting) {
+    if (V.tabPlan && trialOpen && trialEmailReset) {
       trialEmailInput.current?.focus()
       trialEmailInput.current?.select()
     }
-  }, [V.tabPlan, trialOpen, trialCorrecting])
+  }, [V.tabPlan, trialOpen, trialEmailReset])
   useEffect(() => {
     if (!V.tabInv || !billing.connected || !billing.hasCustomer || !billingApi) return
     let active = true
@@ -158,7 +160,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const activateLicense = async () => {
     const key = licenseKey.trim()
     if (!key) {
-      setLicenseNotice({ kind: 'error', message: 'Enter your Nafran license key first.' })
+      setLicenseNotice({ kind: 'error', message: 'Enter your MamaLead license key first.' })
       return
     }
     if (!billingApi) {
@@ -183,35 +185,54 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       const message = error instanceof Error ? error.message : 'License could not be activated.'
       setLicenseNotice({
         kind: 'error',
-        message: /invalid|revoked|exactly as it appears|valid Nafran license key/i.test(message)
+        message: /invalid|revoked|exactly as it appears|valid MamaLead license key/i.test(message)
           ? 'Invalid license key. Check the key in your email and try again.'
           : message,
       })
     }
     finally { setLicenseBusy(false) }
   }
+  const changeTrialEmail = () => {
+    setTrialCorrecting(billing.trialRequest?.requested ?? trialSent)
+    setTrialEmail('')
+    setTrialNotice('')
+    setTrialEmailConflict(false)
+    setLicenseStepNotice('')
+    V.clearLicenseNextStep()
+    setTrialOpen(true)
+    setTrialEmailReset(value => value + 1)
+    V.goTabPlan()
+    window.setTimeout(() => document.getElementById('trial-section')?.scrollIntoView({ behavior:'smooth', block:'center' }), 150)
+  }
   const requestTrial = async () => {
-    if (!billingApi) return
+    if (!billingApi || trialBusy) return
+    const email = trialEmail.trim().toLowerCase()
+    const replacing = trialCorrecting || Boolean(billing.trialRequest?.requested && billing.trialRequest.canChangeEmail)
     setTrialBusy(true)
     setTrialNotice('')
     try {
-      const result = await billingApi.requestTrial(trialEmail, trialCorrecting)
+      const result = await billingApi.requestTrial(email, replacing)
       if (!result.emailSent) throw new Error('Trial email could not be delivered. Please try again.')
-      if (trialCorrecting) setTrialCorrectionUsed(true)
       setTrialCorrecting(false)
+      setTrialEmailConflict(false)
       setTrialSent(true)
       setTrialOpen(false)
-      setTrialNotice(`Trial key sent to ${trialEmail.trim()}. Open that email, then enter the key in Account. Your 24 hours start when you activate it.`)
-      setLicenseStepNotice(`Trial key sent to ${trialEmail.trim()}. Paste it below when the email arrives. Your 24 hours start when you activate it.${trialCorrecting ? ' The previous key is no longer valid.' : ''}`)
+      setTrialNotice(`Trial key sent to ${email}. Open that email, then enter the key in Account. Your 24 hours start when you activate it.`)
+      setLicenseStepNotice(`Trial key sent to ${email}. Paste it below when the email arrives. Your 24 hours start when you activate it.${replacing ? ' The previous key is no longer valid.' : ''}`)
+      await refreshBilling()
       V.goTabAcct()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Trial key could not be requested.'
-      if (!trialCorrecting && message.includes('already been requested')) {
-        setTrialSent(true)
+      const message = (error instanceof Error ? error.message : 'Trial key could not be requested.').replace(/^Error invoking remote method '[^']+': (?:Error:\s*)?/i, '')
+      if (/already been requested|already received its one trial key/i.test(message)) {
+        if (/or browser|or device|already received/i.test(message)) setTrialSent(true)
+        setTrialEmailConflict(true)
+        setTrialOpen(true)
+        setTrialNotice('A trial key has already been requested. Use the key from your email, or choose Change email to enter a different address before activation.')
+      } else if (/can no longer be changed|already activated or closed/i.test(message)) {
+        setTrialChangeBlocked(true)
+        setTrialCorrecting(false)
         setTrialOpen(false)
-        setTrialNotice('A trial key was already requested for this email or device. Check the original email, then enter the key in Account.')
-        setLicenseStepNotice('A trial key was already requested. Check your original email and paste that key below.')
-        V.goTabAcct()
+        setTrialNotice('This device’s trial email cannot be changed. Use your existing key or contact support if you cannot access it. Changing email does not restart an activated trial.')
       } else setTrialNotice(message)
     } finally { setTrialBusy(false) }
   }
@@ -256,7 +277,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
               <span className="billing-status-pill">{billing.lifetime.active ? 'Purchased' : lifetimePlanReady ? 'Not purchased' : 'PKR setup pending'}</span>
             </div>
             {paymentSetupMessage && <p data-checkout-setup-alert="1" role="status" className="billing-setup-alert">{paymentSetupMessage}</p>}
-            <div className="billing-offer">
+            <div id="lifetime-section" tabIndex={-1} className="billing-offer" style={{scrollMarginTop:24}}>
               <div className="billing-offer-top"><span className="billing-offer-badge"><span aria-hidden="true" className="billing-offer-dot" />LIFETIME ACCESS</span><span>Unlimited lookups · first 30 days of Decision Makers included</span></div>
               <div className="billing-offer-body">
                 <div className="billing-offer-price-block">
@@ -283,15 +304,16 @@ export function SettingsPanel({ V }: { V: AppValues }) {
                 {decisionActive && billing.decisionMaker?.renewsAt && <p className="billing-plan-note">{billing.decisionMaker.status === 'included' ? 'Included access ends' : 'Current pass ends'} {new Date(billing.decisionMaker.renewsAt).toLocaleDateString()}. {billing.decisionMaker.monthlyRemaining} searches remain.</p>}
                 {!decisionActive && <p className="billing-plan-note">{V.decisionPrompt || (billing.license?.kind === 'lifetime' ? 'Your lifetime key includes 1,000 searches for the first 30 days. When those searches or 30 days end, buy another pass to continue.' : 'Pay securely in Stripe. This app unlocks your 1,000 Decision Maker searches after payment is verified; no separate key is emailed.')} Each pass is paid manually; there is no automatic renewal.{!decisionPlanSupported ? ' Billing connection is unavailable right now; Subscribe will show the connection error.' : ''}</p>}
               </div>
-              <div className="billing-plan-card">
+              <div id="trial-section" className="billing-plan-card">
                 <div className="billing-plan-heading"><h3>1-day trial · up to 300 Maps leads across all keywords</h3>{billing.trial?.active && <span className="billing-plan-pill">Active</span>}</div>
                 <div className="billing-plan-action"><strong>Free</strong>{billing.trial?.active ? <span className="billing-plan-date">Until {new Date(billing.trial.expiresAt!).toLocaleString()}</span> : trialSent ? <button type="button" onClick={V.goTabAcct}>Enter key in Account</button> : <button type="button" data-trial-open="1" disabled={trialBusy} onClick={() => setTrialOpen(true)}>Get 1-day trial key</button>}</div>
                 {billing.trial?.active && billing.mapsLeads?.limit != null ? <p data-trial-maps-usage="1" className="billing-plan-note">{billing.mapsLeads.used ?? 0} of {billing.mapsLeads.limit} Maps leads used · {billing.mapsLeads.remaining ?? 0} remaining.</p> : <p className="billing-plan-note">Enter your email, receive a trial key, then activate it in Account. The 24 hours start at activation.</p>}
-                {!billing.trial?.active && trialOpen && (!trialSent || trialCorrecting) && <form data-trial-form="1" className="billing-trial-form" onSubmit={(event) => { event.preventDefault(); void requestTrial() }}>
-                  <label htmlFor="desktop-trial-email">{trialCorrecting ? 'Correct email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" ref={trialEmailInput} type="email" autoComplete="email" required value={trialEmail} onChange={(event) => setTrialEmail(event.target.value)} placeholder="you@example.com" /></label>
-                  <button type="submit" disabled={trialBusy}>{trialBusy ? 'Sending…' : trialCorrecting ? 'Send replacement key' : 'Email my 1-day key'}</button>
+                {!billing.trial?.active && !trialChangeBlocked && trialOpen && <form data-trial-form="1" className="billing-trial-form" onSubmit={(event) => { event.preventDefault(); void requestTrial() }}>
+                  <label htmlFor="desktop-trial-email">{trialCorrecting ? 'New email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" ref={trialEmailInput} type="email" autoComplete="email" required disabled={trialBusy} value={trialEmail} onChange={(event) => { setTrialEmail(event.target.value); setTrialNotice(''); setTrialEmailConflict(false) }} placeholder="you@example.com" /></label>
+                  <button type="submit" disabled={trialBusy} style={{ ...button, background: "#1C1C1C", color: "white", padding: "13px 22px", fontWeight: 600 }}>{trialBusy ? 'Sending…' : trialCorrecting ? 'Send replacement key' : 'Send trial key'}</button>
                 </form>}
                 {trialNotice && <p data-trial-notice="1" role="status" className="billing-plan-note">{trialNotice}</p>}
+                {(trialSent || trialEmailConflict) && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={button}>Change email</button>}
               </div>
             </div>
           </section>}
@@ -334,11 +356,11 @@ export function SettingsPanel({ V }: { V: AppValues }) {
         {V.tabPay && <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Payment</h2><p style={muted}>{billing.connected ? 'Your lifetime purchase and payment method are managed securely on Stripe.' : 'Connect the billing server to manage Stripe payments.'}</p>{billing.hasCustomer ? <button type="button" disabled={billingBusy || !billingApi} onClick={() => void openBilling(() => billingApi!.portal())} style={button}>Open Stripe billing portal</button> : <div style={row}>No Stripe customer connected to this installation.</div>}</section>}
         {V.tabInv && <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Invoices</h2><p style={muted}>Invoices shown here come from Stripe for this installation.</p>{invoices.length ? <ul style={{ listStyle: 'none', padding: 0 }}>{invoices.map((invoice) => <li key={invoice.id} style={row}><span style={{ flex: 1 }}>{invoice.number || invoice.id} · {invoice.issued}</span><strong>{money(invoice.total, invoice.currency)}</strong><span>{invoice.status}</span>{invoice.url && <button type="button" onClick={() => void openBilling(() => billingApi!.openInvoice(invoice.url))} style={button}>Open invoice</button>}</li>)}</ul> : <div style={row}>No invoices found in Stripe.</div>}</section>}
         {V.tabAcct && <>
-          <section data-card="1" style={card}>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Nafran license</h2>
+          <section id="license-section" data-card="1" style={card}>
+            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>MamaLead license</h2>
             <p style={muted}>{billing.license?.active ? `${billing.license.kind === 'trial' ? '1-day trial' : billing.license.kind === 'decision' ? billing.license.last4 ? 'Decision Makers key' : 'Decision Makers pass' : 'Lifetime license'} active on this machine${billing.license.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license.email ? ` · ${billing.license.email}` : ''}.` : 'Paste a trial or lifetime key from your email to unlock this machine. Decision Makers passes activate automatically after payment in this app.'}</p>
             {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" style={{ ...muted, margin: '10px 0', color: '#315F2D' }}>{licenseStepNotice || V.licenseNextStep}</p>}
-            {trialSent && !trialCorrectionUsed && !billing.trial?.active && <button type="button" data-trial-change-email="1" onClick={() => { setTrialCorrecting(true); setTrialOpen(true); setTrialNotice(''); V.goTabPlan() }} style={{ ...button, marginBottom: '10px' }}>Wrong email? Change it</button>}
+            {trialSent && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={{ ...button, marginBottom: '10px' }}>Change email</button>}
             <form onSubmit={(event) => { event.preventDefault(); void activateLicense() }} style={row}><label htmlFor="nafran-license-key">License key</label><input id="nafran-license-key" ref={licenseKeyInput} type="password" value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value); setLicenseNotice(null) }} autoComplete="off" placeholder="NF-XXXX-XXXX-…" style={{ flex: '1 1 280px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button type="submit" disabled={licenseBusy} style={button}>{licenseBusy ? 'Activating…' : 'Activate'}</button></form>
           </section>
           <section data-card="1" style={card}>
@@ -347,21 +369,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             <div style={row}><span>Time zone</span><strong style={{ marginLeft: 'auto' }}>{V.localTimeZone}</strong></div>
             <div style={row}><span>Data location</span><span style={{ marginLeft: 'auto', overflowWrap: 'anywhere' }}>{V.localDataPath}</span></div>
             <div style={row}><span>Session</span><span style={{ marginLeft: 'auto' }}>Local workspace on this device</span></div>
-          </section>
-          <section data-card="1" style={card}>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Enrichment keys</h2>
-            <div style={row}><label htmlFor="deep-key">DataForSEO key</label><span>{V.deepKeyLabel}</span><input id="deep-key" data-deepkey="1" type="password" aria-label="DataForSEO API key" value={V.deepKeyDraft} onInput={V.onDeepKeyInput} autoComplete="off" style={{ width: '100%', padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button data-deepsave="1" type="button" onClick={V.saveDeepKey} style={button}>Save</button><button data-deeptest="1" type="button" onClick={V.testDeepKey} style={button}>Test</button><span data-deepnote="1" style={muted}>{V.deepKeyNote}</span></div>
-            <div style={row}><span>LeadsAngel SMTP licence</span><span data-leadsangel-status="1">{V.leadsAngelLabel}</span><button data-leadsangel-import="1" type="button" onClick={V.importLeadsAngelZip} style={button}>Import ZIP</button>{V.leadsAngelConfigured && <button data-leadsangel-remove="1" type="button" onClick={V.removeLeadsAngel} style={button}>Remove</button>}</div>
-          </section>
-          <section data-card="1" data-assist-settings="1" style={card}>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Nafran Assist</h2>
-            <p style={muted}>{assistConfigured ? 'Nafran Assist connects through the MamaLead server. No personal API key is needed.' : 'Server AI is currently unavailable. Connect to the internet and try again.'}</p>
-            <p style={muted}>Includes 5 setup-help messages per device. Active trials receive 25 messages per day; active paid plans receive 100 per day, shared across the licence. Daily allowances reset at 00:00 UTC.</p>
-            <p style={muted}>Your chat messages and a limited workspace summary are sent through our server to the AI provider. Lead records are not included automatically.</p>
-            <div style={row}>
-              <button type="button" disabled={assistBusy} onClick={() => void testAssist()} style={button}>Check AI connection</button>
-            </div>
-            {assistNote && <p data-assist-settings-note="1" role="status" style={muted}>{assistNote}</p>}
           </section>
           <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>App updates</h2><p style={muted}>{V.updateMessage}</p>{V.updateVersion && <p style={muted}>Version {V.updateVersion}</p>}<button type="button" onClick={V.runUpdateAction} disabled={V.updateActionDisabled === '1'} style={button}>{V.updateActionLabel}</button></section>
           <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Your data</h2><p style={muted}>Export your saved leads and lists from this device.</p><button type="button" onClick={V.openExpAll} style={button}>Export everything</button></section>

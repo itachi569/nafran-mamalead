@@ -52,7 +52,7 @@ export function buildLicenseEmail({ to, licenseKey, kind, download }) {
     if (!(key in replacements)) throw new Error(`Unknown email template field: ${key}`)
     return escapeHtml(replacements[key])
   })
-  const text = `Hey ${name},\n\n${intro}\n\nYour license key: ${licenseKey}\n\nDownload Leads Scraper: ${download}\nOpen Settings & Billing → Account, paste the key, and choose Activate.\n\n${features.join('\n')}\n\nKeep your key private.\n`
+  const text = `Hey ${name},\n\n${intro}\n\nYour license key: ${licenseKey}\n\nDownload MamaLead: ${download}\nOpen Settings & Billing → Account, paste the key, and choose Activate.\n\n${features.join('\n')}\n\nKeep your key private.\n`
   return {
     subject, html, text,
     attachments: [{ filename: 'mamalead-logo.png', content: logo, content_type: 'image/png', content_id: 'mamalead-logo' }],

@@ -115,6 +115,8 @@ export interface PhoneSummary {
 
 /** A lead created by a website import, with what the enrichment pass has filled in so far. */
 export interface ImportedLead {
+  enrichment_status: string | null
+  last_scanned_at: string | null
   id: string
   name: string
   website: string
@@ -125,6 +127,7 @@ export interface ImportedLead {
 }
 
 export interface DecisionMakerRow {  id: string
+  source: string
   lead_id: string
   full_name: string
   title: string
@@ -135,6 +138,11 @@ export interface DecisionMakerRow {  id: string
   lead_name: string
   lead_website: string
   lead_area: string
+  lead_address: string
+  lead_phone: string
+  business_emails: string
+  business_phones: string
+  published_socials: string
 }
 
 /** How many leads got as far as a social page, and how many produced a person. */
@@ -559,6 +567,7 @@ export interface DashboardTotals {
   withSocial: number
   withContact: number
   decisionMakers: number
+  decisionMakerPeople: number
   enriched: number
   exportReady: number
   noEmail: number
@@ -636,13 +645,15 @@ export class Repository {
       const known = this.db.prepare(
         `select id, phone, website from leads where workspace_id = ? and place_ref <> '' and place_ref = ?`,
       )
+      const linkRun = this.db.prepare('insert or ignore into scrape_run_leads (run_id, lead_id) values (?, ?)')
 
       for (const lead of summary.leads) {
         if (!lead.name) continue
         const capturedAt = lead.capturedAt ?? nowIso()
         const score = lead.score ?? scoreLead(lead)
+        const leadId = randomUUID()
         const changes = insert.run(
-          randomUUID(),
+          leadId,
           workspaceId,
           runId,
           lead.name,
@@ -665,6 +676,7 @@ export class Repository {
           capturedAt,
         )
         if (changes > 0) {
+          linkRun.run(runId, leadId)
           saved += 1
           continue
         }
@@ -672,6 +684,7 @@ export class Repository {
         // a re-run improves an existing row instead of ignoring it.
         const existing = known.get<{ id: string; phone: string; website: string }>(workspaceId, lead.placeRef ?? '')
         if (!existing) continue
+        linkRun.run(runId, existing.id)
         if (!existing.phone && lead.phone) {
           this.db.run('update leads set phone = ? where id = ?', [lead.phone, existing.id])
         }
@@ -734,7 +747,7 @@ export class Repository {
     const where = ['l.workspace_id = ?']
     const params: unknown[] = [workspaceId]
     if (options.runId) {
-      where.push('l.run_id = ?')
+      where.push('exists (select 1 from scrape_run_leads rl where rl.lead_id = l.id and rl.run_id = ?)')
       params.push(options.runId)
     }
     const search = options.search?.trim().toLowerCase()
@@ -803,6 +816,11 @@ export class Repository {
    * read" outlives the pass that read it — a scan finished yesterday still counts — so it is kept
    * on the lead rather than in the page's memory.
    */
+  fillLeadAddress(leadId: string, addresses: string[]): void {
+    const address=Array.from(new Set(addresses)).join(' | ')
+    if(address) this.db.run("update leads set address = ? where id = ? and (address is null or trim(address) = '')", [address, leadId])
+  }
+
   markLeadScanned(leadId: string): void {
     this.db.run('update leads set last_scanned_at = ? where id = ?', [nowIso(), leadId])
   }
@@ -822,7 +840,8 @@ export class Repository {
     const total = count(`select count(*) as n from leads l where ${scope}`)
 
     const withWebsite = count(`select count(*) as n from leads l where ${scope} and l.website <> ''`)
-    const withPhone = count(`select count(*) as n from leads l where ${scope} and l.phone <> ''`)
+    const withPhone = count(`select count(*) as n from leads l where ${scope} and
+      (l.phone <> '' or exists (select 1 from lead_contacts c where c.lead_id=l.id and c.kind='phone'))`)
     const withEmail = count(`select count(*) as n from leads l where ${scope}
       and exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email')`)
     const withSocial = count(`select count(*) as n from leads l where ${scope}
@@ -832,6 +851,8 @@ export class Repository {
         or exists (select 1 from social_profiles s where s.lead_id = l.id))`)
     const decisionMakers = count(`select count(*) as n from leads l where ${scope}
       and exists (select 1 from decision_makers d where d.lead_id = l.id)`)
+    const decisionMakerPeople = count(`select count(*) as n from decision_makers d
+      join leads l on l.id = d.lead_id where ${scope} and trim(d.full_name) <> ''`)
 
     // "Enriched" is a lead with more than the Maps listing: a website plus something found on it.
     const enriched = count(
@@ -881,6 +902,7 @@ export class Repository {
       withSocial,
       withContact,
       decisionMakers,
+      decisionMakerPeople,
       enriched,
       exportReady,
       noEmail: Math.max(0, withWebsite - withEmail),
@@ -1022,8 +1044,12 @@ export class Repository {
    */
   decisionMakerLedger(workspaceId: string): DecisionMakerRow[] {
     return this.db.query<DecisionMakerRow>(
-      `select d.id, d.lead_id, d.full_name, d.title, d.email, d.phone, d.linkedin_url, d.created_at,
-              l.name as lead_name, l.website as lead_website, l.area as lead_area, l.last_scanned_at
+        `select d.id, d.lead_id, d.full_name, d.title, d.email, d.phone, d.linkedin_url, d.source, d.created_at,
+              l.name as lead_name, l.website as lead_website, l.area as lead_area, l.last_scanned_at,
+              l.address as lead_address, l.phone as lead_phone,
+              coalesce((select group_concat(c.value, char(10)) from lead_contacts c where c.lead_id=l.id and c.kind='email'), '') as business_emails,
+              coalesce((select group_concat(c.value, char(10)) from lead_contacts c where c.lead_id=l.id and c.kind='phone'), '') as business_phones,
+              coalesce((select group_concat(s.profile_url, char(10)) from social_profiles s where s.lead_id=l.id), '') as published_socials
        from decision_makers d
        join leads l on l.id = d.lead_id
        where d.workspace_id = ?
@@ -2234,7 +2260,8 @@ export class Repository {
   importLedger(workspaceId: string): { batches: Record<string, unknown>[]; leads: ImportedLead[] } {
     const batches = this.listImports(workspaceId)
     const leads = this.db.query<ImportedLead>(
-      `select l.id, l.name, l.website, l.phone, l.captured_at,
+      `select l.id, l.name, l.website, l.phone, l.captured_at, l.last_scanned_at,
+                (select j.status from enrichment_jobs j where j.workspace_id=l.workspace_id and j.kind='website' and exists (select 1 from json_each(j.lead_ids) ids where ids.value=l.id) order by j.created_at desc, j.rowid desc limit 1) as enrichment_status,
               case when exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email') then 1 else 0 end as has_email,
               case when exists (select 1 from social_profiles s where s.lead_id = l.id) then 1 else 0 end as has_social
        from leads l

@@ -85,7 +85,7 @@ export function layout(): void {
 
   gridColumns('[data-hero]', width < 1080, 'minmax(0,1.7fr) minmax(0,1fr)')
   gridColumns('[data-setup]', width < 780, 'minmax(0,1.05fr) minmax(0,1fr)')
-  gridColumns('[data-results]', width < 1080, 'minmax(0,2fr) minmax(0,1fr)')
+  gridColumns('[data-results]', true, 'minmax(0,1fr)')
   gridColumns('[data-settings]', width < 940, '246px minmax(0,1fr)')
   gridColumns('[data-socialtop]', width < 1080, 'minmax(0,1.5fr) minmax(0,1fr)')
   gridColumns('[data-podium]', width < 1080, 'minmax(0,1.6fr) minmax(0,1fr)')

@@ -12,6 +12,8 @@
 export interface ScraperSettings {
   /** Show the Chromium window while scraping instead of running it headless. */
   visible: boolean
+  /** Version of the explicit browser choice in the pre-run dialog. */
+  windowChoiceVersion?: number
   /** Seconds to wait between visiting each place, as a slowest/fastest pair. */
   paceMinSeconds: number
   paceMaxSeconds: number
@@ -35,9 +37,10 @@ export interface ScraperSettings {
 
 /** The pacing the scraper has always used, in seconds. */
 export const DEFAULT_SCRAPER_SETTINGS: ScraperSettings = {
-  visible: false,
-  paceMinSeconds: 1,
-  paceMaxSeconds: 2,
+  visible: true,
+  windowChoiceVersion: 1,
+  paceMinSeconds: 3,
+  paceMaxSeconds: 3,
   browserPath: '',
   googleProfile: false,
 }
@@ -62,7 +65,10 @@ export function readScraperSettings(): ScraperSettings {
     const paceMinSeconds = clampSeconds(parsed.paceMinSeconds, DEFAULT_SCRAPER_SETTINGS.paceMinSeconds)
     const paceMaxSeconds = clampSeconds(parsed.paceMaxSeconds, DEFAULT_SCRAPER_SETTINGS.paceMaxSeconds)
     return {
-      visible: parsed.visible === true,
+      // Old installs silently defaulted to hidden. Start the new dialog with its window
+      // enabled once; subsequent explicit choices (including background scans) persist.
+      visible: parsed.windowChoiceVersion === 1 ? parsed.visible !== false : true,
+      windowChoiceVersion: 1,
       paceMinSeconds,
       // The pair has to stay ordered, or the random wait is built from an inverted range.
       paceMaxSeconds: Math.max(paceMinSeconds, paceMaxSeconds),

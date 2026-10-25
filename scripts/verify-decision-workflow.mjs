@@ -54,8 +54,12 @@ const fixture = createServer((req, res) => {
   res.setHeader('content-type', 'text/html')
   const name = req.url.split('/')[1]
   if (name === 'alpha' && req.url.endsWith('/team')) {
-    res.end(`<html><body><h1>Team</h1><script type="application/ld+json">{"@type":"Person","name":"Alice Morgan","jobTitle":"Chief Executive Officer","email":"alice@alpha.example.test","telephone":"+441615551234","sameAs":["https://www.linkedin.com/in/alice-morgan-example/"]}</script><h2>Ben Carter</h2><p>COO</p><h2>Clara Stone</h2><p>Founder</p></body></html>`)
-  } else if (name === 'alpha') res.end('<html><body><h1>Alpha</h1><a href="/team">Meet our team</a></body></html>')
+    res.end(`<html><body><h1>Our team</h1><a href="/professionals/alice-morgan">Alice Morgan</a><article><h2>Ben Carter</h2><h3>COO</h3><a href="mailto:ben@alpha.fixture.test">Email me</a><a href="tel:+441615551235">Direct phone</a><a href="https://www.linkedin.com/in/ben-carter-fixture/">LinkedIn</a></article><article><h2>Clara Stone</h2><p>Founder</p></article><footer><a href="mailto:info@alpha.fixture.test">Email us</a></footer></body></html>`)
+  } else if(name==='alpha' && req.url.includes('/professionals/alice-morgan')) {
+    res.end(`<html><body><script type="application/ld+json">{"@type":"ProfilePage","mainEntity":{"@type":"Person","name":"Alice Morgan","jobTitle":"Chief Executive Officer","email":"alice@alpha.fixture.test","telephone":"+441615551234","sameAs":["https://www.linkedin.com/in/alice-morgan-example/"]}}</script></body></html>`)
+  } else if(name==='alpha' && req.url.endsWith('/contact')) {
+    res.end(`<html><body><address>25 Clifton Road, Karachi, Pakistan</address><address>12 Main Street, Lahore, Pakistan</address><script type="application/ld+json">{"@type":"Organization","email":"office@alpha.fixture.test","telephone":"+922112345678"}</script></body></html>`)
+  } else if (name === 'alpha') res.end('<html><body><h1>Alpha</h1><a href="/team">Meet our team</a><a href="/contact">Contact us</a><a href="mailto:info@alpha.fixture.test">Email us</a><a href="https://www.facebook.com/alphafixture">Facebook</a><a href="https://www.instagram.com/alphafixture/">Instagram</a></body></html>')
   else if (name === 'old') res.end('<html><body><script type="application/ld+json">{"@type":"Person","name":"Previous Person","jobTitle":"Owner"}</script></body></html>')
   else res.end('<html><body><h1>No people published</h1></body></html>')
 })
@@ -75,7 +79,7 @@ try {
     globalThis.fetch = async (input, init) => {
       const url = new URL(String(input))
       if (url.origin === 'https://api.mamalead.com') return native(new URL(url.pathname + url.search, origin), init)
-      if (/^(old|alpha|empty)\.example\.test$/.test(url.hostname)) {
+      if (/^(old|alpha|empty)\.fixture\.test$/.test(url.hostname)) {
         const response = await native(`${fixtureOrigin}/${url.hostname.split('.')[0]}${url.pathname}`, init)
         Object.defineProperty(response, 'url', { value: url.href })
         return response
@@ -89,8 +93,10 @@ try {
   await page.waitForSelector('[data-view="dm"]')
   await page.evaluate(() => window.desktop.billing.checkout('decisionMaker', ''))
   checkoutSession.status = 'complete'; checkoutSession.payment_status = 'paid'
-  checkoutSession.customer = 'cus_decision'; checkoutSession.customer_details.email = 'decision@example.test'
+  checkoutSession.customer = 'cus_decision'; checkoutSession.customer_details.email = 'decision@fixture.test'
   await page.waitForFunction(async () => (await window.desktop.billing.status()).decisionMaker?.active)
+  await page.evaluate(()=>window.dispatchEvent(new Event('nafran:billing-updated')))
+  await page.waitForTimeout(800)
   await page.click('[data-view="dm"]')
   assert.equal(await page.locator('[data-person="1"]').count(), 0)
   console.log('PASS Decision Makers starts with no previous workspace contacts')
@@ -106,13 +112,30 @@ try {
     }, names, { timeout: 60000 })
     await page.waitForTimeout(650)
   }
-  await scan('old.example.test', ['Previous Person'])
-  await scan('alpha.example.test', ['Alice Morgan','Ben Carter','Clara Stone'])
+  await scan('old.fixture.test', ['Previous Person'])
+  await scan('alpha.fixture.test', ['Alice Morgan','Ben Carter','Clara Stone'])
   const resultCard = page.locator('section').filter({ has: page.locator('[data-fres="dm"]') })
   assert.equal(await resultCard.locator('[data-scanrow]').count(), 1)
   assert.ok(!(await page.locator('body').innerText()).includes('Previous Person'))
   assert.equal(await page.locator('[data-person="1"]').count(), 3)
   assert.ok(seenPages.includes('/alpha/team'))
+  assert.ok(seenPages.includes('/alpha/professionals/alice-morgan'))
+  assert.ok(seenPages.includes('/alpha/contact'))
+  const detailRows=await page.evaluate(()=>window.desktop.local.people.ledger())
+  const ben=detailRows.find(person=>person.full_name==='Ben Carter')
+  const clara=detailRows.find(person=>person.full_name==='Clara Stone')
+  assert.equal(ben.email,'ben@alpha.fixture.test')
+  assert.equal(ben.phone.replace(/\s/g,''),'+441615551235')
+  assert.equal(ben.linkedin_url,'https://www.linkedin.com/in/ben-carter-fixture/')
+  assert.equal(clara.email,'');assert.equal(clara.phone,'')
+  assert.ok(ben.business_emails.includes('info@alpha.fixture.test'))
+  assert.ok(ben.business_emails.includes('office@alpha.fixture.test'))
+  assert.ok(ben.business_phones.includes('+922112345678'))
+  assert.ok(ben.lead_address.includes('25 Clifton Road') && ben.lead_address.includes('12 Main Street'))
+  assert.ok(ben.published_socials.includes('facebook.com/alphafixture') && ben.published_socials.includes('instagram.com/alphafixture'))
+  for(const text of ['25 Clifton Road','12 Main Street','info@alpha.fixture.test','+922112345678','facebook.com/alphafixture']) assert.ok((await resultCard.innerText()).includes(text),text)
+  console.log('PASS direct person and general website contacts, two office addresses, Facebook/Instagram/LinkedIn persist and display; no shared footer contacts attributed to Clara')
+
   const headingTop = await page.locator('[data-fres="dm"]').evaluate((el) => el.getBoundingClientRect().top)
   const toolbarBottom = await page.locator('[data-socbar="1"]').evaluate((el) => el.getBoundingClientRect().bottom)
   assert.ok(headingTop >= toolbarBottom && headingTop < 600, `People Found top: ${headingTop}; toolbar bottom: ${toolbarBottom}`)
@@ -127,7 +150,7 @@ try {
   await search.fill('no-such-person-xyz')
   await page.waitForFunction(() => document.querySelectorAll('[data-person="1"]').length === 0)
   assert.equal(await resultCard.locator('[data-scanrow]').count(),0)
-  await search.fill('alpha.example.test')
+  await search.fill('alpha.fixture.test')
   await page.waitForFunction(() => document.querySelectorAll('[data-person="1"]').length === 3)
   await search.fill('')
   console.log('PASS Decision Makers search after import: person, role, business/domain, no match and clear')
@@ -162,10 +185,11 @@ try {
   assert.equal(await page.locator('[data-person="1"]').count(), 0)
   const workbook = new ExcelJS.Workbook(); await workbook.xlsx.readFile(xlsxPath)
   const values = JSON.stringify(workbook.worksheets[0].getSheetValues())
-  for (const value of ['Alice Morgan','Ben Carter','Clara Stone','alice@alpha.example.test','+441615551234','https://www.linkedin.com/in/alice-morgan-example/']) assert.ok(values.includes(value), value)
+  for (const value of ['Alice Morgan','Ben Carter','Clara Stone','alice@alpha.fixture.test','+441615551234','https://www.linkedin.com/in/alice-morgan-example/']) assert.ok(values.includes(value), value)
+  for(const value of ['Business address','Published social links','25 Clifton Road','12 Main Street','info@alpha.fixture.test','+922112345678','facebook.com/alphafixture','instagram.com/alphafixture','ben@alpha.fixture.test'])assert.ok(values.includes(value),value)
   assert.ok(!values.includes('Previous Person'))
   console.log('PASS branded Excel includes all current people and published contact fields; scan resets after save')
-  await scan('alpha.example.test', ['Alice Morgan','Ben Carter','Clara Stone'])
+  await scan('alpha.fixture.test', ['Alice Morgan','Ben Carter','Clara Stone'])
   await page.screenshot({ path: join(reportDir, 'people-found.png') })
   const pdfPath = join(reportDir, 'decision-makers.pdf')
   await desktop.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }) }, pdfPath)
@@ -177,7 +201,7 @@ try {
   assert.equal(saved.filter((person) => person.full_name === 'Alice Morgan').length, 1)
   console.log('PASS branded PDF saves, view resets, previous and current contacts stay safely in the database')
   await page.locator('[data-socbar="1"]').getByRole('button', { name: 'Import websites', exact: true }).click()
-  await page.locator('[data-imptext="1"]').fill('empty.example.test')
+  await page.locator('[data-imptext="1"]').fill('empty.fixture.test')
   await page.locator('[data-socimpgo="1"]').click()
   await page.waitForFunction(async () => {
     return (await window.desktop.local.jobs.covered('decision-maker', ['done'])).length === 3

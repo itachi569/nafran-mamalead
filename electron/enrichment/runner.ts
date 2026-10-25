@@ -274,7 +274,7 @@ export class EnrichmentRunner {
           ? this.enricher.inspectPeople(lead.website, signal)
         : kind === 'email' || kind === 'phone'
           ? this.enricher.inspectContactFast(lead.website, signal)
-          : this.enricher.inspect(lead.website, signal)
+          : this.enricher.inspectContactFast(lead.website, signal)
       const findings = await waitForAbort(inspect, signal)
       // Social scans deliberately stay on the bounded HTTP path. Falling back to Chromium after a
       // 403/timeout brings back the long modal that this foreground pass is meant to avoid; the
@@ -285,8 +285,9 @@ export class EnrichmentRunner {
         continue
       }
 
+      this.repository.fillLeadAddress(leadId, findings.addresses ?? [])
       // Email and website jobs both fill addresses; social fills profiles; phone fills numbers.
-      if (kind === 'email' || kind === 'website') {
+      if (kind === 'email' || kind === 'website' || kind === 'decision-maker') {
         for (const email of findings.emails) {
           this.repository.upsertContact({
             leadId,
@@ -304,16 +305,16 @@ export class EnrichmentRunner {
         }
       }
 
-      if (kind === 'phone') {
+      if (kind === 'phone' || kind === 'website' || kind === 'decision-maker') {
         for (const phone of findings.phones) {
           // The Maps listing usually wins; only fill a gap.
-          if (lead.phone) break
+          if (lead.phone && kind !== 'decision-maker') break
           this.repository.upsertContact({ leadId, kind: 'phone', value: phone.value, source: phone.page || 'website', verified: false })
           found += 1
         }
       }
 
-      if (kind === 'social') {
+      if (kind === 'social' || kind === 'website' || kind === 'decision-maker') {
         for (const social of findings.socials) {
           this.repository.upsertSocialProfile({
             workspaceId: job.workspace_id,
@@ -327,7 +328,7 @@ export class EnrichmentRunner {
         }
       }
 
-      if (kind === 'decision-maker') {
+      if (kind === 'decision-maker' || kind === 'website') {
         for (const person of findings.people) {
           this.repository.addDecisionMaker({
             workspaceId: job.workspace_id,
@@ -347,7 +348,7 @@ export class EnrichmentRunner {
         for (const social of findings.socials) {
           if (social.platform !== 'linkedin' || !/\/in\//i.test(social.profileUrl)) continue
           const name = personNameFromLinkedIn(social.profileUrl)
-          if (!name) continue
+          if (!name || findings.people.some(person => person.fullName.toLowerCase() === name.toLowerCase())) continue
           const result = this.repository.suggestPerson({
             workspaceId: job.workspace_id,
             leadId,

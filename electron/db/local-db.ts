@@ -199,7 +199,7 @@ export class LocalDatabase {
    * The desktop app has one local workspace, created on first launch. Returns the existing one
    * if it is there, so this is safe to call on every startup.
    */
-  ensureWorkspace(name = 'Nafran Leads'): Workspace {
+  ensureWorkspace(name = 'MamaLead'): Workspace {
     const existing = this.one<Workspace>('select id, name, plan from workspaces order by created_at limit 1')
     if (existing) return existing
 

@@ -121,7 +121,7 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
   /** Re-reads the page's data. Rings and rows are read after every refresh. */
   refresh: () => void | Promise<void>
   /** The counts behind the rings, in the order they are drawn. */
-  ringSource: () => { name: string; count: number }[]
+  ringSource: (rows: Row[]) => { name: string; count: number }[]
   /** The action button's own words: "Verify all", "Check numbers", "Review suggestions". */
   actionLabel: string
   /** Said while the pass runs. */
@@ -455,11 +455,12 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   )
 
   const rings = useMemo<FinderRing[]>(() => {
-    const counts = source.ringSource()
-    const denominator = Math.max(1, scanned)
+    const population = scanOn ? scopedRows : sourceRows
+    const counts = source.ringSource(population)
+    const denominator = Math.max(1, population.length)
     const fill = running ? ringFill : 1
     return counts.map((ring) => {
-      const pct = Math.round((ring.count / denominator) * 100)
+      const pct = Math.min(100, Math.max(0, Math.round((ring.count / denominator) * 100)))
       const arc = (Math.min(100, pct) / 100) * CIRCUMFERENCE
       return {
         name: ring.name,
@@ -468,7 +469,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         off: String(Math.round(CIRCUMFERENCE - arc * fill)),
       }
     })
-  }, [scanned, running, ringFill, source])
+  }, [scanOn, scopedRows, sourceRows, running, ringFill, source])
 
   const exit = useCallback(() => {
     generation.current += 1

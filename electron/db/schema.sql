@@ -109,6 +109,17 @@ create unique index if not exists leads_workspace_place_idx
 create index if not exists leads_workspace_captured_idx on leads (workspace_id, captured_at desc);
 create index if not exists leads_workspace_name_idx on leads (workspace_id, name);
 
+-- One saved business can appear in multiple searches without duplicating its contact data.
+create table if not exists scrape_run_leads (
+  run_id text not null references scrape_runs(id) on delete cascade,
+  lead_id text not null references leads(id) on delete cascade,
+  primary key (run_id, lead_id)
+);
+create index if not exists scrape_run_leads_lead_idx on scrape_run_leads (lead_id);
+-- Preserve the run associations available in databases created by earlier versions.
+insert or ignore into scrape_run_leads (run_id, lead_id)
+  select l.run_id, l.id from leads l join scrape_runs r on r.id = l.run_id;
+
 create table if not exists lead_contacts (
   id text primary key,
   lead_id text not null references leads(id) on delete cascade,

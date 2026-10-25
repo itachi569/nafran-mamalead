@@ -245,12 +245,12 @@ export function createNeonStore(databaseUrl) {
       await ready()
       await sql`insert into billing_trial_licenses (id, installation_id, key_hash, key_last4, email, created_at) values (${id}, ${installationId}, ${keyHash}, ${keyLast4}, ${email}, ${createdAt})`
     },
-    async replaceUnactivatedTrial({ id, installationId, keyHash, keyLast4, email }) {
+    async replaceUnactivatedTrial({ id, installationId, keyHash, keyLast4, email, previousHash }) {
       await ready()
       const rows = await sql`
         update billing_trial_licenses set key_hash = ${keyHash}, key_last4 = ${keyLast4},
-          email = ${email}, sent_at = null, correction_count = 1
-        where id = ${id} and installation_id = ${installationId} and correction_count = 0
+          email = ${email}, sent_at = null, correction_count = correction_count + 1
+        where id = ${id} and installation_id = ${installationId} and key_hash = ${previousHash}
           and sent_at is not null and activated_at is null and bound_installation_id is null and revoked_at is null
         returning id
       `
@@ -260,8 +260,8 @@ export function createNeonStore(databaseUrl) {
       await ready()
       const rows = await sql`
         update billing_trial_licenses set key_hash = ${previous.key_hash}, key_last4 = ${previous.key_last4},
-          email = ${previous.email}, sent_at = ${previous.sent_at}, correction_count = 0
-        where id = ${id} and key_hash = ${replacementHash} and correction_count = 1 and sent_at is null
+          email = ${previous.email}, sent_at = ${previous.sent_at}, correction_count = ${previous.correction_count ?? 0}
+        where id = ${id} and key_hash = ${replacementHash} and sent_at is null
           and activated_at is null and bound_installation_id is null
         returning id
       `

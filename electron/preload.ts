@@ -218,6 +218,8 @@ const desktop = {
     ipcRenderer.invoke('app:info'),
   billing: {
     status: () => call('billing:status'),
+      claimReturnHandoff: () => call('billing:claim-return-handoff'),
+      onReturnHandoff: (listener: () => void): Unsubscribe => subscribe('billing:return-handoff', listener),
     claimDecisionSubscribeHandoff: () => call('billing:claim-decision-subscribe-handoff'),
     onDecisionSubscribeHandoff: (listener: () => void): Unsubscribe => subscribe('billing:decision-subscribe-handoff', listener),
     onDecisionUsage: (listener: (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => void): Unsubscribe =>

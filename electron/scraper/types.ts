@@ -7,6 +7,7 @@ export interface ScrapeQuery {
   location: string
   maxResultsPerKeyword: number
   /** Whole-run ceiling, limited by both the user's selection and server allowance. */
+  websiteFilter?: "any" | "has" | "none"
   maxResultsTotal?: number | null
   language: string
   region: string
@@ -99,8 +100,8 @@ export const DEFAULT_QUERY: ScrapeQuery = {
   region: 'uk',
   headless: false,
   detail: true,
-  minDelayMs: 900,
-  maxDelayMs: 2100,
+  minDelayMs: 3000,
+  maxDelayMs: 3000,
   executablePath: '',
   savedProfile: false,
   profileDir: '',
@@ -121,6 +122,7 @@ export function normaliseQuery(input: Partial<ScrapeQuery> = {}): ScrapeQuery {
     .slice(0, HARD_LIMITS.maxKeywords)
   return {
     keywords,
+    websiteFilter: input.websiteFilter === "has" || input.websiteFilter === "none" ? input.websiteFilter : "any",
     location: String(input.location ?? DEFAULT_QUERY.location).trim() || DEFAULT_QUERY.location,
     maxResultsPerKeyword: clamp(input.maxResultsPerKeyword ?? DEFAULT_QUERY.maxResultsPerKeyword, 1, HARD_LIMITS.maxResultsPerKeyword),
     maxResultsTotal: input.maxResultsTotal == null ? null : clamp(input.maxResultsTotal, 1, HARD_LIMITS.maxKeywords * HARD_LIMITS.maxResultsPerKeyword),

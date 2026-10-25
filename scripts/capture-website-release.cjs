@@ -64,7 +64,7 @@ async function main() {
     await page.locator('.billing-offer').screenshot({path:join(output,'settings.png')})
     await page.locator('.billing-plan-grid').screenshot({path:join(output,'settings-plans.png')})
     await page.locator('[data-stab="acct"]').click(); await page.evaluate(()=>window.scrollTo(0,0)); await page.waitForTimeout(600)
-    await page.locator('section[data-card]').filter({has:page.getByRole('heading',{name:'Nafran license',exact:true})}).screenshot({path:join(output,'settings-account.png')})
+    await page.locator('section[data-card]').filter({has:page.getByRole('heading',{name:'MamaLead license',exact:true})}).screenshot({path:join(output,'settings-account.png')})
     if(errors.length) throw new Error(errors.join('\n'))
     writeFileSync(join(output,'capture.json'),JSON.stringify({version,capturedAt:new Date().toISOString(),source:'Packaged Windows app',workspace:'Fictional sample data; not customer records',size:{width:1440,height:960}},null,2)+'\n')
   } finally { await app.close() }

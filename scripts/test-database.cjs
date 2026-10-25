@@ -84,6 +84,10 @@ const repeat = repo.saveRun(workspace.id, {
   leads: [lead('Deansgate Physio', 'ref-1'), lead('Chorlton Movement', 'ref-4')],
 })
 check('a repeat run only adds the places it has not seen', repeat.saved === 1, `saved ${repeat.saved}`)
+check('the original run retains all three captured businesses', repo.listLeads(workspace.id, {runId:run.runId}).total === 3)
+check('a repeat run includes both existing and new businesses', repo.listLeads(workspace.id, {runId:repeat.runId}).total === 2)
+const repeatExport = buildExport(repo, workspace.id, {kind:'leads', runId:repeat.runId, limit:20, delimiter:',', columns:['Business name'], fileName:'repeat.csv'})
+check('exporting a repeat run includes its previously saved businesses', repeatExport.rows === 2)
 
 // A re-run should enrich a row that was stored without a phone number.
 repo.saveRun(workspace.id, {
@@ -387,7 +391,8 @@ const freeMail = scoreEmail('deansgatephysio@gmail.com', 'deansgatephysio.co.uk'
 check('an address on the business domain outscores a free one', ownDomain > freeMail, `${ownDomain} vs ${freeMail}`)
 check('a role address outscores a personal one', scoreEmail('info@x.co.uk', 'x.co.uk') > scoreEmail('dave@x.co.uk', 'x.co.uk'))
 
-check('a UK number is normalised to one shape', normalisePhone('0161 496 0121') === normalisePhone('+44 161 496 0121'), normalisePhone('0161 496 0121'))
+check('a local number keeps its published prefix without guessing its country', normalisePhone('021 37297209') === '02137297209')
+check('an explicit UK country code is retained', normalisePhone('+44 161 496 0121') === '+44 161 496 0121')
 
 // Anything an earlier version stored from a footer is cleared on the next launch.
 repo.upsertContact({ leadId: ledger.rows[1].id, kind: 'email', value: 'mymail@mailservice.com', source: 'website', score: 40 })
@@ -403,6 +408,7 @@ const reopened = new LocalDatabase(file)
 const reopenedRepo = new Repository(reopened)
 check('the database reopens with its rows intact', reopenedRepo.listLeads(workspace.id).total === 5, `${reopenedRepo.listLeads(workspace.id).total} leads after reopen`)
 check('and keeps its workspace', reopened.ensureWorkspace().id === workspace.id)
+check('run memberships survive restarting the database', reopenedRepo.listLeads(workspace.id, {runId:repeat.runId}).total === 2)
 reopened.close()
 
 // The Dashboard's date buttons must change the database aggregate, including related contacts.

@@ -1,5 +1,5 @@
 // GENERATED FILE · do not edit by hand.
-// Source: .reference/markup.html (the Leads Scraper document bundled by the reference app).
+// Source: .reference/markup.html (the MamaLead document bundled by the reference app).
 // Regenerate with: node scripts/build-reference-ui.mjs
 //
 // Every {{ value }} binding resolves against the object returned by useAppValues(), so a
@@ -7,6 +7,9 @@
 import { Fragment, type ReactElement } from 'react'
 import type { AppValues } from './useAppValues'
 import { SettingsPanel } from './SettingsPanel'
+import { ExportDialog } from './ExportDialog'
+import { FeatureAccessBoundary } from './FeatureAccessBoundary'
+import { WorkspaceDialogs, ScanReturn, MapsResults, WebsiteFilter, ImportSources, DecisionResults } from './WorkspaceActions'
 
 /**
  * Whether a section the document guards with a binding is on screen.
@@ -25,13 +28,15 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
   const socialPicks = V.socialPicks
   return (
     <>
+      <WorkspaceDialogs V={V}/>
+      <ScanReturn V={V}/>
       <div style={{display: "grid", gridTemplateColumns: "minmax(0,1fr)", minHeight: "100vh", padding: "clamp(10px,1.4vw,20px)"}}>
         <div data-shell="1" style={{display: "grid", gridTemplateColumns: "262px minmax(0,1fr)", gap: "clamp(10px,1.2vw,18px)", alignItems: "start"}}>
           <aside data-sidebar="1" style={{position: "sticky", top: "clamp(10px,1.4vw,20px)", display: "flex", flexDirection: "column", gap: "10px"}}>
             <div style={{display: "flex", alignItems: "center", gap: "11px", padding: "8px 6px 4px"}}>
               <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "34px", height: "34px", borderRadius: "11px", background: "#1C1C1C", color: "#C8D5BB", fontSize: "15px", fontWeight: "700", flex: "none"}}>L</span>
               <div style={{flex: "1", minWidth: "0"}}>
-                <div style={{fontSize: "16.5px", fontWeight: "700", letterSpacing: "-.02em", lineHeight: "1.1"}}>Leads Scraper</div>
+                <div style={{fontSize: "16.5px", fontWeight: "700", letterSpacing: "-.02em", lineHeight: "1.1"}}>MamaLead</div>
                 <div style={{fontSize: "11px", color: "#555956", letterSpacing: ".02em"}}>{V.appVersion}</div>
               </div>
             </div>
@@ -39,7 +44,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               <button type="button" onClick={V.goSettings} aria-label="Open workspace settings" style={{display: "flex", alignItems: "center", gap: "9px", width: "100%", padding: "0", border: "0", background: "transparent", fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
                 <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "30px", height: "30px", borderRadius: "10px", background: "#C8D5BB", fontSize: "12.5px", fontWeight: "700", flex: "none"}}>N</span>
                 <span style={{flex: "1", minWidth: "0"}}>
-                  <span style={{display: "block", fontSize: "13.5px", fontWeight: "500", lineHeight: "1.2"}}>Nafran Leads</span>
+                  <span style={{display: "block", fontSize: "13.5px", fontWeight: "500", lineHeight: "1.2"}}>{V.workspaceName}</span>
                   <span style={{display: "block", marginTop: "2px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#555956"}}>{V.sideStatus}</span>
                 </span>
                 <span data-live="1" data-on={V.liveDot} aria-hidden="true" style={{width: "8px", height: "8px", borderRadius: "999px", flex: "none", animation: "lsPulse 2.4s ease-in-out infinite"}}></span>
@@ -197,7 +202,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             <button type="button" onClick={V.openChat} data-assist="1" style={{display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "10px 14px 10px 8px", border: "0", borderRadius: "20px", fontFamily: "inherit", textAlign: "left", cursor: "pointer", transition: "background .25s linear,transform .3s cubic-bezier(.22,1,.36,1)"}}>
               <span data-chatlottie="1" aria-hidden="true" style={{display: "block", width: "54px", height: "54px", flex: "none"}}></span>
               <span style={{flex: "1", minWidth: "0"}}>
-                <span style={{display: "block", fontSize: "14px", fontWeight: "500"}}>Ask Nafran Assist</span>
+                <span style={{display: "block", fontSize: "14px", fontWeight: "500"}}>Ask MamaLead Assist</span>
                 <span style={{display: "block", marginTop: "2px", fontSize: "12px", color: "#5A5F5C"}}>Setup help, or email us</span>
               </span>
               <span aria-hidden="true" style={{fontSize: "13px", color: "#4A4F4B"}}>→</span>
@@ -262,7 +267,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{overflow: "auto", minHeight: "0"}}>
                       {(V.notificationRows ?? []).map((n, __in) => (
                         <Fragment key={__in}>
-                          <div data-notification={n.id} data-unread={n.unread} style={{display: "flex", alignItems: "flex-start", gap: "10px", width: "100%", padding: "14px 18px", borderBottom: "1px solid #E4E5E2", background: "transparent", color: "#1C1C1C", fontFamily: "inherit", textAlign: "left"}}>
+                          <div role="button" tabIndex={0} onClick={n.open} onKeyDown={e=>{if(e.key==="Enter" || e.key===" "){e.preventDefault();n.open()}}} data-notification={n.id} data-unread={n.unread} style={{display: "flex", alignItems: "flex-start", gap: "10px", width: "100%", padding: "14px 18px", borderBottom: "1px solid #E4E5E2", background: "transparent", color: "#1C1C1C", fontFamily: "inherit", textAlign: "left"}}>
                             <span aria-hidden="true" data-level={n.level} style={{width: "8px", height: "8px", marginTop: "5px", borderRadius: "999px", background: n.color, flex: "none"}}></span>
                             <span style={{display: "block", minWidth: "0", flex: "1"}}>
                               <strong style={{display: "block", fontSize: "13px", fontWeight: "600", lineHeight: "1.35"}}>{n.title}</strong>
@@ -274,8 +279,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                               <span aria-label="Unread" style={{width: "6px", height: "6px", marginTop: "6px", borderRadius: "999px", background: "#6F8060", flex: "none"}}></span>
                               </>
                             ) : null}
-                            <button type="button" data-notification-read={n.id} aria-label="Mark notification read" title="Mark as read" onClick={n.read} style={{alignSelf: "flex-start", padding: "3px 6px", border: "0", borderRadius: "6px", background: "transparent", color: "#6C766F", fontFamily: "inherit", fontSize: "10px", cursor: "pointer"}}>Read</button>
-                            <button type="button" data-notification-delete={n.id} aria-label={`Delete notification: ${n.title}`} title="Delete notification" onClick={n.remove} style={{alignSelf: "flex-start", padding: "3px 6px", border: "0", borderRadius: "6px", background: "transparent", color: "#A85F59", fontFamily: "inherit", fontSize: "10px", fontWeight: "600", cursor: "pointer"}}>Delete</button>
+                            <button type="button" data-notification-read={n.id} aria-label="Mark notification read" title="Mark as read" onClick={e=>{e.stopPropagation();n.read()}} style={{alignSelf: "flex-start", padding: "3px 6px", border: "0", borderRadius: "6px", background: "transparent", color: "#6C766F", fontFamily: "inherit", fontSize: "10px", cursor: "pointer"}}>Read</button>
+                            <button type="button" data-notification-delete={n.id} aria-label={`Delete notification: ${n.title}`} title="Delete notification" onClick={e=>{e.stopPropagation();n.remove()}} style={{alignSelf: "flex-start", padding: "3px 6px", border: "0", borderRadius: "6px", background: "transparent", color: "#A85F59", fontFamily: "inherit", fontSize: "10px", fontWeight: "600", cursor: "pointer"}}>Delete</button>
                           </div>
                         </Fragment>
                       ))}
@@ -295,13 +300,14 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 <button type="button" aria-label="Dismiss trial and Lifetime notice" onClick={V.dismissPlanWelcome} style={{display: "grid", placeItems: "center", width: "30px", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: "#1C1C1C", fontSize: "22px", cursor: "pointer"}}>×</button>
               </section>
             ) : null}
+            <FeatureAccessBoundary allowed={V.featureAccessAllowed} onBlocked={V.showAccessPrompt}>
             {shows(V.isDashboard) ? (
               <>
               <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
                 <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px"}}>
                   <div>
                     <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
-                      <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Good Afternoon, Nafran</h1>
+                      <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Welcome to MamaLead</h1>
                       <span style={{padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>OVERVIEW</span>
                     </div>
                     <p style={{margin: "8px 0 0", fontSize: "14.5px", color: "#5A5F5C"}}>At-a-glance view of your lead database. Click any card to drill in.</p>
@@ -406,14 +412,14 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                   </section>
                   <div style={{display: "grid", gap: "clamp(12px,1.4vw,20px)", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,155px),1fr))"}}>
-                    <section data-card="1" style={{padding: "22px", borderRadius: "22px", background: "linear-gradient(180deg,#CBD8BC,#B4C6A2)", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500"}}>AI Insights</h2>
+                    <section data-card="1" data-reports-card="1" role="button" tabIndex={0} aria-label="Insights / Reports" onClick={V.openReports} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();V.openReports()}}} style={{cursor:"pointer",outlineOffset:4,padding: "22px", borderRadius: "22px", background: "linear-gradient(180deg,#CBD8BC,#B4C6A2)", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                      <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500"}}>Insights / Reports</h2>
                       <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "128px", height: "128px", margin: "10px 0 8px", borderRadius: "999px", background: "radial-gradient(circle at 50% 42%,#F7F9F5 0%,#EEF2E9 62%,#E2E9DA 100%)", boxShadow: "inset 0 0 0 1px rgba(28,28,28,.07),0 14px 26px -18px rgba(28,28,28,.5)"}}>
                         <span style={{position: "relative", display: "block", width: "104px", height: "104px", overflow: "hidden"}}>
                           <span data-lottie="1" style={{position: "absolute", top: "-6px", left: "-6px", display: "block", width: "116px", height: "116px"}}></span>
                         </span>
                       </span>
-                      <p style={{margin: "0", fontSize: "13px", lineHeight: "1.5", color: "#2C332A", textWrap: "pretty"}}>{V.dashInsight}</p>
+                      <p style={{margin: "0", fontSize: "13px", lineHeight: "1.5", color: "#2C332A", textWrap: "pretty"}}>{V.dashInsight}</p><span style={{marginTop:"auto",paddingTop:16,fontSize:13,fontWeight:500}}>View your report ↗</span>
                     </section>
                     <section data-card="1" style={{padding: "22px", borderRadius: "22px", background: "#F5F5F4", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                       <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500"}}>Data Quality</h2>
@@ -721,7 +727,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <strong style={{fontWeight: "700", color: "#F0F0F0"}}>{V.dashExportReady}</strong>
                             {' '}leads ready to export with usable contact data
                           </span>
-                          <button type="button" onClick={V.runExport} data-attn="1" style={{minWidth: "132px", padding: "9px 16px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear,color .25s linear", flex: "none"}} data-exportgo="1">Export now</button>
+                          <button type="button" onClick={V.openExpAll} data-attn="1" style={{minWidth: "132px", padding: "9px 16px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear,color .25s linear", flex: "none"}} data-exportgo="1">Export now</button>
                         </div>
                         </>
                       ) : null}
@@ -824,7 +830,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.isMaps) ? (
               <>
-              {shows(V.running) ? (
+              {shows(V.runOverlayVisible) ? (
                 <>
                 <div style={{position: "fixed", inset: "0", zIndex: "80", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
                   <section style={{width: "100%", maxWidth: "900px", padding: "clamp(20px,2.4vw,28px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
@@ -838,7 +844,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       </div>
                       <div style={{display: "flex", alignItems: "center", gap: "8px"}}>
                         <span style={{padding: "7px 14px", borderRadius: "999px", background: "#EAEAE8", fontSize: "12px", fontWeight: "500"}}>{V.foundLabel}</span>
-                        <button type="button" data-ghost="1" onClick={V.stopRun} style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Stop</button>
+                        <button type="button" onClick={V.minimizeRun} style={{border:0,borderRadius:999,padding:"12px 18px",cursor:"pointer"}}>Minimize · keep scanning</button><button type="button" aria-label="Hide scanning progress" onClick={V.minimizeRun} style={{border:0,padding:12,cursor:"pointer"}}>×</button><button type="button" data-ghost="1" onClick={V.stopRun} style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Stop</button>
                       </div>
                     </div>
                     <div style={{position: "relative", height: "clamp(240px,30vh,340px)", marginTop: "18px", borderRadius: "20px", overflow: "hidden", background: "#E9EBE4"}}>
@@ -1004,12 +1010,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           </span>
                         </label>
                         <div style={{display: "flex", flexDirection: "column", gap: "11px", marginTop: "2px"}}>
-                          <button type="button" onClick={V.toggleWebsite} data-sw="1" data-on={V.swWebsite} style={{display: "flex", alignItems: "center", gap: "12px", padding: "0", border: "0", background: "transparent", fontFamily: "inherit", cursor: "pointer"}}>
-                            <span aria-hidden="true" data-sw="1" data-on={V.swWebsite} style={{position: "relative", display: "block", width: "42px", height: "24px", borderRadius: "999px", flex: "none"}}>
-                              <span data-knob="1" style={{position: "absolute", top: "3px", left: "3px", width: "18px", height: "18px", borderRadius: "999px", background: "#F7F9F5"}}></span>
-                            </span>
-                            <span style={{fontSize: "14px", color: "#1C1C1C"}}>Has website</span>
-                          </button>
+                          <WebsiteFilter V={V}/>
                           <button type="button" onClick={V.togglePhone} data-sw="1" data-on={V.swPhone} style={{display: "flex", alignItems: "center", gap: "12px", padding: "0", border: "0", background: "transparent", fontFamily: "inherit", cursor: "pointer"}}>
                             <span aria-hidden="true" data-sw="1" data-on={V.swPhone} style={{position: "relative", display: "block", width: "42px", height: "24px", borderRadius: "999px", flex: "none"}}>
                               <span data-knob="1" style={{position: "absolute", top: "3px", left: "3px", width: "18px", height: "18px", borderRadius: "999px", background: "#F7F9F5"}}></span>
@@ -1029,15 +1030,6 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             </span>
                             <button type="button" onClick={V.gAcctAction} data-ghost="1" style={{display: "inline-flex", alignItems: "center", justifyContent: "center", height: "36px", padding: "0 15px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "background .25s linear"}}>{V.gAcctBtn}</button>
                           </div>
-                          <button type="button" onClick={V.toggleBrowser} style={{display: "flex", alignItems: "flex-start", gap: "12px", padding: "0", border: "0", background: "transparent", fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
-                            <span aria-hidden="true" data-sw="1" data-on={V.swBrowser} style={{position: "relative", display: "block", width: "42px", height: "24px", borderRadius: "999px", flex: "none"}}>
-                              <span data-knob="1" style={{position: "absolute", top: "3px", left: "3px", width: "18px", height: "18px", borderRadius: "999px", background: "#F7F9F5"}}></span>
-                            </span>
-                            <span style={{display: "flex", flexDirection: "column", gap: "3px", paddingTop: "2px"}}>
-                              <span style={{fontSize: "14px", color: "#1C1C1C"}}>Show the browser window</span>
-                              <span style={{fontSize: "12px", lineHeight: "1.45", color: "#5A5F5C"}}>Watch the run instead of headless. First thing to try if Google throttles.</span>
-                            </span>
-                          </button>
                           <button type="button" onClick={V.toggleDistricts} style={{display: "flex", alignItems: "flex-start", gap: "12px", padding: "0", border: "0", background: "transparent", fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
                             <span aria-hidden="true" data-sw="1" data-on={V.swDistricts} style={{position: "relative", display: "block", width: "42px", height: "24px", borderRadius: "999px", flex: "none"}}>
                               <span data-knob="1" style={{position: "absolute", top: "3px", left: "3px", width: "18px", height: "18px", borderRadius: "999px", background: "#F7F9F5"}}></span>
@@ -1049,7 +1041,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           </button>
                           <label style={{display: "block", position: "relative"}}>
                             <span style={{display: "block", fontSize: "12.5px", color: "#4A4F4B", marginBottom: "7px"}}>Delay between places</span>
-                            <select aria-label="Delay between places" style={{width: "100%", height: "46px", padding: "0 38px 0 14px", border: "0", borderRadius: "14px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "15px", color: "#1C1C1C", outline: "none", appearance: "none"}} defaultValue={V.paceLabel} onChange={V.onPaceChoice}>
+                            <select aria-label="Delay between places" style={{width: "100%", height: "46px", padding: "0 38px 0 14px", border: "0", borderRadius: "14px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "15px", color: "#1C1C1C", outline: "none", appearance: "none"}} value={V.paceChoice} onChange={V.onPaceChoice}>
                               <option>1.5 s · quick</option>
                               <option>3 s · steady</option>
                               <option>6 s · careful</option>
@@ -1082,7 +1074,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       </div>
                     </div>
                   </div>
-                  <div style={{marginTop: "22px", paddingTop: "20px", borderTop: "1px solid #E4E5E2"}}>
+<div data-coverage-activity="1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,300px),1fr))",gap:20,marginTop:22}}>                  <div style={{marginTop: "22px", paddingTop: "20px", borderTop: "1px solid #E4E5E2"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px"}}>
                       <div>
                         <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Coverage Map</h2>
@@ -1106,7 +1098,53 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </Fragment>
                       ))}
                     </div>
-                  </div>
+                  </div><section data-live-activity="1" data-card="1" style={{maxHeight: "360px", overflow: "auto", padding: "18px", borderRadius: "22px", background: "#1C1C1C", color: "#F0F0F0", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                    <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
+                      <div>
+                        <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Live Activity</h2>
+                        <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#9BA29C"}}>Run log, newest first.</p>
+                      </div>
+                      <span aria-hidden="true" style={{width: "8px", height: "8px", marginTop: "8px", borderRadius: "999px", background: "#C8D5BB", flex: "none", animation: "lsPulse 2.4s ease-in-out infinite"}}></span>
+                    </div>
+                    <ul style={{listStyle: "none", margin: "18px 0 0", padding: "0", display: "flex", flexDirection: "column", gap: "12px"}}>
+                      {shows(V.mapsActivityEmpty) ? (
+                        <>
+                        <li style={{padding: "12px 0", borderBottom: "1px solid #2E302F", fontSize: "12.5px", color: "#9BA29C"}}>{V.mapsActivityEmpty}</li>
+                        </>
+                      ) : null}
+                      {(V.mapsActivity ?? []).map((a, __ia) => (
+                        <Fragment key={__ia}>
+                          <li style={{display: "flex", flexDirection: "column", gap: "5px", paddingBottom: "12px", borderBottom: "1px solid #2E302F"}}>
+                            <span style={{display: "flex", alignItems: "center", gap: "9px"}}>
+                              <span style={{fontSize: "11.5px", color: "#9BA29C", letterSpacing: ".04em"}}>{a.when}</span>
+                              {shows(a.isWarn) ? (
+                                <>
+                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#8C4A3F", color: "#F7EDEA", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>{a.level}</span>
+                                </>
+                              ) : null}
+                              {shows(a.isLive) ? (
+                                <>
+                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#C8D5BB", color: "#1C1C1C", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>LIVE</span>
+                                </>
+                              ) : null}
+                              {shows(a.isInfo) ? (
+                                <>
+                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#2E302F", color: "#B9BEB7", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>INFO</span>
+                                </>
+                              ) : null}
+                              {shows(a.isOk) ? (
+                                <>
+                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#C8D5BB", color: "#1C1C1C", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>OK</span>
+                                </>
+                              ) : null}
+                            </span>
+                            <span style={{fontSize: "13px", color: "#E4E6E3"}}>{a.title}</span>
+                            <span style={{fontSize: "12px", color: "#9BA29C"}}>{a.detail}</span>
+                          </li>
+                        </Fragment>
+                      ))}
+                    </ul>
+                  </section></div>
                 </section>
                 <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,190px),1fr))", gap: "clamp(12px,1.4vw,20px)", alignItems: "end"}}>
                   <div style={{display: "flex", flexDirection: "column", gap: "8px"}}>
@@ -1170,7 +1208,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                   </div>
                 </div>
-                <div data-results="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1.7fr) minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "stretch"}}>
+                <div data-results="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "stretch"}}>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                       <div>
@@ -1193,65 +1231,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         Export
                       </button>
                     </div>
-                    <div data-rowsblock="1" style={{marginTop: "18px"}}>
-                      <div data-rowgrid="1" data-rowhead="1" style={{display: "grid", alignItems: "end", gap: "10px", padding: "0 0 11px", borderBottom: "1px solid #DEDFDC"}}>
-                        <span></span>
-                        <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956"}}>Business</span>
-                        <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956"}}>Contact</span>
-                        <span data-col="addr" style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956"}}>Address</span>
-                        <span data-col="rate" style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956"}}>Rating</span>
-                        <span data-col="soc" style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956"}}>Socials</span>
-                        <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956", whiteSpace: "nowrap"}}>Score ▾</span>
-                        <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956", whiteSpace: "nowrap"}}>Decision</span>
-                      </div>
-                      <ul style={{listStyle: "none", margin: "0", padding: "0", display: "flex", flexDirection: "column"}}>
-                        {shows(V.mapsState) ? (
-                          <>
-                          <li style={{padding: "26px 0", borderTop: "1px solid #E4E5E2", color: "#5A5F5C", fontSize: "13.5px"}}>{V.mapsState}</li>
-                          </>
-                        ) : null}
-                        {(V.mapsRows ?? []).map((mr, __imr) => (
-                          <Fragment key={__imr}>
-                            <li data-row="1" data-rowgrid="1" style={{display: "grid", flexWrap: "wrap", alignItems: "center", gap: "10px", padding: "14px 0", borderTop: "1px solid #E4E5E2", transition: "background .25s linear"}}>
-                              <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "40px", height: "40px", borderRadius: "12px", background: "#C8D5BB", fontSize: "13px", fontWeight: "700", flex: "none"}}>{mr.ini}</span>
-                              <span style={{minWidth: "162px"}}>
-                                <span style={{display: "block", fontSize: "14.5px", fontWeight: "500"}}>{mr.name}</span>
-                                <span title={mr.domain} style={{display: "block", marginTop: "3px", fontSize: "12.5px", color: "#5A5F5C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{mr.domain}</span>
-                                <span data-inline-addr="1" style={{display: "none", marginTop: "3px", fontSize: "12.5px", color: "#5A5F5C"}}>{mr.address}</span>
-                              </span>
-                              <span style={{minWidth: "152px", fontSize: "12.5px", color: "#4A4F4B", lineHeight: "1.5"}}>
-                                <span style={{display: "block", whiteSpace: "nowrap"}}>{mr.phone}</span>
-                                <span title={mr.email} style={{display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{mr.email}</span>
-                              </span>
-                              <span data-col="addr" style={{minWidth: "146px", fontSize: "12.5px", color: "#4A4F4B", lineHeight: "1.5"}}>
-                                {mr.addressLine1}
-                                <br />
-                                {mr.addressLine2}
-                              </span>
-                              <span data-col="rate" style={{minWidth: "68px", fontSize: "13px", color: "#4A4F4B"}}>
-                                {mr.rating}
-                                <br />
-                                <span style={{color: "#5A5F5C"}}>{mr.reviews}</span>
-                              </span>
-                              <span data-col="soc" style={{display: "flex", gap: "5px", minWidth: "54px"}}>
-                                {shows(mr.noSocials) ? (
-                                  <>
-                                  none
-                                  </>
-                                ) : null}
-                                {(mr.socials ?? []).map((sn, __isn) => (
-                                  <Fragment key={__isn}>
-                                    <span data-col="soc" style={{display: "flex", gap: "5px", minWidth: "54px"}}>{sn.short}</span>
-                                  </Fragment>
-                                ))}
-                              </span>
-                              <span style={{padding: "5px 10px", borderRadius: "999px", background: mr.scoreBg, color: mr.scoreColor, fontWeight: "500", fontSize: "11.5px", minWidth: "46px", textAlign: "center"}}>{mr.score}</span>
-                              <span style={{padding: "5px 10px", borderRadius: "999px", background: mr.decisionBg, color: mr.decisionColor, fontSize: "11.5px", minWidth: "78px", textAlign: "center"}}>{mr.decision}</span>
-                            </li>
-                          </Fragment>
-                        ))}
-                      </ul>
-                    </div>
+                    <MapsResults V={V}/>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "18px", paddingTop: "16px", borderTop: "1px solid #E4E5E2"}}>
                       <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Showing {V.mapsShowing} of {V.mapsTotal} results</span>
                       {shows(V.mapsMoreOn) ? (
@@ -1264,53 +1244,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       ) : null}
                     </div>
                   </section>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#1C1C1C", color: "#F0F0F0", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                    <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                      <div>
-                        <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Live Activity</h2>
-                        <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#9BA29C"}}>Run log, newest first.</p>
-                      </div>
-                      <span aria-hidden="true" style={{width: "8px", height: "8px", marginTop: "8px", borderRadius: "999px", background: "#C8D5BB", flex: "none", animation: "lsPulse 2.4s ease-in-out infinite"}}></span>
-                    </div>
-                    <ul style={{listStyle: "none", margin: "18px 0 0", padding: "0", display: "flex", flexDirection: "column", gap: "12px"}}>
-                      {shows(V.mapsActivityEmpty) ? (
-                        <>
-                        <li style={{padding: "12px 0", borderBottom: "1px solid #2E302F", fontSize: "12.5px", color: "#9BA29C"}}>{V.mapsActivityEmpty}</li>
-                        </>
-                      ) : null}
-                      {(V.mapsActivity ?? []).map((a, __ia) => (
-                        <Fragment key={__ia}>
-                          <li style={{display: "flex", flexDirection: "column", gap: "5px", paddingBottom: "12px", borderBottom: "1px solid #2E302F"}}>
-                            <span style={{display: "flex", alignItems: "center", gap: "9px"}}>
-                              <span style={{fontSize: "11.5px", color: "#9BA29C", letterSpacing: ".04em"}}>{a.when}</span>
-                              {shows(a.isWarn) ? (
-                                <>
-                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#8C4A3F", color: "#F7EDEA", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>{a.level}</span>
-                                </>
-                              ) : null}
-                              {shows(a.isLive) ? (
-                                <>
-                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#C8D5BB", color: "#1C1C1C", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>LIVE</span>
-                                </>
-                              ) : null}
-                              {shows(a.isInfo) ? (
-                                <>
-                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#2E302F", color: "#B9BEB7", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>INFO</span>
-                                </>
-                              ) : null}
-                              {shows(a.isOk) ? (
-                                <>
-                                <span style={{padding: "3px 9px", borderRadius: "7px", background: "#C8D5BB", color: "#1C1C1C", fontSize: "10px", fontWeight: "700", letterSpacing: ".08em"}}>OK</span>
-                                </>
-                              ) : null}
-                            </span>
-                            <span style={{fontSize: "13px", color: "#E4E6E3"}}>{a.title}</span>
-                            <span style={{fontSize: "12px", color: "#9BA29C"}}>{a.detail}</span>
-                          </li>
-                        </Fragment>
-                      ))}
-                    </ul>
-                  </section>
+
                 </div>
               </div>
               </>
@@ -1459,14 +1393,14 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       ))}
                     </ul>
                   </section>
-                  <section data-card="1" style={{padding: "22px", borderRadius: "22px", background: "linear-gradient(180deg,#CBD8BC,#B4C6A2)", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                    <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500"}}>AI Insights</h2>
+                  <section data-card="1" data-reports-card="1" role="button" tabIndex={0} aria-label="Insights / Reports" onClick={V.openReports} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();V.openReports()}}} style={{cursor:"pointer",outlineOffset:4,padding: "22px", borderRadius: "22px", background: "linear-gradient(180deg,#CBD8BC,#B4C6A2)", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                    <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500"}}>Insights / Reports</h2>
                     <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "128px", height: "128px", margin: "10px 0 8px", borderRadius: "999px", background: "radial-gradient(circle at 50% 42%,#F7F9F5 0%,#EEF2E9 62%,#E2E9DA 100%)", boxShadow: "inset 0 0 0 1px rgba(28,28,28,.07),0 14px 26px -18px rgba(28,28,28,.5)"}}>
                       <span style={{position: "relative", display: "block", width: "104px", height: "104px", overflow: "hidden"}}>
                         <span data-lottie="1" style={{position: "absolute", top: "-6px", left: "-6px", display: "block", width: "116px", height: "116px"}}></span>
                       </span>
                     </span>
-                    <p style={{margin: "0", fontSize: "13px", lineHeight: "1.5", color: "#2C332A", textWrap: "pretty"}}>{V.socialInsight}</p>
+                    <p style={{margin: "0", fontSize: "13px", lineHeight: "1.5", color: "#2C332A", textWrap: "pretty"}}>{V.socialInsight}</p><span style={{marginTop:"auto",paddingTop:16,fontSize:13,fontWeight:500}}>View your report ↗</span>
                   </section>
                 </div>
                 <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
@@ -1545,7 +1479,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Email Finder</h1>
                       <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
                         <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        IDLE{' '}
+                        {V.importStatus}
                       </span>
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>All scraped leads with their enrichment status. Run the cascade in bulk.</p>
@@ -2020,7 +1954,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Phone Finder</h1>
                       <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
                         <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        IDLE{' '}
+                        {V.importStatus}
                       </span>
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "78ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>All scraped phones, filterable. Maps phones load on scrape; missing ones can be backfilled by visiting each lead's website.</p>
@@ -2360,7 +2294,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Decision Makers</h1>
                       <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
                         <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        IDLE{' '}
+                        {V.importStatus}
                       </span>
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>LinkedIn profile URLs of decision-makers. Populated by deep enrichment.</p>
@@ -2498,42 +2432,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h2 data-fres="dm" style={{scrollMarginTop: "130px", margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>People found</h2>
 
                     </div>
-                    <ul style={{listStyle: "none", margin: "14px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
-                      {(V.fDm.rows ?? []).map((w, __iw) => (
-                        <Fragment key={__iw}>
-                          <li data-scanrow={w.pill} style={{display: "grid", gridTemplateColumns: "minmax(140px,220px) minmax(0,1fr) auto", alignItems: "center", gap: "14px", padding: "13px 10px", borderTop: "1px solid #E4E5E2", borderRadius: "12px", transition: "background .6s linear", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                            <span style={{minWidth: "0"}}>
-                              <span style={{display: "block", fontSize: "10.5px", fontWeight: "600", letterSpacing: ".08em", color: "#4A4F4B"}}>NEW</span>
-                              <span style={{display: "block", marginTop: "2px", fontSize: "14px", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{w.domain}</span>
-                            </span>
-                            <span style={{display: "flex", flexWrap: "wrap", gap: "6px", minWidth: "0"}}>
-                              {shows(w.scanning) ? (
-                                <>
-                                <span style={{display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: "#4A4F4B"}}>
-                                  <span aria-hidden="true" style={{width: "11px", height: "11px", borderRadius: "999px", border: "1.5px solid rgba(28,28,28,.2)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite"}}></span>
-                                  {w.scanLabel}
-                                </span>
-                                </>
-                              ) : null}
-                              {(w.items ?? []).map((it, __iit) => (
-                                <Fragment key={__iit}>
-                                  <span style={{display: "inline-flex", flexDirection: "column", gap: "1px", maxWidth: "100%", padding: "6px 11px", borderRadius: "12px", background: "#EAEAE8", animation: "lsPanelIn .4s cubic-bezier(.22,1,.36,1) both"}}>
-                                    <span style={{fontSize: "13px", fontWeight: "500", overflowWrap: "anywhere"}}>{it.t}</span>
-                                    <span style={{fontSize: "11px", color: "#5A5F5C"}}>{it.k}</span>
-                                  </span>
-                                </Fragment>
-                              ))}
-                              {shows(w.none) ? (
-                                <>
-                                <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Nothing published on this site</span>
-                                </>
-                              ) : null}
-                            </span>
-                            <span data-impst={w.pill} style={{padding: "5px 11px", borderRadius: "999px", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap"}}>{w.status}</span>
-                          </li>
-                        </Fragment>
-                      ))}
-                    </ul>
+                    <DecisionResults V={V}/>
                     <div data-dm-export-options="1" style={{display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "20px", paddingTop: "18px", borderTop: "1px solid #DEDFDC"}}>
                       <button type="button" disabled={V.dmExportDisabled} onClick={V.exportDmExcel} style={{padding: "12px 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#FFFFFF", fontFamily: "inherit", fontSize: "13.5px", cursor: V.dmExportDisabled ? "default" : "pointer", opacity: V.dmExportDisabled ? .5 : 1}}>Download Excel (.xlsx)</button>
                       <button type="button" disabled={V.dmExportDisabled} onClick={V.exportDmPdf} style={{padding: "12px 22px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", cursor: V.dmExportDisabled ? "default" : "pointer", opacity: V.dmExportDisabled ? .5 : 1}}>Download PDF</button>
@@ -2617,59 +2516,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         ))}
                       </ul>
                     </section>
-                    <section data-flistcard="dm" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
-                        <div>
-                          <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Matched Contacts</h2>
-                          <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.dmShowingLabel}</p>
-                        </div>
-                        <div style={{display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto", flexWrap: "wrap"}}>
 
-                          {shows(V.dmMoreContactsOn) ? (
-                            <>
-                            <button type="button" data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer"}} onClick={V.showAllDmContacts}>{V.dmShowAllLabel}</button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div data-flist="dm" data-fpart="contacts" style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,210px),1fr))", gap: "12px", marginTop: "18px"}}>
-                        {(V.dmRows ?? []).map((d, __id) => (
-                          <Fragment key={__id}>
-                            <article data-person="1" style={{display: "flex", flexDirection: "column", gap: "14px", padding: "20px", borderRadius: "18px", background: "#EDEEEB", transition: "transform .4s cubic-bezier(.22,1,.36,1),box-shadow .4s linear"}}>
-                              <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px"}}>
-                                <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "44px", height: "44px", borderRadius: "999px", background: "#C8D5BB", fontSize: "14px", fontWeight: "700", flex: "none"}}>{d.ini}</span>
-                                {shows(d.isStrong) ? (
-                                  <>
-                                  <span style={{padding: "5px 11px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontWeight: "500", fontSize: "11px", whiteSpace: "nowrap"}}>{d.strong}</span>
-                                  </>
-                                ) : null}
-                                {shows(d.isLikely) ? (
-                                  <>
-                                  <span style={{padding: "5px 11px", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontWeight: "500", fontSize: "11px", whiteSpace: "nowrap"}}>{d.likely}</span>
-                                  </>
-                                ) : null}
-                              </div>
-                              <div>
-                                <div style={{fontSize: "16px", fontWeight: "500", letterSpacing: "-.01em"}}>{d.name}</div>
-                                <div style={{marginTop: "3px", fontSize: "13px", color: "#4A4F4B"}}>{d.title}</div>
-                              </div>
-                              <div style={{marginTop: "auto", paddingTop: "12px", borderTop: "1px solid #DEDFDC"}}>
-                                <div style={{fontSize: "13px", fontWeight: "500", textWrap: "pretty"}}>{d.lead}</div>
-                                <div style={{marginTop: "3px", fontSize: "12px", color: "#5A5F5C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{d.domain}</div>
-                              </div>
-                              {shows(d.showProfile) ? (
-                                <>
-                                <a data-ghost="1" style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", height: "38px", border: "0", borderRadius: "999px", background: "#F5F5F4", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", textDecoration: "none"}} href={d.linkedinUrl} target="_blank" rel="noopener noreferrer" data-profile-link={d.linkedinUrl} role="button">
-                                  <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "18px", height: "18px", borderRadius: "5px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "9px", fontWeight: "700"}}>in</span>
-                                  {' '}View profile{' '}
-                                </a>
-                                </>
-                              ) : null}
-                            </article>
-                          </Fragment>
-                        ))}
-                      </div>
-                    </section>
                     <section data-flistcard="dm" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                       <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
                         <div>
@@ -2770,7 +2617,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Website Lookup</h1>
                       <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
                         <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        IDLE{' '}
+                        {V.importStatus}
                       </span>
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "80ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>Paste or upload a list of websites — we'll find the business name, address, phone, emails, socials, and LinkedIn for each.</p>
@@ -2796,32 +2643,16 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         <span style={{fontSize: "11px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#4C554A"}}>Paste websites</span>
                         <span style={{fontSize: "11.5px", color: "#4C554A"}}>{V.importSummary}</span>
                       </div>
-                      <div style={{display: "flex", gap: "14px", marginTop: "12px"}}>
-                        <div aria-hidden="true" style={{display: "flex", flexDirection: "column", gap: "0", fontSize: "12.5px", lineHeight: "28px", color: "#4C554A", fontVariantNumeric: "tabular-nums", textAlign: "right", flex: "none"}}>
-                          <span>01</span>
-                          <span>02</span>
-                          <span>03</span>
-                          <span>04</span>
-                          <span>05</span>
-                        </div>
-                        <div style={{width: "1px", background: "rgba(28,28,28,.16)", flex: "none"}}></div>
-                        <div style={{minWidth: "0", fontSize: "14px", lineHeight: "2", color: "#3F4A3C", fontVariantNumeric: "tabular-nums"}}>
-                          <span style={{display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>northernspine.co.uk</span>
-                          <span style={{display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>deansgatephysio.co.uk</span>
-                          <span style={{display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>rehablab.uk</span>
-                          <span style={{display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>chorltonmovement.com</span>
-                          <span style={{display: "block", color: "#4C554A"}}>…and 24 more</span>
-                        </div>
-                      </div>
+                      <textarea aria-label="Websites to look up" value={V.impValue} onInput={V.onImpText} placeholder="Paste website URLs here, one per line" style={{width:'100%',minHeight:150,marginTop:12,padding:14,border:0,borderRadius:12,font:'inherit',resize:'vertical',background:'#f5f5f4'}}/>
                     </div>
                     <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "18px"}}>
-                      <button type="button" onClick={V.openImp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
+                      <button type="button" onClick={V.startWebsiteLookup} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
                           <path d="M12 15.5V4"></path>
                           <path d="M8 7.5l4-4 4 4"></path>
                           <path d="M4.5 19.5h15"></path>
                         </svg>
-                        {' '}Import websites{' '}
+                        {' '}Start lookup{' '}
                       </button>
                       <button type="button" data-attn="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "rgba(255,255,255,.62)", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer"}} data-lookup-action="clipboard" onClick={V.pasteWebsiteClipboard}>
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
@@ -2838,98 +2669,9 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         {' '}Upload CSV{' '}
                       </button>
                     </div>
-                    <p style={{margin: "14px 0 0", fontSize: "12.5px", color: "#4C554A"}}>Supports up to 500 sites per import. Duplicates against your 128 existing leads are skipped automatically.</p>
+                    <p style={{margin: "14px 0 0", fontSize: "12.5px", color: "#4C554A"}}>Supports up to 500 sites per import. Websites already saved on this device are reused without creating duplicates.</p>
                   </section>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                    <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                      <div style={{minWidth: "0"}}>
-                        <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>One site, filled in</h2>
-                        <p style={{margin: "4px 0 0", fontSize: "13px", color: "#5A5F5C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>deansgatephysio.co.uk</p>
-                      </div>
-                      <span style={{padding: "5px 12px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "500", whiteSpace: "nowrap", flex: "none"}}>Example</span>
-                    </div>
-                    <ul style={{listStyle: "none", margin: "14px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
-                      <li style={{display: "flex", alignItems: "flex-start", gap: "11px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                        <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "28px", height: "28px", borderRadius: "9px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                            <path d="M4 20V8.5l8-4.5 8 4.5V20"></path>
-                            <path d="M9.5 20v-5h5v5"></path>
-                          </svg>
-                        </span>
-                        <span style={{minWidth: "0", flex: "1"}}>
-                          <span style={{display: "block", fontSize: "11px", letterSpacing: ".1em", textTransform: "uppercase", color: "#555956"}}>Business name</span>
-                          <span style={{display: "block", marginTop: "3px", fontSize: "13.5px", fontWeight: "500", textWrap: "pretty"}}>Deansgate Physio Rooms</span>
-                        </span>
-                      </li>
-                      <li style={{display: "flex", alignItems: "flex-start", gap: "11px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                        <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "28px", height: "28px", borderRadius: "9px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                            <path d="M12 21s6.5-6 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 15 12 21 12 21z"></path>
-                            <circle cx="12" cy="10.5" r="2.2"></circle>
-                          </svg>
-                        </span>
-                        <span style={{minWidth: "0", flex: "1"}}>
-                          <span style={{display: "block", fontSize: "11px", letterSpacing: ".1em", textTransform: "uppercase", color: "#555956"}}>Address</span>
-                          <span style={{display: "block", marginTop: "3px", fontSize: "13.5px", fontWeight: "500", textWrap: "pretty"}}>244 Deansgate, Manchester M3 4BQ</span>
-                        </span>
-                      </li>
-                      <li style={{display: "flex", alignItems: "flex-start", gap: "11px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                        <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "28px", height: "28px", borderRadius: "9px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                            <path d="M7 3.8l2.6.5 1.2 3.4-2 1.5a11 11 0 0 0 5.9 5.9l1.5-2 3.4 1.2.5 2.6a2 2 0 0 1-2.2 2.3C11.4 18.8 5.2 12.6 4.7 6a2 2 0 0 1 2.3-2.2z"></path>
-                          </svg>
-                        </span>
-                        <span style={{minWidth: "0", flex: "1"}}>
-                          <span style={{display: "block", fontSize: "11px", letterSpacing: ".1em", textTransform: "uppercase", color: "#555956"}}>Phone</span>
-                          <span style={{display: "block", marginTop: "3px", fontSize: "13.5px", fontWeight: "500", textWrap: "pretty"}}>+44 161 887 3320</span>
-                        </span>
-                        <span style={{padding: "4px 10px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontWeight: "500", fontSize: "11px", whiteSpace: "nowrap", flex: "none", marginTop: "14px"}}>Direct line</span>
-                      </li>
-                      <li style={{display: "flex", alignItems: "flex-start", gap: "11px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                        <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "28px", height: "28px", borderRadius: "9px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                            <rect x="3.5" y="5.5" width="17" height="13" rx="3"></rect>
-                            <path d="M4 7.5l8 5.5 8-5.5"></path>
-                          </svg>
-                        </span>
-                        <span style={{minWidth: "0", flex: "1"}}>
-                          <span style={{display: "block", fontSize: "11px", letterSpacing: ".1em", textTransform: "uppercase", color: "#555956"}}>Email</span>
-                          <span style={{display: "block", marginTop: "3px", fontSize: "13.5px", fontWeight: "500", textWrap: "pretty"}}>info@deansgatephysio.co.uk</span>
-                        </span>
-                        <span style={{padding: "4px 10px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontWeight: "500", fontSize: "11px", whiteSpace: "nowrap", flex: "none", marginTop: "14px"}}>95</span>
-                      </li>
-                      <li style={{display: "flex", alignItems: "flex-start", gap: "11px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                        <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "28px", height: "28px", borderRadius: "9px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                            <circle cx="12" cy="12" r="8.5"></circle>
-                            <path d="M3.5 12h17M12 3.5c2.2 2.4 3.3 5.3 3.3 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.3-5.3-3.3-8.5S9.8 5.9 12 3.5z"></path>
-                          </svg>
-                        </span>
-                        <span style={{minWidth: "0", flex: "1"}}>
-                          <span style={{display: "block", fontSize: "11px", letterSpacing: ".1em", textTransform: "uppercase", color: "#555956"}}>Socials</span>
-                          <span style={{display: "block", marginTop: "3px", fontSize: "13.5px", fontWeight: "500", textWrap: "pretty"}}>
-                            <span style={{display: "flex", gap: "5px", marginTop: "2px"}}>
-                              <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "7px", background: "#E3E4E1", fontSize: "10px", fontWeight: "700"}}>ig</span>
-                              <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "24px", height: "24px", borderRadius: "7px", background: "#E3E4E1", fontSize: "10px", fontWeight: "700"}}>in</span>
-                            </span>
-                          </span>
-                        </span>
-                      </li>
-                      <li style={{display: "flex", alignItems: "flex-start", gap: "11px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                        <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "28px", height: "28px", borderRadius: "9px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                            <circle cx="12" cy="8" r="3.4"></circle>
-                            <path d="M5.5 19.5c1-3.1 3.4-4.7 6.5-4.7s5.5 1.6 6.5 4.7"></path>
-                          </svg>
-                        </span>
-                        <span style={{minWidth: "0", flex: "1"}}>
-                          <span style={{display: "block", fontSize: "11px", letterSpacing: ".1em", textTransform: "uppercase", color: "#555956"}}>Decision maker</span>
-                          <span style={{display: "block", marginTop: "3px", fontSize: "13.5px", fontWeight: "500", textWrap: "pretty"}}>Ruth Ellery · Clinic Director</span>
-                        </span>
-                      </li>
-                    </ul>
-                    <p style={{margin: "14px 0 0", fontSize: "12.5px", color: "#5A5F5C", textWrap: "pretty"}}>Six fields per site, filled in one pass. Anything the lookup can't find is left blank rather than guessed.</p>
-                  </section>
+                  <section data-card="1" style={{padding:28,borderRadius:22,background:'#F5F5F4'}}><h2 style={{fontSize:20,fontWeight:500}}>Your websites, your results</h2><p style={{lineHeight:1.7,color:'#5A5F5C'}}>1. Paste websites or import a CSV.<br/>2. Start the lookup.<br/>3. Review published contact details below.</p><p role="status">{V.importStatus}</p><p>Missing details stay blank. Each scan reads the site's public pages.</p></section>
                 </div>
                 <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
@@ -2955,13 +2697,13 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     {(V.importRows ?? []).map((r, __ir) => (
                       <Fragment key={__ir}>
                         <li style={{display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1fr) 88px", alignItems: "center", gap: "12px", padding: "14px 0", borderTop: "1px solid #E7E8E5"}}>
-                          <span style={{height: "11px", width: "72%", borderRadius: "6px", background: "#E4E5E2"}}>
+                          <span style={{minWidth:0}}>
                             <span style={{display: "block", fontSize: "13.5px", color: "#1C1C1C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.domain}</span>
                           </span>
-                          <span style={{height: "11px", width: "58%", borderRadius: "6px", background: "#E9EAE7"}}>
+                          <span style={{minWidth:0}}>
                             <span style={{display: "block", fontSize: "13.5px", color: "#1C1C1C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.detail}</span>
                           </span>
-                          <span style={{height: "11px", width: "64%", borderRadius: "6px", background: "#E9EAE7"}}>
+                          <span style={{minWidth:0}}>
                             <span style={{display: "block", fontSize: "13.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.contact}</span>
                           </span>
                           <span style={{height: "22px", borderRadius: "999px", background: "#EDEEEB"}}>
@@ -3478,6 +3220,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </div>
               </>
             ) : null}
+            </FeatureAccessBoundary>
             {shows(V.isSettings) ? <SettingsPanel V={V} /> : null}
             {shows(V.gWin) ? (
               <>
@@ -3489,7 +3232,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{width: "10px", height: "10px", borderRadius: "999px", background: "#C6C8C4"}}></span>
                       <span style={{width: "10px", height: "10px", borderRadius: "999px", background: "#C6C8C4"}}></span>
                     </span>
-                    <span style={{flex: "1", minWidth: "0", padding: "7px 12px", borderRadius: "999px", background: "#F5F5F4", fontSize: "12px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>accounts.google.com · Nafran's own browser window</span>
+                    <span style={{flex: "1", minWidth: "0", padding: "7px 12px", borderRadius: "999px", background: "#F5F5F4", fontSize: "12px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>accounts.google.com · MamaLead browser window</span>
                   </div>
                   <div style={{padding: "clamp(22px,3vw,34px)"}}>
                     {shows(V.gSigning) ? (
@@ -3689,7 +3432,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 <section style={{width: "100%", maxWidth: "620px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(20px,2.4vw,28px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
                   <h2 style={{margin: "0", fontSize: "clamp(19px,2.1vw,24px)", fontWeight: "400", letterSpacing: "-.02em"}}>Import websites</h2>
                   <p style={{margin: "6px 0 0", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C"}}>Paste website URLs, one per line.</p>
-                  <textarea data-imptext="1" value={V.impValue} onInput={V.onImpText} spellCheck="false" aria-label="Website URLs" placeholder="northernspine.co.uk\nhttps://deansgatephysio.co.uk\nglowskin.mcr" style={{display: "block", width: "100%", height: "170px", marginTop: "16px", padding: "14px 16px", border: "1px dashed #C6C8C4", borderRadius: "16px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "14px", lineHeight: "1.7", color: "#1C1C1C", resize: "vertical", outline: "none"}} data-socimpinput="1"></textarea>
+                  <ImportSources V={V}/>
+                  <textarea data-imptext="1" value={V.impValue} onInput={V.onImpText} spellCheck="false" aria-label="Website URLs" placeholder="Paste website URLs, one per line" style={{display: "block", width: "100%", height: "170px", marginTop: "16px", padding: "14px 16px", border: "1px dashed #C6C8C4", borderRadius: "16px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "14px", lineHeight: "1.7", color: "#1C1C1C", resize: "vertical", outline: "none"}} data-socimpinput="1"></textarea>
                   <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "16px"}}>
                     {shows(V.impHasLines) ? (
                       <>
@@ -3708,101 +3452,15 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </div>
               </>
             ) : null}
-            {shows(V.expOpen) ? (
-              <>
-              <div data-export-backdrop="1" onClick={(event) => { if (event.target === event.currentTarget) V.closeExp() }} style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
-                <section style={{width: "100%", maxWidth: "700px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(20px,2.4vw,28px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "14px"}}>
-                    <div>
-                      <h2 style={{margin: "0", fontSize: "clamp(19px,2.1vw,24px)", fontWeight: "400", letterSpacing: "-.02em"}}>{V.expTitle}</h2>
-                      <p style={{margin: "6px 0 0", maxWidth: "52ch", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C", textWrap: "pretty"}}>{V.expNote}</p>
-                    </div>
-                    <span style={{padding: "7px 14px", borderRadius: "999px", background: "#C8D5BB", fontSize: "12px", fontWeight: "500", whiteSpace: "nowrap"}}>{V.expSummary}</span>
-                  </div>
-                  <div style={{marginTop: "20px"}}>
-                    <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>What to export</div>
-                    <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "11px"}}>
-                      {(V.expScopes ?? []).map((sc, __isc) => (
-                        <Fragment key={__isc}>
-                          <button type="button" onClick={sc.pick} data-chip="1" data-on={sc.on} style={{display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 16px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "13.5px", cursor: "pointer"}}>
-                            {sc.label}
-                            <span style={{fontSize: "11.5px", opacity: ".7"}}>{sc.count}</span>
-                          </button>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{marginTop: "20px"}}>
-                    <div style={{display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px"}}>
-                      <span style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Columns</span>
-                      <button type="button" onClick={V.expAllCols} style={{padding: "0", border: "0", background: "transparent", fontFamily: "inherit", fontSize: "12px", color: "#4A4F4B", textDecoration: "underline", cursor: "pointer"}}>Select all</button>
-                    </div>
-                    <div style={{display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "11px"}}>
-                      {(V.expCols ?? []).map((c, __ic) => (
-                        <Fragment key={__ic}>
-                          <button type="button" onClick={c.toggle} data-chip="1" data-on={c.on} style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "9px 14px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "13px", cursor: "pointer"}}>
-                            <span data-tick="1" aria-hidden="true" style={{fontSize: "10px"}}>✓</span>
-                            {c.label}
-                          </button>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{marginTop: "20px"}}>
-                    <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>File</div>
-                    <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "11px", padding: "13px 16px", borderRadius: "14px", background: "#EAEAE8"}}>
-                      <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "32px", height: "32px", borderRadius: "10px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "9.5px", fontWeight: "700"}}>{V.expBadge}</span>
-                      <span style={{flex: "1", minWidth: "170px", fontSize: "13.5px", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace"}}>{V.expFile}</span>
-                      <span style={{fontSize: "12px", color: "#5A5F5C"}}>{V.expSize}</span>
-                    </div>
-                    <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px"}}>
-                      {(V.delimChips ?? []).map((dc, __idc) => (
-                        <Fragment key={__idc}>
-                          <button type="button" onClick={dc.pick} data-chip="1" data-on={dc.on} style={{display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 15px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer"}}>
-                            {dc.label}
-                            <span style={{fontSize: "11.5px", opacity: ".7"}}>{dc.count}</span>
-                          </button>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "22px", paddingTop: "18px", borderTop: "1px solid #E4E5E2"}}>
-                    <button type="button" data-run="1" onClick={V.closeExp} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 4v10"></path>
-                        <path d="M8 10.5l4 4 4-4"></path>
-                        <path d="M4.5 18.5h15"></path>
-                      </svg>
-                      {' '}Download{' '}
-                    </button>
-                    <button type="button" data-ghost="1" onClick={V.closeExp} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "transparent", color: "#4A4F4B", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Cancel</button>
-                  </div>
-                </section>
-              </div>
-              </>
-            ) : null}
-            {shows(V.profileExportOpen) ? (
-              <>
-              <div data-profile-export-backdrop="1" onClick={(event) => { if (event.target === event.currentTarget) V.closeProfileExport() }} style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}}>
-                <section style={{width: "100%", maxWidth: "520px", padding: "clamp(22px,3vw,32px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
-                  <h2 style={{margin: "0", fontSize: "clamp(20px,2.2vw,26px)", fontWeight: "400", letterSpacing: "-.02em"}}>Export social profiles</h2>
-                  <p style={{margin: "7px 0 0", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C"}}>{V.profileExportSummary}</p>
-                  <div style={{display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "24px"}}>
-                    <button type="button" onClick={V.exportProfilesExcel} data-profile-export="xlsx" style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer"}}>Excel (.xlsx)</button>
-                    <button type="button" onClick={V.exportProfilesPdf} data-profile-export="pdf" style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer"}}>PDF (.pdf)</button>
-                    <button type="button" onClick={V.closeProfileExport} data-profile-export-cancel="1" style={{height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "transparent", color: "#4A4F4B", fontFamily: "inherit", fontSize: "13.5px", cursor: "pointer"}}>Cancel</button>
-                  </div>
-                </section>
-              </div>
-              </>
-            ) : null}
+            {shows(V.expOpen) ? <ExportDialog title={V.expTitle} summary={V.simpleExportSummary} busy={V.exportBusy} empty={V.simpleExportEmpty} onExport={format => format === 'xlsx' ? V.exportExcel() : V.exportPdf()} onClose={V.closeExp} /> : null}
+            {shows(V.profileExportOpen) ? <ExportDialog social title="Export social profiles" summary={V.profileExportSummary} busy={V.exportBusy} empty={false} onExport={format => format === 'xlsx' ? V.exportProfilesExcel() : V.exportProfilesPdf()} onClose={V.closeProfileExport} /> : null}
             {shows(V.chatOpen) ? (
               <>
               <div data-chat-panel="1" style={{position: "fixed", right: "clamp(12px,2vw,26px)", bottom: "clamp(12px,2vw,26px)", zIndex: "95", width: "min(384px,calc(100vw - 24px))", maxHeight: "min(80vh,620px)", display: "flex", flexDirection: "column", borderRadius: "24px", background: "#F5F5F4", boxShadow: "0 34px 70px -34px rgba(28,28,28,.75)", overflow: "hidden", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                 <div style={{display: "flex", alignItems: "center", gap: "11px", padding: "14px 16px", background: "#1C1C1C", color: "#F0F0F0", flex: "none"}}>
                   <span data-chatlottie2="1" aria-hidden="true" style={{display: "block", width: "40px", height: "40px", flex: "none"}}></span>
                   <span style={{flex: "1", minWidth: "0"}}>
-                    <span style={{display: "block", fontSize: "14.5px", fontWeight: "500"}}>Nafran Assist</span>
+                    <span style={{display: "block", fontSize: "14.5px", fontWeight: "500"}}>MamaLead Assist</span>
                     <span style={{display: "flex", alignItems: "center", gap: "6px", marginTop: "3px", fontSize: "11.5px", color: "#9BA29C"}}>
                       <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#C8D5BB", animation: "lsPulse 2.4s ease-in-out infinite"}}></span>
                       AI · workspace aware
@@ -3838,7 +3496,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     ))}
                   </div>
                   <div style={{display: "flex", alignItems: "center", gap: "8px", padding: "5px 6px 5px 15px", borderRadius: "999px", background: "#EAEAE8"}}>
-                    <input data-chatinput="1" type="text" onKeyDown={V.onChatKey} aria-label="Message Nafran Assist" placeholder="Type a message…" style={{flex: "1", minWidth: "0", height: "36px", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} />
+                    <input data-chatinput="1" type="text" onKeyDown={V.onChatKey} aria-label="Message MamaLead Assist" placeholder="Type a message…" style={{flex: "1", minWidth: "0", height: "36px", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} />
                     <button type="button" onClick={V.sendChat} aria-label="Send" style={{display: "grid", placeItems: "center", width: "36px", height: "36px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "14px", cursor: "pointer", flex: "none"}}>↑</button>
                   </div>
                   {shows(V.mailOpen) ? (
@@ -3846,7 +3504,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{padding: "13px 14px", borderRadius: "16px", background: "#EAEAE8"}}>
                       <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Rather email?</div>
                       <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "7px", marginTop: "9px"}}>
-                        <input data-chatmail="1" type="email" aria-label="Your email" defaultValue="nafran@nafran.co" style={{flex: "1", minWidth: "132px", height: "38px", padding: "0 13px", border: "0", borderRadius: "999px", background: "#F5F5F4", fontSize: "13px", color: "#1C1C1C", outline: "none"}} />
+                        <input data-chatmail="1" type="email" aria-label="Your email" defaultValue="" style={{flex: "1", minWidth: "132px", height: "38px", padding: "0 13px", border: "0", borderRadius: "999px", background: "#F5F5F4", fontSize: "13px", color: "#1C1C1C", outline: "none"}} />
                         <button type="button" onClick={V.sendMail} style={{display: "inline-flex", alignItems: "center", height: "38px", padding: "0 16px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}}>Email transcript</button>
                       </div>
                       <p style={{margin: "9px 0 0", fontSize: "11.5px", lineHeight: "1.5", color: "#4A4F4B"}}>{V.mailNote}</p>

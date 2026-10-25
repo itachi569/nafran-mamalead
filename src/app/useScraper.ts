@@ -14,6 +14,7 @@ import type { Lead, StoredLead } from '../types/desktop'
 type Phase = 'idle' | 'run'
 
 export interface StartOptions {
+  websiteFilter?: "any" | "has" | "none"
   keywords: string[]
   location: string
   maxResultsPerKeyword: number
@@ -44,6 +45,7 @@ export interface StartOptions {
 }
 
 export interface ScrapeSnapshot {
+  runId?: string
   running: boolean
   found: number
   /** The database's full lead count; `leads` holds only the recent preview. */
@@ -86,7 +88,7 @@ const HEADLESS = import.meta.env.VITE_SCRAPER_HEADLESS !== 'false'
 export const SCRAPER_HEADLESS = HEADLESS
 
 /** A stored lead reads the same as a captured one, which is what the ledger consumes. */
-function storedToLead(row: StoredLead): Lead {
+export function storedToLead(row: StoredLead): Lead {
   return {
     id: row.id,
     name: row.name,
@@ -110,6 +112,13 @@ function storedToLead(row: StoredLead): Lead {
     capturedAt: row.captured_at,
     lastScannedAt: row.last_scanned_at ?? null,
   }
+}
+
+function friendlyRunError(error: unknown): string {
+  const message=error instanceof Error ? error.message : 'The run could not be started.'
+  if (/LicenseAccessError|Activate an active|license key/i.test(message)) return 'Activate your 1-day trial or Lifetime key in Settings & Billing before searching.'
+  if (/closed|cancelled|aborted/i.test(message)) return 'The browser was closed. Your scan was cancelled; choose Run again when you are ready.'
+  return message.replace(/^Error invoking remote method '[^']+':\s*/,'').replace(/^Error:\s*/,'')
 }
 
 export function useScraper(): {
@@ -137,7 +146,7 @@ export function useScraper(): {
   const reloadFromDatabase = useCallback(async () => {
     if (!db) return
     try {
-      const [firstPage, runs] = await Promise.all([db.leads.list({ limit: 200 }), db.runs.list(50)])
+      const [firstPage, runs] = await Promise.all([db.leads.list({ limit: 1600 }), db.runs.list(50)])
       const leads = firstPage.rows.map(storedToLead)
       // The maps page names the area it is showing. On a fresh launch nothing has run in this
       // session, so without this the plot would be captioned with the reference's city while the
@@ -199,7 +208,9 @@ export function useScraper(): {
     const offProgress = bridge.scraper.onProgress((progress) => {
       setSnapshot((current) => ({
         ...current,
-        running: progress.status === 'running',
+        // Completion is announced by onDone after billing settles and the run is saved.
+        running: progress.status === 'running' || (current.running && progress.runId !== 'google-gate'),
+        runId: progress.runId === 'google-gate' ? current.runId : progress.runId,
         found: progress.found,
         // The worker reports the real ceiling for this run, so the counter cannot run past it.
         target: progress.target || current.target,
@@ -230,7 +241,7 @@ export function useScraper(): {
             (lead) => !summary.leads.some((fresh) => fresh.placeRef && fresh.placeRef === lead.placeRef),
           ),
         ]
-        const total = current.total + (summary.stored?.saved ?? 0)
+        const total = summary.leads.length
         return {
           ...current,
           running: false,
@@ -247,6 +258,7 @@ export function useScraper(): {
           stSocial: 'idle',
           stEmail: 'idle',
           stPhone: 'idle',
+          runId: summary.runId,
           durationMs: summary.durationMs,
           activityAt: summary.finishedAt,
           request: {
@@ -338,6 +350,7 @@ export function useScraper(): {
             minDelayMs: options.minDelayMs,
             maxDelayMs: options.maxDelayMs,
             executablePath: options.executablePath,
+            websiteFilter: options.websiteFilter,
             savedProfile: options.savedProfile || gated,
           },
         }
@@ -346,8 +359,8 @@ export function useScraper(): {
           setSnapshot((current) => ({
             ...current,
             running: false,
-            error: error instanceof Error ? error.message : 'The run could not be started.',
-            message: error instanceof Error ? error.message : 'The run could not be started.',
+            error: friendlyRunError(error),
+            message: friendlyRunError(error),
             stSocial: 'idle',
             stEmail: 'idle',
             stPhone: 'idle',

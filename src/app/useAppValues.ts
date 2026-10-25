@@ -35,14 +35,15 @@ import {
 import { localDb } from '../lib/local'
 import { describeDeepKey, readDeepKey, storeDeepKey } from './deepKey'
 import { pageLabelOf, type EmailTone } from '../lib/email'
-import { phoneRings } from '../lib/phone'
 import { districtsFor, townOf } from './districts'
 import { PACE_LIMITS, paceToMs, readScraperSettings, storeScraperSettings, type ScraperSettings } from './scraperSettings'
 import { paintTheme, readStoredTheme, storeTheme } from './theme'
 import { useEmailPage } from './useEmailPage'
 import { matchesFinderSearch, useFinderScan } from './useFinderScan'
-import { SCRAPER_HEADLESS, useScraper } from './useScraper'
+import { SCRAPER_HEADLESS, useScraper, storedToLead } from './useScraper'
 import { useSocialPage, type SocialPage } from './useSocialPage'
+
+type SimpleExportSelection = { title: string; summary: string; request: Parameters<NonNullable<ReturnType<typeof localDb>>['exports']['write']>[0] }
 
 const DEFAULT_KEEP = [true, true, true, true, false, false, false, false, false, false]
 const VIEWS_WITH_REAL_DATA = ['leads', 'lists', 'runs', 'settings']
@@ -58,6 +59,7 @@ const DECISION_100_ALERT_KEY = 'nafran.billing.decision100Alert'
 const DECISION_500_ALERT_KEY = 'nafran.billing.decision500Alert'
 
 export type AppNotification = {
+  runId?: string
   id: string
   title: string
   body: string
@@ -348,22 +350,15 @@ function websiteLinesFromCsv(text: string): string[] {
   return [...new Set(rows.slice(dataStart).map((row) => (row[column] ?? '').trim()).filter(looksLikeWebsite))]
 }
 
-/**
- * What the Google row says.
- *
- * Run with filters always connects the account first: the app's own browser opens and asks when the
- * saved profile holds none, and scrapes in that same window once the account is in. So this row is
- * not a switch that decides whether a run has an account — it states whether one is saved, and
- * signing in here is only a way to get that out of the way before pressing Run.
- */
+/** Explain the saved account while keeping the guest option available before every run. */
 function googleNoteFor(status: { profile: boolean; signedIn: boolean } | null): string {
   if (status?.signedIn) {
-    return 'Connected — Run with filters starts straight away and scrapes in this app’s browser.'
+    return 'Google account connected. Choose this account or a private guest session before scanning.'
   }
   if (status?.profile) {
-    return 'The saved profile has no account signed in. Run with filters will open this app’s browser and ask for one.'
+    return 'No account signed into the saved profile. You can sign in or continue as a guest.'
   }
-  return 'No account connected yet — Run with filters opens this app’s browser and asks for one before scraping.'
+  return 'Choose Google sign-in or a private guest session before each run.'
 }
 
 /** One reading of a lead, shared by the ledger rows, the filter chips and the summary card. */
@@ -558,7 +553,31 @@ export function useAppValues() {
   })
   // Districts added by the split control, if any. Empty means one search per keyword.
   const [districtSearches, setDistrictSearches] = useState<string[]>([])
-  const [swWebsite, setSwWebsite] = useState(true)
+  const [swWebsite, setSwWebsite] = useState(false)
+  const [mapsWebsite, setMapsWebsite] = useState('any')
+  const [mapsRunId, setMapsRunId] = useState('latest')
+  const [mapsLatestLeads, setMapsLatestLeads] = useState<Lead[]>([])
+  const [mapsHistoryLeads, setMapsHistoryLeads] = useState<Lead[] | null>(null)
+  const [mapsSelected, setMapsSelected] = useState<string[]>([])
+  const [runMinimized, setRunMinimized] = useState(false)
+  const [mapsPrompt, setMapsPrompt] = useState<'google' | 'license' | 'stop' | null>(null)
+  const [billingJump, setBillingJump] = useState<{ target: 'trial' | 'lifetime' | 'license' } | null>(null)
+  const clearBillingJump = useCallback(() => setBillingJump(null), [])
+  const [featureBilling, setFeatureBilling] = useState<Awaited<ReturnType<NonNullable<Window['desktop']>['billing']['status']>> | null>(null)
+  const showAccessPrompt = useCallback(() => { setReportsOpen(false); setMapsPrompt('license') }, [])
+  const featureAccessAllowed = useCallback(() => {
+    if (!featureBilling?.connected) return false
+    const status = featureBilling
+    const core = status.coreLicenseActive ?? Boolean(status.license?.active && status.license.kind !== 'decision')
+    const trialValid = status.trial?.active && (!status.trial.expiresAt || Date.parse(status.trial.expiresAt) > Date.now())
+    if (core && (status.lifetime?.active || trialValid)) return true
+    const decisionKey = status.decisionKeyActive ?? (status.license?.active && status.license.kind === 'decision')
+    return view === 'dm' && Boolean(decisionKey && status.decisionMaker?.active && status.decisionMaker.monthlyRemaining > 0 &&
+      (!status.decisionMaker.renewsAt || Date.parse(status.decisionMaker.renewsAt) > Date.now()))
+  }, [featureBilling, view])
+  const [reportsOpen, setReportsOpen] = useState(false)
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [reportsError, setReportsError] = useState('')
   const [swPhone, setSwPhone] = useState(false)
   const [chEmails, setChEmails] = useState(true)
   const [chPhones, setChPhones] = useState(true)
@@ -591,6 +610,9 @@ export function useAppValues() {
   /** Whether the open import modal is the Social Profiles one, which files profile URLs. */
   const socialImportOpen = social.importOpen
   const [expOpen, setExpOpen] = useState(false)
+  const [exportSelection, setExportSelection] = useState<SimpleExportSelection | null>(null)
+  const [exportBusy, setExportBusy] = useState(false)
+  const exportLock = useRef(false)
   const [profileExportOpen, setProfileExportOpen] = useState(false)
   const [expMode, setExpMode] = useState('leads')
   const [expScope, setExpScope] = useState(0)
@@ -684,6 +706,12 @@ export function useAppValues() {
   }, [snapshot.message, readGoogleStatus])
 
   const flash = useCallback((message: string) => {
+    // A revoked/expired key can also be caught by the main-process authorization gate.
+    if (/Activate an active 1-day trial or lifetime|Activate a Decision Makers or lifetime key/i.test(message)) {
+      setReportsOpen(false)
+      setMapsPrompt('license')
+      return
+    }
     window.clearTimeout(toastTimer.current)
     setToast(message)
     toastTimer.current = window.setTimeout(() => setToast(''), 2800)
@@ -691,7 +719,7 @@ export function useAppValues() {
 
   /** Adds to the bell history and, when enabled, asks Electron for an OS-level alert. */
   const notify = useCallback(
-    (title: string, body: string, level: AppNotification['level'] = 'info') => {
+    (title: string, body: string, level: AppNotification['level'] = 'info', runId?: string) => {
       const item: AppNotification = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         title,
@@ -699,6 +727,7 @@ export function useAppValues() {
         at: new Date().toISOString(),
         level,
         unread: true,
+        runId,
       }
       setNotifications((current) => {
         const next = [item, ...current].slice(0, 20)
@@ -831,8 +860,9 @@ export function useAppValues() {
       'Maps scrape complete',
       `${snapshot.found} lead${snapshot.found === 1 ? '' : 's'} captured. Open Maps or Leads to review the results.`,
       'success',
+      snapshot.runId,
     )
-  }, [notify, snapshot.error, snapshot.found, snapshot.running])
+  }, [notify, snapshot.error, snapshot.found, snapshot.running, snapshot.runId])
 
   // A worker can fail one job while the rest of the queue continues. Surface that detail without
   // waiting for the final idle notification.
@@ -849,6 +879,7 @@ export function useAppValues() {
   const say = useCallback(async (text: string) => {
     const trimmed = String(text ?? '').trim()
     if (!trimmed) return
+    if (!featureAccessAllowed()) { showAccessPrompt(); return }
     const userMessage = { who: 'me', text: trimmed }
     const next = [...chatMessagesRef.current, userMessage]
     chatMessagesRef.current = next
@@ -874,7 +905,7 @@ export function useAppValues() {
         setMsgs(withBot)
         return
       }
-      if (!bridge?.chat) throw new Error('Nafran Assist is available in the MamaLead desktop app with an internet connection.')
+      if (!bridge?.chat) throw new Error('MamaLead Assist is available in the MamaLead desktop app with an internet connection.')
       let context = assistantContextRef.current
       if (/decision\s*makers?|dm\s*searches?/i.test(trimmed)) {
         try {
@@ -897,7 +928,7 @@ export function useAppValues() {
       chatMessagesRef.current = withBot
       setMsgs(withBot)
     } catch (error) {
-      const message = (error instanceof Error ? error.message : 'Nafran Assist could not reach the AI provider.')
+      const message = (error instanceof Error ? error.message : 'MamaLead Assist could not reach the AI provider.')
         .replace(/^Error invoking remote method '[^']+': Error:\s*/i, '')
       const withError = [...chatMessagesRef.current, { who: 'bot', text: message }]
       chatMessagesRef.current = withError
@@ -906,7 +937,7 @@ export function useAppValues() {
       chatPendingRef.current = Math.max(0, chatPendingRef.current - 1)
       if (chatPendingRef.current === 0) setChatTyping(false)
     }
-  }, [updateDecisionAllowance])
+  }, [updateDecisionAllowance, featureAccessAllowed, showAccessPrompt])
 
   const go = useCallback((next: string) => {
     setView(next)
@@ -918,6 +949,25 @@ export function useAppValues() {
     try { window.localStorage.setItem(LIFETIME_CHECKOUT_PENDING_KEY, String(until)) } catch { /* Poll for this session. */ }
     setLifetimeCheckoutUntil(until)
   }, [])
+
+  useEffect(() => {
+    const bridge = window.desktop?.billing
+    if (!bridge?.claimReturnHandoff || !bridge.onReturnHandoff) return
+    const returnToBilling = async () => {
+      if (!await bridge.claimReturnHandoff()) return
+      go('settings')
+      // Re-read server state; a protocol link is navigation, never proof of payment.
+      const status = await bridge.status().catch(() => null)
+      const needsKey = !status?.coreLicenseActive && !status?.decisionKeyActive ||
+        Boolean(status?.purchaseEmail && !status.coreLicenseActive) || Boolean(status?.decisionKeyEmail && !status.decisionKeyActive)
+      setStab(needsKey ? 'acct' : 'plan')
+      if (needsKey) setBillingJump({target:'license'})
+      window.dispatchEvent(new Event('nafran:billing-updated'))
+    }
+    const unsubscribe = bridge.onReturnHandoff(() => { void returnToBilling() })
+    void returnToBilling()
+    return unsubscribe
+  }, [go])
 
   const startDecisionCheckoutWatch = useCallback(() => {
     const until = Date.now() + 60 * 60 * 1000
@@ -1163,8 +1213,15 @@ export function useAppValues() {
     })
   }, [])
 
-  const runScrape = useCallback(() => {
+  const runScrape = useCallback((useGoogle?: boolean) => {
     if (snapshot.running) return
+    // Open the choice immediately using the current UI entitlement. The main process still
+    // verifies the licence before either kind of run, including revocations and trial limits.
+    if (!featureAccessAllowed()) { setMapsPrompt('license'); return }
+    if (typeof useGoogle !== 'boolean') { setMapsPrompt('google'); return }
+    setMapsPrompt(null)
+    setRunMinimized(false)
+    setMapsRunId('latest'); setMapsHistoryLeads(null); setMapsSelected([])
     // The location field is tagged by the generator. Selecting by position was wrong: the
     // keyword input sits above it, so the run searched whatever the keyword box held.
     const locationField = document.querySelector<HTMLInputElement>('[data-location="1"]')
@@ -1181,10 +1238,7 @@ export function useAppValues() {
     // The run has its own ceiling on how many searches it will make, so a large cross-product is
     // trimmed here rather than silently dropped by the runner.
     const capped = terms.slice(0, 8)
-    // The gate: this button never scrapes from a profile Google has never seen. The main process
-    // checks the saved account, opens the app's own browser to connect one when there is none, and
-    // runs in the window that took the sign-in. `googleProfile` therefore makes no difference here —
-    // a gated run always starts from the saved profile, which is where the account lives.
+    // Account mode uses the saved Google profile; guest mode uses a private session.
     start({
       keywords: capped,
       location: districtSearches.length ? `${town}` : location,
@@ -1195,8 +1249,9 @@ export function useAppValues() {
       minDelayMs: pace.minDelayMs,
       maxDelayMs: pace.maxDelayMs,
       executablePath: scraperSettings.browserPath,
-      savedProfile: true,
-      requireGoogle: true,
+      savedProfile: useGoogle,
+      requireGoogle: useGoogle,
+      websiteFilter: mapsWebsite as "any" | "has" | "none",
     })
     // The browser opens for the sign-in only when there is no account on file, so the first note
     // says which of the two this run is about to be. The cap note wins when both apply, because a
@@ -1205,12 +1260,12 @@ export function useAppValues() {
       flash(`Running the first ${capped.length} of ${terms.length} searches — 8 is the run limit.`)
     } else {
       flash(
-        googleStatus?.signedIn
+        !useGoogle ? 'Starting in a private guest session.' : googleStatus?.signedIn
           ? 'Google account connected — starting the run.'
           : 'Starting — the app’s browser opens for your Google account before the run.',
       )
     }
-  }, [snapshot.running, keywords, maxResults, start, scraperSettings, districtSearches, flash, googleStatus?.signedIn])
+  }, [snapshot.running, featureAccessAllowed, keywords, maxResults, start, scraperSettings, districtSearches, flash, googleStatus?.signedIn, mapsWebsite])
   runScrapeRef.current = runScrape
 
   /** Saves a change to how the browser runs, so it survives a restart. */
@@ -1226,12 +1281,12 @@ export function useAppValues() {
 
   const toggleVisible = useCallback(() => {
     setScraperSettings((current) => {
-      const next = { ...current, visible: !current.visible }
+      const next = { ...current, visible: !current.visible, windowChoiceVersion: 1 }
       storeScraperSettings(next)
       flash(
         next.visible
-          ? 'Runs will open a browser window. Slower, and far less likely to be throttled.'
-          : 'Runs will be headless again.',
+          ? 'The Maps scan will open in a visible browser window.'
+          : 'The scan will run in the background. Google sign-in still opens a window when needed.',
       )
       return next
     })
@@ -1404,9 +1459,7 @@ export function useAppValues() {
     }).catch(() => undefined)
   }, [])
 
-  const stopRun = useCallback(() => {
-    stop()
-  }, [stop])
+  const stopRun = useCallback(() => setMapsPrompt('stop'), [])
 
   const cancelScan = useCallback(() => {
     const jobId = scan.jobId
@@ -1632,12 +1685,12 @@ export function useAppValues() {
               const host = lead.website.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0]
               return {
                 domain: host,
-                detail: lead.name === host ? 'Enriching…' : lead.name,
+                detail: lead.last_scanned_at ? 'Website read' : lead.enrichment_status === 'done' || lead.enrichment_status === 'failed' ? 'Website could not be read' : lead.enrichment_status === 'running' ? 'Reading public pages…' : lead.name === host ? 'Queued for website reading' : lead.name,
                 contact:
                   [lead.phone ? 'phone' : '', lead.has_email ? 'email' : '', lead.has_social ? 'socials' : '']
                     .filter(Boolean)
                     .join(' · ') || 'nothing yet',
-                status: lead.has_email || lead.has_social ? 'Found' : 'Pending',
+                status: lead.last_scanned_at ? (lead.has_email || lead.has_social || lead.phone ? 'Found' : 'No public details') : lead.enrichment_status === 'done' || lead.enrichment_status === 'failed' ? 'Retry needed' : lead.enrichment_status === 'running' ? 'Reading' : 'Queued',
               }
             }),
           })
@@ -1647,6 +1700,22 @@ export function useAppValues() {
       // Leaving the last good value on screen beats clearing the page on a read failure.
     }
   }, [db, refreshPhone, range])
+
+  const refreshReports = useCallback(async () => {
+    setReportsLoading(true)
+    setReportsError('')
+    try {
+      if (!db) throw new Error('Open the desktop app to view your saved reports.')
+      const [totals, counts, history] = await Promise.all([db.dashboard(), db.runs.counts(), db.runs.list(5000)])
+      setDashboard(totals)
+      setRunStats(counts)
+      setRuns(history)
+    } catch {
+      setReportsError('Could not load your saved report. Try refreshing it.')
+    } finally {
+      setReportsLoading(false)
+    }
+  }, [db])
 
   const refreshUsage = useCallback(async () => {
     if (!db) return
@@ -1689,6 +1758,7 @@ export function useAppValues() {
     if (!window.desktop?.billing) return
     try {
       const status = await window.desktop.billing.status()
+      setFeatureBilling(status)
       setShowPlanWelcome(!(status.license?.active && (status.license.kind === 'trial' || status.license.kind === 'lifetime')))
       if (!status.connected || !status.license?.active) return setMapsAllowance(null)
       if (status.license.kind === 'lifetime') return setMapsAllowance({ kind: 'lifetime', used: 0, remaining: 0 })
@@ -1696,7 +1766,7 @@ export function useAppValues() {
         return setMapsAllowance({ kind: 'trial', used: status.mapsLeads.used ?? 0, remaining: status.mapsLeads.remaining ?? 0 })
       }
       setMapsAllowance(null)
-    } catch { setMapsAllowance(null) }
+    } catch { setFeatureBilling(null); setMapsAllowance(null) }
   }, [])
 
   /**
@@ -1909,7 +1979,7 @@ export function useAppValues() {
   runImportRef.current = runImport
 
   /** Opens the shared import dialog with prepared website lines from clipboard or a CSV file. */
-  const fillWebsiteImport = useCallback((lines: string[], source: 'clipboard' | 'CSV') => {
+  const fillWebsiteImport = useCallback((lines: string[], source: 'clipboard' | 'CSV' | 'selected Maps leads' | 'saved Maps run') => {
     if (!lines.length) {
       flash(source === 'CSV' ? 'No website or domain column was found in that CSV.' : 'The clipboard has no website domains to import.')
       return
@@ -2197,13 +2267,24 @@ export function useAppValues() {
     [db, flash],
   )
 
+  useEffect(() => {
+    if(!db || snapshot.running)return
+    let cancelled=false
+    const id=mapsRunId==='latest' ? runs[0]?.id : mapsRunId
+    if(!id){setMapsLatestLeads([]);return}
+    void db.leads.list({runId:id,limit:1600}).then(result=>{
+      if(cancelled)return
+      if(mapsRunId==='latest')setMapsLatestLeads(result.rows.map(storedToLead))
+      else setMapsHistoryLeads(result.rows.map(storedToLead))
+    }).catch(()=>{if(!cancelled)flash('Could not load this saved run. Please try again.')})
+    return ()=>{cancelled=true}
+  },[db,mapsRunId,runs,snapshot.running,snapshot.revision,flash])
+  const mapsDisplayed = snapshot.running ? snapshot.leads : mapsRunId === 'latest' ? mapsLatestLeads : mapsHistoryLeads ?? []
   const mapsWith = (field: 'phone' | 'website' | 'email') => {
-    if (field === 'phone') return dashboard?.withPhone ?? 0
-    if (field === 'website') return dashboard?.withWebsite ?? 0
-    return dashboard?.withEmail ?? 0
+    if(field==='email') return mapsDisplayed.filter(lead=>email.rows.some(row=>row.leadId===lead.id && row.found.length)).length
+    return mapsDisplayed.filter(lead=>Boolean(lead[field])).length
   }
-  const mapsPct = (field: 'phone' | 'website' | 'email') =>
-    snapshot.total ? Math.round((mapsWith(field) / snapshot.total) * 100) : 0
+  const mapsPct = (field: 'phone' | 'website' | 'email') => mapsDisplayed.length ? Math.min(100, Math.round(mapsWith(field) / mapsDisplayed.length * 100)) : 0
   /**
    * A four-segment strip with the leading share filled.
    *
@@ -2227,20 +2308,56 @@ export function useAppValues() {
   // The Maps results table: the places this workspace holds, narrowed by the page's own filter.
   const mapsMatches = useMemo(() => {
     const needle = mapsQuery.trim().toLowerCase()
-    if (!needle) return snapshot.leads
-    return snapshot.leads.filter((lead) =>
+    const selected = mapsDisplayed.filter(lead=>mapsWebsite === "any" || (mapsWebsite === "has" ? Boolean(lead.website) : !lead.website))
+    if (!needle) return selected
+    return selected.filter((lead) =>
       `${lead.name} ${lead.address ?? ''} ${lead.area ?? ''} ${lead.website ?? ''} ${lead.phone ?? ''}`
         .toLowerCase()
         .includes(needle),
     )
-  }, [snapshot.leads, mapsQuery])
+  }, [mapsDisplayed, mapsQuery, mapsWebsite])
 
-  const openExport = useCallback((kind: string, scopeIndex: number) => {
+  // Capture the page's selection when opening the format picker, so later refreshes do not
+  // change what the user is about to save.
+  function openExport(kind: string, scopeIndex: number) {
+    const exportKind = kind === 'runs' || kind === 'invoices' ? kind : 'leads'
+    const columns = EXP_MODES[exportKind].cols.filter(column => column[1]).map(column => column[0])
+    let count = storedLeadCount
+    let title = 'Export leads'
+    let description = 'all saved leads'
+    let stem = 'saved-leads'
+    let leadIds: string[] | undefined
+    let leadFilterKey: 'all' | 'phone' | 'email' | 'social' | 'missing' | undefined
+    let search: string | undefined
+    if (exportKind === 'runs') {
+      count = runs.length; title = 'Export run history'; description = 'saved runs'; stem = 'run-history'
+    } else if (exportKind === 'invoices') {
+      count = 0; title = 'Export invoices'; description = 'Download your paid invoices from Settings & Billing.'; stem = 'invoices'
+    } else if (scopeIndex !== 2) {
+      if (view === 'maps') {
+        const selected = new Set(mapsSelected)
+        leadIds = mapsMatches.filter(lead => !selected.size || selected.has(lead.id)).map(lead => lead.id)
+        title = 'Export Google Maps leads'; description = selected.size ? 'selected leads' : 'results in the current view'; stem = 'google-maps-leads'
+      } else if (view === 'email') {
+        leadIds = [...new Set(emailFinder.rows.map(row => row.leadId))]
+        title = 'Export email results'; description = 'leads in the current view'; stem = 'email-results'
+      } else if (view === 'phone') {
+        leadIds = [...new Set(phoneFinder.rows.map(row => row.leadId))]
+        title = 'Export phone results'; description = 'leads in the current view'; stem = 'phone-results'
+      } else if (scopeIndex === 1) {
+        count = leadPageTotal; leadFilterKey = LEAD_FILTER_KEYS[leadFilter]; search = leadSearch.trim()
+        description = 'leads matching the current filters'; stem = 'filtered-leads'
+      }
+      if (leadIds) count = leadIds.length
+    }
+    setExportSelection({ title, summary: exportKind === 'invoices' ? description : `${count.toLocaleString()} ${description} · choose a file format`, request: {
+      kind: exportKind, limit: count, delimiter: 'csv', columns,
+      fileName: `${stem}-${new Date().toISOString().slice(0,10)}`,
+      ...(leadIds !== undefined ? {leadIds} : {}),
+      ...(leadFilterKey ? {leadFilter:leadFilterKey,search} : {}),
+    } })
     setExpOpen(true)
-    setExpMode(kind)
-    setExpScope(scopeIndex)
-    setExpCols(EXP_MODES[kind].cols.map((column) => ({ label: column[0], on: column[1] })))
-  }, [])
+  }
 
   const openProfileExport = useCallback(() => setProfileExportOpen(true), [])
   const closeProfileExport = useCallback(() => setProfileExportOpen(false), [])
@@ -2249,10 +2366,13 @@ export function useAppValues() {
   /** Writes the Social Profiles page as a simple workbook or PDF, without the lead export options. */
   const runProfileExport = useCallback(
     async (format: 'xlsx' | 'pdf') => {
+      if (exportLock.current) return
       if (!db) {
         flash('The local database is not available in this window.')
         return
       }
+      exportLock.current = true
+      setExportBusy(true)
       try {
         const result = await db.exports.write({
           kind: 'profiles',
@@ -2268,48 +2388,27 @@ export function useAppValues() {
         flash(`Wrote ${result.rows} profile${result.rows === 1 ? '' : 's'} to ${result.fileName}.`)
       } catch (error) {
         flash(error instanceof Error ? error.message : 'The social profiles export could not be written.')
-      }
+      } finally { exportLock.current = false; setExportBusy(false) }
     },
     [db, flash, profileExportLeadIds, social.total],
   )
 
-  /**
-   * Writes the export the modal describes. The scope index picks how many rows to include, the
-   * delimiter chips pick the separator, and only the columns still switched on are written.
-   */
-  const runExport = async () => {
-    if (!db) {
-      flash('The local database is not available in this window.')
-      return
-    }
-    const mode = EXP_MODES[expMode] ?? EXP_MODES.leads
-    const scope = mode.scopes[expScope] ?? mode.scopes[0]
-    const columns = expCols.filter((column) => column.on).map((column) => column.label)
-    if (!columns.length) {
-      flash('Switch on at least one column before downloading.')
-      return
-    }
-    if (liveScope.n === 0) {
-      flash('There are no rows in this export scope.')
-      return
-    }
-    const delimiter = DELIMS[delim]?.[1] === '.tsv' ? 'tsv' : 'csv'
+  /** Save exactly the rows described by the compact format picker. */
+  const runExport = async (format: 'xlsx' | 'pdf') => {
+    if (exportLock.current || !exportSelection) return
+    if (!db) { flash('The local database is not available in this window.'); return }
+    if (!exportSelection.request.limit) { flash('There are no results to export.'); return }
+    exportLock.current = true
+    setExportBusy(true)
     try {
-      const result = await db.exports.write({
-        kind: expMode === 'runs' || expMode === 'invoices' ? expMode : 'leads',
-        limit: liveScope.n,
-        delimiter,
-        columns,
-        fileName: scope.file.replace(/\.csv$/, DELIMS[delim][1]),
-        ...(expMode === 'leads' && expScope === 1 ? { leadFilter: LEAD_FILTER_KEYS[leadFilter], search: leadSearch.trim() } : {}),
-        ...(expMode === 'leads' && expScope === 0 && runs[0] ? { runId: runs[0].id } : {}),
-      })
+      const result = await db.exports.write({ ...exportSelection.request, format, fileName: `${exportSelection.request.fileName}.${format}` })
       if (!result) return
       setExpOpen(false)
-      flash(`Wrote ${result.rows} row${result.rows === 1 ? '' : 's'} to ${result.fileName}.`)
+      flash(`Saved ${result.rows} row${result.rows === 1 ? '' : 's'} to ${result.path}.`)
+      notify('Export saved', result.path, 'success')
     } catch (error) {
       flash(error instanceof Error ? error.message : 'The export could not be written.')
-    }
+    } finally { exportLock.current = false; setExportBusy(false) }
   }
 
   // The reference re-ran its DOM pass on every update; React renders the same attributes, so the
@@ -2380,7 +2479,13 @@ export function useAppValues() {
   }, [refreshLists, refreshUsage, refreshMapsAllowance, snapshot.running, snapshot.revision])
   useEffect(() => {
     window.addEventListener('nafran:billing-updated', refreshMapsAllowance)
-    return () => window.removeEventListener('nafran:billing-updated', refreshMapsAllowance)
+    window.addEventListener('focus', refreshMapsAllowance)
+    const timer = window.setInterval(() => void refreshMapsAllowance(), 60000)
+    return () => {
+      window.removeEventListener('nafran:billing-updated', refreshMapsAllowance)
+      window.removeEventListener('focus', refreshMapsAllowance)
+      window.clearInterval(timer)
+    }
   }, [refreshMapsAllowance])
 
   // The Decision Makers page reads its funnel from the database, so it has to be filled on the
@@ -2607,7 +2712,8 @@ export function useAppValues() {
    * places the last run captured, the rows the ledger is currently showing, and the whole file.
    * Run and invoice exports keep their own numbers, which describe the log rather than leads.
    */
-  const leadScopeCounts = [runs[0]?.found ?? 0, leadPageTotal, storedLeadCount]
+  const exportRun = view === 'maps' && mapsRunId !== 'latest' ? runs.find(run=>run.id===mapsRunId) : runs[0]
+  const leadScopeCounts = [exportRun?.found ?? 0, view === 'maps' ? mapsMatches.length : leadPageTotal, storedLeadCount]
   const liveScope = { ...scope, n: expMode === 'leads' ? leadScopeCounts[expScope] ?? scope.n : scope.n }
 
   // What the local database holds, for copy that names the file's size rather than a sample.
@@ -2930,7 +3036,7 @@ export function useAppValues() {
       email.refresh()
       reload()
     },
-    ringSource: () => email.coverage.rings,
+    ringSource: (rows) => ['Homepage','Contact page','Team page','Structured data'].map(name=>({name,count:rows.filter(row=>row.items.some(item=>item.k===name)).length})),
     actionLabel: 'Verify all',
     runningLabel: (queued) =>
       queued ? `Reading ${queued} site${queued === 1 ? '' : 's'} for addresses…` : 'Reading the sites on file for addresses…',
@@ -2967,6 +3073,7 @@ export function useAppValues() {
       leadId: row.id,
       domain: hostOf(row.website),
       searchText: `${row.name} ${row.address} ${row.areaCode} ${row.phone}`,
+      hasNumber: row.hasNumber,
       scanned: Boolean(row.lastScannedAt),
       items: row.found.map((number) => ({ t: number.value, k: pageLabelOf(number.page) })),
       // The phone ledger's own words for a row: the kind of line, or that there is none.
@@ -2992,7 +3099,7 @@ export function useAppValues() {
       void refreshPhone()
       reload()
     },
-    ringSource: () => phoneRings(phone.rows),
+    ringSource: (rows) => [{name:'Reachable',count:rows.filter(row=>row.hasNumber).length},...['Reception','Direct line','Mobile'].map(name=>({name,count:rows.filter(row=>row.lineType===name).length}))],
     actionLabel: 'Check numbers',
     runningLabel: (queued) =>
       queued ? `Reading ${queued} site${queued === 1 ? '' : 's'} for numbers…` : 'Reading the sites on file for numbers…',
@@ -3003,7 +3110,7 @@ export function useAppValues() {
 
   const dmScope = new Set(dmSession.current.leadIds)
   const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id))
-  const dmSuggestions = suggestions.filter((person) => dmScope.has(person.lead_id))
+  const dmSuggestions = suggestions.filter((person) => dmScope.has(person.lead_id) && !dmPeopleRows.some(saved=>saved.lead_id===person.lead_id && saved.full_name.toLowerCase()===person.full_name.toLowerCase()))
   const dmMatchedIds = new Set(dmPeopleRows.map((person) => person.lead_id))
   const dmLinkedinIds = new Set(dmPeopleRows.filter((person) => person.linkedin_url).map((person) => person.lead_id))
   const dmPeople = { rows: dmPeopleRows, funnel: {
@@ -3031,11 +3138,11 @@ export function useAppValues() {
     },
     jobStatus: (jobId) => db?.jobs.status(jobId) ?? Promise.resolve(null),
     refresh: refreshPeople,
-    ringSource: () => [
-      { name: 'Websites', count: dmSessionLeads.length },
-      { name: 'Website read', count: dmSessionLeads.filter((lead) => lead.last_scanned_at).length },
-      { name: 'LinkedIn found', count: dmLinkedinIds.size },
-      { name: 'Person named', count: dmMatchedIds.size },
+    ringSource: (rows) => [
+      { name: 'Websites', count: rows.length },
+      { name: 'Website read', count: rows.filter(row=>row.scanned).length },
+      { name: 'LinkedIn found', count: rows.filter(row=>dmLinkedinIds.has(row.leadId)).length },
+      { name: 'Person named', count: rows.filter(row=>dmMatchedIds.has(row.leadId)).length },
     ],
     actionLabel: 'Review suggestions',
     runningLabel: () => 'Reading the imported websites for published people and roles…',
@@ -3060,7 +3167,7 @@ export function useAppValues() {
     try {
       const result = await db.exports.write({ kind: 'people', format, limit: dmPeopleRows.length,
         delimiter: 'csv', fileName: `decision-makers.${format}`, leadIds: session.leadIds,
-        columns: ['Business name', 'Domain', 'Decision maker', 'Role', 'Email', 'Phone', 'LinkedIn', 'Source', 'Saved date'],
+        columns: ['Business name', 'Domain', 'Decision maker', 'Role', 'Email', 'Phone', 'Business emails', 'Business phones', 'Business address', 'Published social links', 'LinkedIn', 'Source', 'Saved date'],
       })
       if (!result || result.rows === 0) return
       if (session.generation === dmSession.current.generation) {
@@ -3182,7 +3289,7 @@ export function useAppValues() {
   })()
 
   // The main process sends this compact, live workspace snapshot with each AI request. It gives
-  // Nafran Assist useful answers about the current account without exposing the local database or
+  // MamaLead Assist useful answers about the current account without exposing the local database or
   // provider credential to the renderer's page.
   assistantContextRef.current = {
     page: view,
@@ -3190,7 +3297,7 @@ export function useAppValues() {
     leadsWithEmail: dashboard?.withEmail ?? ledgerWithEmail,
     leadsWithPhone: dashboard?.withPhone ?? ledgerWithPhone,
     leadsWithSocialProfiles: dashboard?.withSocial ?? ledgerWithSocial,
-    namedDecisionMakers: dashboard?.decisionMakers ?? people.rows.length,
+    namedDecisionMakers: dashboard?.decisionMakerPeople ?? people.rows.length,
     missingDecisionMakers: people.funnel?.missing ?? 0,
     decisionMakerSearchesRemaining: decisionAllowance?.remaining ?? null,
     decisionMakerSearchesLimit: decisionAllowance?.limit ?? null,
@@ -3205,7 +3312,9 @@ export function useAppValues() {
   }
 
   return {
-    workspaceName,
+    featureAccessAllowed,
+    showAccessPrompt,
+    workspaceName: /^(Nafran Leads|Local workspace)$/i.test(workspaceName) ? "MamaLead" : workspaceName,
     workspaceMembers,
     localTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'System time zone',
     localDataPath: store?.path || 'Local database path unavailable',
@@ -3285,7 +3394,12 @@ export function useAppValues() {
     })),
     expSize: `≈ ${Math.max(1, Math.round(liveScope.n * columnsOn * 0.021))} KB`,
     expSummary: `${liveScope.n.toLocaleString('en-GB')} rows × ${columnsOn} columns`,
-    expTitle: mode.title,
+    expTitle: exportSelection?.title ?? 'Export leads',
+    simpleExportSummary: exportSelection?.summary ?? '',
+    simpleExportEmpty: !exportSelection?.request.limit,
+    exportBusy,
+    exportExcel: () => void runExport('xlsx'),
+    exportPdf: () => void runExport('pdf'),
     emailBadge: email.coverage.badge,
     emailBuckets: email.coverage.buckets,
     emailCascade: email.coverage.cascade,
@@ -3346,6 +3460,7 @@ export function useAppValues() {
       go('settings')
       setStab('plan')
       setPlanWelcomeDismissed(true)
+      setBillingJump({target:'trial'})
     },
     goSocial: () => go('social'),
     logout,
@@ -3459,8 +3574,8 @@ export function useAppValues() {
     // table says that rather than claiming the whole file came from one run.
     mapsCaptured: snapshot.running
       ? `${snapshot.found} ${snapshot.found === 1 ? 'business' : 'businesses'} captured so far.`
-      : snapshot.total
-        ? `Latest ${snapshot.leads.length} of ${snapshot.total} businesses on file.`
+      : mapsDisplayed.length
+        ? `${mapsDisplayed.length} businesses in the selected search.`
         : 'No places captured yet — run a scrape and they land here.',
     mapsRows: mapsMatches.slice(0, mapsLimit).map((lead) => {
       const row = leadToLedger(lead)
@@ -3473,6 +3588,7 @@ export function useAppValues() {
       const line1 = segments.slice(0, Math.max(1, postcodeAt < 0 ? segments.length - 1 : postcodeAt)).join(', ')
       const line2 = segments.slice(Math.max(1, postcodeAt < 0 ? segments.length - 1 : postcodeAt)).join(' ')
       return {
+        id: lead.id, website: lead.website,
         ini: row.ini,
         name: row.name,
         domain: row.domain,
@@ -3502,7 +3618,7 @@ export function useAppValues() {
     }),
     mapsShowing: Math.min(mapsMatches.length, mapsLimit),
     mapsTotal: mapsMatches.length,
-    mapsState: snapshot.leads.length
+    mapsState: mapsDisplayed.length
       ? mapsMatches.length
         ? ''
         : `No place matches “${mapsQuery.trim()}”.`
@@ -3514,18 +3630,18 @@ export function useAppValues() {
     onMapsInput: (event: React.InputEvent<HTMLInputElement>) => setMapsQuery(event.currentTarget.value),
     // The summary strip: how far the run has got, and what share of the places it captured carry a
     // phone number, a website and an address. Every figure is read from the run itself.
-    mapsProgress: String(snapshot.found || snapshot.total),
-    mapsProgressTotal: String(snapshot.target || snapshot.total),
-    mapsProgressBadge: snapshot.running ? 'Running' : snapshot.target ? 'Done' : 'Not run',
+    mapsProgress: String(snapshot.running ? snapshot.found : mapsDisplayed.length),
+    mapsProgressTotal: String(snapshot.running ? snapshot.target : mapsDisplayed.length),
+    mapsProgressBadge: snapshot.running ? 'Running' : mapsDisplayed.length ? 'Done' : 'Not run',
     mapsProgressBars: bars(snapshot.target ? (snapshot.found || 0) / snapshot.target : 0, '#A9BC9B'),
     // The place actually being searched, so the panel and the map name it rather than the
     // reference's own city. A run in flight reports its request; otherwise the last run's.
     runLocation: location,
     // The ledger spans more than one run, and the map plots all of it, so its caption names every
     // area the pins came from rather than only the one searched last.
-    mapsAreas: (snapshot.request?.locations ?? []).filter(Boolean).join(', ') || location,
-    mapsRadius: pinSpread(snapshot.leads),
-    mapsRadiusShort: pinSpread(snapshot.leads),
+    mapsAreas: (mapsRunId==='latest' ? runs[0] : runs.find(run=>run.id===mapsRunId))?.location || location,
+    mapsRadius: pinSpread(mapsDisplayed),
+    mapsRadiusShort: pinSpread(mapsDisplayed),
     mapsActivity,
     mapsActivityEmpty: mapsActivity.length ? '' : 'Nothing has run yet — start a scrape and it is logged here.',
     // How the browser runs, and how the city is being split, for the controls on the Maps page.
@@ -3538,6 +3654,7 @@ export function useAppValues() {
       ? 'A browser window opens for each run.'
       : 'Runs in the background — faster, more likely to be throttled. Connecting Google still opens the app’s browser once.',
     toggleVisible,
+    paceChoice: `${(scraperSettings.paceMinSeconds + scraperSettings.paceMaxSeconds) / 2} s · ${scraperSettings.paceMinSeconds >= 10 ? "very gentle" : scraperSettings.paceMinSeconds >= 6 ? "careful" : scraperSettings.paceMinSeconds >= 3 ? "steady" : "quick"}`,
     paceMin: scraperSettings.paceMinSeconds,
     paceMax: scraperSettings.paceMaxSeconds,
     paceLabel: `${scraperSettings.paceMinSeconds}–${scraperSettings.paceMaxSeconds}s between places`,
@@ -3760,7 +3877,7 @@ export function useAppValues() {
     gAcctTitle: googleStatus?.signedIn ? 'Google account connected' : 'No Google account connected',
     gAcctNote: googleStatus?.signedIn
       ? 'Runs start from this account, in this app’s own browser.'
-      : 'Run with filters connects it first, in this app’s own browser window.',
+      : 'Choose Google sign-in or a private guest session before each run.',
     gAcctBtn: googleStatus?.signedIn ? 'Replace' : 'Sign in to Google…',
     gAcctAction: () => {
       void signInGoogle()
@@ -3791,7 +3908,7 @@ export function useAppValues() {
     // to the list: the document draws them, this is what makes them mean something.
     onPaceChoice: (event: React.ChangeEvent<HTMLSelectElement>) => {
       const chosen = PACE_CHOICES.find((choice) => choice.label === event.currentTarget.value)
-      if (chosen) updateScraperSettings({ paceMinSeconds: chosen.seconds, paceMaxSeconds: chosen.seconds + 1 })
+      if (chosen) updateScraperSettings({ paceMinSeconds: chosen.seconds, paceMaxSeconds: chosen.seconds })
     },
     onBrowserChoice: (event: React.ChangeEvent<HTMLSelectElement>) => {
       const chosen = BROWSER_PATHS.find((browser) => browser.label === event.currentTarget.value)
@@ -3857,7 +3974,7 @@ export function useAppValues() {
     // land where Lahore is, and Manchester pins where Manchester is. Leads without coordinates
     // (an import, or a listing Google gave no position for) are spread on a fixed grid instead.
     mapsPins: (() => {
-      const placed = snapshot.leads.slice(0, 8)
+      const placed = mapsDisplayed.slice(0, 8)
       const points = placed.filter(
         (lead): lead is typeof lead & { latitude: number; longitude: number } =>
           typeof lead.latitude === 'number' && typeof lead.longitude === 'number',
@@ -4123,6 +4240,11 @@ export function useAppValues() {
     // profile are the population the match works from.
     dmPeopleListed: dmPeople.funnel?.withLinkedin ?? 0,
     dmRows: dmVisiblePeople.slice(0, dmContactLimit).map((person) => ({
+      id: person.id, leadId: person.lead_id, email: person.email, phone: person.phone, source: person.source,
+      address: person.lead_address,
+      businessEmails: (person.business_emails || '').split('\n').filter(value=>value && value!==person.email),
+      businessPhones: [...new Set([person.lead_phone, ...(person.business_phones || '').split('\n')].filter(value=>value && value!==person.phone))],
+      socialLinks: [...new Set([person.linkedin_url, ...(person.published_socials || '').split('\n')].filter(value=>/^https?:\/\//i.test(value)))],
       ini: initialsOf(person.full_name),
       name: person.full_name,
       title: person.title || 'Role not stated',
@@ -4253,12 +4375,13 @@ export function useAppValues() {
       : 'Names inferred from addresses and company pages, kept apart from confirmed contacts until you check them.',
     buildSuggestions: () => void buildSuggestions(),
     // Website Lookup. The page reports what the last import did and previews the leads it made.
+    startWebsiteLookup: () => void runImportText(pastedLines(impValue)),
     importAdded: String(imports.rows.length),
     importMore: imports.websiteBatches.length ? `${imports.websiteBatches.length} website import${imports.websiteBatches.length === 1 ? '' : 's'} on file` : 'Paste a list to begin',
     importRows: imports.rows,
     websiteRecentDomains: imports.rows.slice(0, 5).map((row) => row.domain),
     websitePreview: imports.preview,
-    importStatus: imports.websiteBatches.length ? `${imports.websiteBatches.length} website imports on file` : 'Nothing imported yet',
+    importStatus: enrichmentActivity.find(item=>item.kind==='website' && item.status==='running')?.message || (imports.websiteBatches.length ? `${imports.websiteBatches.length} website imports on file` : 'Nothing imported yet'),
     importSummary: imports.websiteBatches.length
       ? (() => {
           const latest = imports.websiteBatches[0] as { source_count?: number; added?: number; skipped?: number }
@@ -4394,8 +4517,8 @@ export function useAppValues() {
     },
     pasteWebsiteClipboard,
     uploadWebsiteCsv,
-    openChat: () => setChatOpen(true),
-    openExp: () => openExport('leads', 0),
+    openChat: () => { if (!featureAccessAllowed()) { showAccessPrompt(); return }; setChatOpen(true) },
+    openExp: () => openExport('leads', view === 'maps' && (mapsWebsite !== 'any' || mapsQuery.trim()) ? 1 : 0),
     openExpAll: () => openExport('leads', 2),
     openExpInv: () => openExport('invoices', 2),
     openExpRuns: () => openExport('runs', 0),
@@ -4449,7 +4572,67 @@ export function useAppValues() {
       pick: () => { setRunFilter(index); setFocusedRunId(null); setRunsLimit(25) },
     })),
     runNote,
-    runScrape,
+    runScrape: () => void runScrape(),
+    billingJump,
+    clearBillingJump,
+    mapsPrompt,
+    closeMapsPrompt: () => setMapsPrompt(null),
+    confirmStop: () => { setMapsPrompt(null); stop() },
+    runGoogle: () => void runScrape(true),
+    runGuest: () => void runScrape(false),
+    mapsGoogleConnected: Boolean(googleStatus?.signedIn),
+    startTrial: () => { setMapsPrompt(null); go('settings'); setStab('plan'); setBillingJump({target:'trial'}) },
+    getLifetimeKey: () => { setMapsPrompt(null); go('settings'); setStab('plan'); setBillingJump({target:'lifetime'}) },
+    activateExistingKey: () => { setMapsPrompt(null); go('settings'); setStab('acct'); setBillingJump({target:'license'}) },
+    runOverlayVisible: snapshot.running && !runMinimized,
+    runReturnVisible: (snapshot.running && (runMinimized || view !== 'maps')) || (runMinimized && Boolean(snapshot.request)),
+    minimizeRun: () => setRunMinimized(true),
+    restoreRun: () => {
+      go('maps'); setRunMinimized(false)
+      if (!snapshot.running) {
+        setMapsRunId('latest'); setMapsHistoryLeads(null)
+        window.setTimeout(() => document.querySelector('[data-results]')?.scrollIntoView({behavior:'smooth',block:'start'}), 100)
+      }
+    },
+    mapsWebsite,
+    setMapsWebsite,
+    mapsRunId,
+    mapsRunOptions: runs.map(run=>({id:run.id,label:`${new Date(run.started_at).toLocaleString()} · ${run.location}`})),
+    selectMapsRun: (id:string) => {if(id!==mapsRunId){setMapsRunId(id);setMapsHistoryLeads([])}setMapsSelected([])},
+    mapsSelected,
+    toggleMapsLead: (id:string) => setMapsSelected(ids=>ids.includes(id)?ids.filter(v=>v!==id):[...ids,id]),
+    selectAllMaps: () => setMapsSelected(mapsSelected.length===mapsMatches.length ? [] : mapsMatches.map(lead=>lead.id)),
+    sendMapsTo: (target:string) => {
+      const websites=[...new Set(mapsMatches.filter(lead=>mapsSelected.includes(lead.id)).map(lead=>lead.website).filter(Boolean))]
+      if(!websites.length){flash('Select businesses with a website to scan.');return}
+      go(target);fillWebsiteImport(websites,'selected Maps leads')
+    },
+    importSavedRun: async (id:string) => {
+      if(!id || !db)return
+      const result=await db.leads.list({runId:id,limit:1600})
+      const sites=[...new Set(result.rows.map(row=>row.website).filter(Boolean))]
+      fillWebsiteImport(sites,'saved Maps run')
+      if(!sites.length)flash('This run has no websites to scan.')
+    },
+    importCsvFile: async (file:File) => {
+      try {fillWebsiteImport(websiteLinesFromCsv(await file.text()),'CSV')} catch {flash('The CSV file could not be read.')}
+    },
+    reportsOpen,
+    openReports: () => { setMapsPrompt(null); setReportsOpen(true); void refreshReports() },
+    closeReports: () => setReportsOpen(false),
+    reportsLoading,
+    reportsError,
+    refreshReports: () => void refreshReports(),
+    reportCounts: [
+      {label:'Total saved leads',value:dashboard?.total ?? 0},
+      {label:'Decision Makers found',value:dashboard?.decisionMakerPeople ?? 0},
+      {label:'Maps searches',value:runStats.runs},
+      {label:'Leads with a website',value:dashboard?.withWebsite ?? 0},
+      {label:'Leads with email',value:dashboard?.withEmail ?? 0},
+      {label:'Leads with phone',value:dashboard?.withPhone ?? 0},
+      {label:'Leads with social profiles',value:dashboard?.withSocial ?? 0},
+      {label:'Export-ready leads',value:dashboard?.exportReady ?? 0},
+    ],
     // The button says which half of a run it is in: the app's browser connecting Google is not
     // scraping yet, and saying so is the difference between "working" and "waiting for you".
     runState: snapshot.running ? (runWaiting ? 'wait' : 'run') : 'idle',
@@ -4639,6 +4822,7 @@ export function useAppValues() {
       unread: item.unread ? '1' : '0',
       when: notificationTime(item.at),
         color: item.level === 'error' ? '#C46D65' : item.level === 'success' ? '#6F8060' : '#A9BC9B',
+        open: () => {markNotificationRead(item.id);setNotificationsOpen(false);if(item.runId){if(item.runId!==mapsRunId){setMapsRunId(item.runId);setMapsHistoryLeads([])}setMapsSelected([])}go(/maps|scrape/i.test(item.title)?'maps':/email/i.test(item.title)?'email':/phone/i.test(item.title)?'phone':/decision|people/i.test(item.title)?'dm':/social/i.test(item.title)?'social':'runs')},
         read: () => markNotificationRead(item.id),
         remove: () => deleteNotification(item.id),
       })),

@@ -50,6 +50,7 @@ export interface ScrapeQuery {
   location: string
   maxResultsPerKeyword: number
   /** Total cap across every keyword and area in this run. */
+  websiteFilter?: "any" | "has" | "none"
   maxResultsTotal?: number | null
   language: string
   region: string
@@ -174,6 +175,7 @@ export interface PhoneSummary {
 }
 
 export interface DecisionMakerRow {
+  source: string
   id: string
   lead_id: string
   full_name: string
@@ -185,12 +187,19 @@ export interface DecisionMakerRow {
   lead_name: string
   lead_website: string
   lead_area: string
+  lead_address: string
+  lead_phone: string
+  business_emails: string
+  business_phones: string
+  published_socials: string
   /** When a finder last read this lead's own site; null when it never has. */
   last_scanned_at: string | null
 }
 
 /** A lead created by a website import, with what the enrichment pass has filled in so far. */
 export interface ImportedLead {
+  enrichment_status: string | null
+  last_scanned_at: string | null
   id: string
   name: string
   website: string
@@ -233,6 +242,7 @@ export interface DashboardTotals {
   withSocial: number
   withContact: number
   decisionMakers: number
+  decisionMakerPeople: number
   enriched: number
   exportReady: number
   noEmail: number
@@ -497,12 +507,15 @@ export interface DesktopApi {
       decisionKeyActive?: boolean
       lifetime?: { amount: number; currency: string; interval: null; active: boolean }
       trial?: { active: boolean; expiresAt: string | null }
+      trialRequest?: { requested: boolean; email: string | null; canChangeEmail: boolean }
       mapsLeads?: { used: number | null; limit: number | null; remaining: number | null }
       decisionMaker?: { amount: number; currency: string; interval: string | null; periodDays?: number; available?: boolean; active: boolean; status: string; ownerKind?: 'decision' | 'lifetime'; includedPeople: number; monthlyLimit: number; monthlyUsed: number; monthlyRemaining: number; renewsAt: string | null; periodId?: string | null }
       hasCustomer?: boolean
       license?: { active: boolean; kind?: 'trial' | 'lifetime' | 'decision'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
     }>
     claimDecisionSubscribeHandoff: () => Promise<boolean>
+    claimReturnHandoff: () => Promise<boolean>
+    onReturnHandoff: (listener: () => void) => () => void
     onDecisionSubscribeHandoff: (listener: () => void) => () => void
     onDecisionUsage: (listener: (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => void) => () => void
     requestTrial: (email: string, replaceExisting?: boolean) => Promise<{ emailSent: boolean; message: string }>

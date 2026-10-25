@@ -28,22 +28,26 @@ import {
 
 const devUrl = process.env.VITE_DEV_SERVER_URL
 const decisionSubscribeLink = 'mamalead://subscribe/decision-makers'
+const billingReturnLink = 'mamalead://billing'
+let pendingBillingReturn = process.argv.includes(billingReturnLink)
 let pendingDecisionSubscribe = process.argv.includes(decisionSubscribeLink)
 const ownsInstance = app.requestSingleInstanceLock()
 if (!ownsInstance) app.quit()
 if (ownsInstance) {
   const receiveSubscribeLink = (url: string) => {
-    if (url !== decisionSubscribeLink) return
-    pendingDecisionSubscribe = true
+    if (url !== decisionSubscribeLink && url !== billingReturnLink) return
+    if (url === billingReturnLink) pendingBillingReturn = true
+    else pendingDecisionSubscribe = true
     const window = BrowserWindow.getAllWindows()[0]
     if (!window) return
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()
-    window.webContents.send('billing:decision-subscribe-handoff')
+    window.webContents.send(url === billingReturnLink ? 'billing:return-handoff' : 'billing:decision-subscribe-handoff')
   }
   app.on('second-instance', (_event, args) => {
     if (args.includes(decisionSubscribeLink)) receiveSubscribeLink(decisionSubscribeLink)
+    if (args.includes(billingReturnLink)) receiveSubscribeLink(billingReturnLink)
   })
   app.on('open-url', (event, url) => { event.preventDefault(); receiveSubscribeLink(url) })
 }
@@ -466,6 +470,11 @@ function stripePage(raw: string, allowed: string[]): string {
 }
 
 ipcMain.handle('billing:status', () => billingStatus())
+ipcMain.handle('billing:claim-return-handoff', () => {
+  const pending = pendingBillingReturn
+  pendingBillingReturn = false
+  return pending
+})
 ipcMain.handle('billing:claim-decision-subscribe-handoff', () => {
   const claimed = pendingDecisionSubscribe
   pendingDecisionSubscribe = false
@@ -517,14 +526,14 @@ ipcMain.handle('updates:install', () => {
 /** Sends a short OS notification without exposing any renderer or filesystem access. */
 ipcMain.handle('notifications:show', (_event, payload: { title?: string; body?: string } = {}) => {
   if (!Notification.isSupported()) return { shown: false }
-  const title = String(payload.title ?? 'Nafran Leads').trim().slice(0, 120) || 'Nafran Leads'
+  const title = String(payload.title ?? 'MamaLead').trim().slice(0, 120) || 'MamaLead'
   const body = String(payload.body ?? '').trim().slice(0, 500)
   if (!body) return { shown: false }
   new Notification({ title, body }).show()
   return { shown: true }
 })
 
-/** Nafran Assist uses the authenticated server; no provider key is distributed. */
+/** MamaLead Assist uses the authenticated server; no provider key is distributed. */
 ipcMain.handle('assist:status', () => billingAssistStatus())
 ipcMain.handle('assist:test', () => askAssist({ messages: [{ role: 'user', content: 'Say hello in one short sentence.' }] })
   .then(({ model }) => ({ connected: true, model })))
@@ -843,6 +852,7 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
     if (!storeError) try {
       const { db, repository } = openDatabase()
       stored = repository.saveRun(db.ensureWorkspace().id, {
+        runId: finalSummary.runId,
         provider: finalSummary.provider,
         status: finalSummary.status === 'idle' || finalSummary.status === 'running' ? 'done' : finalSummary.status,
         keywords: finalSummary.query.keywords,

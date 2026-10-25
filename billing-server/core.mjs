@@ -2,6 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { readFileSync } from 'node:fs'
 import { buildLicenseEmail } from './license-email.mjs'
 import { createAssistService } from './assist.mjs'
+import { billingPage as page } from './payment-page.mjs'
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -37,12 +38,6 @@ const json = (status, body) => ({
   body: JSON.stringify(body),
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
 })
-const page = (title, message) => ({
-  status: 200,
-  body: `<!doctype html><html><meta charset="utf-8"><title>${title}</title><body style="font:16px system-ui;max-width:38rem;margin:5rem auto;padding:1rem"><h1>${title}</h1><p>${message}</p></body></html>`,
-  headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'", 'x-content-type-options': 'nosniff' },
-})
-
 export function createBillingHandler({ env = process.env, store, fetch: stripeFetch = fetch, getBlob = null, getLocalInstaller = null, hasLocalInstaller = null, sendEmail = null }) {
   const port = Number(env.BILLING_PORT ?? 38747)
   const publicUrl = new URL(env.BILLING_PUBLIC_URL ?? `http://127.0.0.1:${port}`)
@@ -217,6 +212,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const used = decisionPeriod ? await store.countDecisionUses(decisionOwner.id, decisionPeriod.key) : 0
     const decisionRemaining = decisionPeriod ? Math.max(0, DECISION_MONTHLY_LIMIT - used) : 0
     const decisionActive = Boolean(decisionPeriod && decisionRemaining > 0)
+    const requestedTrial = await store.trialForInstallation?.(row.id)
     return {
       configured: true, connected: true, mode,
       lifetime: { ...lifetimePrice, active: lifetimeActive },
@@ -224,6 +220,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       purchaseEmail: purchasedLicense?.sent_at ? purchasedLicense.email : null,
       decisionKeyEmail: purchasedDecisionLicense?.sent_at ? purchasedDecisionLicense.email : null,
       trial: { active: trialActive, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null },
+      trialRequest: { requested: Boolean(requestedTrial), email: requestedTrial?.email ?? null,
+        canChangeEmail: Boolean(requestedTrial?.sent_at && !requestedTrial.activated_at && !requestedTrial.bound_installation_id && !requestedTrial.revoked_at) },
       coreLicenseActive: licenseActive,
       decisionKeyActive: decisionLicenseActive || Boolean(directPeriod),
       mapsLeads: isTrial
@@ -412,8 +410,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     if (existing && replaceExisting && existing.email === email) throw new HttpError(409, 'Enter a different email address. This email already received its one trial key.')
     if (existing && !replaceExisting) throw new HttpError(409, 'A 1-day trial has already been requested for this email or browser.')
     if (!existing && replaceExisting) throw new HttpError(409, 'Request a trial key before changing its email.')
-    if (existing && (existing.activated_at || existing.bound_installation_id || existing.revoked_at || Number(existing.correction_count) >= 1)) {
-      throw new HttpError(409, 'This trial email can no longer be changed. Contact support if you cannot access the key.')
+    if (existing && (existing.activated_at || existing.bound_installation_id || existing.revoked_at)) {
+      throw new HttpError(409, 'This device has already activated or closed its trial. Changing email does not start another free trial.')
     }
     if (existing && (typeof store.replaceUnactivatedTrial !== 'function' || typeof store.restoreTrialCorrection !== 'function')) {
       throw new HttpError(503, 'Trial email correction is unavailable.')
@@ -423,7 +421,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const keyHash = hash(normalizeLicense(licenseKey))
     try {
       if (existing) {
-        const replaced = await store.replaceUnactivatedTrial({ id, installationId: row.id, keyHash, keyLast4: licenseKey.slice(-4), email })
+        const replaced = await store.replaceUnactivatedTrial({ id, installationId: row.id, keyHash, keyLast4: licenseKey.slice(-4), email, previousHash: existing.key_hash })
         if (!replaced) throw new HttpError(409, 'This trial email can no longer be changed.')
       } else await store.createTrial({ id, installationId: row.id, keyHash, keyLast4: licenseKey.slice(-4), email, createdAt: new Date().toISOString() })
     } catch {
@@ -573,13 +571,13 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (method === 'GET' && url.pathname === '/return') {
         const purchase = await reconcile(url.searchParams.get('session_id') ?? '')
         if (purchase.duplicate) return page('Duplicate payment refunded', purchase.product === 'decisionMaker' ? 'This email already has a Decision Makers key. Use the original key in MamaLead.' : 'This email already has a lifetime account. Use the original license key in MamaLead.')
-        if (purchase.product === 'lifetime' && purchase.checkoutFlow === 'desktop') await issueLicense(purchase)
+        const keyDelivered = purchase.product === 'lifetime' && purchase.checkoutFlow === 'desktop' ? Boolean((await issueLicense(purchase)).emailSent) : false
         if (purchase.product === 'decisionMaker' && purchase.checkoutFlow === 'desktop-standalone') {
           const delivered = await issueDecisionLicense(purchase)
-          return delivered.duplicate ? page('Duplicate payment refunded', 'This email already has a Decision Makers key. Use the original key in MamaLead.') : page('Decision Makers key sent', 'Your payment was verified. Your Decision Makers key was emailed to you. Open Settings → Account in MamaLead and activate it.')
+          return delivered.duplicate ? page('Duplicate payment refunded', 'This email already has a Decision Makers key. Use the original key in MamaLead.') : page('Decision Makers key sent', 'Your payment was verified. Your Decision Makers key was emailed to you. Open Settings → Account in MamaLead and activate it.', { product: 'decisionMaker', verified: true, keyDelivered: true })
         }
-        if (purchase.product === 'decisionMaker') return page('Decision Makers ready', 'Your payment was verified. Return to MamaLead; 1,000 Decision Maker searches are available for 30 days from payment. The app will refresh automatically.')
-        return page('Purchase confirmed', 'Your Stripe payment was verified. Return to MamaLead; the app will open the license field automatically once your license key has been emailed.')
+        if (purchase.product === 'decisionMaker') return page('Decision Makers ready', 'Your payment was verified. Return to MamaLead; 1,000 Decision Maker searches are available for 30 days from payment. The app will refresh automatically.', { product: 'decisionMaker', verified: true })
+        return page('Purchase confirmed', 'Your Stripe payment was verified. Return to MamaLead; the app will open the license field automatically once your license key has been emailed.', { product: 'lifetime', verified: true, keyDelivered })
       }
       if (method === 'POST' && url.pathname === '/webhooks/stripe') {
         const raw = await readBody()
@@ -603,7 +601,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (method === 'POST' && url.pathname === '/v1/download-by-license') {
         const { licenseKey } = await jsonBody(readBody)
         const normalized = normalizeLicense(licenseKey)
-        if (!licensePattern.test(normalized)) throw new HttpError(400, 'Enter a valid Nafran license key.')
+        if (!licensePattern.test(normalized)) throw new HttpError(400, 'Enter a valid MamaLead license key.')
         const license = await store.licenseByHash(hash(normalized))
         if (!license || license.revoked_at) throw new HttpError(401, 'This license key is invalid or revoked.')
         if (license.kind === 'trial') {
