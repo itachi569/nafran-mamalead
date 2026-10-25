@@ -38,7 +38,7 @@ async function main() {
     await moduleButton.click(); await page.getByRole('dialog').getByRole('img',{name:/Light-mode Google Maps Scraper/}).waitFor()
     await page.screenshot({path:join(out,'module.png')})
     await page.keyboard.press('Escape')
-    await page.getByRole('button',{name:'Open the Decision Makers module'}).click()
+    await page.locator('#modules button').filter({hasText:'Decision Makers'}).click()
     assert.match(await page.getByRole('dialog').innerText(),/office addresses and social links/)
     await page.screenshot({path:join(out,'decision-makers.png')})
     await page.keyboard.press('Escape')
