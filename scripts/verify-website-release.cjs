@@ -12,19 +12,22 @@ async function main() {
     await page.goto(origin,{waitUntil:'networkidle'})
     await page.locator('[data-public-download="windows"][data-dc-tpl]').waitFor()
     const html=readFileSync('website/index.html','utf8')
-    const files=[...new Set(html.match(/img\/app\/v1\.4\.14\/[\w.-]+\.png/g))]
+    const files=[...new Set(html.match(/img\/app\/v1\.4\.15\/[\w.-]+\.png/g))]
     for(const file of files) {
       const res=await page.request.get(new URL(file,origin).href)
       assert.equal(res.status(),200,file)
       assert.match(res.headers()['content-type'],/image\/png/)
     }
     assert.equal(await page.locator('[data-public-download^="mac"]').count(),0)
+    assert.equal(await page.locator('[data-plan-welcome]').count(),0)
+    assert.match(await page.locator('#latest').innerText(),/Insights \/ Reports/)
+    assert.ok(!html.includes('img/app/v1.4.14/'))
     assert.equal(await page.locator('[data-public-download="windows"]').getAttribute('href'),'https://api.mamalead.com/v1/download?platform=windows')
-    assert.match(await page.locator('body').innerText(),/Windows 1.4.14/)
+    assert.match(await page.locator('body').innerText(),/Windows 1.4.15/)
     await page.locator('img').evaluateAll(imgs=>Promise.all(imgs.map(img=>{img.loading='eager';return img.decode()})))
     assert.equal(await page.locator('img').evaluateAll(imgs=>imgs.every(i=>i.complete && i.naturalWidth>0)),true)
     await page.screenshot({path:join(out,'desktop.png')})
-    for(const name of ['pricing','download']) {
+    for(const name of ['latest','pricing','download']) {
       await page.locator('#'+name).scrollIntoViewIfNeeded(); await page.waitForTimeout(800)
       await page.screenshot({path:join(out,name+'.png')})
     }
@@ -34,6 +37,10 @@ async function main() {
     const moduleButton=page.getByRole('button',{name:'Open the Google Maps Scraper module'})
     await moduleButton.click(); await page.getByRole('dialog').getByRole('img',{name:/Light-mode Google Maps Scraper/}).waitFor()
     await page.screenshot({path:join(out,'module.png')})
+    await page.keyboard.press('Escape')
+    await page.getByRole('button',{name:'Open the Decision Makers module'}).click()
+    assert.match(await page.getByRole('dialog').innerText(),/office addresses and social links/)
+    await page.screenshot({path:join(out,'decision-makers.png')})
     await page.keyboard.press('Escape')
     await page.setViewportSize({width:390,height:844})
     await page.goto(origin+'/#download',{waitUntil:'networkidle'})
