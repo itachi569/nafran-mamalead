@@ -26,23 +26,31 @@
 - Read-only signature diagnostic using Microsoft's official root certificate
   passed signature, timestamp and CRL checks for the staged signed installer.
 
-## Production remains pending
+## Windows release published: 26 October 2026
 
-The guarded source publisher pushed the new website commit, then refused its
-rollout because homepage changes require owner approval for the new exact SHA.
-The prior approval for 1e7764c does not cover 070fd336bd692b533720c98f010bb8d33bdd0865.
+The administrator configured the root-owned installer publisher to use the
+Microsoft code-signing root certificate for signature and timestamp validation.
+`mamalead-installer-publish 1.4.16` completed successfully with all checks enabled.
 
-The installer publisher passed asset hashes/metadata but failed its default CA
-chain verification. Its root-owned configuration still needs the Microsoft
-Identity Verification Root Certificate Authority 2020 trust fix documented in
-installer-trust-fix-1.4.15.md (same configuration repair; publish 1.4.16 afterward).
-No verification or release guard was bypassed, and no runtime files were written
-manually. The current public source remains 1.4.15; Windows feed remains 1.4.14.
+- Public installer: https://api.mamalead.com/v1/download?platform=windows
+- HTTP 200; filename MamaLead-Setup-1.4.16.exe; length 333988008 bytes.
+- Update feed: https://mamalead.com/updates/windows/latest.yml reports 1.4.16.
+- Installer SHA-256: 33b5c9e8c7c4b2f58ff12fbc31ddd94e93f32ff1db20e199f83c887d42c79605.
+- Publisher verified hashes, update metadata, Nafran LTD signature, rollback,
+  billing health and public artifact/feed.
+- Rollback record: /var/lib/mamalead-publish/installer-backups/20261026T130909Z-1.4.16.
+- Billing health returns ok:true, mode:test.
 
-After the administrator registers the new exact-SHA approval and repairs the
-publisher trust configuration, run from /home/ahmed/mamalead:
+## Website screenshot deployment still pending
 
-    mamalead-publish
-    mamalead-installer-publish 1.4.16
+`mamalead-publish --check` still rejects the new homepage source SHA:
+`070fd336bd692b533720c98f010bb8d33bdd0865`.
+The server's exact-SHA guard requires owner approval for this specific commit;
+the earlier 1.4.15 approval does not cover it. VM115 staging evidence is already
+available under /tmp/vm115-playwright/mamalead-1.4.16-review/.
 
-Then verify the homepage images, download filename, updater version and health.
+The public website returns HTTP 200 but still references the previous Maps
+screenshots. Its download button now serves the updated 1.4.16 installer.
+Once the owner registers this exact homepage SHA, run `mamalead-publish` from
+/home/ahmed/mamalead, then verify the two new Maps screenshot URLs. No further
+installer publication or trust fix is required for this release.
