@@ -1,4 +1,4 @@
-# MamaLead 1.4.15 — prepared; production approval pending
+# MamaLead 1.4.15 — source deployed; installer trust configuration pending
 
 Desktop source: `a919637117dda56420408d2aee7e4d3740b5cb5f`, tag
 `v1.4.15-windows`. Signed Windows build:
@@ -31,25 +31,37 @@ not copied into that repository.
 - GitHub CI passed Azure signing and verified both application and installer
   publisher signatures as Nafran LTD.
 
-## Remaining publication gate
+## Production deployment: 26 October 2026
 
-`mamalead-publish` validated and pushed the production commit, then the installed
-release guard refused rollout: the exact SHA needs staging evidence and owner
-approval. `/home/ahmed/AGENTS.md` and the canonical repository's AGENTS.md require
-that approval for homepage/assets and protected billing SQL content. Do not
-bypass the guard or write directly into `/opt/billing` or `/srv/nafran-site`.
+Owner approval was registered for exact commit
+`1e7764c7f8e6da52e248a3f3e3b339b626eca60f`.
+`mamalead-publish --check` passed and `mamalead-publish` completed deployment.
+VM115 validation job `4d4f593e` passed. The publisher backed up source and SQLite,
+updated the approved source, restarted billing/landing, and verified services,
+database and public endpoints. The live homepage returns 200 and contains 1.4.15
+content, reports details and the current screenshot paths. GitHub source is pushed.
 
-Owner/Aamir must register approval for the exact production SHA above using the
-server's release-guard procedure. Review artifacts are under
-`/tmp/vm115-playwright/mamalead-1.4.15-review2/` on fleet-ops.
-After approval, run `mamalead-publish` from `/home/ahmed/mamalead` and verify the
-live homepage/assets, billing health and admin availability.
+## Signed installer: ready and staged, not published
 
-The server's documented source publisher excludes installer files and runtime
-download pointers. Publishing the signed 1.4.15 Windows installer, blockmap and
-`latest.yml`, and selecting the new download, also needs the owner-managed
-artifact publication path. Retain the existing 1.4.14 artifacts and rollback
-pointers. Verify signed-release hashes before switching either public endpoint.
+The signed GitHub CI assets were downloaded and checked against GitHub SHA-256,
+CI SHA-512, size and update metadata. Local Windows Authenticode validation is
+Valid, publisher CN=Nafran LTD, with a Microsoft timestamp.
 
-No production rollout or public installer switch is claimed by this note.
-Stripe test mode and Mac download visibility are unchanged.
+- Installer bytes: 334020024
+- SHA-256: `210b07a498ff41e6838616b6ab06db4047730e98ce05b4a002658c4e1a7595be`
+- Staged files: `/home/ahmed/deploy-staging/1.4.15/signed/`
+- Approved publisher: `mamalead-installer-publish 1.4.15`
+
+The new publisher passed file hashes and metadata but stopped at Authenticode
+chain validation. Its default Linux CA bundle lacks Microsoft Identity
+Verification Root Certificate Authority 2020. A separate diagnostic using the
+root downloaded from Microsoft's official PKI repository passed signature,
+timestamp and CRL verification. No signature check was disabled.
+
+The server administrator must configure the root-owned publisher to use a
+root-owned dedicated CA file for both `-CAfile` and `-TSA-CAfile`. The complete
+procedure is in `deploy/installer-trust-fix-1.4.15.md`. Ahmed does not have
+permission to modify that publisher or its trust configuration. The public
+Windows update feed still reports 1.4.14; the installer switch remains pending.
+
+Stripe health still reports test mode. Mac downloads remain hidden.
