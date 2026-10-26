@@ -41,16 +41,19 @@ Microsoft code-signing root certificate for signature and timestamp validation.
 - Rollback record: /var/lib/mamalead-publish/installer-backups/20261026T130909Z-1.4.16.
 - Billing health returns ok:true, mode:test.
 
-## Website screenshot deployment still pending
+## Website deployed: 26 October 2026
 
-`mamalead-publish --check` still rejects the new homepage source SHA:
-`070fd336bd692b533720c98f010bb8d33bdd0865`.
-The server's exact-SHA guard requires owner approval for this specific commit;
-the earlier 1.4.15 approval does not cover it. VM115 staging evidence is already
-available under /tmp/vm115-playwright/mamalead-1.4.16-review/.
+Owner approval was registered for 070fd336bd692b533720c98f010bb8d33bdd0865.
+The release guard passed. VM115 build job 444138d5 succeeded and mamalead-publish
+completed the website rollout, restarting only nafran-landing. All four public
+endpoints and database checks passed. The publisher created rollback backups.
 
-The public website returns HTTP 200 but still references the previous Maps
-screenshots. Its download button now serves the updated 1.4.16 installer.
-Once the owner registers this exact homepage SHA, run `mamalead-publish` from
-/home/ahmed/mamalead, then verify the two new Maps screenshot URLs. No further
-installer publication or trust fix is required for this release.
+Public verification passed:
+- Homepage HTTP 200; all Maps screenshot references use v1.4.16.
+- maps-light.png and coverage-map.png return HTTP 200, with SHA-256 hashes
+  matching the reviewed local screenshot files exactly.
+- Windows updater remains 1.4.16.
+- Billing health remains ok:true, mode:test.
+
+The app and website removal is released. No deployment approval or certificate
+configuration work remains for 1.4.16.
