@@ -582,7 +582,6 @@ export function useAppValues() {
   const [chEmails, setChEmails] = useState(true)
   const [chPhones, setChPhones] = useState(true)
   const [chSocial, setChSocial] = useState(true)
-  const [chDm, setChDm] = useState(false)
   const [chLinkedin, setChLinkedin] = useState(false)
   const [keywords, setKeywords] = useState<string[]>(['physiotherapy', 'skin care doctor', 'sports massage'])
   const [bulkKeywordsOpen, setBulkKeywordsOpen] = useState(false)
@@ -3352,7 +3351,6 @@ export function useAppValues() {
     startLifetimeCheckoutWatch,
     startDecisionCheckoutWatch,
     clearLicenseNextStep: () => setLicenseNextStep(''),
-    chDm: chDm ? '1' : '0',
     chEmails: chEmails ? '1' : '0',
     chLinkedin: chLinkedin ? '1' : '0',
     chPhones: chPhones ? '1' : '0',
@@ -4831,7 +4829,6 @@ export function useAppValues() {
       markNotificationsRead,
       markNotificationRead,
       deleteNotification,
-    togDm: () => setChDm((current) => !current),
     togEmails: () => setChEmails((current) => !current),
     togLinkedin: () => setChLinkedin((current) => !current),
     togPhones: () => setChPhones((current) => !current),

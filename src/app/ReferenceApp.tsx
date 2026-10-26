@@ -940,10 +940,6 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                               <span data-tick="1" aria-hidden="true" style={{fontSize: "11px"}}>✓</span>
                               Find social media
                             </button>
-                            <button type="button" onClick={V.togDm} data-chip="1" data-on={V.chDm} style={{display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 16px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "13.5px", cursor: "pointer"}}>
-                              <span data-tick="1" aria-hidden="true" style={{fontSize: "11px"}}>✓</span>
-                              Find decision makers
-                            </button>
                             <button type="button" onClick={V.togLinkedin} data-chip="1" data-on={V.chLinkedin} style={{display: "inline-flex", alignItems: "center", gap: "8px", padding: "10px 16px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "13.5px", cursor: "pointer"}}>
                               <span data-tick="1" aria-hidden="true" style={{fontSize: "11px"}}>✓</span>
                               Find LinkedIn page
