@@ -203,6 +203,25 @@ create index if not exists decision_maker_candidates_workspace_idx
   on decision_maker_candidates (workspace_id, status, created_at desc);
 
 -- ---------------------------------------------------------------- lists, jobs, exports
+create table if not exists email_contact_archive (
+  id text primary key,
+  workspace_id text not null references workspaces(id) on delete cascade,
+  lead_id text not null references leads(id) on delete cascade,
+  contact_id text not null,
+  original_json text not null,
+  archived_at text not null
+);
+
+-- Recoverable originals from the profile-only cleanup; deleting a lead deletes its archives too.
+create table if not exists social_profile_repairs (
+  id text primary key,
+  workspace_id text not null references workspaces(id) on delete cascade,
+  lead_id text not null references leads(id) on delete cascade,
+  profile_id text not null,
+  reason text not null,
+  original_json text not null,
+  repaired_at text not null
+);
 
 create table if not exists lists (
   id text primary key,
@@ -229,6 +248,7 @@ create table if not exists enrichment_jobs (
   workspace_id text not null references workspaces(id) on delete cascade,
   kind text not null check (kind in ('email', 'phone', 'social', 'decision-maker', 'website', 'deep')),
   lead_ids text not null default '[]',
+  options text not null default '{}',
   status text not null default 'queued' check (status in ('queued', 'running', 'done', 'failed')),
   found integer not null default 0,
   error text,
@@ -398,3 +418,14 @@ select
   count(distinct lead_id)   as leads
 from social_profiles
 group by workspace_id, platform;
+
+-- Per-scan Website Lookup results, isolated from the rest of the saved lead ledger.
+create table if not exists website_lookup_rows (
+  job_id text not null references enrichment_jobs(id) on delete cascade,
+  lead_id text not null references leads(id) on delete cascade,
+  position integer not null,
+  status text not null default 'queued' check (status in ('queued','running','done','failed')),
+  data text not null,
+  error text not null default '',
+  primary key (job_id, lead_id)
+);

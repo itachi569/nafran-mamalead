@@ -51,6 +51,19 @@ async function main() {
     global.fetch = originalFetch
   }
   console.log('PASS  LeadsAngel ZIP import, verdict mapping, async job polling')
+
+  let polls=0;const streamed=[]
+  global.fetch=async(url)=>{
+    const path=new URL(url).pathname.split('/').at(-1)
+    if(path==='verify')return Response.json({id:'stream-job-12345678',status:'queued'})
+    if(path==='status'){polls++;return Response.json({status:polls===1?'running':'completed',succeeded:polls===1?1:2})}
+    return Response.json({items:[{email:'yes@example.com',status:'done',result:{status:'safe'}},...(polls>1?[{email:'no@example.com',status:'done',result:{status:'unsafe',reason:'recipient_rejected'}}]:[]),{email:'unrequested@example.com',status:'done',result:{status:'safe'}}]})
+  }
+  try{
+    const result=await verifyEmailAddressesWithLeadsAngel(credentials,['yes@example.com','no@example.com'],new AbortController().signal,undefined,rows=>{streamed.push(...rows.map(row=>({email:row.email,beforeComplete:polls===1})))})
+    assert.equal(result.length,2);assert.deepEqual(streamed,[{email:'yes@example.com',beforeComplete:true},{email:'no@example.com',beforeComplete:false}]);assert.equal(polls,2)
+    console.log('PASS  partial SMTP results delivered early, deduplicated and scoped to requested addresses')
+  }finally{global.fetch=originalFetch}
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1 })

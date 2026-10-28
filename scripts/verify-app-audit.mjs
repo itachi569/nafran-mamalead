@@ -61,7 +61,7 @@ async function pages(label) {
   for (const view of ['dashboard', 'maps', 'social', 'email', 'phone', 'dm', 'website', 'leads', 'lists', 'runs', 'settings']) {
     await page.click(`[data-view="${view}"]`)
     await page.waitForTimeout(100)
-    assert.ok(await page.locator('section[data-card]').count(), `${view} has content`)
+    assert.ok(await page.locator('section[data-card], [data-website-lookup] .wl-card').count(), `${view} has content`)
     assert.ok((await page.locator('body').innerText()).length > 300)
   }
   console.log(`PASS ${label}: all 11 app pages render`)
@@ -81,6 +81,9 @@ try {
   assert.equal(sent.length, 1)
   await page.evaluate(key => window.desktop.billing.activate(key), sent[0].licenseKey)
   assert.equal((await page.evaluate(() => window.desktop.billing.status())).trial.active, true)
+  await page.reload()
+  await page.locator('[data-view="dashboard"]').waitFor()
+  await page.waitForTimeout(500)
   await page.click('[data-assist="1"]')
   await page.locator('[data-chatinput="1"]').fill('How do I import a website?')
   await page.locator('[data-chatinput="1"]').press('Enter')
@@ -94,7 +97,7 @@ try {
     await page.click(`[data-view="${view}"]`)
     if(view==='website') {
       await page.getByLabel('Websites to look up').fill(`${view}.fixture.test`)
-      await page.getByRole('button',{name:'Start lookup',exact:true}).click()
+      await page.getByRole('button',{name:/^Start lookup/}).click()
     } else {
       await page.getByRole('button', { name: 'Import websites', exact: true }).first().click()
       await page.locator('[data-imptext="1"]').fill(`${view}.fixture.test`)
@@ -148,7 +151,7 @@ try {
     const result = await page.evaluate(format => window.desktop.local.exports.write({ kind: 'leads', limit: 200, delimiter: ',', columns: ['Business name', 'Domain', 'Phone', 'Email'], fileName: 'audit', format }), format)
     assert.equal(result.rows, 24); assert.ok(existsSync(file))
     if (format === 'csv') assert.ok(readFileSync(file, 'utf8').includes('fixture.test'))
-    if (format === 'xlsx') { const book = new ExcelJS.Workbook(); await book.xlsx.readFile(file); assert.equal(book.worksheets[0].getCell('A1').value, 'mamalead') }
+    if (format === 'xlsx') { const book = new ExcelJS.Workbook(); await book.xlsx.readFile(file); assert.ok(book.worksheets[0].getImages().length>0,'Original logo is embedded');assert.equal(book.worksheets[0].getCell('A4').value,'Business name') }
     if (format === 'pdf') assert.ok((await PDFDocument.load(readFileSync(file))).getPageCount() >= 1)
   }
   console.log('PASS CSV, Excel and PDF contain all 24 stored businesses')
@@ -187,11 +190,14 @@ try {
   await page.evaluate(async ({ listId, leadId }) => { await window.desktop.local.lists.removeLead(listId, leadId); await window.desktop.local.lists.remove(listId) }, { listId, leadId })
   assert.ok(!(await page.evaluate(() => window.desktop.local.lists.list())).some(list => list.id === listId))
   if (!packaged) {
-    const contacts = await page.evaluate(async leadId => {
+    const contacts = await page.evaluate(async () => {
       const ids = []
-      for (let i = 0; i < 10; i++) ids.push((await window.desktop.local.contacts.upsert({ leadId, kind: 'email', value: `audit${i}@fixture.test`, source: 'test' })).id)
+      for (let i = 0; i < 10; i++) {
+        const imported=await window.desktop.local.imports.websites([`verification${i}.fixture.test`],{enqueue:false})
+        ids.push((await window.desktop.local.contacts.upsert({leadId:imported.leadIds[0],kind:'email',value:`audit${i}@fixture.test`,source:'test'})).id)
+      }
       return ids
-    }, leadId)
+    })
     await page.click('[data-view="email"]')
     await page.evaluate(() => window.desktop.test.mockSlowEmailValidity())
     await page.evaluate(ids => { window.__verification = window.desktop.emailValidity.verify({ contactIds: ids }) }, contacts)

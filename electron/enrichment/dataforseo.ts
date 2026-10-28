@@ -103,6 +103,55 @@ const DEFAULT_QUEUED_RETRIES = 2
 
 type SerpTask = { status_code?: number; cost?: number; result?: unknown[] }
 
+export interface OrganicSearchHit { title: string; description: string; url: string }
+const liveResultCache = new Map<string, OrganicSearchHit[]>()
+// Live responses are normally much faster, but a 10s cutoff discarded otherwise valid searches
+// during provider latency spikes. The caller has a separate end-to-end budget for source checks.
+const LIVE_REQUEST_TIMEOUT_MS = 15_000
+
+/** Foreground owner lookups need completed search results, not an abandoned Standard task. */
+export async function searchOrganicLive(
+  key: string,
+  query: string,
+  where: SearchLocation = DEFAULT_LOCATION,
+  signal?: AbortSignal,
+): Promise<{ hits: OrganicSearchHit[]; cost: number; error: string | null }> {
+  const empty = { hits: [] as OrganicSearchHit[], cost: 0, error: null as string | null }
+  if (!key.trim() || !query.trim()) return { ...empty, error: 'A search credential and query are required.' }
+  signal?.throwIfAborted()
+  const id = cacheKey(query, where)
+  const cached = liveResultCache.get(id)
+  if (cached) return { ...empty, hits: cached.map(hit => ({ ...hit })) }
+  try {
+    const body = await call('/serp/google/organic/live/advanced', key.trim(), {
+      method: 'POST', signal,
+      body: JSON.stringify([{ keyword: query, location_name: where.location, language_code: where.language,
+        se_domain: where.domain, device: 'desktop', depth: 10, load_async_ai_overview: false }]),
+    }, LIVE_REQUEST_TIMEOUT_MS) as { tasks?: { status_code?: number; status_message?: string; cost?: number; result?: {items?: unknown[]}[] }[] }
+    const task = body.tasks?.[0], cost = task?.cost ?? 0
+    if (!task || task.status_code !== 20000) return { ...empty, cost, error: task?.status_message || 'The live search could not finish.' }
+    const hits: OrganicSearchHit[] = []
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) { value.forEach(visit); return }
+      if (!value || typeof value !== 'object') return
+      const item = value as Record<string, unknown>
+      if (typeof item.url === 'string' && /^https?:\/\//i.test(item.url) && typeof item.title === 'string') {
+        hits.push({ title: item.title, description: String(item.description ?? item.snippet ?? ''), url: item.url })
+      }
+      if (Array.isArray(item.items)) item.items.forEach(visit)
+    }
+    visit(task.result)
+    const unique = [...new Map(hits.map(hit => [hit.url, hit])).values()].slice(0, 10)
+    if (liveResultCache.size >= CACHE_LIMIT) liveResultCache.delete(liveResultCache.keys().next().value!)
+    liveResultCache.set(id, unique.map(hit => ({ ...hit })))
+    return { hits: unique, cost, error: null }
+  } catch (error) {
+    // Preserve the caller's reason: an overall deadline is not the user's Stop action.
+    signal?.throwIfAborted()
+    return { ...empty, error: error instanceof Error && error.name === 'AbortError' ? 'The search provider did not respond within 15 seconds. Retry this website.' : error instanceof Error ? error.message : 'The live search could not finish.' }
+  }
+}
+
 /**
  * Collects one already-posted task without posting a second paid task when the queue is slow.
  * DataForSEO can legitimately leave a Standard task in one of its pending states for longer than
@@ -114,12 +163,14 @@ async function collectTask(
   taskId: string,
   waitMs: number,
   queuedRetries: number,
+  signal?: AbortSignal,
 ): Promise<{ task: SerpTask | null; cost: number; queued: boolean }> {
   let cost = 0
   for (let attempt = 0; attempt <= queuedRetries; attempt += 1) {
     const deadline = Date.now() + waitMs
     while (Date.now() < deadline) {
-      const got = (await call(`/serp/google/organic/task_get/advanced/${taskId}`, key, { method: 'GET' })) as {
+      signal?.throwIfAborted()
+      const got = (await call(`/serp/google/organic/task_get/advanced/${taskId}`, key, { method: 'GET', signal })) as {
         tasks?: SerpTask[]
       }
       const settled = got.tasks?.[0] ?? null
@@ -163,7 +214,7 @@ async function call(path: string, key: string, init: RequestInit = {}, timeoutMs
   try {
     const response = await fetch(`${API_ROOT}${path}`, {
       ...init,
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal,...(init.signal?[init.signal]:[])]),
       headers: {
         Authorization: `Basic ${key}`,
         'Content-Type': 'application/json',
@@ -220,7 +271,7 @@ export async function searchEmails(
   key: string,
   query: string,
   where: SearchLocation = DEFAULT_LOCATION,
-  options: { waitMs?: number; queuedRetries?: number } = {},
+  options: { waitMs?: number; queuedRetries?: number; signal?: AbortSignal } = {},
 ): Promise<DeepSearchResult> {
   const empty = { query, emails: [], cost: 0 }
   const trimmed = key.trim()
@@ -233,6 +284,7 @@ export async function searchEmails(
   try {
     const posted = (await call('/serp/google/organic/task_post', trimmed, {
       method: 'POST',
+      signal: options.signal,
       body: JSON.stringify([
         {
           keyword: query,
@@ -257,6 +309,7 @@ export async function searchEmails(
       task.id,
       options.waitMs ?? DEFAULT_WAIT_MS,
       options.queuedRetries ?? DEFAULT_QUEUED_RETRIES,
+      options.signal,
     )
     const cost = (task.cost ?? 0) + collected.cost
     if (collected.queued) return { query, emails: [], cost, error: 'The search is still queued at DataForSEO.' }
@@ -280,7 +333,7 @@ export async function searchOwnerCandidates(
   key: string,
   query: string,
   where: SearchLocation = DEFAULT_LOCATION,
-  options: { waitMs?: number; queuedRetries?: number } = {},
+  options: { waitMs?: number; queuedRetries?: number; signal?: AbortSignal } = {},
 ): Promise<{ query: string; owners: OwnerCandidate[]; cost: number; error: string | null }> {
   const empty = { query, owners: [], cost: 0, error: null as string | null }
   const trimmed = key.trim()
@@ -290,6 +343,7 @@ export async function searchOwnerCandidates(
   try {
     const posted = (await call('/serp/google/organic/task_post', trimmed, {
       method: 'POST',
+      signal: options.signal,
       body: JSON.stringify([
         {
           keyword: query,
@@ -311,6 +365,7 @@ export async function searchOwnerCandidates(
       task.id,
       options.waitMs ?? DEFAULT_WAIT_MS,
       options.queuedRetries ?? DEFAULT_QUEUED_RETRIES,
+      options.signal,
     )
     const cost = (task.cost ?? 0) + collected.cost
     if (collected.queued) return { ...empty, cost, error: 'The search is still queued at DataForSEO.' }

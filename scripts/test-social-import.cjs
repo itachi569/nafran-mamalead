@@ -30,13 +30,11 @@ const cases = [
   ['https://www.tiktok.com/@acmedental', 'tiktok', 'acmedental'],
   ['https://www.youtube.com/@acmedental', 'youtube', 'acmedental'],
   ['https://www.youtube.com/channel/UC1234567890', 'youtube', 'UC1234567890'],
-  ['https://youtu.be/dQw4w9WgXcQ', 'youtube', 'youtu.be/dQw4w9WgXcQ'],
   ['https://x.com/acmedental', 'x', 'acmedental'],
   ['https://twitter.com/acmedental', 'x', 'acmedental'],
   ['https://www.linkedin.com/company/acmedental/', 'linkedin', 'acmedental'],
-  ['https://www.linkedin.com/in/someone', 'linkedin', 'www.linkedin.com/in/someone'],
-  ['https://www.instagram.com/p/Cabc123/', 'instagram', 'www.instagram.com/p/Cabc123/'],
-  ['https://www.facebook.com/profile.php?id=100012345', 'facebook', 'www.facebook.com/profile.php?id=100012345'],
+  ['https://www.linkedin.com/in/someone', 'linkedin', 'someone'],
+  ['https://www.facebook.com/profile.php?id=100012345', 'facebook', '100012345'],
 ]
 
 for (const [input, platform, handle] of cases) {
@@ -54,6 +52,8 @@ check('a handle with no platform dropdown is skipped', parseSocialUrl('acmedenta
 check('a website is not a social profile', parseSocialUrl('https://acmedental.co.uk') === null)
 check('a comment line is skipped', parseSocialUrl('# dental clinics') === null)
 check('an empty line is skipped', parseSocialUrl('   ') === null)
+check('a video short link is not a profile',parseSocialUrl('https://youtu.be/dQw4w9WgXcQ')===null)
+check('an Instagram post is not a profile',parseSocialUrl('https://www.instagram.com/p/Cabc123/')===null)
 
 // ---------------------------------------------------------------- the import
 
@@ -130,11 +130,10 @@ check('re-importing the same URL adds nothing', again.added === 0 && again.skipp
 const byDropdown = repo.importSocialProfiles(workspace.id, ['@brightsmileclinic'], 'instagram')
 check('the dropdown platform is used for a bare handle', byDropdown.added === 1, JSON.stringify(byDropdown))
 
-// A shared post is not a profile, but the paste still has to produce something: the platform names
-// the lead it creates, and the link is stored on it.
+// A shared post must not inflate the saved account count or create a fictitious company.
 const junk = repo.importSocialProfiles(workspace.id, ['https://www.instagram.com/p/Cabc123/'])
 const junkLead = db.one("select name from leads where name like '%post%'")
-check('a post link is stored rather than dropped', junk.added === 1 && junk.created === 1 && junkLead?.name === 'Instagram post', `${JSON.stringify(junk)} · ${junkLead?.name}`)
+check('a post link creates no social profile or fictitious lead', junk.added === 0 && junk.created === 0 && !junkLead,JSON.stringify(junk))
 
 // Direct platform URLs must keep their existing lead, including links whose path does not name
 // the business (Facebook numeric profiles) and saved URLs with a trailing slash.

@@ -10,6 +10,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const assets = [
   ['electron/db/schema.sql', 'dist-electron/db/schema.sql'],
   ['electron/export/assets/mamalead-original.jpeg', 'dist-electron/export/assets/mamalead-original.jpeg'],
+  ['electron/export/assets/mamalead-logo.png', 'dist-electron/export/assets/mamalead-logo.png'],
   ['electron/export/assets/mamalead-watermark.png', 'dist-electron/export/assets/mamalead-watermark.png'],
 ]
 

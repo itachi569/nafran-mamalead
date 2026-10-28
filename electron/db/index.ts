@@ -21,6 +21,8 @@ export function openDatabase(): { db: LocalDatabase; repository: Repository } {
   const file = join(app.getPath('userData'), 'leads.db')
   database = new LocalDatabase(file)
   repository = new Repository(database)
+  repository.repairSocialProfiles()
+  repository.collapseBusinessEmails()
   return { db: database, repository }
 }
 

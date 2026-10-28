@@ -195,7 +195,9 @@ export async function fetchSocialCoverage(
 }
 
 export async function fetchSocialPage(db: Db, options: { limit?: number } = {}): Promise<SocialPageData> {
-  const { rows, total } = await fetchSocialRows(db, options)
+  const first=await fetchSocialRows(db,{limit:options.limit ?? 200})
+  const rows=[...first.rows],total=first.total
+  while(rows.length<total){const page=await fetchSocialRows(db,{limit:200,offset:rows.length});if(!page.rows.length)break;rows.push(...page.rows)}
   const { donuts, extras } = await fetchSocialCoverage(db, total)
   return { rows, total, donuts, extras }
 }

@@ -79,8 +79,8 @@ export class LocalDatabase {
   /** Runs the schema, which is written to be safe on an existing database. */
   private migrate(): void {
     this.db.exec(readFileSync(SCHEMA_FILE, 'utf8'))
-    this.addMissingColumns()
     this.widenJobKinds()
+    this.addMissingColumns()
     this.db.exec('pragma user_version = 1')
   }
 
@@ -136,6 +136,7 @@ export class LocalDatabase {
    */
   private addMissingColumns(): void {
     const additions: [table: string, column: string, definition: string][] = [
+      ['enrichment_jobs', 'options', "text not null default '{}'"],
       ['leads', 'last_scanned_at', 'text'],
       ['lead_contacts', 'validation_status', "text check (validation_status is null or validation_status in ('valid', 'invalid', 'risky', 'unknown'))"],
       ['lead_contacts', 'validation_provider', 'text'],

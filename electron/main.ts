@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from 'electron'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFile, stat } from 'node:fs/promises'
+import { basename, extname, join } from 'node:path'
 import { chromium, type BrowserContext } from 'playwright'
 import { autoUpdater } from 'electron-updater'
 import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './scraper/browser'
@@ -461,6 +462,29 @@ ipcMain.handle('app:info', () => ({
   electron: process.versions.electron,
 }))
 
+let websiteFileDialogOpen = false
+ipcMain.handle('imports:chooseWebsiteCsv', async (event) => {
+  const parent = BrowserWindow.fromWebContents(event.sender)
+  if (!parent || websiteFileDialogOpen) return null
+  websiteFileDialogOpen = true
+  try {
+    const selection = await dialog.showOpenDialog(parent, {
+      title: 'Import websites into MamaLead',
+      buttonLabel: 'Use this file',
+      filters: [{ name: 'Website lists (CSV or TSV)', extensions: ['csv', 'tsv'] }],
+      properties: ['openFile'],
+    })
+    const file = selection.filePaths[0]
+    if (selection.canceled || !file) return null
+    if (!['.csv', '.tsv'].includes(extname(file).toLowerCase())) throw new Error('Choose a CSV or TSV website list.')
+    const info = await stat(file)
+    if (!info.isFile() || info.size > 20 * 1024 * 1024) throw new Error('Choose a CSV or TSV file smaller than 20 MB.')
+    return { name: basename(file), content: await readFile(file, 'utf8'), bytes: info.size }
+  } finally {
+    websiteFileDialogOpen = false
+  }
+})
+
 function stripePage(raw: string, allowed: string[]): string {
   const url = new URL(raw)
   if (url.protocol !== 'https:' || !allowed.includes(url.hostname) || url.username || url.password) {
@@ -524,13 +548,31 @@ ipcMain.handle('updates:install', () => {
 })
 
 /** Sends a short OS notification without exposing any renderer or filesystem access. */
-ipcMain.handle('notifications:show', (_event, payload: { title?: string; body?: string } = {}) => {
+ipcMain.handle('notifications:show', (event, payload: { title?: string; body?: string; id?: string } = {}) => {
   if (!Notification.isSupported()) return { shown: false }
   const title = String(payload.title ?? 'MamaLead').trim().slice(0, 120) || 'MamaLead'
   const body = String(payload.body ?? '').trim().slice(0, 500)
   if (!body) return { shown: false }
-  new Notification({ title, body }).show()
+  const notification=new Notification({title,body})
+  notification.on('click',()=>{
+    const win=BrowserWindow.fromWebContents(event.sender)
+    if(!win || win.isDestroyed())return
+    if(win.isMinimized())win.restore()
+    win.show();win.focus()
+    win.webContents.send('notifications:open',typeof payload.id==='string'?payload.id.slice(0,200):'')
+  })
+  notification.show()
   return { shown: true }
+})
+
+// Only files already recorded as exports in this workspace can be revealed. Nothing is executed.
+ipcMain.handle('notifications:reveal-export',async (_event,payload:{path?:string}={})=>{
+  const {db}=openDatabase(),workspace=db.ensureWorkspace().id
+  if(typeof payload.path!=='string'||!db.one('select id from exports where workspace_id = ? and path = ? limit 1',[workspace,payload.path]))throw new Error('This file is not a saved MamaLead export.')
+  const info=await stat(payload.path).catch(()=>null)
+  if(!info?.isFile())throw new Error('The exported file was moved or deleted. Export the results again to save a new copy.')
+  shell.showItemInFolder(payload.path)
+  return {shown:true}
 })
 
 /** MamaLead Assist uses the authenticated server; no provider key is distributed. */
@@ -649,8 +691,10 @@ ipcMain.handle(
       byAddress.set(address, matches)
     }
     const entries = Array.from(byAddress.entries())
-    const limited = Math.max(0, entries.length - 100)
-    const queue = entries.slice(0, 100)
+    // A selected import is explicit scope: finish every address in that import. Legacy callers
+    // without a lead scope still take a bounded pass over the whole saved database.
+    const queue = payload.leadIds ? entries : entries.slice(0,100)
+    const limited = entries.length-queue.length
     const summary: EmailValiditySummary = {
       configured: true,
       provider,
@@ -668,8 +712,11 @@ ipcMain.handle(
 
     setEmailValidityProgress({ total: queue.length, pending: queue.length, message: queue.length ? `Checking 0 of ${queue.length} emails…` : 'No unchecked emails in this pass.' })
 
+    const savedAddresses=new Set<string>()
     const save = (rows: typeof selected, result: EmailValidityResult) => {
+      const key=result.email.trim().toLowerCase();if(savedAddresses.has(key))return
       for (const row of rows) repository.updateEmailValidation(row.id, result)
+      savedAddresses.add(key)
       summary.checked += 1
       summary.updated += rows.length
       summary[result.status] += 1
@@ -705,18 +752,25 @@ ipcMain.handle(
           queue.map(([address]) => address),
           async (batch, signal) => {
             await requireActiveLicense('lifetime', false)
-            return verifyEmailAddressesWithLeadsAngel(leadsAngel, batch, signal, (message) => setEmailValidityProgress({ message }))
+            return verifyEmailAddressesWithLeadsAngel(leadsAngel,batch,signal,
+              message=>setEmailValidityProgress({message}),
+              results=>{
+                for(const result of results){const rows=byAddress.get(result.email.toLowerCase());if(rows)save(rows,result)}
+                setEmailValidityProgress({checked:summary.checked,pending:queue.length-summary.checked,message:`LeadsAngel SMTP: ${summary.checked} of ${queue.length} checked…`})
+              })
           },
           {
             signal: emailValidityController.signal,
-            batchSize: 2,
+            batchSize: 20,
             onResult: (result) => {
               const rows = byAddress.get(result.email.toLowerCase())
               if (rows) save(rows, result)
             },
             onProgress: (progress) => setEmailValidityProgress({
               ...progress,
-              message: `LeadsAngel SMTP: ${progress.checked} of ${progress.total} checked · ${progress.failed} need retry.`,
+              checked:summary.checked,
+              pending:Math.max(0,queue.length-summary.checked-progress.failed),
+              message: `LeadsAngel SMTP: ${summary.checked} of ${progress.total} checked · ${progress.failed} need retry.`,
             }),
           },
         )
@@ -1067,8 +1121,8 @@ ipcMain.handle('enrichment:prioritize', async (_event, payload: { jobId?: string
   return { started: true }
 })
 
-ipcMain.handle('enrichment:stop', () => {
-  enricher?.stop()
+ipcMain.handle('enrichment:stop', (_event, payload: { jobId?: string } = {}) => {
+  enricher?.stop(payload.jobId)
   return { stopped: true }
 })
 
@@ -1192,6 +1246,8 @@ if (ownsInstance) app.whenReady().then(() => {
     if (channel === 'db:jobs:queue') {
       const kind = (payload as { kind?: string } | undefined)?.kind
       await requireActiveLicense(kind === 'decision-maker' || kind === 'deep' ? 'decisionMaker' : 'lifetime')
+    } else if (channel === 'db:lookup:start') {
+      await requireActiveLicense('lifetime')
     } else if (channel === 'db:imports:websites' || channel === 'db:exports:write') {
       try { await requireActiveLicense('lifetime') } catch { await requireActiveLicense('decisionMaker') }
     } else if (channel === 'db:imports:social') {

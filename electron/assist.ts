@@ -1,4 +1,6 @@
 import { billingAssistChat } from './billing/client'
+import { assistMessagesWithLanguageHint } from './assist-language'
+import {assistMessagesWithWorkflowHint} from './assist-workflow'
 export type AssistRole = 'user' | 'assistant'
 export type AssistMessage = { role: AssistRole; content: string }
 export type AssistChatRequest = { messages?: AssistMessage[]; context?: Record<string, string | number | boolean | null> }
@@ -16,5 +18,5 @@ export async function askAssist(request: AssistChatRequest = {}): Promise<Assist
     if (typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value) || value === null) context[name] = value
     else if (typeof value === 'string') context[name] = value.slice(0, 100)
   }
-  return billingAssistChat({ messages, context })
+  return billingAssistChat({ messages:assistMessagesWithWorkflowHint(assistMessagesWithLanguageHint(messages)), context })
 }

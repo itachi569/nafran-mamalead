@@ -10,6 +10,9 @@
 // what is on file, the rows come from the page's own list, and a site counts as scanned when the
 // enrichment pass has actually read it (`leads.last_scanned_at`).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { localDb } from '../lib/local'
+import { savedSearchScore, searchSavedRows } from './saved-search'
+import type { EnrichmentJobStatus } from '../types/desktop'
 
 export type FinderKind = 'email' | 'phone' | 'decision-maker'
 
@@ -39,6 +42,7 @@ export interface FinderSourceRow {
   domain: string
   /** Additional published fields searched with the domain and result items. */
   searchText?: string
+  searchFields?: string[]
   /** Whether a finder has read this lead's site. */
   scanned: boolean
   /** What was found there, each item labelled with the page it came off. */
@@ -85,6 +89,7 @@ export interface FinderScan<Row = FinderSourceRow> {
   closeHist: () => void
   histOpen: boolean
   hist: { q: string; n: string; run: () => void }[]
+  clearHistory: () => void
   /** The count on the History button. */
   count: string
   /** The line beside the recent chips, e.g. "10 rows on screen". */
@@ -99,6 +104,10 @@ export interface FinderScan<Row = FinderSourceRow> {
   scanSub: string
   scanBadge: string
   scanLabel: string
+  progress: { total: number; processed: number; remaining: number; failed: number; found: number; percent: number; current: string; message: string }
+  stopping: boolean
+  stopped: boolean
+  stop: () => void
   exit: () => void
   reset: () => void
   exportScan: () => void
@@ -109,6 +118,9 @@ export interface FinderScan<Row = FinderSourceRow> {
 export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow> {
   /** Every row the page holds, in view order. */
   rows: Row[]
+  historyScope: 'email'|'phone'|'dm'
+  /** An import stays isolated until the user searches the saved workspace. */
+  defaultScopeIds?: string[]
   /**
    * `scan` reads each lead's own site; `review` reads what is already on file. The second one
    * touches no server, so it has no pass to watch.
@@ -117,7 +129,7 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
   /** Queues the given leads and reports the exact job that belongs to this scan. */
   queue: (leadIds: string[]) => Promise<{ queued: number; jobId: string }>
   /** Reads one scan job, so another page's queued work cannot hold this result open. */
-  jobStatus?: (jobId: string) => Promise<{ status: 'queued' | 'running' | 'done' | 'failed' } | null>
+  jobStatus?: (jobId: string) => Promise<EnrichmentJobStatus | null>
   /** Re-reads the page's data. Rings and rows are read after every refresh. */
   refresh: () => void | Promise<void>
   /** The counts behind the rings, in the order they are drawn. */
@@ -130,6 +142,8 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
   doneLabel: (scanned: number) => string
   /** Called when a scan starts, so the page can do its own first step. */
   onStart?: () => void
+  /** Runs once after this job succeeds, with only the leads submitted for this pass. */
+  onComplete?: (leadIds: string[]) => void
   /** Opens the export dialog on the rows the scan found. */
   onExport: () => void
   /** Results card to bring into view after the pass finishes. */
@@ -139,19 +153,13 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
 }
 
 const CIRCUMFERENCE = 276.5
-const RING_STEP_MS = 260
-const ROW_REVEAL_MS = 420
+const EMPTY_PROGRESS = { total: 0, processed: 0, failed: 0, found: 0, leadName: '', message: '' }
 
 /** Search normalization so "Northern  Spine" finds "Northern Spine & Sports Clinic". */
 export function matchesFinderSearch(haystack: string, needle: string): boolean {
-  if (!needle) return true
-  if (/^[+\d\s().-]+$/.test(needle) && needle.replace(/\D/g, '').length >= 4) {
-    return haystack.replace(/\D/g, '').includes(needle.replace(/\D/g, ''))
-  }
-  const field = haystack.toLowerCase().replace(/[^a-z0-9@.]+/g, ' ')
-  const terms = needle.toLowerCase().split(/[^a-z0-9@.]+/).filter(Boolean)
-  return terms.every((term) => field.includes(term))
+  return savedSearchScore([haystack],needle)>0
 }
+const fieldsOf=(row:FinderSourceRow)=>row.searchFields ?? [row.searchText ?? '',row.domain,...row.items.flatMap(item=>[item.t,item.k])]
 
 /**
  * The scan, its rings and its rows for one finder page.
@@ -161,6 +169,7 @@ export function matchesFinderSearch(haystack: string, needle: string): boolean {
  * the finished figures once the worker reports it has stopped.
  */
 export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSource<Row>): FinderScan<Row> {
+  const db=useMemo(()=>localDb(),[])
   const [term, setTerm] = useState('')
   const [filter, setFilter] = useState('all')
   const [histOpen, setHistOpen] = useState(false)
@@ -172,10 +181,15 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   /** The rows this action started with; after completion the page stays on these rows only. */
   const [scopeIds, setScopeIds] = useState<string[] | null>(null)
   const [imported, setImported] = useState(false)
-  const [rowCursor, setRowCursor] = useState(0)
-  const [ringFill, setRingFill] = useState(0)
-  const timers = useRef<number[]>([])
+  const [progress, setProgress] = useState(EMPTY_PROGRESS)
+  const [stopping, setStopping] = useState(false)
+  const [stopped, setStopped] = useState(false)
+  const active = useRef(false)
+  const stopRequested = useRef(false)
   const generation = useRef(0)
+  const completion = useRef<FinderScanSource<Row>['onComplete']>(undefined)
+  const visibleCount=useRef(0)
+  const historyTimer=useRef<number|undefined>(undefined)
   const [failure, setFailure] = useState('')
 
   // The source changes identity on every render — it is built from live data — so it is read
@@ -183,25 +197,21 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   const sourceRef = useRef(source)
   sourceRef.current = source
 
-  const clearTimers = useCallback(() => {
-    timers.current.forEach((timer) => window.clearTimeout(timer))
-    timers.current = []
-  }, [])
-
-  useEffect(() => clearTimers, [clearTimers])
-
-  const remember = useCallback((value: string, results = 0) => {
+  useEffect(()=>{let active=true;void db?.search.history(source.historyScope,50).then(items=>{if(active)setHistory(items.map(item=>({term:item.term,results:item.results??0})))}).catch(()=>undefined);return()=>{active=false}},[db,source.historyScope])
+  const remember = useCallback((value: string, results = visibleCount.current) => {
     const trimmed = value.trim()
-    if (!trimmed) return
+    if (trimmed.length<2) return
     setHistory((current) =>
-      [{ term: trimmed, results }, ...current.filter((entry) => entry.term !== trimmed)].slice(0, 8),
+      [{ term: trimmed, results }, ...current.filter((entry) => entry.term !== trimmed)].slice(0, 50),
     )
-  }, [])
+    void db?.search.record(trimmed,source.historyScope,results).catch(()=>undefined)
+  }, [db,source.historyScope])
+  useEffect(()=>{if(term.trim().length<2)return;historyTimer.current=window.setTimeout(()=>remember(term),650);return()=>window.clearTimeout(historyTimer.current)},[term,remember])
 
   const onInput = useCallback((event: React.InputEvent<HTMLInputElement>) => setTerm(event.currentTarget.value), [])
   const onKey = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== 'Enter' && event.key !== ',') return
+      if (event.key !== 'Enter') return
       event.preventDefault()
       const value = event.currentTarget.value
       setTerm(value)
@@ -253,9 +263,8 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   // rather than silently queueing every lead in the workspace.
   const actionRows = useMemo(
     () =>
-      source.rows.filter((row) => {
-        const haystack = `${row.searchText ?? ''} ${row.domain} ${row.statusLabel} ${row.items.map((item) => `${item.t} ${item.k}`).join(' ')}`
-        if (!matchesFinderSearch(haystack, term)) return false
+      searchSavedRows(source.rows,term,fieldsOf).filter((row) => {
+        if(!term.trim() && source.defaultScopeIds && !source.defaultScopeIds.includes(row.leadId))return false
         // "Review suggestions" is a people list action. Keep the normal toolbar
         // action scoped to rows that already have a named person; an imported
         // website uses scanImported() with its explicit lead ids and is allowed
@@ -271,7 +280,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         if (filter === 'nowebsite') return !row.domain
         return true
       }),
-    [filter, source.rows, term],
+    [filter, source.rows,source.defaultScopeIds, term],
   )
 
   /**
@@ -282,16 +291,19 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
    * report a figure the page never showed.
    */
   const start = useCallback((leadIds: string[], fromImport: boolean) => {
+    if (active.current) return
     const current = sourceRef.current
+    completion.current = current.onComplete
     const request = ++generation.current
     setFailure('')
-    clearTimers()
     setScanOn(true)
-    setRowCursor(0)
-    setRingFill(0)
     setQueued(0)
     setJobId('')
     const uniqueIds = Array.from(new Set(leadIds))
+    setProgress({ ...EMPTY_PROGRESS, total: uniqueIds.length })
+    stopRequested.current = false
+    setStopping(false)
+    setStopped(false)
     setScopeIds(uniqueIds)
     setImported(fromImport)
     if (fromImport) { setTerm(''); setFilter('all') }
@@ -304,25 +316,31 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       }
       // An imported site needs a real people pass before the Decision Makers result can settle.
       setRunning(true)
+      active.current = true
       void current.queue(uniqueIds).then(async (result) => {
         if (request !== generation.current) return
         setQueued(result.queued)
-        if (result.jobId) setJobId(result.jobId)
+        if (result.jobId) {
+          setJobId(result.jobId)
+          if (stopRequested.current) await window.desktop?.enrichment.stop(result.jobId)
+        }
         else {
           await current.refresh()
           if (request !== generation.current) return
           setRunning(false)
-          setRingFill(1)
+          active.current = false
         }
-      }).catch(() => { if (request === generation.current) { setFailure('The scan could not start. Check your plan and try again.'); setRunning(false) } })
+      }).catch(() => { if (request === generation.current) { setFailure('The scan could not start. Check your plan and try again.'); setRunning(false); active.current=false; setStopping(false) } })
       return
     }
     setRunning(true)
+    active.current = true
     void current.queue(uniqueIds).then(async (result) => {
       if (request !== generation.current) return
       setQueued(result.queued)
       if (result.jobId) {
         setJobId(result.jobId)
+        if (stopRequested.current) await window.desktop?.enrichment.stop(result.jobId)
         return
       }
       // Nothing was queued (for example, every row lacked a website): finish cleanly and leave the
@@ -330,39 +348,24 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       await current.refresh()
       if (request !== generation.current) return
       setRunning(false)
-      setRingFill(1)
-    }).catch(() => { if (request === generation.current) { setFailure('The scan could not start. Try again.'); setRunning(false) } })
-  }, [clearTimers])
+      active.current = false
+      setStopping(false)
+    }).catch(() => { if (request === generation.current) { setFailure('The scan could not start. Try again.'); setRunning(false); active.current=false; setStopping(false) } })
+  }, [])
 
   const act = useCallback(() => start(actionRows.map((row) => row.leadId), false), [actionRows, start])
   const scanImported = useCallback((leadIds: string[]) => start(leadIds, true), [start])
 
-  // While a pass runs the rows are revealed one at a time in list order, so the panel fills from
-  // the top the way a scan reaches the sites.
-  useEffect(() => {
-    if (!scanOn || !running) return
-    if (rowCursor >= sourceRef.current.rows.length) return
-    const timer = window.setTimeout(() => setRowCursor((cursor) => cursor + 1), ROW_REVEAL_MS)
-    timers.current.push(timer)
-    return () => window.clearTimeout(timer)
-  }, [scanOn, running, rowCursor, source.rows.length])
-
-  // The rings fill behind the reveal rather than jumping to their final length.
-  useEffect(() => {
-    if (!scanOn || !running || ringFill >= 1) return
-    const timer = window.setTimeout(() => setRingFill((fill) => Math.min(1, fill + 0.2)), RING_STEP_MS)
-    timers.current.push(timer)
-    return () => window.clearTimeout(timer)
-  }, [scanOn, running, ringFill])
-
-  // A pass that has run this long is not going to report: the worker reads a site in seconds, so a
-  // scan still saying it is running after this is stalled. The card stops claiming to work, which
-  // puts the way out of the scan back on screen — a spinner with no exit is a page you cannot leave.
-  useEffect(() => {
-    if (!running) return
-    const timer = window.setTimeout(() => { setFailure('The scan is taking longer than expected. Refresh to see saved results.'); setRunning(false) }, Math.max(90_000, queued * 60_000))
-    return () => window.clearTimeout(timer)
-  }, [running, queued])
+  const stop = useCallback(() => {
+    if (!active.current || stopRequested.current) return
+    stopRequested.current = true
+    setStopping(true)
+    if (!jobId) return // The queued job is cancelled as soon as its ID is returned.
+    void window.desktop?.enrichment.stop(jobId).catch(() => {
+      stopRequested.current=false;setStopping(false)
+      setFailure('Could not stop the scan. Please try Stop scan again.')
+    })
+  }, [jobId])
 
   // The pass is over when this page's own job is done. Looking at the global queue made an Email
   // scan wait behind an unrelated Phone or website job, and could leave its result card open.
@@ -372,10 +375,19 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     if (!statusForJob) return
     let cancelled = false
     let timer: number | undefined
+    let lastProcessed = -1
     const poll = async (): Promise<void> => {
       try {
         const status = await statusForJob(jobId)
         if (cancelled) return
+        if (status) {
+          setProgress({ total: status.total, processed: status.processed, failed: status.failed, found: status.found, leadName: status.leadName, message: status.message })
+          if (status.processed !== lastProcessed) {
+            lastProcessed = status.processed
+            await sourceRef.current.refresh()
+            if (cancelled) return
+          }
+        }
         if (!status || status.status === 'queued' || status.status === 'running') {
           // Finder jobs are short direct HTTP reads. Polling every two seconds made a finished
           // lookup look slow in the UI, even when the worker had already written its result.
@@ -384,9 +396,14 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         }
         await sourceRef.current.refresh()
         if (cancelled) return
-        if (status.status === 'failed') setFailure('The scan could not finish. Any saved results are shown below; check your connection and plan before retrying.')
+        if (status.status === 'failed') setFailure(status.message || 'Some websites could not be checked. Saved results are shown below; retry the unsuccessful websites.')
+        setStopped(status.status === 'cancelled')
         setRunning(false)
-        setRingFill(1)
+        active.current = false
+        setStopping(false)
+        const finished = completion.current
+        completion.current = undefined
+        if (status.status === 'done') finished?.(scopeIds ?? [])
       } catch {
         if (!cancelled) timer = window.setTimeout(() => void poll(), 900)
       }
@@ -396,7 +413,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [jobId, running])
+  }, [jobId, running, scopeIds])
 
   const sourceRows = source.rows
   const scannedRows = useMemo(() => sourceRows.filter((row) => row.scanned), [sourceRows])
@@ -409,10 +426,8 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   // The filter and the search both narrow the list; the scan narrows it further to the sites it
   // has reached, which is what makes "Show all leads" mean something.
   const visible = useMemo(() => {
-    const base = scanOn ? scopedRows : sourceRows
-    return base.filter((row) => {
-      const haystack = `${row.searchText ?? ''} ${row.domain} ${row.statusLabel} ${row.items.map((item) => `${item.t} ${item.k}`).join(' ')}`
-      if (!matchesFinderSearch(haystack, term)) return false
+    const base = term.trim() ? sourceRows : scanOn ? scopedRows : source.defaultScopeIds ? sourceRows.filter(row=>source.defaultScopeIds!.includes(row.leadId)) : sourceRows
+    return searchSavedRows(base,term,fieldsOf).filter((row) => {
       if (filter === 'done') return row.scanned
       if (filter === 'valid' || filter === 'invalid' || filter === 'risky' || filter === 'unknown' || filter === 'unchecked') {
         return row.validityStatuses?.includes(filter) ?? false
@@ -423,30 +438,33 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       if (filter === 'nowebsite') return !row.domain
       return true
     })
-  }, [sourceRows, scopedRows, scanOn, imported, term, filter])
+  }, [sourceRows, scopedRows, scanOn,source.defaultScopeIds, term, filter])
+  visibleCount.current=visible.length
 
-  // The reveal: during a pass only the rows the cursor has passed are on screen.
-  const revealed = useMemo(() => {
-    if (!running) return visible
-    return visible.filter((_, index) => index < rowCursor)
-  }, [visible, running, rowCursor])
+  // Results are backed by the database; no timer pretends a website has been scanned.
+  const revealed = visible
 
   const rows = useMemo<FinderRowOf<Row>[]>(
     () =>
-      revealed.map((row) => ({
+      revealed.map((row) => {
+        const position = scopeIds?.indexOf(row.leadId) ?? -1
+        const tracked = source.historyScope === 'dm' && scanOn && position >= 0
+        const attempted = tracked ? position < progress.processed : row.scanned
+        const checking = running && (tracked ? position === progress.processed : !row.scanned)
+        return ({
         ...row,
         domain: row.domain || 'No website',
-        scanning: running && !row.scanned,
-        scanLabel: running && !row.scanned ? 'Scanning…' : '',
+        scanning: checking,
+        scanLabel: checking ? 'Scanning…' : tracked && !attempted ? 'Not scanned yet' : '',
         items: source.filterItemsOnSearch && term
           ? row.items.filter((item) => matchesFinderSearch(`${row.searchText ?? ''} ${row.domain} ${item.t} ${item.k}`, term))
           : row.items,
         none: !running && row.items.length === 0,
-        pill: row.scanned ? 'done' : running ? 'scanning' : 'pending',
-        status: row.scanned ? 'Done' : running ? 'Scanning' : row.statusLabel || 'Pending',
+        pill: attempted ? 'done' : checking ? 'scanning' : 'pending',
+        status: attempted ? 'Done' : checking ? 'Scanning' : tracked ? 'Not scanned yet' : row.statusLabel || 'Pending',
         onThisSite: row.items.length > 0,
-      })),
-    [revealed, running, source.filterItemsOnSearch, term],
+      })}),
+    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed],
   )
 
   const scanned = useMemo(
@@ -458,31 +476,31 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     const population = scanOn ? scopedRows : sourceRows
     const counts = source.ringSource(population)
     const denominator = Math.max(1, population.length)
-    const fill = running ? ringFill : 1
     return counts.map((ring) => {
       const pct = Math.min(100, Math.max(0, Math.round((ring.count / denominator) * 100)))
       const arc = (Math.min(100, pct) / 100) * CIRCUMFERENCE
       return {
         name: ring.name,
-        pct: Math.round(pct * fill),
+        pct,
         leads: `${ring.count} lead${ring.count === 1 ? '' : 's'}`,
-        off: String(Math.round(CIRCUMFERENCE - arc * fill)),
+        off: String(Math.round(CIRCUMFERENCE - arc)),
       }
     })
-  }, [scanOn, scopedRows, sourceRows, running, ringFill, source])
+  }, [scanOn, scopedRows, sourceRows, source])
 
   const exit = useCallback(() => {
+    if (active.current) return
     generation.current += 1
     setFailure('')
-    clearTimers()
     setScanOn(false)
     setRunning(false)
-    setRowCursor(0)
-    setRingFill(0)
+    setProgress(EMPTY_PROGRESS)
+    setStopped(false)
+    setStopping(false)
     setJobId('')
     setScopeIds(null)
     setImported(false)
-  }, [clearTimers])
+  }, [])
 
   const reset = useCallback(() => {
     exit()
@@ -541,16 +559,21 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     closeHist: () => setHistOpen(false),
     histOpen,
     hist,
+    clearHistory:()=>{window.clearTimeout(historyTimer.current);setHistory([]);void db?.activity.clear(source.historyScope).catch(()=>undefined)},
     count: String(history.length),
     rowsCount: `${revealed.length} row${revealed.length === 1 ? '' : 's'} on screen`,
-    selectedLeadIds: scanOn ? scopeIds : null,
+    selectedLeadIds: term.trim() ? visible.map(row=>row.leadId) : scanOn ? scopeIds : null,
     scanImported,
     scanOn,
     scanning: running,
     scanDone: scanOn && !running,
-    scanSub: failure || (running ? source.runningLabel(queued) : source.doneLabel(scanned)),
-    scanBadge: failure || (running ? source.runningLabel(queued) : source.doneLabel(scanned)),
-    scanLabel: failure || (running ? source.runningLabel(queued) : source.doneLabel(scanned)),
+    scanSub: failure || (stopped ? 'Scan stopped. Completed results are saved below.' : running ? source.runningLabel(queued) : source.doneLabel(scanned)),
+    scanBadge: failure || (stopped ? 'Scan stopped' : running ? source.runningLabel(queued) : source.doneLabel(scanned)),
+    scanLabel: failure || (stopped ? 'Scan stopped. Completed results are saved below.' : running ? source.runningLabel(queued) : source.doneLabel(scanned)),
+    progress: { total: progress.total, processed: progress.processed, remaining: Math.max(0, progress.total-progress.processed), failed: progress.failed, found: progress.found, percent: progress.total ? Math.min(100, Math.floor(progress.processed / progress.total * 100)) : 0, current: progress.leadName, message: progress.message },
+    stopping,
+    stopped,
+    stop,
     exit,
     reset,
     exportScan: () => sourceRef.current.onExport(),

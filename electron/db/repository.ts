@@ -5,6 +5,10 @@
 // above them did not change when the storage moved to this machine.
 import { randomUUID } from 'node:crypto'
 import { currentPeriod, nowIso, type LocalDatabase } from './local-db'
+import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFields, type WebsiteLookupRow } from '../enrichment/website-lookup'
+import { isBusinessOwner, ownerEmail, ownerIdentityKey } from '../enrichment/owner-contact'
+import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
+import {compareEmailContacts} from '../email-ranking'
 
 // ---------------------------------------------------------------- scraper
 
@@ -75,6 +79,7 @@ export interface StoredLead {
 }
 
 export interface StoredRun {
+  saved?: number
   id: string
   provider: string
   status: string
@@ -276,56 +281,6 @@ export interface SocialUrl {
  * Instagram's short links live on `instagr.am`, so a paste of what the share button copies still
  * lands on the right platform rather than being reported as something this app does not store.
  */
-const SOCIAL_HOSTS: { platform: string; hosts: string[] }[] = [
-  { platform: 'instagram', hosts: ['instagram.com', 'instagr.am'] },
-  { platform: 'facebook', hosts: ['facebook.com', 'fb.com', 'fb.me', 'm.facebook.com'] },
-  { platform: 'linkedin', hosts: ['linkedin.com', 'lnkd.in'] },
-  { platform: 'tiktok', hosts: ['tiktok.com'] },
-  { platform: 'youtube', hosts: ['youtube.com', 'youtu.be'] },
-  { platform: 'x', hosts: ['twitter.com', 'x.com'] },
-]
-
-/** Paths that are part of the platform's own machinery rather than anybody's profile. */
-const SOCIAL_NOT_A_PROFILE = new Set([
-  'p',
-  'reel',
-  'reels',
-  'stories',
-  'explore',
-  'tv',
-  'share',
-  'home',
-  'watch',
-  'results',
-  'search',
-  'feed',
-  'groups',
-  'events',
-  'marketplace',
-  'gaming',
-  'settings',
-  'login',
-  'signup',
-  'help',
-  'about',
-  'privacy',
-  'policies',
-  'terms',
-  'intent',
-  'i',
-  'sharer',
-  'share.php',
-  'profile.php',
-  'pages',
-  'tr',
-  'company',
-  'school',
-  'in',
-  'pub',
-  'feed',
-  'hashtag',
-])
-
 const SOCIAL_PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'x', 'other']
 
 /** The canonical profile URL for a handle, which is what the page links to. */
@@ -356,67 +311,26 @@ export function socialProfileUrl(platform: string, handle: string): string {
  * paste box, and a line that neither names nor implies a platform is skipped rather than guessed at.
  */
 export function parseSocialUrl(raw: string, fallbackPlatform = ''): SocialUrl | null {
-  const trimmed = raw.trim()
-  if (!trimmed || trimmed.startsWith('#')) return null
-  const fallback = SOCIAL_PLATFORMS.includes(fallbackPlatform) ? fallbackPlatform : ''
-
-  // A handle on its own: no host to read, so the dropdown has to say where it belongs.
-  if (!/[/.]/.test(trimmed) || trimmed.startsWith('@')) {
-    const handle = trimmed.replace(/^@/, '').trim()
-    return handle && fallback && fallback !== 'other'
-      ? { platform: fallback, handle, profileUrl: socialProfileUrl(fallback, handle) }
-      : null
+  const trimmed=raw.trim()
+  if(!trimmed||trimmed.startsWith('#'))return null
+  const fallback=SOCIAL_PLATFORMS.includes(fallbackPlatform)?fallbackPlatform:''
+  if(!/[/.]/.test(trimmed)||trimmed.startsWith('@')){
+    const handle=trimmed.replace(/^@/,'').trim()
+    return handle&&fallback&&fallback!=='other'?canonicalSocialProfile(socialProfileUrl(fallback,handle)):null
   }
-
-  const withScheme = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-  let parsed: URL
-  try {
-    parsed = new URL(withScheme)
-  } catch {
-    return null
-  }
-  const host = parsed.hostname.replace(/^www\./i, '').toLowerCase()
-  const platform = SOCIAL_HOSTS.find((entry) => entry.hosts.includes(host))?.platform ?? fallback
-  if (!platform) return null
-
-  const segments = parsed.pathname.split('/').filter(Boolean)
-  // A shared post or video: the file itself is not a profile, and its short name is a poor guess at
-  // one, so only a full link back to the platform counts when the paste is not a profile.
-  const full = `${parsed.host}${parsed.pathname}${parsed.search}`
-  const deepLink = (): SocialUrl => ({ platform, handle: full, profileUrl: `https://${full}` })
-  const profile = (handle: string): SocialUrl => ({ platform, handle, profileUrl: socialProfileUrl(platform, handle) })
-
-  if (!segments.length) return platform === 'other' ? deepLink() : null
-  const [first, second] = segments
-
-  if (platform === 'instagram') {
-    return SOCIAL_NOT_A_PROFILE.has(first.toLowerCase()) ? deepLink() : profile(first)
-  }
-  if (platform === 'tiktok') {
-    return first.startsWith('@') ? profile(first.slice(1)) : deepLink()
-  }
-  if (platform === 'youtube') {
-    if (first.startsWith('@')) return profile(first.slice(1))
-    if (['channel', 'c', 'user'].includes(first) && second) return profile(second)
-    return deepLink()
-  }
-  if (platform === 'linkedin') {
-    // Company pages are the lead's own; a person's profile is a decision maker, not this page's row.
-    return first === 'company' && second ? profile(second) : deepLink()
-  }
-  if (platform === 'x') {
-    return SOCIAL_NOT_A_PROFILE.has(first.toLowerCase()) ? deepLink() : profile(first)
-  }
-  if (platform === 'facebook') {
-    if (first === 'profile.php') return deepLink()
-    if (first === 'people' && second) return profile(second)
-    return SOCIAL_NOT_A_PROFILE.has(first.toLowerCase()) ? deepLink() : profile(first)
-  }
-  return deepLink()
+  const profile=canonicalSocialProfile(trimmed)
+  if(profile)return profile
+  // An explicitly selected Other profile may use a service we do not recognize. Known
+  // platform content endpoints still cannot be disguised as a profile via the dropdown.
+  try{const url=new URL(/^[a-z]+:\/\//i.test(trimmed)?trimmed:'https://'+trimmed)
+    return fallback==='other'&&!socialPlatformOf(url.href)&&/^https?:$/.test(url.protocol)?{platform:'other',handle:url.host+url.pathname,profileUrl:url.href}:null
+  }catch{return null}
 }
 
 /** Treat pasted and previously saved forms of the same profile URL as one profile. */
 function socialProfileKey(platform: string, profileUrl: string): string {
+  const strict=canonicalSocialProfile(profileUrl)
+  if(strict)return socialProfileIdentity(strict)
   const parsed = parseSocialUrl(profileUrl, platform)
   const canonical = parsed?.platform === platform ? parsed.profileUrl : profileUrl.trim()
   return `${platform}|${canonical.replace(/\/+$/, '').toLowerCase()}`
@@ -706,8 +620,9 @@ export class Repository {
 
   listRuns(workspaceId: string, limit = 50): StoredRun[] {
     return this.db.query<StoredRun>(
-      `select id, provider, status, keywords, location, max_results, found, error, started_at, finished_at, duration_ms
-       from scrape_runs where workspace_id = ? order by started_at desc limit ?`,
+      `select sr.id, sr.provider, sr.status, sr.keywords, sr.location, sr.max_results, sr.found, sr.error, sr.started_at, sr.finished_at, sr.duration_ms,
+              (select count(*) from scrape_run_leads rl where rl.run_id = sr.id) as saved
+       from scrape_runs sr where sr.workspace_id = ? order by sr.started_at desc limit ?`,
       [workspaceId, limit],
     )
   }
@@ -819,6 +734,12 @@ export class Repository {
   fillLeadAddress(leadId: string, addresses: string[]): void {
     const address=Array.from(new Set(addresses)).join(' | ')
     if(address) this.db.run("update leads set address = ? where id = ? and (address is null or trim(address) = '')", [address, leadId])
+  }
+
+  fillPublishedBusiness(leadId: string, name: string, phone: string): void {
+    const lead=this.db.one<{name:string;website:string}>('select name,website from leads where id = ?',[leadId])
+    if (name && lead && (!lead.name.trim() || lead.name.toLowerCase()===normaliseDomain(lead.website))) this.db.run('update leads set name = ? where id = ?',[name,leadId])
+    if (phone) this.db.run("update leads set phone = ? where id = ? and trim(phone) = ''",[phone,leadId])
   }
 
   markLeadScanned(leadId: string): void {
@@ -943,7 +864,7 @@ export class Repository {
    * line; a second number found on the lead's own website is a direct line. A lead with no
    * number at all still gets a row, because the page's job is to show the gaps too.
    */
-  phoneLedger(workspaceId: string, limit = 200): PhoneRow[] {
+  phoneLedger(workspaceId: string, limit = 200, offset = 0): PhoneRow[] {
     const leads = this.db.query<{
       id: string
       name: string
@@ -955,32 +876,36 @@ export class Repository {
       last_scanned_at: string | null
     }>(
       `select id, name, phone, area, address, website, captured_at, last_scanned_at
-       from leads where workspace_id = ? order by captured_at desc limit ?`,
-      [workspaceId, Math.min(500, Math.max(1, limit))],
+       from leads where workspace_id = ? order by captured_at desc, id limit ? offset ?`,
+      [workspaceId, Math.min(500, Math.max(1, limit)),Math.max(0,offset)],
     )
     if (!leads.length) return []
 
-    const extras = this.db.query<{ lead_id: string; value: string; source: string }>(
-      `select lead_id, value, source from lead_contacts
-       where workspace_id = ? and kind = 'phone' order by created_at`,
-      [workspaceId],
+    const extras = this.db.query<{ lead_id: string; value: string; source: string; score: number | null }>(
+      `select lead_id, value, source, score from lead_contacts
+       where workspace_id = ? and kind = 'phone' and lead_id in (${leads.map(()=>'?').join(',')}) order by coalesce(score,0) desc, created_at`,
+      [workspaceId,...leads.map(lead=>lead.id)],
     )
-    const byLead = new Map<string, { value: string; source: string }[]>()
+    const byLead = new Map<string, { value: string; source: string; score: number | null }[]>()
     for (const row of extras) {
       const list = byLead.get(row.lead_id) ?? []
-      list.push({ value: row.value, source: row.source })
+      list.push({ value: row.value, source: row.source, score: row.score })
       byLead.set(row.lead_id, list)
     }
 
     return leads.map((lead, index) => {
       const onFile = byLead.get(lead.id) ?? []
-      const numbers = [lead.phone, ...onFile.map((entry) => entry.value)].filter(Boolean)
+      const best=onFile.find(entry=>(entry.score??0)>=50)
+      const numbers = [best?.value,lead.phone, ...onFile.map((entry) => entry.value)].filter((value):value is string=>Boolean(value))
       const shown = numbers[0] ?? ''
+      const found=onFile.map(entry=>({value:entry.value,page:entry.source}))
+      if(lead.phone && !found.some(entry=>entry.value.replace(/\D/g,'')===lead.phone.replace(/\D/g,'')))found.push({value:lead.phone,page:'Saved Maps number'})
       return {
         id: lead.id,
-        index: String(index + 1).padStart(3, '0'),
+        index: String(offset + index + 1).padStart(3, '0'),
         name: lead.name,
         phone: shown,
+        mainSource: best?.source ?? '',
         areaCode: areaCodeOf(shown),
         area: lead.area,
         address: lead.address,
@@ -989,7 +914,7 @@ export class Repository {
         lineType: !shown ? 'missing' : isMobile(shown) ? 'mobile' : lead.phone ? 'reception' : 'direct',
         hasNumber: Boolean(shown),
         lastScannedAt: lead.last_scanned_at,
-        found: onFile.map((entry) => ({ value: entry.value, page: entry.source })),
+        found,
       }
     })
   }
@@ -997,10 +922,11 @@ export class Repository {
   /** Totals for the phone page: how many lines there are, of what kind, and where they dial to. */
   phoneSummary(workspaceId: string): PhoneSummary {
     // A compact projection covers the full workspace; the visible phone book stays paged.
-    const rows = this.db.query<{ phone: string; website: string; found_phone: string | null }>(
+    const rows = this.db.query<{ phone: string; website: string; found_phone: string | null; found_score: number | null }>(
       `select l.phone, l.website,
               (select c.value from lead_contacts c where c.lead_id = l.id and c.kind = 'phone'
-               order by c.created_at, c.id limit 1) as found_phone
+               order by coalesce(c.score,0) desc, c.created_at, c.id limit 1) as found_phone,
+              (select max(c.score) from lead_contacts c where c.lead_id=l.id and c.kind='phone') as found_score
        from leads l where l.workspace_id = ?`,
       [workspaceId],
     )
@@ -1011,7 +937,7 @@ export class Repository {
     let missing = 0
     let canBackfill = 0
     for (const row of rows) {
-      const number = row.phone || row.found_phone || ''
+      const number = (row.found_score??0)>=50 ? row.found_phone || row.phone : row.phone || row.found_phone || ''
       if (!number) {
         missing += 1
         if (row.website) canBackfill += 1
@@ -1055,7 +981,7 @@ export class Repository {
        where d.workspace_id = ?
        order by d.created_at desc`,
       [workspaceId],
-    )
+    ).filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:ownerEmail(person.full_name,person.email)}))
   }
 
   /**
@@ -1101,19 +1027,32 @@ export class Repository {
     verified?: boolean
     score?: number | null
   }): { id: string } {
+    if(input.kind==='email')return this.db.transaction(()=>{
+      const incoming={value:input.value.trim().toLowerCase(),source:input.source??'manual',score:input.score??null}
+      if(!incoming.value)throw new Error('A contact value is required.')
+      const old=this.db.query<{id:string;value:string;source:string;score:number|null}>("select id,value,source,score from lead_contacts where lead_id=? and kind='email'",[input.leadId]).filter(row=>row.value.toLowerCase()!==incoming.value).sort(compareEmailContacts)
+      const winner=old[0]&&compareEmailContacts(old[0],incoming)<0?{id:old[0].id}:this.writeContact({...input,value:incoming.value})
+      this.retainMainEmail(input.leadId,winner.id)
+      return winner
+    })
+    return this.writeContact(input)
+  }
+
+  private writeContact(input:{leadId:string;kind:'email'|'phone'|'social';value:string;source?:string;verified?:boolean;score?:number|null}):{id:string}{
     const value = input.value.trim()
     if (!value) throw new Error('A contact value is required.')
+    const score=input.score==null||!Number.isFinite(input.score)?null:Math.max(0,Math.min(100,Math.round(input.score)))
 
-    const existing = this.db.one<{ id: string }>(
-      'select id from lead_contacts where lead_id = ? and kind = ? and value = ?',
+    const existing = this.db.one<{ id: string;validation_status:string|null;verified:number;score:number|null }>(
+      'select id,validation_status,verified,score from lead_contacts where lead_id = ? and kind = ? and value = ?',
       [input.leadId, input.kind, value],
     )
     const at = nowIso()
     if (existing) {
       this.db.run('update lead_contacts set source = ?, verified = ?, score = ?, checked_at = ? where id = ?', [
         input.source ?? 'manual',
-        input.verified ? 1 : 0,
-        input.score ?? null,
+        input.kind==='email'&&existing.validation_status?existing.verified:input.verified ? 1 : 0,
+        input.kind==='email'&&existing.validation_status?existing.score:score,
         at,
         existing.id,
       ])
@@ -1125,9 +1064,45 @@ export class Repository {
     this.db.run(
       `insert into lead_contacts (id, lead_id, workspace_id, kind, value, source, verified, score, checked_at, created_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, input.leadId, lead?.workspace_id ?? '', input.kind, value, input.source ?? 'manual', input.verified ? 1 : 0, input.score ?? null, at, at],
+      [id, input.leadId, lead?.workspace_id ?? '', input.kind, value, input.source ?? 'manual', input.verified ? 1 : 0, score, at, at],
     )
     return { id }
+  }
+
+  /** Keep one active business mailbox. Replaced/legacy alternatives remain recoverable locally. */
+  private retainMainEmail(leadId:string,preferredId?:string|null):{removed:number;id:string|null}{
+    const rows=this.db.query<Record<string,unknown>&{id:string;workspace_id:string;lead_id:string;value:string;source:string;score:number|null}>("select * from lead_contacts where lead_id=? and kind='email'",[leadId]).sort(compareEmailContacts)
+    const winner=preferredId===null?undefined:rows.find(row=>row.id===preferredId)??rows[0]
+    let removed=0
+    for(const row of rows)if(row.id!==winner?.id){
+      this.db.run('insert into email_contact_archive (id,workspace_id,lead_id,contact_id,original_json,archived_at) values (?,?,?,?,?,?)',[randomUUID(),row.workspace_id,row.lead_id,row.id,JSON.stringify(row),nowIso()])
+      this.db.run('delete from lead_contacts where id=?',[row.id]);removed++
+    }
+    return {removed,id:winner?.id??null}
+  }
+
+  /** A successful new website scan replaces the previous main mailbox, without inventing one. */
+  replaceMainEmail(leadId:string,email?:{value:string;page:string;score:number}):void {
+    this.db.transaction(()=>{
+      const saved=email?this.writeContact({leadId,kind:'email',value:email.value.trim().toLowerCase(),source:email.page,score:email.score,verified:false}):null
+      this.retainMainEmail(leadId,saved?.id??null)
+    })
+  }
+
+  collapseBusinessEmails():{removed:number}{
+    return this.db.transaction(()=>{
+      let removed=0
+      for(const row of this.db.query<{lead_id:string}>("select lead_id from lead_contacts where kind='email' group by lead_id having count(*)>1"))removed+=this.retainMainEmail(row.lead_id).removed
+      return {removed}
+    })
+  }
+
+  replaceScannedPhones(leadId: string, phones: {value:string;page:string}[], pages: string[]): void {
+    if(!pages.length)return
+    const pageKey=(value:string)=>{try{const url=new URL(value);return url.hostname.replace(/^www\./i,'')+url.pathname.replace(/\/$/,'')}catch{return value}}
+    const covered=new Set(pages.map(pageKey)),current=new Set(phones.map(item=>item.value.replace(/\D/g,'')))
+    const old=this.db.query<{id:string;value:string;source:string}>("select id,value,source from lead_contacts where lead_id = ? and kind = 'phone'",[leadId])
+    for(const phone of old)if((phone.source==='website'||covered.has(pageKey(phone.source)))&&!current.has(phone.value.replace(/\D/g,'')))this.db.run('delete from lead_contacts where id = ?',[phone.id])
   }
 
   updateContact(id: string, patch: { value?: string; verified?: boolean; score?: number | null }): void {
@@ -1143,7 +1118,7 @@ export class Repository {
     }
     if (patch.score !== undefined) {
       fields.push('score = ?')
-      params.push(patch.score)
+      params.push(patch.score==null||!Number.isFinite(patch.score)?null:Math.max(0,Math.min(100,Math.round(patch.score))))
     }
     params.push(id)
     this.db.run(`update lead_contacts set ${fields.join(', ')} where id = ?`, params)
@@ -1161,12 +1136,13 @@ export class Repository {
     },
   ): void {
     const at = nowIso()
+    const score=result.score==null||!Number.isFinite(result.score)?null:Math.max(0,Math.min(100,Math.round(result.score)))
     this.db.run(
       `update lead_contacts
        set verified = ?, score = ?, checked_at = ?, validation_status = ?, validation_provider = ?,
            validation_message = ?, validated_at = ?
        where id = ? and kind = 'email'`,
-      [result.verified ? 1 : 0, result.score, at, result.status, result.provider, result.message.slice(0, 500), at, id],
+      [result.verified ? 1 : 0, score, at, result.status, result.provider, result.message.slice(0, 500), at, id],
     )
   }
 
@@ -1224,11 +1200,14 @@ export class Repository {
     verified?: boolean
     source?: string
   }): { id: string } {
+    const canonical=canonicalSocialProfile(input.profileUrl || socialProfileUrl(input.platform,input.handle || ''))
+    if(input.platform!=='other'&&(!canonical||canonical.platform!==input.platform))throw new Error('Use a direct social account or channel URL, not a post, video, share or login link.')
+    if(canonical)input={...input,profileUrl:canonical.profileUrl,handle:canonical.handle}
     const at = nowIso()
-    const existing = this.db.one<{ id: string }>(
-      'select id from social_profiles where lead_id = ? and platform = ? and profile_url = ?',
-      [input.leadId, input.platform, input.profileUrl ?? ''],
-    )
+    const existing = this.db.query<{id:string;profile_url:string}>(
+      'select id,profile_url from social_profiles where lead_id = ? and platform = ?',
+      [input.leadId,input.platform],
+    ).find(row=>socialProfileKey(input.platform,row.profile_url)===socialProfileKey(input.platform,input.profileUrl??''))
     if (existing) {
       this.db.run(
         'update social_profiles set handle = ?, followers = ?, verified = ?, checked_at = ?, updated_at = ? where id = ?',
@@ -1263,6 +1242,12 @@ export class Repository {
     id: string,
     patch: { handle?: string; profileUrl?: string; followers?: number | null; verified?: boolean },
   ): void {
+    if(patch.profileUrl!==undefined){
+      const row=this.db.one<{platform:string}>('select platform from social_profiles where id=?',[id])
+      const canonical=canonicalSocialProfile(patch.profileUrl)
+      if(row&&row.platform!=='other'&&(!canonical||canonical.platform!==row.platform))throw new Error('Use a direct social account or channel URL.')
+      if(canonical)patch={...patch,profileUrl:canonical.profileUrl,handle:canonical.handle}
+    }
     const fields: string[] = ['checked_at = ?', 'updated_at = ?']
     const params: unknown[] = [nowIso(), nowIso()]
     if (patch.handle !== undefined) {
@@ -1289,6 +1274,34 @@ export class Repository {
     this.db.run('delete from social_profiles where id = ?', [id])
   }
 
+  /** Repair old platform-page crawls; every changed row is archived before mutation. */
+  repairSocialProfiles(): {removed:number;normalized:number;added:number} {
+    return this.db.transaction(()=>{
+      const rows=this.db.query<Record<string,unknown>&{id:string;lead_id:string;workspace_id:string;platform:string;profile_url:string;source:string;website:string}>('select s.*,l.website from social_profiles s join leads l on l.id=s.lead_id order by s.discovered_at,s.id')
+      const groups=new Map<string,{row:typeof rows[number];url:NonNullable<ReturnType<typeof canonicalSocialProfile>>}[]>()
+      const report={removed:0,normalized:0,added:0}
+      const archive=(row:typeof rows[number],reason:string)=>this.db.run('insert into social_profile_repairs (id,workspace_id,lead_id,profile_id,reason,original_json,repaired_at) values (?,?,?,?,?,?,?)',[randomUUID(),row.workspace_id,row.lead_id,row.id,reason,JSON.stringify(row),nowIso()])
+      for(const row of rows){
+        if(row.platform==='other')continue
+        const profile=canonicalSocialProfile(row.profile_url),own=canonicalSocialProfile(row.website)
+        const corporate=profile&&/^(?:youtube(?:creators|music|gaming|insider|tv)?|teamyoutube|facebook|instagram|meta|tiktok|twitter)$/i.test(profile.handle)
+        const feed=row.source==='website'&&own&&profile&&socialProfileIdentity(own)!==socialProfileIdentity(profile)&&(own.platform===profile.platform||corporate)
+        if(!profile||profile.platform!==row.platform||feed){archive(row,feed?'legacy platform feed, not the supplied account':'not a direct social profile');this.db.run('delete from social_profiles where id=?',[row.id]);report.removed++;continue}
+        const key=row.lead_id+'|'+socialProfileIdentity(profile),list=groups.get(key)??[];list.push({row,url:profile});groups.set(key,list)
+      }
+      for(const list of groups.values()){
+        const winner=list.find(item=>item.row.profile_url===item.url.profileUrl)??list[0]
+        for(const item of list)if(item!==winner){archive(item.row,'duplicate profile URL variant');this.db.run('delete from social_profiles where id=?',[item.row.id]);report.removed++}
+        if(winner.row.profile_url!==winner.url.profileUrl||winner.row.handle!==winner.url.handle){archive(winner.row,'canonical profile URL');this.db.run('update social_profiles set profile_url=?,handle=?,updated_at=? where id=?',[winner.url.profileUrl,winner.url.handle,nowIso(),winner.row.id]);report.normalized++}
+      }
+      for(const lead of this.db.query<{id:string;workspace_id:string;website:string}>('select id,workspace_id,website from leads where website <> ?',[''])){
+        const own=canonicalSocialProfile(lead.website);if(!own)continue
+        if(!this.db.one('select id from social_profiles where lead_id=? and platform=? and profile_url=?',[lead.id,own.platform,own.profileUrl])){this.upsertSocialProfile({workspaceId:lead.workspace_id,leadId:lead.id,...own,source:lead.website});report.added++}
+      }
+      return report
+    })
+  }
+
   // ---------------------------------------------------------------- decision makers
 
   listDecisionMakers(workspaceId: string, leadIds?: string[]): Record<string, unknown>[] {
@@ -1309,6 +1322,7 @@ export class Repository {
     phone?: string
     linkedinUrl?: string
     source?: string
+    replaceEmail?: boolean
   }): { id: string } {
     const lead = this.db.one<{ workspace_id: string }>('select workspace_id from leads where id = ?', [input.leadId])
     const workspaceId = lead?.workspace_id ?? input.workspaceId
@@ -1316,15 +1330,15 @@ export class Repository {
     const existing = this.db.one<{ id: string }>(
       'select id from decision_makers where workspace_id = ? and lead_id = ? and lower(trim(full_name)) = lower(?) limit 1',
       [workspaceId, input.leadId, fullName],
-    )
+    ) ?? this.db.query<{id:string;full_name:string}>('select id,full_name from decision_makers where workspace_id=? and lead_id=?',[workspaceId,input.leadId]).find(person=>Boolean(ownerIdentityKey(fullName)) && ownerIdentityKey(person.full_name)===ownerIdentityKey(fullName))
     if (existing) {
       // Re-scans enrich the same contact without duplicating it or erasing published details.
       this.db.run(
-        `update decision_makers set title = coalesce(nullif(?, ''), title),
-         email = coalesce(nullif(?, ''), email), phone = coalesce(nullif(?, ''), phone),
+        `update decision_makers set full_name = ?, title = coalesce(nullif(?, ''), title),
+         email = case when ? then ? else coalesce(nullif(?, ''), email) end, phone = coalesce(nullif(?, ''), phone),
          linkedin_url = coalesce(nullif(?, ''), linkedin_url), source = coalesce(nullif(?, ''), source)
          where id = ?`,
-        [input.title ?? '', input.email ?? '', input.phone ?? '', input.linkedinUrl ?? '', input.source ?? '', existing.id],
+        [fullName, input.title ?? '', input.replaceEmail ? 1 : 0, input.email ?? '', input.email ?? '', input.phone ?? '', input.linkedinUrl ?? '', input.source ?? '', existing.id],
       )
       return { id: existing.id }
     }
@@ -1356,9 +1370,9 @@ export class Repository {
    * Removes named contacts whose name reads as a button or a service rather than a person. The
    * worker refuses them now, and this clears any stored before it did.
    */
-  pruneNoisyPeople(isUsable: (name: string, title: string) => boolean): { removed: number } {
+  pruneNoisyPeople(isUsable: (name: string, title: string) => boolean, leadId?: string): { removed: number } {
     const rows = this.db.query<{ id: string; full_name: string; title: string }>(
-      'select id, full_name, title from decision_makers',
+      'select id, full_name, title from decision_makers' + (leadId ? ' where lead_id=?' : ''), leadId ? [leadId] : [],
     )
     let removed = 0
     for (const row of rows) {
@@ -1648,12 +1662,13 @@ export class Repository {
 
   // ---------------------------------------------------------------- enrichment jobs
 
-  queueJob(workspaceId: string, kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep', leadIds: string[]): { jobId: string; queued: number } {
+  queueJob(workspaceId: string, kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep', leadIds: string[], options: Record<string, unknown> = {}): { jobId: string; queued: number } {
+    leadIds = [...new Set(leadIds.filter(id => typeof id === 'string' && id.trim()))]
     if (!leadIds.length) return { jobId: '', queued: 0 }
     const id = randomUUID()
     this.db.run(
-      'insert into enrichment_jobs (id, workspace_id, kind, lead_ids, status, created_at) values (?, ?, ?, ?, ?, ?)',
-      [id, workspaceId, kind, JSON.stringify(leadIds), 'queued', nowIso()],
+      'insert into enrichment_jobs (id, workspace_id, kind, lead_ids, options, status, created_at) values (?, ?, ?, ?, ?, ?, ?)',
+      [id, workspaceId, kind, JSON.stringify(leadIds), JSON.stringify(options), 'queued', nowIso()],
     )
     return { jobId: id, queued: leadIds.length }
   }
@@ -1676,12 +1691,12 @@ export class Repository {
     return covered
   }
 
-  nextQueuedJob(foregroundJobId = ''): { id: string; workspace_id: string; kind: string; lead_ids: string } | null {
+  nextQueuedJob(foregroundJobId = ''): { id: string; workspace_id: string; kind: string; lead_ids: string; options: string } | null {
     return this.db.one(
       // A one-site import is an explicit foreground action. Let its social pass run before an
       // old 50-lead cascade, otherwise the import modal can sit on "Scanning" while background
       // work from an earlier session spends minutes ahead of the URL the user just entered.
-      `select id, workspace_id, kind, lead_ids
+      `select id, workspace_id, kind, lead_ids, options
        from enrichment_jobs
        where status = 'queued'
        order by
@@ -1727,6 +1742,11 @@ export class Repository {
     )
   }
 
+  /** Persist actual completed-site progress so polling/reopening does not invent a scan percentage. */
+  saveJobProgress(id: string, progress: { processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string }): void {
+    this.db.run("update enrichment_jobs set options = json_set(case when json_valid(options) then options else '{}' end, '$.progress', json(?)), found = ? where id = ?", [JSON.stringify(progress), progress.found, id])
+  }
+
   markJob(id: string, status: 'running' | 'done' | 'failed', found = 0, error: string | null = null): void {
     const finished = status === 'running' ? null : nowIso()
     this.db.run(
@@ -1748,11 +1768,17 @@ export class Repository {
   }
 
   /** The state of one queued pass, so a page can wait for its own scan rather than the whole queue. */
-  jobStatus(workspaceId: string, jobId: string): { status: 'queued' | 'running' | 'done' | 'failed' } | null {
-    return this.db.one<{ status: 'queued' | 'running' | 'done' | 'failed' }>(
-      'select status from enrichment_jobs where workspace_id = ? and id = ?',
+  jobStatus(workspaceId: string, jobId: string): { status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string } | null {
+    const row = this.db.one<{ status: 'queued' | 'running' | 'done' | 'failed'; lead_ids: string; options: string; found: number; error: string | null; finished_at: string | null }>(
+      'select status, lead_ids, options, found, error, finished_at from enrichment_jobs where workspace_id = ? and id = ?',
       [workspaceId, jobId],
     )
+    if (!row) return null
+    let total = 0
+    let progress: Partial<{ processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string }> = {}
+    try { total = new Set(JSON.parse(row.lead_ids) as string[]).size } catch { /* malformed jobs are reported by the worker */ }
+    try { progress = JSON.parse(row.options || '{}').progress || {} } catch { /* older jobs have no progress */ }
+    return { status: row.error === 'Cancelled by user' ? 'cancelled' : row.status, total, processed: Math.min(total, Math.max(0, Number(progress.processed ?? (row.status === 'done' ? total : 0)) || 0)), found: row.found || 0, failed: Number(progress.failed) || 0, leadName: progress.leadName || '', message: row.error === 'Cancelled by user' ? 'Scan stopped. Completed results are saved.' : row.error || progress.message || '', at: progress.at || row.finished_at || '' }
   }
 
   /**
@@ -1776,6 +1802,30 @@ export class Repository {
     const used: Record<string, number> = {}
     for (const row of rows) used[row.kind] = row.n
     return used
+  }
+
+  startWebsiteLookup(workspaceId: string, input: string[], selected: WebsiteLookupFields) {
+    const fields = lookupFields(selected)
+    const domains = [...new Set(input.map(normaliseDomain).filter(Boolean))]
+    if (!domains.length) throw new Error('Add at least one valid website URL.')
+    if (domains.length > 500) throw new Error('Scan up to 500 unique websites at a time. Split this list into smaller batches.')
+    const active = this.db.one<{ id: string }>("select id from enrichment_jobs where workspace_id = ? and kind = 'website' and status in ('queued','running') and json_extract(options, '$.source') = 'website-lookup'", [workspaceId])
+    if (active) throw new Error('A Website Lookup is already running. Wait for it to finish before starting another.')
+    const imported = this.importWebsites(workspaceId, domains, false)
+    return this.db.transaction(() => {
+      const {jobId} = this.queueJob(workspaceId, 'website', imported.leadIds, {source:'website-lookup',fields,added:imported.added,reused:imported.skipped})
+      for (const [position,id] of imported.leadIds.entries()) {
+        const lead = this.getLead(workspaceId,id)!
+        this.db.run('insert into website_lookup_rows (job_id,lead_id,position,data) values (?,?,?,?)',[jobId,id,position,JSON.stringify(emptyLookupRow(lead))])
+      }
+      return readWebsiteLookup(this.db,workspaceId,jobId)!
+    })
+  }
+
+  websiteLookupSession(workspaceId: string, jobId?: string) { return readWebsiteLookup(this.db,workspaceId,jobId) }
+
+  saveWebsiteLookupRow(jobId: string, row: WebsiteLookupRow): void {
+    this.db.run('update website_lookup_rows set data = ?, status = ?, error = ? where job_id = ? and lead_id = ?', [JSON.stringify(row),row.status,row.error,jobId,row.leadId])
   }
 
   // ---------------------------------------------------------------- exports
@@ -1824,7 +1874,7 @@ export class Repository {
    * find the business's real name, address and contacts from the site itself. Domains already on
    * file are skipped rather than duplicated, so re-importing a list is harmless.
    */
-  importWebsites(workspaceId: string, input: string[]): { batchId: string; added: number; skipped: number; leadIds: string[] } {
+  importWebsites(workspaceId: string, input: string[], enqueue = true): { batchId: string; added: number; skipped: number; leadIds: string[] } {
     return this.db.transaction(() => {
       const seen = new Set<string>()
       const domains: string[] = []
@@ -1876,7 +1926,7 @@ export class Repository {
         [batchId, workspaceId, domains.length, addedLeadIds.length, skipped, nowIso()],
       )
 
-      if (addedLeadIds.length) {
+      if (addedLeadIds.length && enqueue) {
         this.db.run(
           `insert into enrichment_jobs (id, workspace_id, kind, lead_ids, status, created_at)
            values (?, ?, 'website', ?, 'queued', ?)`,

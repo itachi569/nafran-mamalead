@@ -30,6 +30,44 @@ export interface ExtractedEmail {
   context: string
 }
 
+/** Cloudflare publishes these email labels for the browser to display, using a small XOR encoding. */
+export function decodePublishedEmailHtml(html: string): string {
+  return html.replace(/<(a|span)\b[^>]*\bdata-cfemail=["']([0-9a-f]+)["'][^>]*>[\s\S]*?<\/\1>/gi,(original,_tag,hex:string)=>{
+    if (hex.length<4 || hex.length%2) return original
+    const key=parseInt(hex.slice(0,2),16)
+    const bytes=new Uint8Array((hex.length-2)/2)
+    for (let i=2;i<hex.length;i+=2) bytes[(i-2)/2]=parseInt(hex.slice(i,i+2),16)^key
+    const email=new TextDecoder().decode(bytes)
+    return /^[^\s<>@]+@[^\s<>@]+\.[a-z]{2,}$/i.test(email) ? email : original
+  })
+}
+
+/** Example programs and SQL rows describe test data, not contact details. */
+export function stripContactCodeExamples(text: string): string {
+  const example = /\b(?:insert\s+into\s+\S+[\s\S]*?\bvalues\s*\(|create\s+table\s+|select\s+.+\s+from\s+)|(?:const|let|var)\s+\w+\s*=|["'](?:email|name)["']\s*:/i
+  const contactOnly=(body:string)=>/^(?:(?:e-?mail|contact)(?:\s+us)?\s*:?\s*)?(?:mailto:)?[^\s<>@]+@[^\s<>@]+\.[a-z]{2,}$/i.test(body.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim())
+  // HTML strings inside hydration scripts are data, not DOM blocks. Preserve whole scripts so
+  // removing an example cannot accidentally join two script tags around the page's real content.
+  const scripts:string[]=[]
+  return text.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,whole=>`\u0000CONTACT_SCRIPT_${scripts.push(whole)-1}\u0000`)
+    .replace(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi, (whole,body:string)=>contactOnly(body)?whole:' ')
+    .replace(/```[^\n]*\n[\s\S]*?```/g, ' ')
+    .replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (whole, body: string) => {
+      return contactOnly(body) ? whole : ' '
+    })
+    .replace(/<(td|p)\b[^>]*>([\s\S]*?)<\/\1>/gi, (whole, _tag: string, body: string) => example.test(body.replace(/<[^>]*>/g,' ')) ? ' ' : whole)
+    .replace(/\u0000CONTACT_SCRIPT_(\d+)\u0000/g,(_whole,index:string)=>scripts[Number(index)])
+}
+
+/** Literal addresses and explicit [at]/(at) obfuscation; prose such as "team at company.com" is not an email. */
+export function extractPublishedEmails(text: string): string[] {
+  const decoded=text.replace(/&#(x[0-9a-f]+|[0-9]+);/gi,(_match,code:string)=>{
+    const value=parseInt(code.replace(/^x/i,''),/^x/i.test(code)?16:10)
+    return value>0 && value<=0x10ffff ? String.fromCodePoint(value) : ''
+  }).replace(/\s*(?:\[\s*at\s*\]|\(\s*at\s*\))\s*/gi,'@').replace(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\))\s*/gi,'.')
+  return [...new Set((decoded.match(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi) ?? []).map(value=>value.toLowerCase()))]
+}
+
 /** A person named by a result snippet, still a suggestion until somebody confirms it. */
 export interface ExtractedPerson {
   fullName: string
@@ -139,6 +177,7 @@ const EMAIL_PATTERN = /[a-z0-9][a-z0-9.!+_%'-]*@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(
  */
 export function extractEmails(text: string, limit = 20): ExtractedEmail[] {
   if (typeof text !== 'string' || !text) return []
+  text=stripContactCodeExamples(text)
   const plain = text.toLowerCase()
   const read = normalise(text)
   const found = new Map<string, ExtractedEmail>()
@@ -284,7 +323,7 @@ export function extractEmailsFromResult(result: unknown, limit = 20): ExtractedE
 }
 
 const PERSON_TITLE = '(?:co[- ]?founder|co[- ]?owner|founder|owner|principal|managing director|director|chief executive officer|ceo)'
-const PERSON_NAME = "[A-Z][A-Za-z.'-]+(?:\\s+[A-Z][A-Za-z.'-]+){1,3}"
+const PERSON_NAME = "[\\p{Lu}][\\p{L}.'’-]*(?:[^\\S\\r\\n]+(?:van|von|de|der|den|la|le|al|bin|ibn|da|di|[\\p{Lu}][\\p{L}.'’-]*)){1,3}"
 
 /**
  * A name as somebody actually wrote it, with the words around it taken off.
@@ -310,6 +349,7 @@ function cleanPersonName(value: string): string {
     .replace(/^[\s,;:|–—-]+|[\s,;:|–—-]+$/g, '')
     .replace(/^(?:hi|hello|hey)[\s,]+/i, '')
     .replace(/^(?:i\s*['’]?\s*(?:am|m)|my name is|this is|we\s*['’]?\s*(?:are|re))\s+/i, '')
+    .replace(/^[A-Z][a-z]+-born\s+/, '')
     .replace(/\s+/g, ' ')
     .trim()
   const words = stripped.split(' ')
@@ -329,13 +369,16 @@ const NOT_A_NAME_START = /^(?:i|i['’]?m|im|we|we['’]?re|my|our|me|us|he|she|
 function isPersonName(value: string): boolean {
   const words = value.split(/\s+/)
   if (words.length < 2 || words.length > 4) return false
-  if (!words.every((word) => /^[A-Z]/.test(word) && !/[.,;:!?]$/.test(word))) return false
+  if (!words.every((word,index) => /^\p{Lu}[\p{L}'’.-]*$/u.test(word) && (!/[.,;:!?]$/.test(word) || /^\p{Lu}\.$/u.test(word)) || index>0 && /^(?:van|von|de|der|den|la|le|al|bin|ibn|da|di)$/.test(word))) return false
+  if (/^(?:stories|ecommerce|migration|inspiring|insights|resources|business|entrepreneurs)\b|\b(?:founder|founders|owner|owners)\b/i.test(value)) return false
+  if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company)\.?$/i.test(value)) return false
   return !NOT_A_NAME_START.test(words[0])
 }
 
 /** Extracts named founders/owners from the title and snippet text of a SERP result. */
 export function extractPeople(text: string, limit = 8): ExtractedPerson[] {
   if (typeof text !== 'string' || !text.trim()) return []
+  text=stripContactCodeExamples(text)
   const found = new Map<string, ExtractedPerson>()
   const add = (name: string, title: string, source: string) => {
     const fullName = cleanPersonName(name)
@@ -351,19 +394,25 @@ export function extractPeople(text: string, limit = 8): ExtractedPerson[] {
     found.set(key, { fullName, title: title.replace(/[-]+/g, ' ').replace(/\s+/g, ' ').trim(), source: snippetAround(text, Math.max(0, text.indexOf(name)), name.length), url: '' })
   }
 
-  const titleFirst = new RegExp(`\\b(${PERSON_TITLE})\\b\\s*(?:is|:|-|–|—|,)?\\s+(${PERSON_NAME})`, 'gi')
+  const titleFirst = new RegExp(`\\b(${PERSON_TITLE})\\b\\s*(?:is|:|-|–|—|,)?\\s+(${PERSON_NAME})`, 'giu')
   for (const match of text.matchAll(titleFirst)) add(match[2], match[1], text)
 
-  const foundedBy = new RegExp(`\\b(?:founded|started|established)\\s+by\\s+(${PERSON_NAME})`, 'gi')
+  const foundedBy = new RegExp(`\\b(?:co[- ]?founded|founded|started|established)\\s+by\\s+(${PERSON_NAME})`, 'giu')
   for (const match of text.matchAll(foundedBy)) add(match[1], 'Founder', text)
 
   // A separator is required here: without it, the company in “Northern Spine founder Ruth
   // Taylor” would be mistaken for a person before the title-first rule sees Ruth Taylor.
-  const nameFirst = new RegExp(`\\b(${PERSON_NAME})\\s*(?:,|[-–—])\\s*(${PERSON_TITLE})\\b`, 'gi')
+  const nameFirst = new RegExp(`\\b(${PERSON_NAME})\\s*(?:,|[-–—])\\s*(${PERSON_TITLE})\\b`, 'giu')
   for (const match of text.matchAll(nameFirst)) add(match[1], match[2], text)
 
-  const nameBeforeIs = new RegExp(`\\b(${PERSON_NAME})\\s+(?:is|was)\\s+(?:the\\s+)?(${PERSON_TITLE})\\b`, 'gi')
+  const nameBeforeIs = new RegExp(`\\b(${PERSON_NAME})\\s+(?:is|was)\\s+(?:the\\s+)?(${PERSON_TITLE})\\b`, 'giu')
   for (const match of text.matchAll(nameBeforeIs)) add(match[1], match[2], text)
+  const nameFounded = new RegExp(`\\b(${PERSON_NAME})\\s+(?:has\\s+)?(?:co[- ]?founded|founded|started|established)\\b`, 'giu')
+  for (const match of text.matchAll(nameFounded)) add(match[1], 'Founder', text)
+  // A joint founder sentence is evidence for both people, not a single concatenated name.
+  const photoPosition='(?:\\s*\\((?:left|right|centre|center)\\))?'
+  const jointFounders=new RegExp(`\\b(${PERSON_NAME})${photoPosition}\\s+(?:and|&)\\s+(${PERSON_NAME})${photoPosition}\\s+(?:(?:are|were)\\s+(?:the\\s+)?(?:co[- ]?)?(?:founders|owners)|(?:co[- ]?founded|founded|started|established))\\b`,'giu')
+  for(const match of text.matchAll(jointFounders)){add(match[1],'Founder',text);add(match[2],'Founder',text)}
   return [...found.values()]
 }
 

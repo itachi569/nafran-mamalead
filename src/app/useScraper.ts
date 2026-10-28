@@ -218,9 +218,9 @@ export function useScraper(): {
         // and the coverage map pin businesses as they land rather than only at the end. The
         // provider can report the same place more than once, so the list is kept unique.
         leads: progress.lead
-          ? current.leads.some((lead) => lead.placeRef && lead.placeRef === progress.lead?.placeRef)
+          ? current.leads.some((lead) => lead.id === progress.lead?.id || (lead.placeRef && lead.placeRef === progress.lead?.placeRef))
             ? current.leads
-            : [...current.leads, progress.lead].slice(-200)
+            : [...current.leads, progress.lead]
           : current.leads,
         message: progress.message,
         activityAt: progress.at,

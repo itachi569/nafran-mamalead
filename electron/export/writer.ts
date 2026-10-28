@@ -7,13 +7,16 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { app, dialog, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import ExcelJS from 'exceljs'
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
 import type { Repository } from '../db/repository'
+import { isBusinessOwner, ownerEmail } from '../enrichment/owner-contact'
+import {compareEmailContacts} from '../email-ranking'
 
 const logoAsset = join(__dirname, 'assets', 'mamalead-original.jpeg')
+const headerLogoAsset = join(__dirname, 'assets', 'mamalead-logo.png')
 const watermarkAsset = join(__dirname, 'assets', 'mamalead-watermark.png')
 
-export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles' | 'people'
+export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles' | 'people' | 'website'
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf'
 
 export interface ExportRequest {
@@ -31,6 +34,7 @@ export interface ExportRequest {
   leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'
   search?: string
   runId?: string
+  lookupJobId?: string
 }
 
 export interface ExportResult {
@@ -63,11 +67,16 @@ function duration(ms: unknown): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 }
 
+function numberedEmails(values:string[]):string {
+  const unique=Array.from(new Set(values.map(value=>value.trim().toLowerCase()).filter(Boolean)))
+  return unique.length>1?unique.map((value,index)=>`${index+1}. ${value}`).join('\n'):unique[0]??''
+}
+
 const LEAD_COLUMNS: Record<string, ColumnReader> = {
   'Business name': (row) => text(row.name),
   Domain: (row) => text(row.website).replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0],
   Phone: (row) => text(row.phone),
-  Email: (row) => text(row.best_email),
+  Email: (row) => text(row.all_emails ?? row.best_email),
   Address: (row) => text(row.address),
   Rating: (row) => text(row.rating),
   'Review count': (row) => text(row.review_count),
@@ -155,10 +164,28 @@ function rowsFor(
     }
   }
 
+  if (request.kind === 'website') {
+    if (!request.lookupJobId) throw new Error('Choose a Website Lookup scan to export.')
+    const session=repository.websiteLookupSession(workspaceId,request.lookupJobId)
+    if (!session) throw new Error('That Website Lookup scan could not be found.')
+    const selected=request.leadIds === undefined ? null : new Set(request.leadIds)
+    const rows=session.rows.filter(row=>!selected || selected.has(row.leadId)).slice(0,Math.max(0,request.limit))
+    return { columns: {
+      'Business name': row=>text(row.businessName), Website: row=>text(row.website),
+      Emails: row=>numberedEmails([...(row.emails as {value:string;score?:number;source?:string}[])].sort(compareEmailContacts).map(item=>item.value)),
+      'Phone numbers': row=>(row.phones as {value:string}[]).map(item=>item.value).join('\n'),
+      'Business address': row=>text(row.address),
+      'Social links': row=>(row.socials as {url:string}[]).map(item=>item.url).join('\n'),
+      Sources: row=>(row.sources as string[]).join('\n'),
+      Status: row=>row.status === 'done' ? ((row.emails as unknown[]).length || (row.phones as unknown[]).length || (row.socials as unknown[]).length || row.address ? 'Found' : 'No public details') : text(row.status),
+      Error: row=>text(row.error),
+    }, rows: rows as unknown as Record<string,unknown>[] }
+  }
+
   if (request.kind === 'people') {
     const ids = [...new Set(request.leadIds ?? [])]
     const leads = new Map(ids.map((id) => [id, repository.getLead(workspaceId, id)]))
-    const rows = repository.decisionMakerLedger(workspaceId).filter(person=>leads.has(person.lead_id))
+    const rows = repository.decisionMakerLedger(workspaceId).filter(person=>leads.has(person.lead_id) && isBusinessOwner(person.title))
       .filter((person) => leads.get(String(person.lead_id)))
       .map((person) => {
         const lead = leads.get(String(person.lead_id))!
@@ -166,14 +193,9 @@ function rowsFor(
       })
     return { columns: {
       'Business name': (row) => text(row.name), Domain: LEAD_COLUMNS.Domain,
-      'Decision maker': (row) => text(row.full_name), Role: (row) => text(row.title),
-      Email: (row) => text(row.email), Phone: (row) => text(row.phone),
-      'Business emails': (row) => text(row.business_emails),
-      'Business phones': (row) => [...new Set([text(row.lead_phone), ...text(row.business_phones).split('\n')].filter(Boolean))].join('\n'),
-      'Business address': (row) => text(row.lead_address),
-      'Published social links': (row) => text(row.published_socials),
-      LinkedIn: (row) => text(row.linkedin_url), Source: (row) => text(row.source),
-      'Saved date': (row) => shortDate(row.created_at),
+      Owner: (row) => text(row.full_name),
+      'Owner email': (row) => ownerEmail(text(row.full_name),text(row.email)),
+      Source: (row) => text(row.source),
     }, rows }
   }
 
@@ -199,13 +221,19 @@ function rowsFor(
     if (rows.length >= page.total) break
   }
   const enriched = rows.map((lead) => {
-    const emails = repository.listContacts(workspaceId, 'email', [lead.id]) as { value: string; score: number | null }[]
+    const phones = (repository.listContacts(workspaceId,'phone',[lead.id]) as {value:string;score:number|null}[]).sort((a,b)=>(b.score??0)-(a.score??0))
+    const bestPhone=phones.find(phone=>(phone.score??0)>=50)?.value
+    const phoneValues=[bestPhone,lead.phone,...phones.map(item=>item.value)].filter((value):value is string=>Boolean(value && value.replace(/\D/g,'').length>=9 && value.replace(/\D/g,'').length<=15))
+    const allPhones=Array.from(new Map(phoneValues.map(value=>[value.replace(/\D/g,''),value])).values())
+    const emails = (repository.listContacts(workspaceId, 'email', [lead.id]) as { value: string; score: number | null;source?:string }[]).sort(compareEmailContacts).slice(0,1)
     const socials = repository.listSocialProfiles(workspaceId, [lead.id]) as { platform: string }[]
     const people = repository.listDecisionMakers(workspaceId, [lead.id]) as { full_name: string }[]
-    const best = emails.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))[0]
+    const best = emails[0]
     return {
       ...lead,
+      phone: allPhones.join('\n'),
       best_email: best?.value ?? '',
+      all_emails:numberedEmails(emails.map(item=>item.value)),
       socials: socials.map((social) => social.platform).join(', '),
       decision_maker: people[0]?.full_name ?? '',
     }
@@ -254,7 +282,7 @@ export function buildExport(
 }
 
 function exportTitle(kind: ExportKind): string {
-  return kind === 'people' ? 'Decision Makers' : kind === 'profiles' ? 'Social Profiles' : kind === 'runs' ? 'Run History' : kind === 'invoices' ? 'Invoices' : 'Leads'
+  return kind === 'website' ? 'Website Lookup' : kind === 'people' ? 'Decision Makers' : kind === 'profiles' ? 'Social Profiles' : kind === 'runs' ? 'Run History' : kind === 'invoices' ? 'Invoices' : 'Leads'
 }
 
 async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> {
@@ -278,12 +306,16 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
 
   // Branding is part of the sheet itself, so it also appears when opened or printed.
   sheet.mergeCells(1, 1, 1, lastColumn)
-  sheet.getCell(1, 1).value = 'mamalead'
-  sheet.getCell(1, 1).font = { name: 'Aptos Display', size: 19, bold: true, color: { argb: 'FFFFFFFF' } }
-  sheet.getCell(1, 1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 }
-  sheet.getRow(1).height = 40
+  sheet.getRow(1).height = 58
+  const headerLogo = workbook.addImage({ filename: headerLogoAsset, extension: 'png' })
+  // Embed the actual brand artwork as a drawing, not only a worksheet background.
+  sheet.addImage(headerLogo, {
+    tl: { col: 0.05, row: 0.1 },
+    ext: { width: 96, height: 96 * 584 / 892 },
+    editAs: 'oneCell',
+  })
   sheet.mergeCells(2, 1, 2, lastColumn)
-  sheet.getCell(2, 1).value = `${exportTitle(kind)}  |  ${table.values.length} rows  |  ${new Date().toISOString().slice(0, 10)}`
+  sheet.getCell(2, 1).value = `${exportTitle(kind)}  |  ${table.values.length} ${table.values.length===1?'row':'rows'}  |  ${new Date().toISOString().slice(0, 10)}`
   sheet.getCell(2, 1).font = { name: 'Aptos', size: 11, color: { argb: 'FF435042' } }
   sheet.getCell(2, 1).alignment = { vertical: 'middle', indent: 2 }
   sheet.getRow(2).height = 27
@@ -307,7 +339,7 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   table.values.forEach((values, index) => {
     const row = sheet.getRow(index + 5)
     const wrappedLines = Math.max(1, ...values.map((value, column) => value.split(/\r?\n/).reduce((total, line) => total + Math.max(1, Math.ceil(line.length / Math.max(10, Number(sheet.getColumn(column + 1).width ?? 25) - 2))), 0)))
-    row.height = kind === 'people' ? Math.min(409, Math.max(30, wrappedLines * 14 + 10)) : Math.min(60, Math.max(25, values.some((value) => value.length > 70) ? 42 : 25))
+    row.height = Math.min(409,Math.max(30,wrappedLines*14+10))
     row.alignment = { vertical: 'middle', wrapText: true }
     row.font = { name: 'Aptos', size: 10, color: { argb: 'FF1C1C1C' } }
     row.eachCell((cell, columnNumber) => {
@@ -332,6 +364,15 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
 
 function pdfText(value: string): string {
   return value.replace(/[^\x20-\x7E]/g, '?')
+}
+
+function drawPdfBrandHeader(page: PDFPage, logo: PDFImage, font: PDFFont, bold: PDFFont, title: string, summary: string, margin: number): void {
+  const { width, height } = page.getSize()
+  const size = logo.scaleToFit(84, 55)
+  page.drawRectangle({ x: 0, y: height - 78, width, height: 78, color: rgb(.11, .11, .11) })
+  page.drawImage(logo, { x: margin, y: height - 65, ...size })
+  page.drawText(title, { x: margin + 104, y: height - 34, size: 16, font: bold, color: rgb(1, 1, 1) })
+  page.drawText(summary, { x: margin + 104, y: height - 53, size: 9, font, color: rgb(.78, .84, .73) })
 }
 
 function pdfCellLines(value: string, font: PDFFont, size: number, width: number): string[] {
@@ -360,71 +401,32 @@ function pdfCellLines(value: string, font: PDFFont, size: number, width: number)
   return lines
 }
 
-/** People exports use labelled records so every address and URL stays readable and paginates. */
-async function buildPeoplePdf(table: ExportTable): Promise<Buffer> {
-  const pdf=await PDFDocument.create()
-  pdf.setTitle('MamaLead - Decision Makers');pdf.setAuthor('MamaLead')
-  const font=await pdf.embedFont(StandardFonts.Helvetica)
-  const bold=await pdf.embedFont(StandardFonts.HelveticaBold)
-  const logo=await pdf.embedJpg(readFileSync(logoAsset))
-  const width=842,height=595,margin=36,valueX=190,lineHeight=13
-  let y=0
-  const newPage=()=>{
-    const page=pdf.addPage([width,height])
-    page.drawRectangle({x:0,y:height-74,width,height:74,color:rgb(.11,.11,.11)})
-    page.drawText('mamalead',{x:margin,y:height-32,size:19,font:bold,color:rgb(1,1,1)})
-    page.drawText(`DECISION MAKERS | ${table.values.length} CONTACTS`,{x:margin,y:height-53,size:9,font,color:rgb(.78,.84,.73)})
-    page.drawImage(logo,{x:width/2-180,y:100,width:360,height:360,opacity:.055})
-    y=height-96
-    return page
-  }
-  let page=newPage()
-  const nameIndex=table.columns.indexOf('Decision maker')
-  const heading=(name:string,continued=false)=>{
-    page.drawRectangle({x:margin,y:y-27,width:width-margin*2,height:27,color:rgb(.78,.84,.73)})
-    page.drawText(pdfText(name+(continued?' (continued)':'')),{x:margin+10,y:y-18,size:11,font:bold,color:rgb(.11,.11,.11)})
-    y-=38
-  }
-  for(const [index,row] of table.values.entries()) {
-    const name=`${index+1}. ${row[nameIndex] || 'Named contact'}`
-    if(y<150)page=newPage()
-    heading(name)
-    for(const [column,value] of row.entries()) {
-      if(column===nameIndex)continue
-      const lines=(value || 'Not published').split(/\r?\n/).flatMap(part=>pdfCellLines(part,font,9,width-margin-valueX-12))
-      let offset=0
-      while(offset<lines.length) {
-        if(y<76){page=newPage();heading(name,true)}
-        const fit=Math.max(1,Math.floor((y-48)/lineHeight))
-        const chunk=lines.slice(offset,offset+fit)
-        const label=table.columns[column]+(offset?' (cont.)':'')
-        pdfCellLines(label,bold,8.5,valueX-margin-16).forEach((line,i)=>page.drawText(line,{x:margin,y:y-i*11,size:8.5,font:bold,color:rgb(.30,.34,.29)}))
-        chunk.forEach((line,i)=>page.drawText(line,{x:valueX,y:y-i*lineHeight,size:9,font,color:rgb(.12,.15,.13)}))
-        y-=Math.max(2,chunk.length)*lineHeight+5
-        offset+=chunk.length
-      }
-    }
-    y-=16
-  }
-  pdf.getPages().forEach((sheet,index)=>sheet.drawText(`mamalead | Decision Makers | Page ${index+1} of ${pdf.getPageCount()}`,{x:margin,y:20,size:8,font,color:rgb(.38,.43,.38)}))
-  return Buffer.from(await pdf.save())
-}
-
 async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
-  if(kind==='people')return buildPeoplePdf(table)
   const pdf = await PDFDocument.create()
   pdf.setTitle(`MamaLead - ${exportTitle(kind)}`)
   pdf.setAuthor('MamaLead')
   pdf.setSubject(`${exportTitle(kind)} export`)
   const logo = await pdf.embedJpg(readFileSync(logoAsset))
+  const headerLogo = await pdf.embedPng(readFileSync(headerLogoAsset))
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
-  const width = 842
-  const height = 595
+  // The full Decision Makers ledger has 13 columns; use a wider landscape sheet.
+  const wideTable = (kind === 'people' && table.columns.length > 9) || (kind === 'website' && table.columns.length >= 7)
+  const width = wideTable ? 1191 : 842
+  const height = wideTable ? 842 : 595
   const margin = 34
   const contentWidth = width - margin * 2
   const title = exportTitle(kind)
   const weights = table.columns.map((column) => {
+    if (kind === 'website') return ({'Business name':1.8,Website:1.8,Emails:2.2,'Phone numbers':1.8,'Business address':2.2,'Social links':2.2,Sources:2.4,Status:1.1,Error:1.8} as Record<string,number>)[column] ?? 1.5
+    if (kind === 'people') {
+      if (column === 'Business address' || column === 'Published social links') return 2.2
+      if (column === 'Business name' || column === 'Decision maker' || column === 'Business emails') return 1.7
+      if (column === 'Email' || column === 'LinkedIn' || column === 'Source') return 1.6
+      if (column === 'Saved date') return 1.3
+      return 1.4
+    }
+    if (column === 'Email' || column === 'Emails') return 2.2
     if (column === 'Profile URL') return 3.2
     if (column === 'Business name' || column === 'Address' || column === 'Description') return 1.8
     if (column === 'Domain' || column === 'Handle' || column === 'Keywords') return 1.5
@@ -434,49 +436,58 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
   const weightSum = weights.reduce((sum, value) => sum + value, 0)
   const widths = weights.map((weight) => (contentWidth * weight) / weightSum)
   const lefts = widths.map((_, index) => margin + widths.slice(0, index).reduce((sum, value) => sum + value, 0))
-  const textSize = table.columns.length > 9 ? 6.7 : 7.5
+  const textSize = wideTable ? 8 : table.columns.length > 9 ? 6.7 : 7.5
   const lineHeight = textSize + 3.5
   const minRowHeight = 25
+  const columnHeadings = table.columns.map((column, index) => pdfCellLines(column, bold, 7.5, widths[index] - 14))
+  const headingHeight = Math.max(30, Math.max(...columnHeadings.map(lines => lines.length)) * 9 + 12)
   let y = 0
   let rowIndex = 0
 
   const startPage = (): PDFPage => {
     const page = pdf.addPage([width, height])
-    page.drawRectangle({ x: 0, y: height - 78, width, height: 78, color: rgb(0.11, 0.11, 0.11) })
-    page.drawRectangle({ x: margin, y: height - 59, width: 38, height: 38, color: rgb(0.78, 0.84, 0.73) })
-    page.drawText('m', { x: margin + 10, y: height - 50, size: 20, font: bold, color: rgb(0.11, 0.11, 0.11) })
-    page.drawText('mamalead', { x: margin + 50, y: height - 34, size: 16, font: bold, color: rgb(1, 1, 1) })
-    page.drawText(`${title.toUpperCase()}  |  ${table.values.length} ROWS`, { x: margin + 50, y: height - 53, size: 9, font, color: rgb(0.78, 0.84, 0.73) })
+    drawPdfBrandHeader(page, headerLogo, font, bold, title, `${table.values.length} ${table.values.length===1?'ROW':'ROWS'}`, margin)
     y = height - 100
-    page.drawRectangle({ x: margin, y: y - 30, width: contentWidth, height: 30, color: rgb(0.16, 0.19, 0.16) })
-    table.columns.forEach((column, index) => {
-      const lines = pdfCellLines(column, bold, 7.5, widths[index] - 14)
-      lines.slice(0, 2).forEach((line, lineIndex) => page.drawText(line, {
+    page.drawRectangle({ x: margin, y: y - headingHeight, width: contentWidth, height: headingHeight, color: rgb(0.16, 0.19, 0.16) })
+    columnHeadings.forEach((lines, index) => {
+      lines.forEach((line, lineIndex) => page.drawText(line, {
         x: lefts[index] + 7, y: y - 12 - lineIndex * 9, size: 7.5, font: bold, color: rgb(1, 1, 1),
       }))
     })
-    lefts.slice(1).forEach((x) => page.drawLine({ start: { x, y }, end: { x, y: y - 30 }, thickness: 0.45, color: rgb(0.44, 0.5, 0.44) }))
-    y -= 30
+    lefts.slice(1).forEach((x) => page.drawLine({ start: { x, y }, end: { x, y: y - headingHeight }, thickness: 0.45, color: rgb(0.44, 0.5, 0.44) }))
+    y -= headingHeight
     return page
   }
   let page = startPage()
   for (const row of table.values) {
-    const lines = row.map((value, index) => pdfCellLines(value, font, textSize, widths[index] - 14))
-    const rowHeight = Math.max(minRowHeight, Math.max(...lines.map((item) => item.length)) * lineHeight + 10)
-    if (y - rowHeight < 37) page = startPage()
-    page.drawRectangle({
-      x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight,
-      color: rowIndex % 2 ? rgb(0.94, 0.96, 0.93) : rgb(1, 1, 1),
-    })
-    page.drawLine({ start: { x: margin, y: y - rowHeight }, end: { x: width - margin, y: y - rowHeight }, thickness: 0.45, color: rgb(0.84, 0.87, 0.83) })
-    lefts.slice(1).forEach((x) => page.drawLine({ start: { x, y }, end: { x, y: y - rowHeight }, thickness: 0.45, color: rgb(0.84, 0.87, 0.83) }))
-    lines.forEach((cellLines, index) => {
-      cellLines.forEach((line, lineIndex) => page.drawText(line, {
-        x: lefts[index] + 7, y: y - 12 - lineIndex * lineHeight, size: textSize, font,
-        color: table.columns[index] === 'Profile URL' ? rgb(0.18, 0.35, 0.45) : rgb(0.12, 0.15, 0.13),
-      }))
-    })
-    y -= rowHeight
+    const lines = row.map((value, index) => value.split(/\r?\n/).flatMap(part => pdfCellLines(part, font, textSize, widths[index] - 14)))
+    const totalLines = Math.max(1, ...lines.map(item => item.length))
+    const fullRowHeight = Math.max(minRowHeight, totalLines * lineHeight + 10)
+    const freshRowSpace = height - 100 - headingHeight - 37
+    // Keep ordinary records together; unusually long records continue onto the next page.
+    if (y - fullRowHeight < 37 && (fullRowHeight <= freshRowSpace || y < height - 100 - headingHeight)) page = startPage()
+    let offset = 0
+    while (offset < totalLines) {
+      if (y - minRowHeight < 37) page = startPage()
+      const fit = Math.max(1, Math.floor((y - 37 - 10) / lineHeight))
+      const count = Math.min(fit, totalLines - offset)
+      const rowHeight = Math.max(minRowHeight, count * lineHeight + 10)
+      page.drawRectangle({
+        x: margin, y: y - rowHeight, width: contentWidth, height: rowHeight,
+        color: rowIndex % 2 ? rgb(0.94, 0.96, 0.93) : rgb(1, 1, 1),
+      })
+      page.drawLine({ start: { x: margin, y: y - rowHeight }, end: { x: width - margin, y: y - rowHeight }, thickness: 0.45, color: rgb(0.84, 0.87, 0.83) })
+      lefts.slice(1).forEach((x) => page.drawLine({ start: { x, y }, end: { x, y: y - rowHeight }, thickness: 0.45, color: rgb(0.84, 0.87, 0.83) }))
+      lines.forEach((cellLines, index) => {
+        cellLines.slice(offset, offset + count).forEach((line, lineIndex) => page.drawText(line, {
+          x: lefts[index] + 7, y: y - 12 - lineIndex * lineHeight, size: textSize, font,
+          color: table.columns[index] === 'Profile URL' ? rgb(0.18, 0.35, 0.45) : rgb(0.12, 0.15, 0.13),
+        }))
+      })
+      y -= rowHeight
+      offset += count
+      if (offset < totalLines) page = startPage()
+    }
     rowIndex += 1
   }
   pdf.getPages().forEach((sheet, index) => {

@@ -39,7 +39,7 @@ const local = {
   },
 
   phones: {
-    ledger: (payload?: { limit?: number }) => call('db:phones:ledger', payload ?? {}),
+    ledger: (payload?: { limit?: number;offset?:number }) => call('db:phones:ledger', payload ?? {}),
     summary: () => call('db:phones:summary'),
   },
 
@@ -117,11 +117,15 @@ const local = {
     covered: (kind: string, statuses: string[]) => call<string[]>('db:jobs:covered', { kind, statuses }),
   },
 
+  lookup: {
+    start: (input: string[], fields: import('./enrichment/website-lookup').WebsiteLookupFields) => call<import('./enrichment/website-lookup').WebsiteLookupSession>('db:lookup:start', {input,fields}),
+    get: (jobId?: string) => call<import('./enrichment/website-lookup').WebsiteLookupSession | null>('db:lookup:get', {jobId}),
+  },
   imports: {
     list: (limit?: number) => call('db:imports:list', { limit }),
     ledger: () => call('db:imports:ledger'),
-    websites: (input: string[] | string) =>
-      call<{ batchId: string; added: number; skipped: number; leadIds: string[] }>('db:imports:websites', { input }),
+    websites: (input: string[] | string, options?: {enqueue?:boolean}) =>
+      call<{ batchId: string; added: number; skipped: number; leadIds: string[] }>('db:imports:websites', { input,enqueue:options?.enqueue }),
     /**
      * Pasted social profile URLs, attached to the leads their handles name.
      *
@@ -194,11 +198,12 @@ const local = {
 
 export interface EnrichmentProgress {
   jobId: string
-  kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website'
-  status: 'running' | 'done' | 'failed' | 'idle'
+  kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
+  status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'
   processed: number
   total: number
   found: number
+  failed: number
   leadName: string
   message: string
   at: string
@@ -208,12 +213,13 @@ const enrichment = {
   status: (): Promise<{ running: boolean; pending: number }> => ipcRenderer.invoke('enrichment:status'),
   start: (): Promise<{ started: boolean }> => ipcRenderer.invoke('enrichment:start'),
   prioritize: (jobId?: string): Promise<{ started: boolean }> => ipcRenderer.invoke('enrichment:prioritize', { jobId }),
-  stop: (): Promise<{ stopped: boolean }> => ipcRenderer.invoke('enrichment:stop'),
+  stop: (jobId?: string): Promise<{ stopped: boolean }> => ipcRenderer.invoke('enrichment:stop', {jobId}),
   onProgress: (listener: (progress: EnrichmentProgress) => void): Unsubscribe =>
     subscribe('enrichment:progress', listener),
 }
 
 const desktop = {
+  chooseWebsiteCsv: () => call<{ name: string; content: string; bytes: number } | null>('imports:chooseWebsiteCsv'),
   getInfo: (): Promise<{ version: string; platform: string; isPackaged: boolean; electron: string }> =>
     ipcRenderer.invoke('app:info'),
   billing: {
@@ -288,8 +294,11 @@ const desktop = {
     }> => ipcRenderer.invoke('emailValidity:verify', input),
   },
   notifications: {
-    show: (title: string, body: string): Promise<{ shown: boolean }> =>
-      ipcRenderer.invoke('notifications:show', { title, body }),
+    show: (title: string, body: string, id?: string): Promise<{ shown: boolean }> => ipcRenderer.invoke('notifications:show',{title,body,id}),
+    revealExport: (path: string): Promise<{ shown: boolean }> => ipcRenderer.invoke('notifications:reveal-export',{path}),
+    onOpen: (listener:(id:string)=>void):Unsubscribe=>subscribe('notifications:open',listener),
+    onExportSaved: (listener:(result:{ eventId: string; kind: string; path: string; fileName: string; rows: number; bytes: number })=>void):Unsubscribe=>subscribe('notifications:export-saved',listener),
+    onExportFailed: (listener:(result:{eventId:string;message:string})=>void):Unsubscribe=>subscribe('notifications:export-failed',listener),
   },
   updates: {
     status: (): Promise<{

@@ -8,6 +8,11 @@
 // Nothing here writes to the database; it returns findings and the caller decides what to keep.
 import { chromium, type Browser } from 'playwright'
 import { parse, serialize, type DefaultTreeAdapterMap } from 'parse5'
+import { isBusinessOwner, ownerEmail } from './owner-contact'
+import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, stripContactCodeExamples } from './email-extractor'
+import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
+import {compareEmailContacts,emailContactPriority} from '../email-ranking'
+import {searchPublicSources} from './public-search'
 
 export interface FoundEmail {
   value: string
@@ -20,12 +25,15 @@ export interface FoundEmail {
 export interface FoundPhone {
   value: string
   page: string
+  /** Strength of the website's main contact evidence; not call-volume verification. */
+  score?: number
 }
 
 export interface FoundSocial {
   platform: 'instagram' | 'facebook' | 'linkedin' | 'tiktok' | 'youtube' | 'x' | 'other'
   handle: string
   profileUrl: string
+  page?: string
 }
 
 export interface FoundPerson {
@@ -34,29 +42,25 @@ export interface FoundPerson {
   linkedinUrl: string
   /** Where the name came from, shown beside it so a person can be judged rather than trusted. */
   evidence: string
+  /** Both public pages when an explicit short owner signature is resolved by its own team list. */
+  identityEvidence?: string[]
   email?: string
   phone?: string
 }
 
 export interface WebsiteFindings {
+  businessName?: string
   addresses?: string[]
   emails: FoundEmail[]
   phones: FoundPhone[]
   socials: FoundSocial[]
   people: FoundPerson[]
+  /** Older schema-only owner names superseded by the site's visible current ownership page. */
+  supersededOwnerNames?: string[]
   /** Pages actually read, so a run can report what it looked at. */
   pagesRead: string[]
   error: string | null
 }
-
-const SOCIAL_HOSTS: [RegExp, FoundSocial['platform']][] = [
-  [/(^|\.)instagram\.com$/i, 'instagram'],
-  [/(^|\.)facebook\.com$/i, 'facebook'],
-  [/(^|\.)linkedin\.com$/i, 'linkedin'],
-  [/(^|\.)tiktok\.com$/i, 'tiktok'],
-  [/(^|\.)youtube\.com$/i, 'youtube'],
-  [/(^|\.)(twitter|x)\.com$/i, 'x'],
-]
 
 /**
  * Mailboxes that belong to a platform or a form widget rather than to the business. These turn
@@ -71,47 +75,8 @@ const ROLE_RANK: [RegExp, number][] = [
   [/^(info|hello|hi|enquiries|enquiry|contact|mail)$/i, 16],
   [/^(admin|office|reception|frontdesk|team|help|support)$/i, 12],
   [/^(bookings|appointments|sales|newbusiness|clinic|practice)$/i, 10],
-  [/^(careers|jobs|press|pr|marketing|accounts|billing|payroll|noreply|no-reply|donotreply)$/i, -20],
+  [/^(careers|jobs|press|pr|marketing|accounts|billing|payroll|noreply|no-reply|donotreply|notice|notices|legal|privacy|abuse|compliance|copyright|webmaster)$/i, -20],
 ]
-
-/** Hosts that make a link a profile rather than a page of the site's own. */
-function socialFrom(href: string): FoundSocial | null {
-  let url: URL
-  try {
-    url = new URL(href)
-  } catch {
-    return null
-  }
-  if (!['http:', 'https:'].includes(url.protocol)) return null
-  const host = url.hostname.replace(/^www\./i, '')
-  for (const [pattern, platform] of SOCIAL_HOSTS) {
-    if (!pattern.test(host)) continue
-    // The first path segment is the handle, except for the shapes that put a keyword first.
-    const segments = url.pathname.split('/').filter(Boolean)
-    const first = segments[0]?.toLowerCase() ?? ''
-    // Share widgets, posts, login pages and platform home pages are not business profiles.
-    const excluded: Partial<Record<FoundSocial['platform'], string[]>> = {
-      facebook: ['sharer', 'sharer.php', 'share.php', 'share', 'dialog', 'plugins', 'login', 'login.php', 'watch', 'reel', 'help'],
-      instagram: ['p', 'reel', 'reels', 'stories', 'accounts', 'explore', 'share'],
-      linkedin: ['sharing', 'sharearticle', 'feed', 'posts', 'login', 'signup'],
-      x: ['intent', 'share', 'search', 'home', 'login', 'i'],
-      youtube: ['watch', 'shorts', 'embed', 'playlist', 'results', 'feed'],
-      tiktok: ['embed', 'login', 'discover', 'tag'],
-    }
-    if (!first || excluded[platform]?.includes(first)) return null
-    if (platform === 'facebook' && first === 'profile.php') {
-      const id = url.searchParams.get('id')
-      if (!id || !/^\d+$/.test(id)) return null
-      return { platform, handle: id, profileUrl: `${url.origin}${url.pathname}?id=${id}` }
-    }
-    const handle = segments[0] && !['company', 'in', 'pages', 'profile.php', 'c', 'channel', 'user'].includes(segments[0])
-      ? segments[0]
-      : (segments[1] ?? '')
-    if (!handle) return null
-    return { platform, handle, profileUrl: `${url.origin}${url.pathname}`.replace(/\/$/, '') }
-  }
-  return null
-}
 
 /** Basic entity decoding is enough for hrefs and JSON-LD URLs without loading a browser. */
 function decodeHtml(value: string): string {
@@ -125,7 +90,8 @@ function decodeHtml(value: string): string {
 }
 
 /** Finds social URLs already present in the server HTML. Most company footers publish these here. */
-function socialLinksFromHtml(html: string, baseHref: string): FoundSocial[] {
+export function socialLinksFromHtml(html: string, baseHref: string): FoundSocial[] {
+  const own=canonicalSocialProfile(baseHref),platformPage=Boolean(socialPlatformOf(baseHref))
   const candidates = new Set<string>()
   const add = (raw: string): void => {
     const decoded = decodeHtml(raw.replace(/\\\//g, '/')).trim()
@@ -138,16 +104,46 @@ function socialLinksFromHtml(html: string, baseHref: string): FoundSocial[] {
     }
   }
 
-  for (const match of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)) add(match[1])
-  // JSON-LD sameAs values and escaped page fragments can carry a profile without an anchor.
-  const unescaped = decodeHtml(html.replace(/\\\//g, '/'))
-  for (const match of unescaped.matchAll(/https?:\/\/(?:www\.)?(?:instagram\.com|facebook\.com|linkedin\.com|tiktok\.com|youtube\.com|youtu\.be|twitter\.com|x\.com)[^\s"'<>\\]*/gi)) add(match[0])
+  if(own)add(own.profileUrl)
+  // Platform feeds contain other people's accounts and corporate footer links. Only the
+  // supplied account and explicit owner metadata are evidence on a platform page.
+  if(!platformPage)for(const link of siteLinksFromHtml(html))add(link.href)
+  const collectUrls=(value:unknown):void=>{
+    if(typeof value==='string'){
+      const text=decodeHtml(value.replace(/\\\//g,'/'))
+      for(const match of text.matchAll(/https?:\/\/[^\s"'<>\\]+/g)){
+        let raw=match[0]
+        try{const url=new URL(raw);if(platformPage&&/^(?:www\.)?youtube\.com$/.test(url.hostname)&&url.pathname==='/redirect')raw=url.searchParams.get('q')||url.searchParams.get('url')||raw}catch{/* not a URL */}
+        add(raw)
+      }
+    }else if(Array.isArray(value))value.forEach(collectUrls)
+    else if(value&&typeof value==='object')Object.values(value).forEach(collectUrls)
+  }
+  const metadata=(value:unknown):void=>{
+    if(Array.isArray(value)){value.forEach(metadata);return}
+    if(!value||typeof value!=='object')return
+    for(const [key,item] of Object.entries(value)){
+      if(key==='sameAs'||(!platformPage&&/^(?:socials?|socialLinks?|socialMedia|(?:facebook|instagram|linkedin|youtube|tiktok|twitter|x)(?:Url|Link|Profile)?)$/i.test(key))||(platformPage&&/^(?:channelHeaderLinksRenderer|channelHeaderLinksViewModel|aboutChannelViewModel)$/i.test(key)))collectUrls(item)
+      else metadata(item)
+    }
+  }
+  for(const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)){
+    const script=match[1].trim()
+    try{metadata(JSON.parse(script));continue}catch{/* Some sites assign their page data to a variable. */}
+    const assignment=script.match(/^(?:var\s+|window\.)?(?:ytInitialData|__NEXT_DATA__|__INITIAL_STATE__|__NUXT__)\s*=\s*([\s\S]*?);?$/)
+    if(assignment)try{metadata(JSON.parse(assignment[1].replace(/;\s*$/,'')))}catch{/* Never evaluate site scripts. */}
+    if(!platformPage){
+      // Escaped application/config fragments still need an explicit social property name.
+      const unescaped=script.replace(/\\"/g,'"').replace(/\\\//g,'/')
+      for(const property of unescaped.matchAll(/["'](?:sameAs|socials?|socialLinks?|socialMedia|(?:facebook|instagram|linkedin|youtube|tiktok|twitter|x)(?:Url|Link|Profile)?)["']\s*:\s*("(?:[^"\\]|\\.)*"|'[^']*'|\[[^\]]{0,10000}\])/gi))collectUrls(property[1])
+    }
+  }
 
   const found = new Map<string, FoundSocial>()
   for (const href of candidates) {
-    const social = socialFrom(href)
+    const social = canonicalSocialProfile(href)
     if (!social) continue
-    found.set(`${social.platform}:${social.profileUrl.toLowerCase()}`, social)
+    found.set(socialProfileIdentity(social), {...social,page:baseHref})
   }
   return Array.from(found.values())
 }
@@ -158,12 +154,38 @@ function readableHtml(html: string): string {
     html
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<\/?(?:h[1-6]|p|div|section|article|li|br|tr)\b[^>]*>/gi, '\n')
+      .replace(/<\/?(?:h[1-6]|p|div|section|article|li|br|tr|address)\b[^>]*>/gi, '\n')
       .replace(/<[^>]+>/g, ' ')
       .replace(/[^\S\n]+/g, ' ')
       .replace(/ *\n */g, '\n')
       .replace(/\n+/g, '\n'),
   ).trim()
+}
+
+/** Read a published brand name, without inventing a name from a page title or domain. */
+export function businessNameFromHtml(html: string): string {
+  let metaName = '', schemaName = ''
+  const visitSchema = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach(visitSchema); return }
+    const item = value as Record<string, unknown>
+    const types = Array.isArray(item['@type']) ? item['@type'].join(' ') : String(item['@type'] ?? '')
+    if (!schemaName && /Organization|LocalBusiness|ProfessionalService|LegalService|Attorney|MedicalBusiness|Restaurant|Store|WebSite/i.test(types) && typeof item.name === 'string') schemaName = item.name.trim()
+    if (item['@graph']) visitSchema(item['@graph'])
+  }
+  const walk = (node: DefaultTreeAdapterMap['node']): void => {
+    if ('tagName' in node) {
+      const attrs = Object.fromEntries(node.attrs.map(attr=>[attr.name,attr.value]))
+      if (node.tagName === 'meta' && (attrs.property || attrs.name || '').toLowerCase() === 'og:site_name') metaName = (attrs.content || '').trim()
+      if (node.tagName === 'script' && (attrs.type || '').toLowerCase() === 'application/ld+json') {
+        try { visitSchema(JSON.parse(node.childNodes.map(child=>'value' in child ? child.value : '').join(''))) } catch { /* Optional malformed schema. */ }
+      }
+    }
+    if ('childNodes' in node) node.childNodes.forEach(walk)
+  }
+  walk(parse(html))
+  const value = (metaName || schemaName).replace(/\s+/g,' ').trim()
+  return value.length > 1 && value.length <= 160 && !/^(?:home|website|untitled|wordpress)$/i.test(value) ? value : ''
 }
 
 /** Keep published physical addresses, including multiple offices. Never infer an address. */
@@ -200,23 +222,74 @@ function uniqueAddresses(addresses: string[]): string[] {
   return addresses.filter((value,i)=>!addresses.some((other,j)=>j!==i && key(other).includes(key(value)) && (key(other).length>key(value).length || j<i))).slice(0,12)
 }
 
+/** Parse real navigation anchors, including unquoted HTML attributes, without reading script templates. */
+function siteLinksFromHtml(html: string): { href: string; label: string }[] {
+  const links: {href:string;label:string}[]=[]
+  const visit=(node:DefaultTreeAdapterMap['node']):void=>{
+    if ('tagName' in node && node.tagName==='a') {
+      const attr=(name:string)=>node.attrs.find(item=>item.name===name)?.value ?? ''
+      if(attr('href'))links.push({href:attr('href'),label:readableHtml(serialize(node)).replace(/\s+/g,' ').trim() || attr('aria-label') || attr('title')})
+    }
+    if('childNodes' in node)node.childNodes.forEach(visit)
+  }
+  visit(parse(html));return links
+}
+
+/** Explicit first-name owner signatures can be resolved only by the site's own named team. */
+function shortOwnerSignaturesFromHtml(html:string):string[]{
+  const names=new Set<string>()
+  const visit=(node:DefaultTreeAdapterMap['node']):void=>{
+    if('tagName' in node){
+      const labels=node.attrs.filter(attr=>attr.name==='class'||attr.name==='id').map(attr=>attr.value).join(' ')
+      if(/^(?:script|style|nav|header|footer)$/.test(node.tagName)||/testimoni|customer[-_ ]?(?:story|stories|review|quote)|client[-_ ]?(?:story|stories|review)/i.test(labels))return
+      if(/^(?:p|h[1-6]|li)$/.test(node.tagName)){
+        const text=readableHtml(serialize(node)).replace(/\s+/g,' ').trim()
+        const match=text.match(/^([\p{L}'’-]+(?:(?:\s*,\s*|\s+(?:and|&)\s+)[\p{L}'’-]+){1,3})\s*[,·|:–—-]?\s*(?:co[- ]?)?(?:founders|owners)\.?$/iu)
+        if(match){const parts=match[1].split(/\s*,\s*|\s+(?:and|&)\s+/i);if(parts.every(name=>/^\p{Lu}[\p{L}'’-]+$/u.test(name)))parts.forEach(name=>names.add(name))}
+      }
+    }
+    if('childNodes' in node)node.childNodes.forEach(visit)
+  }
+  visit(parse(html));return [...names]
+}
+
+/** Names must be in visible team headings/cards; an ordinary mention is insufficient. */
+function namedTeamCardsFromHtml(html:string):string[]{
+  const document=parse(html),names=new Set<string>()
+  let teamHeading=false
+  const heading=(node:DefaultTreeAdapterMap['node']):void=>{
+    if('tagName' in node && /^h[1-3]$/.test(node.tagName)){
+      const text=readableHtml(serialize(node)).replace(/\s+/g,' ').trim()
+      if(/^(?:(?:meet|about) (?:our |the )?|our |core )?(?:team|people|leadership|management team|staff|founders|owners)$/i.test(text))teamHeading=true
+    }
+    if('childNodes' in node)node.childNodes.forEach(heading)
+  }
+  heading(document);if(!teamHeading)return []
+  const visit=(node:DefaultTreeAdapterMap['node']):void=>{
+    if('tagName' in node){
+      const labels=node.attrs.filter(attr=>attr.name==='class'||attr.name==='id').map(attr=>attr.value).join(' ')
+      if(/^(?:script|style|nav|header|footer)$/.test(node.tagName)||/testimoni|customer[-_ ]?(?:story|stories|review|quote)|client[-_ ]?(?:story|stories|review)/i.test(labels))return
+      const cardName=/^h[1-4]$/.test(node.tagName) || /^(?:a|strong|b)$/.test(node.tagName) && node.parentNode && 'tagName' in node.parentNode && /^(?:li|p)$/.test(node.parentNode.tagName)
+      if(cardName){const name=readableHtml(serialize(node)).replace(/\s+/g,' ').trim();if(name.split(/\s+/).length>=2 && isUsablePerson(name,''))names.add(name)}
+    }
+    if('childNodes' in node)node.childNodes.forEach(visit)
+  }
+  visit(document);return [...names]
+}
+
 /** Finds contact details already in the first server response, without starting Chromium. */
-function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFindings, 'error' | 'pagesRead'> {
+export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFindings, 'error' | 'pagesRead'> {
+  html=decodePublishedEmailHtml(stripContactCodeExamples(html))
   const origin = new URL(pageUrl)
   const siteHost = origin.host.replace(/^www\./i, '')
   const text = readableHtml(html)
   const emails = cleanEmails([
     ...Array.from(html.matchAll(/mailto:([^"'\s?<>]+)/gi), (match) => decodeHtml(match[1])),
     ...(text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? []),
+    ...extractPublishedEmails(text),
   ]).map((value) => ({ value, score: scoreEmail(value, siteHost), page: pageUrl }))
 
-  const phoneValues = new Set<string>()
-  for (const match of html.matchAll(/(?:href\s*=\s*["']tel:|\btel:)([^"'<>\s]+)/gi)) phoneValues.add(match[1])
-  for (const match of text.matchAll(/(?:\+?\d[\d\s().-]{7,}\d)/g)) phoneValues.add(match[0])
-  const phones = Array.from(phoneValues)
-    .map((value) => normalisePhone(value))
-    .filter((value, index, values) => value.replace(/\D/g, '').length >= 9 && values.indexOf(value) === index)
-    .map((value) => ({ value, page: pageUrl }))
+  const phones = publishedPhonesFromHtml(html,pageUrl)
 
   const jsonLd = Array.from(html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi), (match) => decodeHtml(match[1]))
   const structuredContacts = (value: unknown): void => {
@@ -231,7 +304,7 @@ function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFin
     for(const raw of Array.isArray(node.telephone)?node.telephone:[node.telephone]) {
       if(typeof raw!=='string')continue
       const phone=normalisePhone(raw)
-      if(phone.replace(/\D/g,'').length>=9 && !phones.some(item=>item.value===phone))phones.push({value:phone,page:pageUrl})
+      if(phone.replace(/\D/g,'').length>=9 && phone.replace(/\D/g,'').length<=15 && !phones.some(item=>item.value===phone))phones.push({value:phone,page:pageUrl})
     }
     Object.values(node).forEach(structuredContacts)
   }
@@ -245,9 +318,10 @@ function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFin
     evidence: pageUrl,
   }))
   for (const person of findPeople(text)) {
-    if (!people.some((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())) {
+    const existing=people.find((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())
+    if (!existing) {
       people.push({ ...person, linkedinUrl: '', email: '', phone: '', evidence: pageUrl })
-    }
+    } else if(!existing.title || isBusinessOwner(person.title) && !isBusinessOwner(existing.title))existing.title=person.title
   }
 
   // Associate a mailbox only when the site explicitly names its owner beside the link.
@@ -265,10 +339,10 @@ function contactFindingsFromHtml(html: string, pageUrl: string): Omit<WebsiteFin
   // Person fields may exist only in structured data, outside visible text/mailto links.
   for (const person of people) {
     if (person.email && isUsableEmail(person.email) && !emails.some(item=>item.value===person.email)) emails.push({value:person.email,score:scoreEmail(person.email,siteHost),page:pageUrl})
-    if (person.phone && !phones.some(item=>item.value===normalisePhone(person.phone!))) phones.push({value:normalisePhone(person.phone),page:pageUrl})
+    if (person.phone && normalisePhone(person.phone) && !phones.some(item=>item.value===normalisePhone(person.phone!))) phones.push({value:normalisePhone(person.phone),page:pageUrl})
   }
 
-  return { addresses: addressesFromHtml(html), emails, phones, socials: socialLinksFromHtml(html, pageUrl), people }
+  return { businessName: businessNameFromHtml(html), addresses: addressesFromHtml(html), emails, phones, socials: socialLinksFromHtml(html, pageUrl).map(social=>({...social,page:pageUrl})), people }
 }
 
 /**
@@ -294,12 +368,60 @@ export function scoreEmail(value: string, siteHost: string): number {
   return Math.max(0, Math.min(100, score))
 }
 
-/** Normalises a UK phone number so the same line cannot be stored twice in two shapes. */
+/** Published tel links and visible phone text, excluding clearly labelled IDs and dates. */
+export function publishedPhonesFromHtml(html: string, page: string): FoundPhone[] {
+  const found=new Map<string,FoundPhone>()
+  const contactPage=/\/(?:contact(?:-us)?|contactus|reach-us|get-in-touch)(?:\/|\.[a-z]+$|$)/i.test(new URL(page).pathname)
+  const add=(raw:string,score=20)=>{
+    const value=normalisePhone(raw),digits=value.replace(/\D/g,'')
+    score=Math.min(100,Math.max(1,score+(contactPage?10:0)))
+    if(digits.length>=9 && digits.length<=15 && score>(found.get(digits)?.score ?? -1))found.set(digits,{value,page,score})
+  }
+  const walk=(node:DefaultTreeAdapterMap['node'],inChrome=false):void=>{
+    if('tagName' in node){
+      if(['script','style','noscript','template'].includes(node.tagName))return
+      inChrome ||= ['header','footer'].includes(node.tagName)
+      const href=node.attrs.find(attr=>attr.name==='href')?.value || ''
+      if(/^tel:/i.test(href.trim())){
+        const context=readableHtml(serialize(node.parentNode ?? node)).slice(0,1000)
+        const secondary=/\b(?:fax|careers|recruitment|press|media enquiries)\b/i.test(context) && !/\b(?:main|reception|switchboard|general enquiries)\b/i.test(context)
+        add(href.trim(),50+(inChrome?20:0)+(/\b(?:main|reception|switchboard|general enquiries|call us|call now)\b/i.test(context)?25:0)-(secondary?50:0))
+      }
+    }
+    if('childNodes' in node)node.childNodes.forEach(child=>walk(child,inChrome))
+  }
+  walk(parse(html))
+  for(const line of readableHtml(html).split('\n'))for(const match of line.matchAll(/\+?\d[\d ().-]{7,}\d/g)) {
+    const before=line.slice(Math.max(0,(match.index ?? 0)-45),match.index)
+    if(/(?:order|invoice|reference|registration|company\s*(?:no|number|id)|tax|vat|cnic|ntn|iban|account|sku|isbn|tracking|postal|postcode|zip|amount|price|total)\b[^\d\n]{0,25}$/i.test(before) && !/(?:phone|tel|mobile|whatsapp|call|fax)\b[^\d\n]{0,18}$/i.test(before))continue
+    if(/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}(?:$|\s)/.test(match[0]))continue
+    add(match[0],20+(/(?:phone|tel|mobile|whatsapp|call)\b[^\d\n]{0,18}$/i.test(before)?15:0)-(/fax\b[^\d\n]{0,18}$/i.test(before)?30:0))
+  }
+  const structured=(value:unknown):void=>{
+    if(Array.isArray(value)){value.forEach(structured);return}
+    if(!value || typeof value!=='object')return
+    const node=value as Record<string,unknown>,type=String(node['@type'] ?? '')
+    const score=/Organization|LocalBusiness|Corporation|ProfessionalService|Store|Restaurant|Dentist|Medical|LegalService|Attorney/i.test(type)?70:/ContactPoint/i.test(type)?65:25
+    for(const phone of Array.isArray(node.telephone)?node.telephone:[node.telephone])if(typeof phone==='string')add(phone,score+(/customer service|main|reception/i.test(String(node.contactType ?? ''))?15:0))
+    Object.values(node).forEach(structured)
+  }
+  for(const match of html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){try{structured(JSON.parse(decodeHtml(match[1])))}catch{/* Optional markup. */}}
+  return [...found.values()].sort((a,b)=>(b.score ?? 0)-(a.score ?? 0))
+}
+
+/** Decodes tel links, strips extensions and rejects values beyond phone digit limits. */
 export function normalisePhone(raw: string): string {
-  const digits = raw.replace(/[^\d+]/g, '')
-  if (digits.startsWith('+44')) return `+44 ${digits.slice(3).replace(/(\d{3})(\d{3})(\d+)/, '$1 $2 $3')}`.trim()
-  // A local number could belong to Pakistan, the UK or another country. Keep its prefix.
-  return digits
+  let value=decodeHtml(raw).replace(/^tel:/i,'')
+  try{value=decodeURIComponent(value)}catch{return ''}
+  value=value.split(/[;?]/)[0].replace(/\s*(?:ext\.?|extension|x)\s*\d+\s*$/i,'').trim()
+  // Four dotted octets are an IPv4 address, not a published phone number.
+  if(/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)&&value.split('.').every(part=>Number(part)<=255))return ''
+  if(value.startsWith('+'))value=value.replace(/\(0\)/g,'')
+  const number=(value.startsWith('+')?'+':'')+value.replace(/\D/g,'')
+  const digits=number.replace(/\D/g,'')
+  if(digits.length<9 || digits.length>15)return ''
+  if(number.startsWith('+44'))return ('+44 '+number.slice(3).replace(/(\d{3})(\d{3})(\d+)/,'$1 $2 $3')).trim()
+  return number
 }
 
 /** Words that mark a phrase as a service or a treatment rather than a person's name. */
@@ -313,9 +435,16 @@ const SERVICE_WORDS =
 export function isUsablePerson(fullName: string, title: string): boolean {
   const name = fullName.trim()
   if (!name || name.length > 40) return false
+  if (/^(?:a|an|the|our|your|this|that|latest|featured|company|business|meet|read|learn|how|why|what|for|start|quick)\b/i.test(name)) return false
   if (/[\n\r]/.test(name)) return false
+  if (/^(?:e-?mail|call|telephone|phone|contact|meet|message|connect with)\b/i.test(name)) return false
   if (PERSON_NOISE.test(name) || PERSON_NOISE.test(title.trim())) return false
   if (SERVICE_WORDS.test(name)) return false
+  // Title-cased marketing headings often sit in the same section as a founder bio. They are not
+  // names, and following them would spend a paid search on a slogan instead of the actual owner.
+  if (/\b(?:engineering|consistency|compounds|approach|workspace|diagnostic|links|flow|journey|growth|solutions|mission|vision|values|systems|performance|ourselves|yourself)\b/i.test(name)) return false
+  if (/^(?:stories|ecommerce|migration|inspiring|insights|resources|entrepreneurs)\b|\b(?:founder|founders|owner|owners)\b/i.test(name)) return false
+  if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company)\.?$/i.test(name)) return false
 
   const words = name.split(/\s+/)
   if (words.length > 4) return false
@@ -323,8 +452,93 @@ export function isUsablePerson(fullName: string, title: string): boolean {
   return words.every((word, index) => /^\p{Lu}[\p{L}'’.-]*$/u.test(word) || (index > 0 && /^(van|von|de|der|den|la|le|al|bin|ibn|ur|ul|el|mac|mc|da|di)$/.test(word)))
 }
 
+/** A customer's founder in a review is not the owner of the website being scanned. */
+export function ownerNameOutsideTestimonials(html:string,fullName:string):boolean{
+  const wanted=fullName.toLowerCase().replace(/\s+/g,' ').trim()
+  let named=false,ordinary=false
+  const visit=(node:DefaultTreeAdapterMap['node']):string=>{
+    if('value' in node)return node.value
+    if('tagName' in node && /^(?:script|style)$/.test(node.tagName))return ''
+    const content=('childNodes' in node?node.childNodes.map(visit).join(' '):'').replace(/\s+/g,' ').trim()
+    if('tagName' in node && /^(?:h[1-6]|p|span|strong|a)$/.test(node.tagName) && content.length<180 && content.toLowerCase().includes(wanted)){
+      named=true;let current:DefaultTreeAdapterMap['node']|null=node,review=false
+      while(current && 'tagName' in current){
+        const labels=current.attrs.filter(attr=>attr.name==='class'||attr.name==='id').map(attr=>attr.value).join(' ')
+        if(/testimoni|customer[-_ ]?(?:story|stories|review|quote)|client[-_ ]?(?:story|stories|review)|(?:^|[-_ ])reviews?(?:[-_ ]|$)/i.test(labels)){review=true;break}
+        current=current.parentNode
+      }
+      if(!review)ordinary=true
+    }
+    return content
+  }
+  visit(parse(html));return !named || ordinary
+}
+
+/** A director's biography may describe ownership of a different business. */
+export function ownerBelongsToBusiness(html:string,website:string,fullName:string,sourceUrl=website):boolean{
+  html=stripContactCodeExamples(html)
+  let brand='',sameHost=false
+  try{const target=new URL(website);brand=target.hostname.replace(/^www\./i,'').split('.')[0].replace(/[^a-z0-9]/gi,'').toLowerCase();sameHost=new URL(sourceUrl).hostname.replace(/^www\./i,'')===target.hostname.replace(/^www\./i,'')}catch{return false}
+  if(!brand)return false
+  const brands=[brand,...(sameHost?[businessNameFromHtml(html).replace(/[^a-z0-9]/gi,'').toLowerCase()]:[])].filter(Boolean)
+  const matchesCompany=(company:string)=>brands.some(value=>company.startsWith(value))
+  const normal=(value:string)=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
+  const wanted=normal(fullName),blocks:string[]=[]
+  const visit=(node:DefaultTreeAdapterMap['node'])=>{
+    if('tagName' in node && /^(?:p|li|article|section|div)$/.test(node.tagName)){
+      const text=normal(readableHtml(serialize(node)))
+      if(text.length<2500 && text.includes(wanted) && /\b(?:co[- ]?found(?:ers?|ed)|founders?|founded|founding|owners?|owns|proprietor|started|established)\b/i.test(text))blocks.push(text)
+    }
+    if('childNodes' in node)node.childNodes.forEach(visit)
+  }
+  visit(parse(html))
+  // Use the nearest prose, so another director's biography cannot establish this person's role.
+  const scoped=blocks.filter(block=>!blocks.some(other=>other!==block && other.length<block.length && block.includes(other)))
+  if(scoped.length && scoped.every(text=>{
+    const at=text.indexOf(wanted),before=text.slice(Math.max(0,at-90),at),after=text.slice(at+wanted.length,at+wanted.length+100)
+    return /\b(?:former|retired|previous|ex[- ])\s*(?:co[- ]?)?(?:founder|owner)\s*[,;:\-–—]?\s*$/i.test(before) || /^[\s,;:\-–—]*(?:(?:is|was)\s+)?(?:a\s+|the\s+)?(?:former|retired|previous|ex[- ])\s*(?:co[- ]?)?(?:founder|owner)\b/i.test(after)
+  }))return false
+  if(!scoped.length){
+    // JSON-LD can be the sole published owner evidence, but a flattened heading plus a bio name
+    // is not a real name. Retain only an exact schema name when no visible owner block matches.
+    const schemaOwner=(value:unknown,inherited=false):boolean=>{
+      if(Array.isArray(value))return value.some(item=>schemaOwner(item,inherited))
+      if(!value || typeof value!=='object')return false
+      const item=value as Record<string,unknown>
+      if(typeof item.name==='string' && normal(item.name)===wanted && (inherited || typeof item.jobTitle==='string' && isBusinessOwner(item.jobTitle)))return true
+      return Object.entries(item).some(([key,next])=>schemaOwner(next,/^(?:founders?|owners?)$/i.test(key)))
+    }
+    return [...html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].some(match=>{try{return schemaOwner(JSON.parse(match[1]))}catch{return false}})
+  }
+  let explicit=false,matched=false
+  for(const text of scoped){
+    const at=text.indexOf(wanted),context=text.slice(at+ wanted.length,at+wanted.length+220)
+    const before=text.slice(Math.max(0,at-180),at)
+    const passive=before.match(/([\p{L}0-9][\p{L}0-9 &'’.-]{1,90})[, ]+(?:co[- ]?founded|founded|established)\s+by\s+(?:[\p{L}]+-born\s+)?$/iu)?.[1]
+    if(passive){
+      const company=passive.split(/\b(?:that|where|when)\s+/i).at(-1)!.replace(/[^a-z0-9]/g,'')
+      explicit=true
+      if(matchesCompany(company))matched=true
+    }
+    const patterns=[
+      /^(?:[\s,]+)(?:has\s+)?(?:co[- ]?founded|founded|started|established|owns)\s+([^.;!?]+)/i,
+      /^[\s,–—-]*(?:(?:is|was)\s+)?(?:the\s+)?(?:co[- ]?founder|founder|co[- ]?owner|owner|proprietor)(?:\s+and\s+[\w\s-]{1,65}?)?\s+(?:of|at)\s+([^.;!?]+)/i,
+    ]
+    for(const pattern of patterns){
+      const relation=context.match(pattern)?.[1]
+      if(!relation)continue
+      const company=relation.replace(/^the\s+/i,'').split(/\s+(?:in|since|where|which|and has|and served|from|prior)\b/i)[0].replace(/[^a-z0-9]/g,'')
+      if(!company || /^(?:ourcompany|ourbusiness|ourfirm|ourpractice|thiscompany|thisbusiness|thisfirm|thecompany|thebusiness|thefirm)$/.test(company))continue
+      explicit=true
+      if(matchesCompany(company))matched=true
+    }
+  }
+  return !explicit || matched
+}
+
 function isContactLink(href: string, text: string): boolean {
-  return /contact|about|team|staff|our-people|meet|clinic|practice|book/i.test(`${href} ${text}`)
+  if (/\/(?:videos?|blog|news|articles?)\//i.test(href))return false
+  return /contact|support|help|customer-service|about|team|staff|our-people|meet|clinic|practice|book/i.test(`${href} ${text}`)
 }
 
 /** Attach direct contacts only within one person's own card, never from a shared footer. */
@@ -338,7 +552,7 @@ function attachPeopleCards(html: string, pageUrl: string, people: FoundPerson[])
   }
   walk(parse(html))
   const attr = (node: Element, key: string) => node.attrs.find(item=>item.name===key)?.value ?? ''
-  const nameOf = (node: Element) => readableHtml(serialize(node)).replace(/\s+/g,' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'').replace(/,?\s+(?:Esq\.?|PhD|M\.D\.)$/i,'')
+  const nameOf = (node: Element) => readableHtml(serialize(node)).replace(/\s+/g,' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'').replace(/,?\s+(?:Esq\.?|PhD|M\.D\.)$/i,'').replace(/\s+(?:Co[- ]?Founder|Founder|Co[- ]?Owner|Owner|CEO)$/i,'')
   const headings = elements.filter(node=>/^h[1-4]$/.test(node.tagName) || attr(node,'itemprop')==='name' || /(?:^|\s)(?:nm|name|(?:person|team|member|staff)[_-]name)(?:\s|$)/i.test(attr(node,'class')))
   const isNameHeading = (name: string) => name.split(/\s+/).length>=2 && isUsablePerson(name,'') && name.match(ROLE_ANYWHERE)?.[0]!==name
   for (const heading of headings) {
@@ -355,11 +569,18 @@ function attachPeopleCards(html: string, pageUrl: string, people: FoundPerson[])
       const otherPerson=people.some(item=>item.fullName.toLowerCase()!==name.toLowerCase() && text.toLowerCase().includes(item.fullName.toLowerCase()))
       const otherHeading=headings.some(item=>item!==heading && isNameHeading(nameOf(item)) && nameOf(item)!==name && (()=>{let ancestor=item.parentNode;while(ancestor){if(ancestor===parent)return true;ancestor='parentNode' in ancestor ? ancestor.parentNode : null}return false})())
       if(otherPerson || otherHeading) break
-      const title=text.match(ROLE_ANYWHERE)?.[0] ?? person?.title ?? ''
-      if(!person && !title) continue
+      const nameAt=text.toLowerCase().indexOf(name.toLowerCase())
+      const afterName=nameAt<0?'':text.slice(nameAt+name.length).replace(/^[\s,·|:—–-]+/,'')
+      const beforeName=nameAt<0?'':text.slice(0,nameAt).replace(/[\s,·|:—–-]+$/,'')
+      const afterRole=afterName.match(ROLE_ANYWHERE),beforeRole=beforeName.match(ROLE_ANYWHERE)
+      const adjacentRole=afterRole?.index===0?afterRole[0]:beforeRole && beforeRole.index!+beforeRole[0].length===beforeName.length?beforeRole[0]:''
+      // A role elsewhere in a large section may refer to another person. New cards need a role
+      // directly beside the name; do not climb out of a self-contained article looking for one.
+      const title=adjacentRole || person?.title || ''
+      if(!person && !title) { if(/^(?:article|li)$/.test(parent.tagName))break;continue }
       if(!person) { person={fullName:name,title,email:'',phone:'',linkedinUrl:'',evidence:pageUrl};people.push(person) }
       if(!person.title || title.length>person.title.length && title.includes(person.title))person.title=title
-      const email=cleanEmails(Array.from(block.matchAll(/href\s*=\s*["']mailto:([^"'?<>\s]+)/gi),m=>decodeHtml(m[1]))).find(value=>! /^(?:info|hello|contact|office|admin|support|sales|reception|enquiries)@/i.test(value))
+      const email=cleanEmails([...Array.from(block.matchAll(/href\s*=\s*["']mailto:([^"'?<>\s]+)/gi),m=>decodeHtml(m[1])), ...Array.from(text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi),m=>m[0])]).find(value=>Boolean(ownerEmail(name,value)))
       const tel=block.match(/href\s*=\s*["']tel:([^"'<>]+)/i)?.[1]
       const phone=tel ? normalisePhone(decodeHtml(tel)) : ''
       const linkedin=Array.from(block.matchAll(/href\s*=\s*["']([^"']+)["']/gi),m=>decodeHtml(m[1])).find(url=>/^https?:\/\/(?:[a-z]+\.)?linkedin\.com\/in\//i.test(url))
@@ -396,12 +617,15 @@ function findPeople(text: string): { fullName: string; title: string }[] {
     if (!isUsablePerson(fullName, title)) continue
     if (!people.some((person) => person.fullName.toLowerCase() === fullName.toLowerCase())) people.push({ fullName, title })
   }
+  for(const person of extractPeople(text,24)){
+    if(isUsablePerson(person.fullName,person.title) && !people.some(saved=>saved.fullName.toLowerCase()===person.fullName.toLowerCase()))people.push({fullName:person.fullName,title:person.title})
+  }
   return people
 }
 
 /** The role vocabulary, as a pattern that can be matched anywhere in a block of text. */
 const ROLE_ANYWHERE = new RegExp(
-  String.raw`\b(CEO|CFO|CTO|COO|CMO|Chief Executive Officer|Managing Director|Managing Partner|Senior Partner|Co-Founder|Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Attorney|Lawyer|Barrister|Advocate|Solicitor|Associate|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)\b`,
+  String.raw`\b(Founding Attorney|Founding Partner|Founding Director|Co-Owner|Proprietor|CEO|CFO|CTO|COO|CMO|Chief Executive Officer|Managing Director|Managing Partner|Senior Partner|Co-Founder|Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Attorney|Lawyer|Barrister|Advocate|Solicitor|Associate|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)\b`, 'i',
 )
 
 function cleanEmails(values: string[]): string[] {
@@ -466,13 +690,27 @@ interface PageHarvest {
 function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; email: string; phone: string; linkedinUrl: string }[] {
   const found: { fullName: string; title: string; email: string; phone: string; linkedinUrl: string }[] = []
   const seen = new Set<string>()
+  const indexed = new Map<string,Record<string,unknown>>()
+  const documents: unknown[] = []
+  const index = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(index); return }
+    if (!value || typeof value !== 'object') return
+    const node=value as Record<string,unknown>
+    if (typeof node['@id']==='string' && node.name) indexed.set(node['@id'],node)
+    Object.values(node).forEach(index)
+  }
+  for (const block of blocks) { try { const value=JSON.parse(block); documents.push(value); index(value) } catch { /* Optional malformed schema. */ } }
 
-  const readPerson = (node: Record<string, unknown>): void => {
+  const readPerson = (node: Record<string, unknown>, ownership = ''): void => {
     const name = typeof node.name === 'string' ? node.name.replace(/\s+/g, ' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'') : ''
-    const title = typeof node.jobTitle === 'string' ? node.jobTitle.replace(/\s+/g, ' ').trim() : ''
+    const title = ownership || (typeof node.jobTitle === 'string' ? node.jobTitle.replace(/\s+/g, ' ').trim() : '')
     if (!name || !isUsablePerson(name, title)) return
     const key = name.toLowerCase()
-    if (seen.has(key)) return
+    if (seen.has(key)) {
+      const existing = found.find(person=>person.fullName.toLowerCase()===key)
+      if (existing && isBusinessOwner(title)) existing.title=title
+      return
+    }
     seen.add(key)
     found.push({
       fullName: name,
@@ -483,31 +721,49 @@ function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; 
     })
   }
 
-  const visit = (value: unknown): void => {
+  const visit = (value: unknown, ownership = ''): void => {
     if (Array.isArray(value)) {
-      value.forEach(visit)
+      value.forEach(item=>visit(item,ownership))
       return
     }
     if (!value || typeof value !== 'object') return
     const node = value as Record<string, unknown>
     const type = node['@type']
     const types = Array.isArray(type) ? type.map(String) : [String(type ?? '')]
-    if (types.some((entry) => /^Person$/i.test(entry))) readPerson(node)
-    Object.values(node).forEach(value=>{if(value && typeof value==='object')visit(value)})
+    const resolved=typeof node['@id']==='string' ? {...indexed.get(node['@id']),...node} : node
+    if ((ownership && !types.some(entry=>/Organization|Corporation/i.test(entry))) || types.some((entry) => /^Person$/i.test(entry))) readPerson(resolved,ownership)
+    Object.entries(node).forEach(([key,value])=>{if(value && typeof value==='object')visit(value,/^founders?$/i.test(key)?'Founder':/^owners?$/i.test(key)?'Owner':'')})
   }
 
-  for (const block of blocks) {
-    try {
-      visit(JSON.parse(block))
-    } catch {
-      // A malformed block is common; the next one may still parse.
-    }
-  }
+  documents.forEach(value=>visit(value))
   return found
 }
 
 export class WebsiteEnricher {
   private browser: Browser | null = null
+
+  /** A normal Google web search; challenges are reported rather than bypassed. */
+  async searchPublicWeb(query: string, signal?: AbortSignal): Promise<{title:string;description:string;url:string}[]> {
+    if (signal?.aborted) throw new DOMException('Enrichment cancelled','AbortError')
+    const direct=await searchPublicSources(query,signal).catch(error=>{if(signal?.aborted)throw error;return []})
+    if(direct.length)return direct
+    const browser=await this.launch()
+    if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
+    const page=await browser.newPage()
+    const stop=()=>{void page.close().catch(()=>undefined)}
+    signal?.addEventListener('abort',stop,{once:true})
+    try {
+      const url=new URL('https://www.google.com/search');url.searchParams.set('q',query);url.searchParams.set('num','10')
+      await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:6000})
+      await page.waitForFunction(()=>Boolean(document.querySelector('a h3')),{},{timeout:1000}).catch(()=>undefined)
+      if (/\/sorry\//i.test(page.url()) || /unusual traffic|verify (?:that )?you are (?:a )?human/i.test(await page.locator('body').innerText())) throw new Error('Google requires a browser check. Try the search again later.')
+      return await page.evaluate(()=>Array.from(document.querySelectorAll<HTMLAnchorElement>('a')).filter(a=>a.querySelector('h3')).map(a=>{
+        let url=a.href
+        try { const target=new URL(url);if(/(?:^|\.)google\.[a-z.]+$/i.test(target.hostname) && target.pathname==='/url')url=target.searchParams.get('q') || target.searchParams.get('url') || url } catch { /* Ignore malformed result links below. */ }
+        return {title:a.querySelector('h3')?.textContent?.trim() ?? '',description:a.parentElement?.parentElement?.textContent?.slice(0,2200) ?? '',url}
+      }).filter(hit=>/^https?:\/\//i.test(hit.url) && !/(?:^|\.)google\.[a-z.]+$/i.test(new URL(hit.url).hostname)))
+    } finally { signal?.removeEventListener('abort',stop); await page.close().catch(()=>undefined) }
+  }
 
   /** Follow the site's own team/about links; one credit still covers one website. */
   async inspectPeople(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
@@ -516,58 +772,96 @@ export class WebsiteEnricher {
     let origin: URL
     try { origin = new URL(website) } catch { return { ...findings, error: 'Invalid website address.' } }
     const host = origin.hostname.replace(/^www\./i, '')
-    const pending = [origin.href]
+    const pageKey=(raw:string)=>{const url=new URL(raw);url.hostname=url.hostname.replace(/^www\./i,'');url.hash='';url.pathname=url.pathname.replace(/\/$/,'')||'/';return url.href}
+    const pending = [{url:origin.href,rank:100}]
     const visited = new Set<string>()
+    const visiblePeople = new Set<string>()
+    const currentOwners = new Set<string>()
+    const shortOwners=new Map<string,string>()
+    const teamCards=new Map<string,{fullName:string;page:string}>()
+    const nameKey=(name:string)=>name.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 45_000)
+    const timer = setTimeout(() => controller.abort(), 18_000)
     const onAbort = () => controller.abort()
     signal?.addEventListener('abort', onAbort, { once: true })
     try {
-      while (pending.length && visited.size < 12 && !controller.signal.aborted) {
-        const url = pending.shift()!
-        if (visited.has(url)) continue
-        visited.add(url)
+      while (pending.length && visited.size < 8 && !controller.signal.aborted) {
+        const url = pending.shift()!.url
+        if (visited.has(pageKey(url))) continue
+        visited.add(pageKey(url))
         try {
-          const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8_000)]),
-            headers: { accept: 'text/html,application/xhtml+xml', 'user-agent': 'MamaLead contact scanner/1.4' } })
-          if (!response.ok) throw new Error(`Website returned HTTP ${response.status}.`)
-          const pageUrl = response.url || url
-          if (new URL(pageUrl).hostname.replace(/^www\./i, '') !== host) continue
-          const html = (await response.text()).slice(0, 2_000_000)
+          const corporatePage=visited.size===1 || /(?:^|\/)(?:investors?|investor-relations|leadership|management-team|board-of-directors)(?:\/|$)/i.test(new URL(url).pathname)
+          const readPage=async(target:string,timeout:number):Promise<{pageUrl:string;html:string}|{error:Error;retryAlias:boolean}>=>{
+            try{
+              const response=await fetch(target,{redirect:'follow',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(timeout)]),headers:{accept:'text/html,application/xhtml+xml','user-agent':'MamaLead contact scanner/1.4'}})
+              if(!response.ok){void response.body?.cancel().catch(()=>{});return {error:new Error(`Website returned HTTP ${response.status}.`),retryAlias:response.status>=500}}
+              const pageUrl=response.url||target
+              if(new URL(pageUrl).hostname.replace(/^www\./i,'')!==host){void response.body?.cancel().catch(()=>{});return {error:new Error('Website redirected to a different host.'),retryAlias:true}}
+              return {pageUrl,html:(await response.text()).slice(0,2_000_000)}
+            }catch(error){return {error:error instanceof Error?error:new Error('Website could not be read.'),retryAlias:true}}
+          }
+          let page=await readPage(url,corporatePage?8500:4500)
+          // Some sites serve only one public www/apex alias reliably. Retry the initial root
+          // once on transport/server failure, sharing the same business key and 18 s deadline.
+          if('error' in page && page.retryAlias && visited.size===1 && !controller.signal.aborted){
+            const alternate=new URL(url);alternate.hostname=alternate.hostname.startsWith('www.')?alternate.hostname.slice(4):'www.'+alternate.hostname
+            page=await readPage(alternate.href,4500)
+          }
+          if('error' in page)throw page.error
+          const {pageUrl,html}=page
           const found = contactFindingsFromHtml(html, pageUrl)
+          const visibleText=readableHtml(stripContactCodeExamples(html)).toLowerCase()
+          const currentIdentityPage=/(?:^|[/_-])(?:about|team|people|leadership|management|staff)(?:[/_.-]|$)/i.test(new URL(pageUrl).pathname)
+          if(currentIdentityPage || pageKey(pageUrl)===pageKey(origin.href))for(const name of shortOwnerSignaturesFromHtml(html))shortOwners.set(nameKey(name),pageUrl)
+          for(const fullName of namedTeamCardsFromHtml(html))teamCards.set(nameKey(fullName),{fullName,page:pageUrl})
           findings.pagesRead.push(pageUrl)
           findings.addresses = [...new Set([...(findings.addresses ?? []), ...(found.addresses ?? [])])]
           findings.emails.push(...found.emails)
           findings.phones.push(...found.phones)
           findings.socials.push(...found.socials)
-          for (const person of found.people) {
+          for (const person of found.people.filter(person=>!isBusinessOwner(person.title)||(ownerNameOutsideTestimonials(html,person.fullName) && ownerBelongsToBusiness(html,website,person.fullName,pageUrl)))) {
+            const name=person.fullName.toLowerCase()
+            if(visibleText.includes(name)){visiblePeople.add(name);if(currentIdentityPage && isBusinessOwner(person.title))currentOwners.add(name)}
             const existing = findings.people.find((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())
             if (!existing) findings.people.push(person)
             else {
               if ((!existing.email && person.email) || (!existing.phone && person.phone)) existing.evidence=person.evidence
-              for (const field of ['title', 'email', 'phone', 'linkedinUrl'] as const) if ((!existing[field] || field==='title' && person.title.includes(existing.title)) && person[field]) existing[field] = person[field]
+              for (const field of ['title', 'email', 'phone', 'linkedinUrl'] as const) if ((!existing[field] || field==='title' && (person.title.includes(existing.title) || isBusinessOwner(person.title) && !isBusinessOwner(existing.title))) && person[field]) existing[field] = person[field]
             }
           }
-          const links = Array.from(html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi))
-            .map((match) => {
+          const links = siteLinksFromHtml(html)
+            .map((link) => {
               try {
-                const target = new URL(decodeHtml(match[1]), pageUrl)
-                const label = readableHtml(match[2]).replace(/\s+/g, ' ').trim()
-                const pathMatch = /(?:^|[/_-])(?:team|people|leadership|management|staff|lawyers|attorneys|professionals|profile|bio)(?:[/_.-]|$)/i.test(target.pathname)
-                const aboutMatch = /(?:^|[/_-])(?:about|contact|locations|offices)(?:[/_.-]|$)/i.test(target.pathname)
-                const labelMatch = /^(?:(?:meet|about) (?:our |the )?|our )?(?:team|people|leadership|management|staff|about us|contact us)$/i.test(label)
-                const personLink = /team|people|lawyers|attorneys|professionals/i.test(new URL(pageUrl).pathname) && label.split(/\s+/).length>=2 && isUsablePerson(label,'')
-                return { target, rank: aboutMatch ? 4 : pathMatch ? 3 : personLink ? 2 : labelMatch ? 1 : 0 }
+                const target = new URL(link.href, pageUrl)
+                const label = link.label
+                if(target.searchParams.has('country') || target.searchParams.has('lang'))return null
+                const pathMatch = /(?:^|[/_-])(?:team|people|leadership|management|staff|lawyers|attorneys|professionals|profile|bio|board-of-directors|management-team)(?:[/_.-]|$)/i.test(target.pathname)
+                const aboutMatch = /(?:^|[/_-])(?:about|company|story|our-story)(?:[/_.-]|$)/i.test(target.pathname)
+                const contactMatch=/(?:^|[/_-])contact(?:[/_.-]|$)/i.test(target.pathname)
+                const locationMatch=/(?:^|[/_-])(?:locations|offices)(?:[/_.-]|$)/i.test(target.pathname)
+                const investorMatch=/^\/(?:investors?|investor-relations)\/?$/i.test(target.pathname)
+                const labelMatch = /^(?:(?:meet|about) (?:our |the )?|our )?(?:team(?: page)?|people|leadership|management|staff|about us|contact us)$/i.test(label)
+                const personLink = /team|people|lawyers|attorneys|professionals/i.test(new URL(pageUrl).pathname) && found.people.some(person=>person.fullName.toLowerCase()===label.toLowerCase())
+                const editorial=(/\b(?:stories|story|tips|lessons|guide|how|success|inspiring|entrepreneurs)\b/i.test(label) || /(?:founder|success|customer|client)[-_]stories\b/i.test(target.pathname)) && !/\b(?:our|company)\s+(?:founder|owner|story)\b/i.test(label)
+                const ownerLink = !editorial && (/\b(?:founder|owner)\b/i.test(label) || findings.people.some(person=>isBusinessOwner(person.title) && person.fullName.toLowerCase()===label.toLowerCase()) || /(?:^|[/_-])(?:founder|owner)(?:[/_.-]|$)/i.test(target.pathname))
+                if (/\/(?:videos?|blog|news|practice-areas)\//i.test(target.pathname) && !ownerLink) return null
+                const founderStoryIndex=/^\/blog\/?$/i.test(target.pathname) && !findings.people.some(person=>isBusinessOwner(person.title))
+                return { target, rank: personLink ? 11 : pathMatch || labelMatch ? 10 : aboutMatch ? 9 : contactMatch ? 8 : investorMatch ? 7 : ownerLink ? 6 : locationMatch ? 2 : founderStoryIndex ? 1 : 0 }
               } catch { return null }
             }).filter((link): link is { target: URL; rank: number } => Boolean(link?.rank))
             .sort((a, b) => b.rank - a.rank)
-          for (const { target } of links) {
+          for (const { target, rank } of links) {
             try {
               target.hash = ''
-              if (!/^https?:$/.test(target.protocol) || target.hostname.replace(/^www\./i, '') !== host || visited.has(target.href) || pending.includes(target.href)) continue
-              if (pending.length + visited.size < 12) pending.push(target.href)
+              if (!/^https?:$/.test(target.protocol) || target.hostname.replace(/^www\./i, '') !== host || visited.has(pageKey(target.href))) continue
+              const queued=pending.find(item=>pageKey(item.url)===pageKey(target.href))
+              if(queued){queued.rank=Math.max(queued.rank,rank);continue}
+              pending.push({url:target.href,rank})
             } catch { /* Ignore malformed links. */ }
           }
+          pending.sort((a,b)=>b.rank-a.rank)
+          if(findings.people.some(person=>isBusinessOwner(person.title)))for(let index=pending.length-1;index>=0;index--)if(pending[index].rank<2)pending.splice(index,1)
+          pending.splice(24)
         } catch (error) {
           if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
           if (!findings.pagesRead.length) findings.error = error instanceof Error ? error.message : 'Website could not be read.'
@@ -578,6 +872,35 @@ export class WebsiteEnricher {
       findings.phones=Array.from(new Map(findings.phones.map(item=>[item.value,item])).values())
       findings.socials=Array.from(new Map(findings.socials.map(item=>[item.profileUrl,item])).values())
       findings.addresses=uniqueAddresses(findings.addresses ?? [])
+      // A first-name signature supplies the ownership claim. The team card supplies the full
+      // identity; a marketing/job title alone never promotes somebody to owner. Resolve only
+      // after all fetched team cards are known, so an ambiguous shared first name is rejected.
+      for(const [shortName,declarationPage] of shortOwners){
+        const matches=[...teamCards.values()].filter(person=>nameKey(person.fullName.split(/\s+/)[0])===shortName)
+        if(matches.length!==1)continue
+        const {fullName,page}=matches[0],key=fullName.toLowerCase()
+        let person=findings.people.find(item=>item.fullName.toLowerCase()===key)
+        if(!person){person={fullName,title:'Co-founder',evidence:page,email:'',phone:'',linkedinUrl:''};findings.people.push(person)}
+        else if(!isBusinessOwner(person.title)){person.title='Co-founder';person.evidence=page}
+        person.identityEvidence=[...new Set([...(person.identityEvidence??[]),declarationPage,page])]
+        visiblePeople.add(key);currentOwners.add(key)
+      }
+      const namedPeople = [...findings.people]
+      findings.supersededOwnerNames=currentOwners.size?namedPeople.filter(person=>isBusinessOwner(person.title) && !visiblePeople.has(person.fullName.toLowerCase())).map(person=>person.fullName):[]
+      findings.people = namedPeople.filter(person=>isBusinessOwner(person.title) && (!currentOwners.size || visiblePeople.has(person.fullName.toLowerCase()))).map(person=>{
+        let email=ownerEmail(person.fullName,person.email ?? '')
+        let evidence=person.evidence
+        if (!email) {
+          const published=findings.emails.filter(item=>ownerEmail(person.fullName,item.value) && namedPeople.filter(other=>ownerEmail(other.fullName,item.value)).length===1)
+          const unique=Array.from(new Map(published.map(item=>[item.value,item])).values())
+          if (unique.length===1) { email=unique[0].value; evidence=unique[0].page }
+        }
+        return {...person,email,evidence,phone:'',linkedinUrl:''}
+      })
+      findings.addresses=[]
+      findings.emails=[]
+      findings.phones=[]
+      findings.socials=[]
     } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort) }
     return findings
   }
@@ -602,9 +925,8 @@ export class WebsiteEnricher {
   }
 
   /**
-   * Fast social-only pass. A plain HTTP response avoids Chromium startup and waits for delayed
-   * JavaScript footers, which makes an ordinary website resolve in roughly one network round trip.
-   * The full browser inspector remains available for sites that refuse a direct response.
+   * Homepage plus two linked Contact/About pages, with parallel HTTP reads and an eight-second
+   * total budget. Social platform feeds are never traversed as if they were business websites.
    */
   async inspectSocialFast(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
     const findings: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], pagesRead: [], error: null }
@@ -616,40 +938,131 @@ export class WebsiteEnricher {
       return findings
     }
 
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 4_500)
-    const onAbort = () => controller.abort()
-    signal?.addEventListener('abort', onAbort, { once: true })
+    if(!/^https?:$/.test(origin.protocol))return {...findings,error:'Enter an HTTP or HTTPS website URL.'}
+    if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
+    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),8_000)
+    const combined=AbortSignal.any([budget.signal,...(signal?[signal]:[])])
+    const found=new Map<string,FoundSocial>(),own=canonicalSocialProfile(origin.href)
+    if(own)found.set(socialProfileIdentity(own),{...own,page:origin.href})
+    const read=async(url:string,home=false):Promise<{url:string;html:string}|null>=>{
+      try{
+        const response=await fetch(url,{redirect:'follow',signal:AbortSignal.any([combined,AbortSignal.timeout(home&&own?2500:3500)]),headers:{accept:'text/html,application/xhtml+xml','user-agent':'MamaLead contact scanner/1.5'}})
+        if(!response.ok||Number(response.headers.get('content-length')??0)>2_000_000){await response.body?.cancel();if(home&&!own)findings.error=`${origin.host} returned HTTP ${response.status}.`;return null}
+        const final=response.url||url,reader=response.body?.getReader();if(!reader)return null
+        const decoder=new TextDecoder();let html='',bytes=0
+        try{while(true){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.length;if(bytes>2_000_000)break;html+=decoder.decode(chunk.value,{stream:true})}}finally{await reader.cancel()}
+        findings.pagesRead.push(final)
+        return {url:final,html:html+decoder.decode()}
+      }catch(error){if(home&&!own)findings.error=error instanceof Error?error.message:'The website could not be read.';return null}
+    }
+    const collect=(page:{url:string;html:string})=>{for(const social of socialLinksFromHtml(page.html,page.url)){const canonical=canonicalSocialProfile(social.profileUrl);if(canonical)found.set(socialProfileIdentity(canonical),social)}}
     try {
-      const response = await fetch(origin.href, {
-        redirect: 'follow',
-        signal: controller.signal,
-        headers: {
-          accept: 'text/html,application/xhtml+xml',
-          'user-agent': 'MamaLead contact scanner/1.5',
-        },
-      })
-      if (!response.ok) {
-        findings.error = `${origin.host} returned HTTP ${response.status}.`
-        return findings
+      const home=await read(origin.href,true)
+      if(home){
+        collect(home)
+        if(!socialPlatformOf(home.url)){
+          const base=new URL(home.url),candidates=new Map<string,number>()
+          for(const link of siteLinksFromHtml(home.html))try{
+            const url=new URL(link.href,base);url.hash=''
+            if(!/^https?:$/.test(url.protocol)||url.host!==base.host||url.href===base.href)continue
+            if(/\/(?:videos?|blog|news|articles?|products?|posts?)\//i.test(url.pathname))continue
+            const score=/\b(?:contact|reach us|get in touch)\b/i.test(link.label)||/\/(?:contact(?:-us)?|contactus|get-in-touch)(?:\/|\.|$)/i.test(url.pathname)?2:/\/(?:about(?:-us)?|company)(?:\/|\.|$)/i.test(url.pathname)?1:0
+            if(score)candidates.set(url.href,Math.max(score,candidates.get(url.href)??0))
+          }catch{/* Ignore malformed navigation. */}
+          const pages=await Promise.all([...candidates].sort((a,b)=>b[1]-a[1]).slice(0,2).map(([url])=>read(url)))
+          for(const page of pages)if(page)collect(page)
+        }
       }
-      const html = await response.text()
       if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      const pageUrl = response.url || origin.href
-      findings.pagesRead.push(pageUrl)
-      findings.socials = socialLinksFromHtml(html, pageUrl)
-    } catch (error) {
-      if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      findings.error = error instanceof Error ? error.message : `${origin.host} could not be fetched.`
+      findings.socials=[...found.values()]
     } finally {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
+      clearTimeout(timer);budget.abort()
     }
     return findings
   }
 
+  /** Main phone lookup: homepage and contact pages first, bounded HTTP reads, no browser startup. */
+  async inspectPhoneFast(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
+    const result:WebsiteFindings={emails:[],phones:[],socials:[],people:[],addresses:[],pagesRead:[],error:null}
+    let origin:URL
+    try{origin=new URL(website)}catch{return {...result,error:'Enter a valid website URL.'}}
+    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),16_000)
+    const combined=AbortSignal.any([budget.signal,...(signal?[signal]:[])])
+    const sameSite=(raw:string,base=origin.href):string|null=>{try{const url=new URL(decodeHtml(raw),base);url.hash='';return /^https?:$/.test(url.protocol)&&url.host.replace(/^www\./i,'')===origin.host.replace(/^www\./i,'')?url.href:null}catch{return null}}
+    const read=async(raw:string):Promise<string>=>{
+      let url=sameSite(raw)
+      try{
+        for(let redirects=0;url&&redirects<4;redirects++){
+          const response=await fetch(url,{redirect:'manual',signal:AbortSignal.any([combined,AbortSignal.timeout(3500)]),headers:{'user-agent':'MamaLead contact scanner/1.5'}})
+          if(response.status>=300&&response.status<400){const next=sameSite(response.headers.get('location') || '',url);await response.body?.cancel();url=next;continue}
+          if(!response.ok||Number(response.headers.get('content-length')??0)>1_500_000){await response.body?.cancel();return ''}
+          const reader=response.body?.getReader();if(!reader)return ''
+          const decoder=new TextDecoder();let text='',bytes=0
+          try{while(true){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.length;if(bytes>1_500_000)break;text+=decoder.decode(chunk.value,{stream:true})}}finally{await reader.cancel()}
+          return text+decoder.decode()
+        }
+      }catch{/* One slow/blocked endpoint must not stall the website. */}
+      return ''
+    }
+    const rank=(raw:string,label='')=>{
+      const path=new URL(raw).pathname
+      if(/\/(?:blog|news|posts?|products?|team|people|careers)\//i.test(path))return 0
+      if(/(?:^|\/)(?:contact(?:-us)?|contactus|reach-us|get-in-touch)(?:\/|\.[a-z]+$|$)/i.test(path))return 10
+      if(/^(?:contact(?: us)?|reach us|get in touch)$/i.test(label.trim()))return 9
+      if(/(?:^|\/)(?:locations?|offices?|support|customer-service)(?:\/|\.[a-z]+$|$)/i.test(path))return 4
+      return 0
+    }
+    const candidates=new Map<string,number>(),seen=new Set<string>(),collected:FoundPhone[]=[]
+    const key=(raw:string)=>{const url=new URL(raw);return url.pathname.replace(/\/$/,'')+url.search}
+    const append=(raw:string,label='',base=origin.href)=>{const url=sameSite(raw,base);if(url&&rank(url,label)>0&&!seen.has(key(url)))candidates.set(url,Math.max(candidates.get(url)??0,rank(url,label)))}
+    const collect=(url:string,html:string)=>{
+      seen.add(key(url));if(!html)return
+      result.pagesRead.push(url);collected.push(...publishedPhonesFromHtml(html,url))
+      for(const link of siteLinksFromHtml(html))append(link.href,link.label,url)
+    }
+    try{
+      collect(origin.href,await read(origin.href))
+      // A linked Contact page is both faster and more relevant than traversing sitemaps.
+      if(![...candidates.values()].some(score=>score>=9)&&!combined.aborted){
+        const robots=await read(new URL('/robots.txt',origin).href)
+        let maps=Array.from(robots.matchAll(/^Sitemap:\s*(\S+)/gim),m=>sameSite(m[1])).filter((url):url is string=>Boolean(url))
+        if(!maps.length)maps=[new URL('/sitemap.xml',origin).href]
+        const visited=new Set<string>(),mapRank=(url:string)=>/page|contact|static/i.test(url)?3:/post|tag|category|product/i.test(url)?0:1
+        for(let round=0;round<2&&maps.length&&!combined.aborted;round++){
+          const batch=maps.filter(url=>!visited.has(url)).sort((a,b)=>mapRank(b)-mapRank(a)).slice(0,2);maps=[]
+          const pages=await Promise.all(batch.map(async url=>{visited.add(url);return {url,xml:await read(url)}}))
+          for(const {xml} of pages){
+            const index=/<(?:\w+:)?sitemapindex\b/i.test(xml)
+            for(const match of xml.matchAll(/<(?:\w+:)?loc\b[^>]*>([\s\S]*?)<\/(?:\w+:)?loc>/gi)){
+              const url=sameSite(match[1].trim().replace(/^<!\[CDATA\[|\]\]>$/g,''));if(!url)continue
+              if(index){if(!visited.has(url)&&mapRank(url)>0&&maps.length<32)maps.push(url)}else append(url)
+            }
+          }
+          if([...candidates.values()].some(score=>score>=9))break
+        }
+      }
+      if(!candidates.size&&!combined.aborted)for(const path of ['/contact-us','/contact'])append(new URL(path,origin).href)
+      const contacts=[...candidates].sort((a,b)=>b[1]-a[1]).slice(0,2).map(([url])=>url)
+      const pages=await Promise.all(contacts.map(async url=>({url,html:await read(url)})))
+      for(const {url,html} of pages)collect(url,html)
+      const merged=new Map<string,FoundPhone & {pages:Set<string>}>()
+      for(const phone of collected){const digits=phone.value.replace(/\D/g,''),existing=merged.get(digits);if(existing){existing.pages.add(key(phone.page));if((phone.score??0)>(existing.score??0)){existing.score=phone.score;existing.page=phone.page}}else merged.set(digits,{...phone,pages:new Set([key(phone.page)])})}
+      // Merge a local spelling only when this website also publishes one unambiguous international
+      // spelling of that same line. Never invent a country code from the user's search location.
+      for(const [digits,phone] of [...merged]){
+        if(phone.value.startsWith('+'))continue
+        const local=digits.startsWith('0')?digits.slice(1):digits
+        const matches=[...merged.entries()].filter(([key,value])=>value.value.startsWith('+')&&key.endsWith(local)&&key.length>local.length&&key.length-local.length<=3)
+        if(matches.length===1){const target=matches[0][1];phone.pages.forEach(page=>target.pages.add(page));if((phone.score??0)>(target.score??0)){target.score=phone.score;target.page=phone.page}merged.delete(digits)}
+      }
+      result.phones=[...merged.values()].map(({pages,...phone})=>({...phone,score:Math.min(100,(phone.score??0)+Math.max(0,pages.size-1)*15)})).sort((a,b)=>(b.score??0)-(a.score??0))
+      if(!result.pagesRead.length)result.error=budget.signal.aborted?'The website took too long to respond. Retry this website.':'The website could not be read. Try again or check its URL.'
+    }finally{clearTimeout(timer);budget.abort();if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')}
+    return result
+  }
+
   /** Fast email, phone and decision-maker pass over the server HTML of a site. */
-  async inspectContactFast(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
+  async inspectContactFast(website: string, signal?: AbortSignal, mainEmailOnly=false): Promise<WebsiteFindings> {
     const result: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], addresses: [], pagesRead: [], error: null }
     let origin: URL
     try { origin = new URL(website) } catch { return { ...result, error: 'Enter a valid website URL.' } }
@@ -672,30 +1085,71 @@ export class WebsiteEnricher {
       }
       return ''
     }
+    const contactRank=(raw:string,label='') => {
+      const path=new URL(raw,origin).pathname
+      if (/\/(?:videos?|blog|news|articles?|products?)\//i.test(path)) return 0
+      if (/(?:^|\/)(?:contact(?:-us)?|contactus|reach-us|get-in-touch)(?:\/|\.[a-z]+$|$)/i.test(path)) return 10
+      if (/^(?:contact(?: us)?|reach us|get in touch|email us)$/i.test(label.trim())) return 9
+      if (/(?:^|\/)(?:support|help|customer-service|customer-support|customer-care)(?:\/|\.[a-z]+$|$)/i.test(path))return 6
+      if (/(?:^|\/)(?:legal(?:-notices)?|privacy(?:-policy)?|policies|terms(?:-of-service)?|imprint|impressum)(?:\/|\.[a-z]+$|$)/i.test(path))return 1
+      return /(?:^|\/)(?:locations?|offices?|about(?:-us)?)(?:\/|\.[a-z]+$|$)/i.test(path) ? 3 : 0
+    }
+    const mapRank=(url:string) => /page|contact|static/i.test(url) ? 3 : /post|tag|category|product/i.test(url) ? 0 : 1
+    const pageKey=(raw:string) => { const url=new URL(raw);return url.host.replace(/^www\./i,'')+url.pathname.replace(/\/$/,'')+url.search }
     const queue=[origin.href]; const seen=new Set<string>()
-    const append=(raw:string) => { const url=sameSite(raw); if(url && !seen.has(url) && !queue.includes(url) && queue.length<12)queue.push(url) }
+    const append=(raw:string) => { const url=sameSite(raw); if(url && !seen.has(pageKey(url)) && !queue.some(saved=>pageKey(saved)===pageKey(url)) && queue.length<12){queue.push(url);queue.sort((a,b)=>a===origin.href?-1:b===origin.href?1:contactRank(b)-contactRank(a))} }
     try {
+      const home=read(origin.href).catch(()=>'')
+      if(mainEmailOnly){
+        const html=await home
+        if(signal?.aborted)throw new DOMException('Cancelled','AbortError')
+        if(html){
+          const found=contactFindingsFromHtml(html,origin.href)
+          const primary=[...found.emails].sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))[0]
+          if(primary&&emailContactPriority(primary.value,primary.page)>=18)return {...result,...found,emails:[primary],pagesRead:[origin.href]}
+        }
+      }
       const robots=await read(new URL('/robots.txt',origin).href).catch(()=>'')
       const maps=Array.from(robots.matchAll(/^Sitemap:\s*(\S+)/gim),m=>m[1])
-      if (!maps.length) maps.push(new URL('/sitemap.xml',origin).href, new URL('/sitemap_index.xml',origin).href)
+      if (!maps.length) maps.push(new URL('/sitemap.xml',origin).href, new URL('/sitemap_index.xml',origin).href, new URL('/wp-sitemap.xml',origin).href)
       const visitedMaps=new Set<string>()
-      while(maps.length && visitedMaps.size<4 && !combined.aborted){
+      while(maps.length && visitedMaps.size<6 && !combined.aborted){
+        if(queue.some(url=>contactRank(url)>=9) && maps.every(url=>mapRank(url)===0))break
+        maps.sort((a,b)=>mapRank(b)-mapRank(a))
         const map=sameSite(maps.shift()!); if(!map || visitedMaps.has(map))continue; visitedMaps.add(map)
         const xml=await read(map).catch(()=>'')
-        for(const match of xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?([^<\]]+)/gi)) {
-          const url=sameSite(match[1].trim()); if(!url)continue
-          if(/contact|reach-us|get-in-touch|locations|offices/i.test(new URL(url).pathname))append(url)
-          else if(/sitemapindex/i.test(xml.slice(0,1000)) && /page|sitemap/i.test(url) && maps.length<4) maps.push(url)
+        const index=/<(?:\w+:)?sitemapindex\b/i.test(xml)
+        const locations=Array.from(xml.matchAll(/<(?:\w+:)?loc\b[^>]*>([\s\S]*?)<\/(?:\w+:)?loc>/gi),match=>sameSite(match[1].trim().replace(/^<!\[CDATA\[|\]\]>$/g,''))).filter((url):url is string=>Boolean(url))
+        if (index) {
+          for(const url of locations.sort((a,b)=>mapRank(b)-mapRank(a))) if(!visitedMaps.has(url) && !maps.includes(url) && maps.length<32)maps.push(url)
+        } else {
+          for(const url of locations.sort((a,b)=>contactRank(b)-contactRank(a))) if(contactRank(url)>0)append(url)
         }
       }
       while(queue.length && seen.size<6 && !combined.aborted){
-        const url=queue.shift()!; if(seen.has(url))continue; seen.add(url)
-        const html=await read(url).catch(()=>''); if(!html)continue
+        if(!result.emails.length && seen.size>=2)queue.sort((a,b)=>(contactRank(b)===1?4:contactRank(b))-(contactRank(a)===1?4:contactRank(a)))
+        const url=queue.shift()!; if(seen.has(pageKey(url)))continue; seen.add(pageKey(url))
+        if(contactRank(url)===1 && result.emails.length)continue
+        const html=url===origin.href ? await home : await read(url).catch(()=>''); if(!html)continue
         const found=contactFindingsFromHtml(html,url);result.pagesRead.push(url)
+        if (!result.businessName && found.businessName) result.businessName=found.businessName
+        if(contactRank(url)===1) {
+          const siteHost=origin.hostname.replace(/^www\./i,'').toLowerCase(),brand=siteHost.split('.')[0]
+          const personal=new Set(['gmail.com','outlook.com','hotmail.com','yahoo.com','proton.me','protonmail.com','icloud.com','aol.com','live.com','gmx.com'])
+          found.emails=found.emails.filter(email=>{const domain=email.value.split('@')[1];return domain===siteHost || domain.endsWith('.'+siteHost) || domain.split('.')[0]===brand || personal.has(domain)})
+          found.phones=[];found.socials=[];found.people=[];found.addresses=[]
+        }
         result.emails.push(...found.emails);result.phones.push(...found.phones);result.socials.push(...found.socials);result.people.push(...found.people);result.addresses!.push(...(found.addresses ?? []))
-        for(const link of html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) if(/contact|reach us|get in touch|locations|offices/i.test(link[1]+' '+readableHtml(link[2])))append(new URL(link[1],url).href)
+        if(mainEmailOnly&&contactRank(url)>=9&&found.emails.some(email=>emailContactPriority(email.value,email.page)>=0))break
+        const links=siteLinksFromHtml(html).map(link=>{
+          try { return {url:sameSite(new URL(link.href,url).href),label:link.label} } catch { return null }
+        }).filter((link):link is {url:string;label:string}=>Boolean(link?.url))
+        for(const link of links.sort((a,b)=>contactRank(b.url,b.label)-contactRank(a.url,a.label))) if(contactRank(link.url,link.label)>0)append(link.url)
       }
-      result.emails=Array.from(new Map(result.emails.map(v=>[v.value,v])).values())
+      const emails=new Map<string,FoundEmail>()
+      for(const email of result.emails){const prior=emails.get(email.value);if(!prior||compareEmailContacts({...email,source:email.page},{...prior,source:prior.page})<0)emails.set(email.value,email)}
+      result.emails=[...emails.values()].sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
+      if(mainEmailOnly)result.emails=result.emails.slice(0,1)
       result.phones=Array.from(new Map(result.phones.map(v=>[v.value,v])).values())
       result.addresses=uniqueAddresses(result.addresses ?? [])
       if(!result.pagesRead.length) result.error='The website could not be read. Try again or check its URL.'
@@ -811,14 +1265,9 @@ export class WebsiteEnricher {
           if (emailSet.has(address)) continue
           emailSet.set(address, { value: address, score: scoreEmail(address, siteHost), page: url })
         }
-        for (const raw of data.tel) {
-          const value = normalisePhone(raw)
-          if (!value || value.replace(/\D/g, '').length < 9) continue
-          if (!phoneSet.has(value)) phoneSet.set(value, { value, page: url })
-        }
-        for (const link of data.links) {
-          const social = socialFrom(link.href)
-          if (!social) continue
+        for (const phone of contactFindingsFromHtml(data.html,url).phones) phoneSet.set(phone.value,phone)
+
+        for (const social of socialLinksFromHtml(data.html,url)) {
           const key = `${social.platform}:${social.profileUrl}`
           if (!socialSet.has(key)) socialSet.set(key, social)
         }
@@ -838,7 +1287,8 @@ export class WebsiteEnricher {
           }
         }
 
-        return data.links.filter((link) => isContactLink(link.href, link.text)).map((link) => link.href)
+        const rank=(link:{href:string;text:string})=>/contact|reach us|get in touch/i.test(`${link.href} ${link.text}`)?3:/support|help/i.test(`${link.href} ${link.text}`)?2:1
+        return data.links.filter((link) => isContactLink(link.href, link.text)).sort((a,b)=>rank(b)-rank(a)).map((link) => link.href)
       }
 
       const home = await harvest(origin.href)

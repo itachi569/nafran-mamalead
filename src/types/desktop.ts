@@ -113,6 +113,7 @@ export interface StoredLead {
 }
 
 export interface StoredRun {
+  saved?: number
   id: string
   provider: string
   status: string
@@ -150,6 +151,7 @@ export interface PhoneRow {
   index: string
   name: string
   phone: string
+  mainSource?: string
   areaCode: string
   area: string
   address: string
@@ -299,7 +301,7 @@ export interface LocalApi {
     needing: (kind: 'email' | 'phone' | 'social', limit?: number) => Promise<StoredLead[]>
   }
   phones: {
-    ledger: (payload?: { limit?: number }) => Promise<PhoneRow[]>
+    ledger: (payload?: { limit?: number;offset?:number }) => Promise<PhoneRow[]>
     summary: () => Promise<PhoneSummary>
   }
   runs: {
@@ -376,17 +378,21 @@ export interface LocalApi {
     ) => Promise<{ jobId: string; queued: number }>
     cancel: (jobId: string) => Promise<{ cancelled: boolean }>
     totals: () => Promise<{ queued: number; running: number; done: number; failed: number }>
-    status: (jobId: string) => Promise<{ status: 'queued' | 'running' | 'done' | 'failed' } | null>
+    status: (jobId: string) => Promise<EnrichmentJobStatus | null>
     /** Leads each kind of enrichment pass has covered, for the billing lookup meters. */
     usage: () => Promise<Record<string, number>>
     covered: (kind: string, statuses: string[]) => Promise<string[]>
+  }
+  lookup: {
+    start: (input: string[], fields: import('../../electron/enrichment/website-lookup').WebsiteLookupFields) => Promise<import('../../electron/enrichment/website-lookup').WebsiteLookupSession>
+    get: (jobId?: string) => Promise<import('../../electron/enrichment/website-lookup').WebsiteLookupSession | null>
   }
   imports: {
     list: (limit?: number) => Promise<Record<string, unknown>[]>
     /** The import batches and the leads they created, in one read. */
     ledger: () => Promise<{ batches: Record<string, unknown>[]; leads: ImportedLead[] }>
     /** Turns pasted domains into leads named after their host, queued for a website pass. */
-    websites: (input: string[] | string) => Promise<{
+    websites: (input: string[] | string, options?: {enqueue?:boolean}) => Promise<{
       batchId: string
       added: number
       skipped: number
@@ -451,7 +457,8 @@ export interface LocalApi {
     }) => Promise<{ id: string }>
     /** Writes the file and reports where it landed; null when the save dialog is cancelled. */
     write: (input: {
-      kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people'
+      kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people' | 'website'
+      lookupJobId?: string
       limit: number
       delimiter: string
       columns: string[]
@@ -470,13 +477,25 @@ export interface LocalApi {
 }
 
 /** Progress the enrichment worker reports while it reads lead websites. */
-export interface EnrichmentProgress {
-  jobId: string
-  kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
-  status: 'running' | 'done' | 'failed' | 'idle'
+export interface EnrichmentJobStatus {
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
   processed: number
   total: number
   found: number
+  failed: number
+  leadName: string
+  message: string
+  at: string
+}
+
+export interface EnrichmentProgress {
+  jobId: string
+  kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
+  status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'
+  processed: number
+  total: number
+  found: number
+  failed?: number
   leadName: string
   message: string
   at: string
@@ -494,6 +513,7 @@ export interface EmailValidityProgress {
 }
 
 export interface DesktopApi {
+  chooseWebsiteCsv: () => Promise<{ name: string; content: string; bytes: number } | null>
   billing: {
     status: () => Promise<{
       configured: boolean
@@ -566,7 +586,11 @@ export interface DesktopApi {
   }
   /** Shows a native notification when the host OS supports desktop notifications. */
   notifications: {
-    show: (title: string, body: string) => Promise<{ shown: boolean }>
+    show: (title: string, body: string, id?: string) => Promise<{ shown: boolean }>
+    revealExport: (path:string)=>Promise<{shown:boolean}>
+    onOpen: (listener:(id:string)=>void)=>()=>void
+    onExportSaved: (listener:(result:{ eventId: string; kind: string; path: string; fileName: string; rows: number; bytes: number })=>void)=>()=>void
+    onExportFailed: (listener:(result:{eventId:string;message:string})=>void)=>()=>void
   }
   updates: {
     status: () => Promise<UpdateStatus>
@@ -611,7 +635,7 @@ export interface DesktopApi {
     status: () => Promise<{ running: boolean; pending: number }>
     start: () => Promise<{ started: boolean }>
     prioritize: (jobId?: string) => Promise<{ started: boolean }>
-    stop: () => Promise<{ stopped: boolean }>
+    stop: (jobId?: string) => Promise<{ stopped: boolean }>
     onProgress: (listener: (progress: EnrichmentProgress) => void) => () => void
   }
   /**

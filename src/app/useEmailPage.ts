@@ -52,13 +52,13 @@ export interface EmailPage {
   validityProgress: EmailValidityProgress
   cancelValidity: () => Promise<void>
   isTone: (tone: EmailTone, want: EmailTone) => boolean
-  refresh: () => void
+  refresh: () => Promise<void>
   queueEnrichment: () => Promise<{ queued: number }>
   addAddress: (input: EmailAddressInput) => Promise<void>
   editAddress: (id: string, patch: { value?: string; verified?: boolean; score?: number | null }) => Promise<void>
   removeAddress: (id: string) => Promise<void>
   verifyValidity: (leadIds?: string[], force?: boolean) => Promise<EmailValiditySummary>
-  recheckUnknownValidity: () => Promise<EmailValiditySummary>
+  recheckUnknownValidity: (leadIds?: string[]) => Promise<EmailValiditySummary>
 }
 
 export interface EmailValiditySummary {
@@ -168,14 +168,17 @@ export function useEmailPage(): EmailPage {
   useEffect(() => {
     const validity = window.desktop?.emailValidity
     if (!validity) return
+    let refreshed=0,timer:number|undefined
     const sync = (progress: EmailValidityProgress) => {
       setValidityProgress(progress)
       setVerifying(progress.state === 'running' || progress.state === 'cancelling')
+      if(progress.checked>refreshed){refreshed=progress.checked;window.clearTimeout(timer);timer=window.setTimeout(()=>void load(),200)}
+      if(progress.state==='running'&&progress.checked===0)refreshed=0
     }
     const unsubscribe = validity.onProgress(sync)
     void validity.status().then((status) => sync(status.progress)).catch(() => undefined)
-    return unsubscribe
-  }, [])
+    return ()=>{unsubscribe();window.clearTimeout(timer)}
+  }, [load])
 
   const viewRows = useMemo<EmailRowView[]>(() => {
     if (!live) return DEMO_ROWS
@@ -266,11 +269,11 @@ export function useEmailPage(): EmailPage {
     [load],
   )
 
-  const recheckUnknownValidity = useCallback(async (): Promise<EmailValiditySummary> => {
+  const recheckUnknownValidity = useCallback(async (leadIds?:string[]): Promise<EmailValiditySummary> => {
     if (!window.desktop?.emailValidity) throw new Error('Email validity checks are only available in the Electron app.')
     setVerifying(true)
     try {
-      const result = await window.desktop.emailValidity.verify({ recheckUnknown: true })
+      const result = await window.desktop.emailValidity.verify({ recheckUnknown: true,leadIds })
       await load()
       return result
     } finally {

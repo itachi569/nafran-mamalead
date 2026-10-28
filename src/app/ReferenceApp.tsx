@@ -9,7 +9,16 @@ import type { AppValues } from './useAppValues'
 import { SettingsPanel } from './SettingsPanel'
 import { ExportDialog } from './ExportDialog'
 import { FeatureAccessBoundary } from './FeatureAccessBoundary'
-import { WorkspaceDialogs, ScanReturn, MapsResults, WebsiteFilter, ImportSources, DecisionResults } from './WorkspaceActions'
+import { WorkspaceDialogs, ScanReturn, MapsResults, WebsiteFilter, DecisionResults } from './WorkspaceActions'
+import { NotificationCenter, NotificationToast } from './NotificationCenter'
+import { FinderSearchHistory } from './FinderSearchHistory'
+import { SavedMapsButton, SavedMapsSearches } from './SavedMapsSearches'
+import { WebsiteLookupPanel } from './WebsiteLookupPanel'
+import { ImportWebsitesDialog } from './ImportWebsitesDialog'
+import { SocialProfileLinks } from './SocialProfileLinks'
+import { EmailValidityChoice } from './EmailValidityChoice'
+import { DecisionScanProgress } from './DecisionScanProgress'
+import mamaLeadIcon from '../../build/mamalead-icon.png'
 
 /**
  * Whether a section the document guards with a binding is on screen.
@@ -30,34 +39,36 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
     <>
       <WorkspaceDialogs V={V}/>
       <ScanReturn V={V}/>
+      <NotificationToast V={V}/>
+      <FinderSearchHistory V={V}/>
       <div style={{display: "grid", gridTemplateColumns: "minmax(0,1fr)", minHeight: "100vh", padding: "clamp(10px,1.4vw,20px)"}}>
         <div data-shell="1" style={{display: "grid", gridTemplateColumns: "262px minmax(0,1fr)", gap: "clamp(10px,1.2vw,18px)", alignItems: "start"}}>
           <aside data-sidebar="1" style={{position: "sticky", top: "clamp(10px,1.4vw,20px)", display: "flex", flexDirection: "column", gap: "10px"}}>
             <div style={{display: "flex", alignItems: "center", gap: "11px", padding: "8px 6px 4px"}}>
-              <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "34px", height: "34px", borderRadius: "11px", background: "#1C1C1C", color: "#C8D5BB", fontSize: "15px", fontWeight: "700", flex: "none"}}>L</span>
+              <img src={mamaLeadIcon} alt="" data-brand-logo="1" width="38" height="38" style={{display:'block',borderRadius:11,flex:'none'}}/>
               <div style={{flex: "1", minWidth: "0"}}>
                 <div style={{fontSize: "16.5px", fontWeight: "700", letterSpacing: "-.02em", lineHeight: "1.1"}}>MamaLead</div>
                 <div style={{fontSize: "11px", color: "#555956", letterSpacing: ".02em"}}>{V.appVersion}</div>
               </div>
             </div>
-            <div data-account="1" style={{padding: "14px 15px", borderRadius: "18px", background: "#F5F5F4"}}>
-              <button type="button" onClick={V.goSettings} aria-label="Open workspace settings" style={{display: "flex", alignItems: "center", gap: "9px", width: "100%", padding: "0", border: "0", background: "transparent", fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
-                <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "30px", height: "30px", borderRadius: "10px", background: "#C8D5BB", fontSize: "12.5px", fontWeight: "700", flex: "none"}}>N</span>
+            <div data-account="1" className="sidebar-workspace" style={{padding: "14px 15px", borderRadius: "18px"}}>
+              <button type="button" onClick={V.goSettings} aria-label="Open workspace settings" style={{display: "flex", alignItems: "center", gap: "9px", width: "100%", padding: "0", border: "0", background: "transparent", color:'inherit', fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
+                <span className="sidebar-workspace-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 11h18"/></svg></span>
                 <span style={{flex: "1", minWidth: "0"}}>
-                  <span style={{display: "block", fontSize: "13.5px", fontWeight: "500", lineHeight: "1.2"}}>{V.workspaceName}</span>
-                  <span style={{display: "block", marginTop: "2px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#555956"}}>{V.sideStatus}</span>
+                  <span style={{display: "block", fontSize: "13.5px", fontWeight: "500", lineHeight: "1.2"}}>{/^(MamaLead|Nafran Leads|Local workspace)$/i.test(V.workspaceName) ? 'My workspace' : V.workspaceName}</span>
+                  <span className="sidebar-workspace-muted" style={{display: "block", marginTop: "2px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em"}}>{V.sideStatus}</span>
                 </span>
                 <span data-live="1" data-on={V.liveDot} aria-hidden="true" style={{width: "8px", height: "8px", borderRadius: "999px", flex: "none", animation: "lsPulse 2.4s ease-in-out infinite"}}></span>
               </button>
               <div style={{display: "flex", alignItems: "baseline", gap: "7px", marginTop: "14px"}}>
                 <span style={{fontSize: "22px", fontWeight: "700", letterSpacing: "-.03em", lineHeight: "1", fontVariantNumeric: "tabular-nums"}}>{V.scrapeUsed}</span>
-                <span style={{fontSize: "11.5px", color: "#555956"}}>{V.scrapeLimit}</span>
+                <span className="sidebar-workspace-muted" style={{fontSize: "11.5px"}}>{V.scrapeLimit}</span>
               </div>
               {V.showScrapeMeter && <div style={{display: "flex", gap: "3px", marginTop: "9px"}}>
                 <span style={{flex: V.scrapeUsedFlex, height: "6px", borderRadius: "3px", background: "#1C1C1C"}}></span>
                 <span style={{flex: V.scrapeFreeFlex, height: "6px", borderRadius: "3px", background: "#E2E5DE"}}></span>
               </div>}
-              <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "9px", fontSize: "11.5px", color: "#555956"}}>
+              <div className="sidebar-workspace-muted" style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginTop: "9px", fontSize: "11.5px"}}>
                 <span>{V.sidebarLeads}</span>
                 <span>{V.sidebarDays}</span>
               </div>
@@ -238,56 +249,11 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   </svg>
                   {shows(V.unreadNotifications) ? (
                     <>
-                    <span data-notifications-badge="1" aria-label={`${V.unreadNotifications} unread notifications`} style={{position: "absolute", top: "-4px", right: "-4px", display: "grid", placeItems: "center", minWidth: "19px", height: "19px", padding: "0 4px", borderRadius: "999px", background: "#A9BC9B", color: "#1C1C1C", fontSize: "10px", fontWeight: "700", lineHeight: "1"}}>{V.unreadNotifications}</span>
+                    <span className="nt-badge" data-notifications-badge="1" aria-label={`${V.unreadNotifications} unread notifications`}>{Number(V.unreadNotifications)>99?'99+':V.unreadNotifications}</span>
                     </>
                   ) : null}
                 </button>
-                {shows(V.notificationsOpen) ? (
-                  <>
-                  <section id="notifications-panel" data-notifications-panel="1" aria-label="Notifications" style={{position: "absolute", top: "56px", right: "0", zIndex: "120", width: "min(380px,calc(100vw - 32px))", maxHeight: "min(490px,75vh)", display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #E4E5E2", borderRadius: "20px", background: "#F5F5F4", boxShadow: "0 24px 58px -26px rgba(28,28,28,.42)"}}>
-                    <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "17px 18px", borderBottom: "1px solid #E4E5E2"}}>
-                      <div style={{display: "flex", alignItems: "center", gap: "9px"}}>
-                        <button type="button" data-notifications-close="1" aria-label="Back" title="Back to page" onClick={V.closeNotifications} style={{display: "grid", placeItems: "center", width: "30px", height: "30px", padding: "0", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "17px", lineHeight: "1", cursor: "pointer"}}>←</button>
-                        <div>
-                          <h2 style={{margin: "0", fontSize: "17px", fontWeight: "600"}}>Notifications</h2>
-                          <span style={{fontSize: "11px", color: "#5A5F5C"}}>{V.notificationsCountLabel}</span>
-                        </div>
-                      </div>
-                      {shows(V.unreadNotifications) ? (
-                        <>
-                        <button type="button" data-notifications-read="1" onClick={V.markNotificationsRead} style={{padding: "7px 10px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "11px", cursor: "pointer"}}>Mark all read</button>
-                        </>
-                      ) : null}
-                    </div>
-                    {shows(V.notificationsEmpty) ? (
-                      <>
-                      <p data-notifications-empty="1" style={{margin: "0", padding: "28px 18px", color: "#5A5F5C", fontSize: "13px", lineHeight: "1.5"}}>No notifications yet. Finished scans and lookups will appear here.</p>
-                      </>
-                    ) : null}
-                    <div style={{overflow: "auto", minHeight: "0"}}>
-                      {(V.notificationRows ?? []).map((n, __in) => (
-                        <Fragment key={__in}>
-                          <div role="button" tabIndex={0} onClick={n.open} onKeyDown={e=>{if(e.key==="Enter" || e.key===" "){e.preventDefault();n.open()}}} data-notification={n.id} data-unread={n.unread} style={{display: "flex", alignItems: "flex-start", gap: "10px", width: "100%", padding: "14px 18px", borderBottom: "1px solid #E4E5E2", background: "transparent", color: "#1C1C1C", fontFamily: "inherit", textAlign: "left"}}>
-                            <span aria-hidden="true" data-level={n.level} style={{width: "8px", height: "8px", marginTop: "5px", borderRadius: "999px", background: n.color, flex: "none"}}></span>
-                            <span style={{display: "block", minWidth: "0", flex: "1"}}>
-                              <strong style={{display: "block", fontSize: "13px", fontWeight: "600", lineHeight: "1.35"}}>{n.title}</strong>
-                              <span style={{display: "block", marginTop: "3px", color: "#5A5F5C", fontSize: "12px", lineHeight: "1.45"}}>{n.body}</span>
-                              <time dateTime={n.at} style={{display: "block", marginTop: "7px", color: "#6C766F", fontSize: "10.5px"}}>{n.when}</time>
-                            </span>
-                            {shows(n.unread) ? (
-                              <>
-                              <span aria-label="Unread" style={{width: "6px", height: "6px", marginTop: "6px", borderRadius: "999px", background: "#6F8060", flex: "none"}}></span>
-                              </>
-                            ) : null}
-                            <button type="button" data-notification-read={n.id} aria-label="Mark notification read" title="Mark as read" onClick={e=>{e.stopPropagation();n.read()}} style={{alignSelf: "flex-start", padding: "3px 6px", border: "0", borderRadius: "6px", background: "transparent", color: "#6C766F", fontFamily: "inherit", fontSize: "10px", cursor: "pointer"}}>Read</button>
-                            <button type="button" data-notification-delete={n.id} aria-label={`Delete notification: ${n.title}`} title="Delete notification" onClick={e=>{e.stopPropagation();n.remove()}} style={{alignSelf: "flex-start", padding: "3px 6px", border: "0", borderRadius: "6px", background: "transparent", color: "#A85F59", fontFamily: "inherit", fontSize: "10px", fontWeight: "600", cursor: "pointer"}}>Delete</button>
-                          </div>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </section>
-                  </>
-                ) : null}
+                {V.notificationsOpen ? <NotificationCenter V={V}/> : null}
               </div>
             </header>
             {V.showPlanWelcome ? (
@@ -887,6 +853,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                     <p style={{margin: "8px 0 0", fontSize: "14.5px", color: "#5A5F5C"}}>{V.runNote}</p>
                   </div>
+                  <SavedMapsButton V={V}/>
                 </div>
                 <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                   <div data-setup="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1.05fr) minmax(0,1fr)", gap: "clamp(20px,3vw,44px)"}}>
@@ -1218,7 +1185,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </svg>
                         <input type="search" placeholder="Filter leads..." aria-label="Filter leads" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} data-mapsfilter="1" value={V.mapsQueryText} onInput={V.onMapsInput} />
                       </div>
-                      <button type="button" onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
+                      <button type="button" disabled={V.mapsResultsLoading} onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M12 4v10"></path>
                           <path d="M8 10.5l4 4 4-4"></path>
@@ -1247,7 +1214,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.isSocial) ? (
               <>
-              <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
+              <div data-saved-search-page="social" data-searching={Boolean(V.socQ.trim())} style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
                 <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px"}}>
                   <div>
                     <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
@@ -1314,18 +1281,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.shCount}</span>
                     </button>
                   </div>
-                  <p id="saved-social-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved profile by business, domain, handle or profile URL. Filters the current list.</p>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
-                    <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
-                    {(V.socHist ?? []).map((h, __ih) => (
-                      <Fragment key={__ih}>
-                        <button type="button" onClick={h.run} style={{display: "inline-flex", alignItems: "center", gap: "7px", height: "30px", padding: "0 12px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "12.5px", cursor: "pointer"}} data-socrecent="1">
-                          {h.q}
-                          <span style={{fontSize: "11px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{h.n}</span>
-                        </button>
-                      </Fragment>
-                    ))}
-                  </div>
+                  <p id="saved-social-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search all saved profiles by company, website, handle or profile URL. Matches appear below as you type.</p>
+                  
                 </div>
                 <div data-podium="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "start"}}>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
@@ -1399,7 +1356,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <p style={{margin: "0", fontSize: "13px", lineHeight: "1.5", color: "#2C332A", textWrap: "pretty"}}>{V.socialInsight}</p><span style={{marginTop:"auto",paddingTop:16,fontSize:13,fontWeight:500}}>View your report ↗</span>
                   </section>
                 </div>
-                <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                <section data-saved-results="social" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                     <div>
                       <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}} data-profcard="1">Profiles</h2>
@@ -1436,7 +1393,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <span data-col="idx" style={{minWidth: "34px", fontSize: "11px", fontWeight: "600", letterSpacing: ".08em", color: "#4A4F4B"}}>NEW</span>
                             <span style={{minWidth: "158px", fontSize: "14.5px", fontWeight: "500"}}>{sr.name}</span>
                             <span data-col="dom" title={sr.domain} style={{minWidth: "140px", fontSize: "12.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{sr.domain}</span>
-                            <span style={{display: "flex", gap: "5px", alignItems: "center", minWidth: "150px"}}>
+                            <span style={{display: "flex", flexWrap:'wrap', gap: "5px", alignItems: "center", minWidth: "0"}}>
                               {shows(sr.scanning) ? (
                                 <>
                                 <span style={{display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: "#4A4F4B"}}>
@@ -1445,11 +1402,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                                 </span>
                                 </>
                               ) : null}
-                              {(sr.profiles ?? []).map((p, __ip) => (
-                                <Fragment key={__ip}>
-                                  <a href={p.url} target="_blank" rel="noopener noreferrer" data-social-profile-link={p.url} aria-label={`Open ${p.tag} profile`} title={p.url} style={{display: "grid", placeItems: "center", width: "26px", height: "26px", borderRadius: "8px", background: "#E3E4E1", color: "#1C1C1C", fontSize: "10.5px", fontWeight: "700", textDecoration: "none", cursor: "pointer", animation: "lsPanelIn .4s cubic-bezier(.22,1,.36,1) both"}}>{p.tag}</a>
-                                </Fragment>
-                              ))}
+                              <SocialProfileLinks profiles={sr.profiles ?? []}/>
                               {shows(sr.none) ? (
                                 <>
                                 <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>No profiles found</span>
@@ -1468,7 +1421,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.isEmail) ? (
               <>
-              <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
+              <div data-saved-search-page="email" data-searching={Boolean(V.fEmail.q.trim())} style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
                 <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px"}}>
                   <div>
                     <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
@@ -1478,7 +1431,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         {V.importStatus}
                       </span>
                     </div>
-                    <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>All scraped leads with their enrichment status. Run the cascade in bulk.</p>
+                    <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>Find one main email published on each company's own website. Missing emails stay blank.</p>
                   </div>
                   <button data-action="Run the cascade" type="button" data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1488,6 +1441,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     {' '}Run the cascade{' '}
                   </button>
                 </div>
+                <EmailValidityChoice enabled={V.emailAutoVerifyOn} disabled={V.emailScanBusy} onToggle={V.toggleEmailAutoVerify}/>
                 <div data-socbar="1" style={{position: "sticky", top: "12px", zIndex: "30", padding: "14px 16px", borderRadius: "22px", background: "#F5F5F4", boxShadow: "0 18px 36px -26px rgba(28,28,28,.55)"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
                     <div style={{display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "220px", height: "44px", padding: "0 16px", borderRadius: "999px", background: "#EAEAE8"}}>
@@ -1516,7 +1470,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M5 12.5l4.5 4.5L19 7.5"></path>
                       </svg>
-                      {' '}Verify all{' '}
+                      {' '}Find emails{' '}
                     </button>
                     <button type="button" onClick={V.verifyEmailValidity} data-email-validity="1" data-busy={V.emailValidityBusy} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "44px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear,transform .3s cubic-bezier(.22,1,.36,1)"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1550,19 +1504,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fEmail.count}</span>
                     </button>
                   </div>
-                  <p id="saved-email-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved email by business, domain or email address. Filters the current list.</p>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
-                    <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
-                    {(V.fEmail.hist ?? []).map((h, __ih) => (
-                      <Fragment key={__ih}>
-                        <button type="button" onClick={h.run} style={{display: "inline-flex", alignItems: "center", gap: "7px", height: "30px", padding: "0 12px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "12.5px", cursor: "pointer"}} data-socrecent="1">
-                          {h.q}
-                          <span style={{fontSize: "11px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{h.n}</span>
-                        </button>
-                      </Fragment>
-                    ))}
-                    <span data-fcount="email" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.emailShowing} rows on screen</span>
-                  </div>
+                  <p id="saved-email-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search all saved emails by business, website or email address. Matches appear below as you type.</p>
+                  <div className="saved-search-count" style={{display:'flex',justifyContent:'flex-end',marginTop:10}}><span data-fcount="email" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.emailShowing} rows on screen</span></div>
                   {V.emailValidityProgressState !== 'idle' ? (
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginTop: "12px", padding: "10px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
                       <span role="status" data-email-validity-progress="1" style={{flex: "1", fontSize: "13px", color: "#1C1C1C"}}>{V.emailValidityProgressText}</span>
@@ -1621,6 +1564,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                       <h2 data-fres="email" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Emails found</h2>
+                      <button type="button" className="email-validity-check" data-email-validity="1" data-email-validity-scan="1" disabled={!V.emailCanVerifyResults} onClick={V.verifyEmailValidity}>{V.emailValidityBusy==='1'?V.emailValidityLabel:'Check email validity'}</button>
                       {shows(V.fEmail.scanDone) ? (
                         <>
                         <button type="button" onClick={V.fEmail.exportScan} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)", animation: "lsPanelIn .35s cubic-bezier(.22,1,.36,1) both"}}>
@@ -1784,12 +1728,14 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                   </section>
                 </div>
-                <section data-flistcard="email" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                <section data-saved-results="email" data-flistcard="email" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                  {V.fEmail.q.trim() && V.fEmail.rows.length===0 && <p className="saved-search-empty" role="status">No saved emails match this search. Try a different name, website or email.</p>}
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                     <div>
                       <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Addresses</h2>
                       <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Showing {V.emailShowing} of {V.emailTotal} leads.</p>
                     </div>
+                    <button type="button" className="email-validity-check" data-email-validity="1" data-email-validity-results="1" disabled={!V.emailCanVerifyResults} onClick={V.verifyEmailValidity}>{V.emailValidityBusy==='1'?V.emailValidityLabel:'Check email validity'}</button>
                     <button type="button" onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 4v10"></path>
@@ -1822,13 +1768,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <span data-col="idx" style={{minWidth: "34px", fontSize: "12.5px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{r.index}</span>
                             <span style={{minWidth: "156px", fontSize: "14.5px", fontWeight: "500"}}>{r.name}</span>
                             <span data-col="dom" title={r.domain} style={{minWidth: "138px", fontSize: "12.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.domain}</span>
-                            <span title={r.primary} style={{minWidth: "150px", fontSize: "12.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>
-                              {r.primary}{' '}
-                              {shows(r.hasExtras) ? (
-                                <>
-                                <span style={{color: "#5A5F5C"}}>{r.extrasLabel}</span>
-                                </>
-                              ) : null}
+                            <span data-email-addresses="1" style={{display:'flex',flexDirection:'column',gap:'7px',minWidth:0,fontSize:'12.5px',color:'#4A4F4B',overflowWrap:'anywhere'}}>
+                              {r.emailDetails.length?r.emailDetails.map(address=><a key={address.value} href={'mailto:'+address.value} title={address.page?`Published on ${address.page}`:address.value} data-email-address={address.value} style={{color:'inherit',textDecoration:'none',lineHeight:1.5}}>{address.value}</a>):r.primary}
                             </span>
                             <span style={{minWidth: "148px"}}>
                               {shows(V.isTone(r.tone, 'high')) ? (
@@ -1943,7 +1884,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.isPhone) ? (
               <>
-              <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
+              <div data-saved-search-page="phone" data-searching={Boolean(V.fPhone.q.trim())} style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
                 <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px"}}>
                   <div>
                     <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
@@ -2016,19 +1957,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fPhone.count}</span>
                     </button>
                   </div>
-                  <p id="saved-phone-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved number by business, area or phone number. Filters the current list.</p>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
-                    <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
-                    {(V.fPhone.hist ?? []).map((h, __ih) => (
-                      <Fragment key={__ih}>
-                        <button type="button" onClick={h.run} style={{display: "inline-flex", alignItems: "center", gap: "7px", height: "30px", padding: "0 12px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "12.5px", cursor: "pointer"}} data-socrecent="1">
-                          {h.q}
-                          <span style={{fontSize: "11px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{h.n}</span>
-                        </button>
-                      </Fragment>
-                    ))}
-                    <span data-fcount="phone" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.phoneShowing} rows on screen</span>
-                  </div>
+                  <p id="saved-phone-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search all saved numbers by business, website or phone. Matches appear below as you type.</p>
+                  <div className="saved-search-count" style={{display:'flex',justifyContent:'flex-end',marginTop:10}}><span data-fcount="phone" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.phoneShowing} rows on screen</span></div>
                 </div>
                 {shows(V.fPhone.scanOn) ? (
                   <>
@@ -2215,7 +2145,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                   </section>
                 </div>
-                <section data-flistcard="phone" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                <section data-saved-results="phone" data-flistcard="phone" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                  {V.fPhone.q.trim() && V.fPhone.rows.length===0 && <p className="saved-search-empty" role="status">No saved phone numbers match this search. Try a different name, website or number.</p>}
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                     <div>
                       <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Phone Book</h2>
@@ -2247,7 +2178,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <span style={{display: "grid", placeItems: "center", width: "16px", height: "16px", borderRadius: "5px", border: "1.5px solid #C6C8C4"}}></span>
                             <span data-col="idx" style={{minWidth: "34px", fontSize: "12.5px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{p.index}</span>
                             <span style={{minWidth: "158px", fontSize: "14.5px", fontWeight: "500"}}>{p.name}</span>
-                            <span style={{minWidth: "156px", fontSize: "13.5px", fontVariantNumeric: "tabular-nums", color: "#1C1C1C", whiteSpace: "nowrap"}}>{p.phone}</span>
+                            <span className="phone-result-numbers" style={{minWidth:"156px",fontSize:"13.5px",fontVariantNumeric:"tabular-nums",color:"#1C1C1C"}}><span title={p.mainSource || undefined}>{p.phone}</span>{p.mainSource && <small>Main website contact</small>}{p.extraNumbers.length>0&&<details><summary>+{p.extraNumbers.length} more number{p.extraNumbers.length===1?'':'s'}</summary>{p.extraNumbers.map(number=><span key={number.value} title={number.page}>{number.value}</span>)}</details>}</span>
                             <span style={{minWidth: "104px"}}>
                               {shows(p.isReception) ? (
                                 <>
@@ -2283,33 +2214,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             ) : null}
             {shows(V.isDm) ? (
               <>
-              <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
-                <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px"}}>
-                  <div>
-                    <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
-                      <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Decision Makers</h1>
-                      <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
-                        <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        {V.importStatus}
-                      </span>
-                    </div>
-                    <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>LinkedIn profile URLs of decision-makers. Populated by deep enrichment.</p>
-                  </div>
-                  <div data-dm-picker="1" style={{display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap"}}>
-                    <label style={{display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: "#4A4F4B"}}>
-                      Leads
-                      <input data-dm-limit="1" type="number" min="1" max={V.dmLeadLimitMax} value={V.dmLeadLimit} onChange={V.onDmLeadLimitInput} aria-label="Leads per deep pass" style={{width: "72px", height: "36px", padding: "0 10px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13px", color: "#1C1C1C", outline: "none"}} />
-                    </label>
-                    <span data-dm-selection="1" style={{fontSize: "12px", color: "#5A5F5C", whiteSpace: "nowrap"}}>{V.dmSelectedLabel}</span>
-                  </div>
-                  <button type="button" data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}} onClick={V.deepRun} data-deeprun="1">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="8" r="3.4"></circle>
-                      <path d="M5.5 19.5c1-3.1 3.4-4.7 6.5-4.7s5.5 1.6 6.5 4.7"></path>
-                    </svg>
-                    {' '}Deep enrich all missing{' '}
-                  </button>
-                </div>
+              <div data-saved-search-page="dm" data-searching={Boolean(V.fDm.q.trim())} style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
+                <div><h1 style={{margin:0,fontSize:'clamp(26px,2.6vw,36px)',lineHeight:1.1,fontWeight:400,letterSpacing:'-.03em'}}>Decision Makers</h1><p style={{margin:'10px 0 0',maxWidth:'76ch',fontSize:14,lineHeight:1.6,color:'#5A5F5C'}}>Find the business owner's published email. Import websites to check owner/founder evidence and a matching direct email.</p></div>
                 <div data-socbar="1" style={{position: "sticky", top: "12px", zIndex: "30", padding: "14px 16px", borderRadius: "22px", background: "#F5F5F4", boxShadow: "0 18px 36px -26px rgba(28,28,28,.55)"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
                     <div style={{display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "220px", height: "44px", padding: "0 16px", borderRadius: "999px", background: "#EAEAE8"}}>
@@ -2333,12 +2239,12 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </svg>
                       </span>
                     </span>
-                    <button type="button" onClick={V.fDm.act} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}} data-fact="fDm">
+                    <button type="button" onClick={V.fDm.act} disabled={V.fDm.scanning} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}} data-fact="fDm">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <circle cx="12" cy="8" r="3.5"></circle>
                         <path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"></path>
                       </svg>
-                      {' '}Review suggestions{' '}
+                      {' '}{V.fDm.scanning ? 'Scan running…' : V.fDm.actLabel}{' '}
                     </button>
                     <button type="button" onClick={V.openImp} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "44px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2365,67 +2271,15 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fDm.count}</span>
                     </button>
                   </div>
-                  <p id="saved-dm-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Find a saved contact by person, role or business. Filters the current list.</p>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px"}}>
-                    <span style={{marginRight: "4px", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#555956"}}>Recent</span>
-                    {(V.fDm.hist ?? []).map((h, __ih) => (
-                      <Fragment key={__ih}>
-                        <button type="button" onClick={h.run} style={{display: "inline-flex", alignItems: "center", gap: "7px", height: "30px", padding: "0 12px", border: "0", borderRadius: "999px", fontFamily: "inherit", fontSize: "12.5px", cursor: "pointer"}} data-socrecent="1">
-                          {h.q}
-                          <span style={{fontSize: "11px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{h.n}</span>
-                        </button>
-                      </Fragment>
-                    ))}
-                    <span data-fcount="dm" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.dmShowing} rows on screen</span>
-                  </div>
+                  <p id="saved-dm-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search saved owners by name, role, company, website or email. Matches appear below as you type.</p>
+                  <div className="saved-search-count" style={{display:'flex',justifyContent:'flex-end',marginTop:10}}><span data-fcount="dm" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.dmShowing} rows on screen</span></div>
                 </div>
-                {shows(V.fDm.scanOn) ? (
+                {shows(V.fDm.scanOn || V.fDm.q.trim()) ? (
                   <>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                    <h2 data-fcov="dm" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Contact Coverage</h2>
-                    <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.fDm.scanSub}</p>
-                    {shows(V.fDm.scanning) ? (
-                      <>
-                      <div style={{display: "flex", alignItems: "center", gap: "10px", marginTop: "16px", padding: "10px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
-                        <span aria-hidden="true" style={{width: "12px", height: "12px", borderRadius: "999px", border: "2px solid rgba(28,28,28,.2)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite", flex: "none"}}></span>
-                        <span style={{fontSize: "13px", fontWeight: "500"}}>{V.fDm.scanBadge}</span>
-                      </div>
-                      </>
-                    ) : null}
-                    {shows(V.fDm.scanOn) ? (
-                      <>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "16px", padding: "8px 8px 8px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
-                        <span style={{flex: "1", minWidth: "180px", fontSize: "13px", fontWeight: "500"}}>{V.fDm.scanLabel}</span>
-                        <button type="button" onClick={V.fDm.refresh} style={{height: "32px", padding: "0 14px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}} data-exitscan="1">Refresh results</button>
-                      </div>
-                      </>
-                    ) : null}
-                    <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(96px,1fr))", gap: "14px", marginTop: "20px"}}>
-                      {(V.fDm.rings ?? []).map((r, __ir) => (
-                        <Fragment key={__ir}>
-                          <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "10px"}}>
-                            <span style={{position: "relative", display: "grid", placeItems: "center", width: "98px", height: "98px"}}>
-                              <svg viewBox="0 0 100 100" aria-hidden="true" style={{position: "absolute", inset: "0", width: "100%", height: "100%", transform: "rotate(-90deg)"}}>
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="#DADCD7" strokeWidth="7"></circle>
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="#1C1C1C" strokeWidth="7" strokeLinecap="round" strokeDasharray="276.5" strokeDashoffset={r.off}></circle>
-                              </svg>
-                              <span style={{fontSize: "22px", fontWeight: "400", letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums"}}>
-                                {r.pct}
-                                <span style={{fontSize: "11px", color: "#5A5F5C"}}>%</span>
-                              </span>
-                            </span>
-                            <span style={{textAlign: "center"}}>
-                              <span style={{display: "block", fontSize: "13.5px", fontWeight: "500"}}>{r.name}</span>
-                              <span style={{display: "block", marginTop: "2px", fontSize: "12px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{r.leads}</span>
-                            </span>
-                          </div>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </section>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
+                  <DecisionScanProgress scan={V.fDm}/>
+                  <section data-saved-results="dm" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
-                      <h2 data-fres="dm" style={{scrollMarginTop: "130px", margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>People found</h2>
+                      <h2 data-fres="dm" style={{scrollMarginTop: "130px", margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Owner emails</h2>
 
                     </div>
                     <DecisionResults V={V}/>
@@ -2437,293 +2291,11 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   </section>
                   </>
                 ) : null}
-                <div data-dmbody="1" style={{display: "grid", gridTemplateColumns: "300px minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "start"}}>
-                  <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.4vw,20px)"}}>
-                    <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "linear-gradient(170deg,#E9EDE4 0%,#CBD8BC 100%)", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#4C554A"}}>Coverage</div>
-                      <div style={{display: "flex", alignItems: "flex-end", gap: "10px", marginTop: "12px"}}>
-                        <span style={{fontSize: "clamp(44px,5vw,60px)", lineHeight: ".86", fontWeight: "700", letterSpacing: "-.05em", backgroundImage: "radial-gradient(circle at 50% 50%,#1C1C1C 1.45px,transparent 1.55px)", backgroundSize: "3.2px 3.2px", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", WebkitTextFillColor: "transparent", animation: "lsPop .7s cubic-bezier(.22,1,.36,1) both"}}>{V.dmMatched}</span>
-                        <span style={{fontSize: "15px", color: "#4C554A", paddingBottom: "5px"}}>of {V.dmTotal}</span>
-                      </div>
-                      <div style={{height: "8px", marginTop: "14px", borderRadius: "4px", background: "rgba(255,255,255,.6)", overflow: "hidden"}}>
-                        <span style={{display: "block", height: "100%", width: "{{ dmCoveragePct }}%", borderRadius: "4px", background: "#1C1C1C"}}></span>
-                      </div>
-                      <div style={{display: "flex", justifyContent: "space-between", marginTop: "9px", fontSize: "12.5px", color: "#4C554A"}}>
-                        <span>{V.dmCoveragePct}% have a named contact</span>
-                        <span>{V.dmMissing} missing</span>
-                      </div>
-                    </section>
-                    <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500", letterSpacing: "-.01em"}}>Seniority Mix</h2>
-                      <p style={{margin: "4px 0 0", fontSize: "13px", color: "#5A5F5C"}}>{V.dmSeniorityNote}</p>
-                      <ul style={{listStyle: "none", margin: "14px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
-                        {(V.dmSeniority ?? []).map((s, __is) => (
-                          <Fragment key={__is}>
-                            <li style={{display: "flex", alignItems: "center", gap: "10px", padding: "10px 0", borderTop: "1px solid #E4E5E2"}}>
-                              <span style={{flex: "1", fontSize: "13.5px"}}>{s.role}</span>
-                              <span style={{fontSize: "14.5px", fontWeight: "500"}}>{s.count}</span>
-                            </li>
-                          </Fragment>
-                        ))}
-                      </ul>
-                    </section>
-                    <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#1C1C1C", color: "#F0F0F0", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <h2 style={{margin: "0", fontSize: "17px", fontWeight: "500", letterSpacing: "-.01em"}}>Deep Enrich</h2>
-                      <p style={{margin: "4px 0 0", fontSize: "13px", color: "#9BA29C"}}>Costs one credit per lead.</p>
-                      <div style={{display: "flex", flexDirection: "column", gap: "8px", marginTop: "16px"}}>
-                        <button type="button" data-attn="1" style={{display: "flex", alignItems: "center", gap: "12px", width: "100%", padding: "13px 15px", border: "0", borderRadius: "14px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", textAlign: "left", cursor: "pointer"}} onClick={V.deepRun} data-deeprun="1">
-                          <span style={{flex: "1"}}>Enrich all missing</span>
-                          <span>{V.dmMissing}</span>
-                        </button>
-                        <div style={{display: "flex", alignItems: "center", gap: "12px", padding: "13px 15px", borderRadius: "14px", background: "#212221", color: "#7E837F", fontSize: "13.5px"}}>
-                          <span style={{flex: "1"}}>Enrich selected</span>
-                          <span>0</span>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-                  <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.4vw,20px)", minWidth: "0"}}>
-                    <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                        <div>
-                          <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Where Matches Drop Off</h2>
-                          <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Every stage a lead must clear before a named contact lands.</p>
-                        </div>
-                        <span style={{display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "11.5px", whiteSpace: "nowrap"}}>
-                          Biggest loss:{' '}
-                          <strong style={{fontWeight: "700"}}>no company page</strong>
-                        </span>
-                      </div>
-                      <ul style={{listStyle: "none", margin: "20px 0 0", padding: "0"}}>
-                        {(V.dmStages ?? []).map((st, __ist) => (
-                          <Fragment key={__ist}>
-                            <li style={{position: "relative", padding: "0 0 18px 26px"}}>
-                              <span aria-hidden="true" style={{position: "absolute", left: "5px", top: "6px", width: "9px", height: "9px", borderRadius: "999px", background: "#1C1C1C"}}></span>
-                              <span aria-hidden="true" style={{position: "absolute", left: "9px", top: "18px", bottom: "0", width: "1px", background: "#DEDFDC"}}></span>
-                              <div style={{display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "10px"}}>
-                                <span style={{fontSize: "17px", fontWeight: "500", fontVariantNumeric: "tabular-nums"}}>{st.count}</span>
-                                <span style={{flex: "1", minWidth: "140px", fontSize: "13.5px", color: "#4A4F4B"}}>{st.label}</span>
-                              </div>
-                              <div style={{height: "7px", marginTop: "8px", borderRadius: "4px", background: "#E7E8E5", overflow: "hidden"}}>
-                                <span style={{display: "block", height: "100%", width: st.width, borderRadius: "4px", background: "#1C1C1C", transformOrigin: "left", animation: "lsGrow .9s cubic-bezier(.22,1,.36,1) both"}}></span>
-                              </div>
-                            </li>
-                          </Fragment>
-                        ))}
-                      </ul>
-                    </section>
-
-                    <section data-flistcard="dm" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                        <div>
-                          <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Awaiting a Match</h2>
-                          <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.dmBlockerNote}</p>
-                        </div>
-                        <span style={{position: "relative", display: "block"}}>
-                          <select aria-label="Blocker filter" style={{height: "42px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
-                            <option>All blockers</option>
-                            <option>No people listed</option>
-                            <option>No company page</option>
-                            <option>No website</option>
-                            <option>Pending</option>
-                          </select>
-                          <span aria-hidden="true" style={{position: "absolute", right: "14px", top: "14px", display: "block", pointerEvents: "none", color: "#4A4F4B"}}>
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M6 9.5l6 6 6-6"></path>
-                            </svg>
-                          </span>
-                        </span>
-                      </div>
-                      <ul data-flist="dm" data-fpart="blockers" style={{listStyle: "none", margin: "16px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
-                        {(V.dmBlockers ?? []).map((b, __ib) => (
-                          <Fragment key={__ib}>
-                            <li data-row="1" style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", padding: "12px 0", borderTop: "1px solid #E4E5E2", transition: "background .25s linear"}}>
-                              <span aria-hidden="true" style={{width: "8px", height: "8px", borderRadius: "999px", background: "#C6C8C4", flex: "none"}}></span>
-                              <span style={{flex: "1", minWidth: "160px", fontSize: "14px", fontWeight: "500"}}>{b.name}</span>
-                              <span title={b.domain} style={{minWidth: "150px", fontSize: "12.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{b.domain}</span>
-                              <span style={{padding: "5px 11px", borderRadius: "999px", background: "#EAEAE8", color: "#4A4F4B", fontSize: "11.5px", minWidth: "120px", textAlign: "center", whiteSpace: "nowrap"}}>{b.blocker}</span>
-                            </li>
-                          </Fragment>
-                        ))}
-                      </ul>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "16px", paddingTop: "14px", borderTop: "1px solid #E4E5E2"}}>
-                        <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Showing {V.dmBlockersShowing} of {V.dmMissing}</span>
-                        {shows(V.dmBlockerMoreOn) ? (
-                          <>
-                          <button type="button" data-more="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer"}} onClick={V.showAllDmBlockers}>
-                            {V.dmBlockerShowAllLabel}{' '}
-                            <span aria-hidden="true">↓</span>
-                          </button>
-                          </>
-                        ) : null}
-                      </div>
-                    </section>
-                  </div>
-                </div>
-                <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                    <div>
-                      <h2 data-dmsugs="1" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Suggestions to review</h2>
-                      <p style={{margin: "4px 0 0", maxWidth: "70ch", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C", textWrap: "pretty"}}>Only schema.org people, named mailto addresses, LinkedIn /in/ profiles and explicit name + role text are saved as decision makers. Softer hits wait here for you.</p>
-                    </div>
-                    <span style={{padding: "7px 14px", borderRadius: "999px", background: "#C8D5BB", fontSize: "12px", fontWeight: "500", whiteSpace: "nowrap"}}>{V.dmSugBadge}</span>
-                  </div>
-                  <ul style={{listStyle: "none", margin: "16px 0 0", padding: "0", display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(100%,300px),1fr))", gap: "10px"}}>
-                    {(V.dmSugRows ?? []).map((d, __id) => (
-                      <Fragment key={__id}>
-                        <li data-dmsug={d.state} style={{display: "flex", flexDirection: "column", gap: "12px", padding: "16px", borderRadius: "18px", transition: "background .3s linear,opacity .3s linear"}}>
-                          <div style={{display: "flex", alignItems: "flex-start", gap: "12px"}}>
-                            <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "38px", height: "38px", borderRadius: "12px", background: "#E3E4E1", fontSize: "13px", fontWeight: "700", flex: "none"}}>{d.initials}</span>
-                            <span style={{flex: "1", minWidth: "0"}}>
-                              <span style={{display: "block", fontSize: "14.5px", fontWeight: "500"}}>{d.name}</span>
-                              <span style={{display: "block", marginTop: "2px", fontSize: "12.5px", color: "#4A4F4B"}}>{d.role} · {d.lead}</span>
-                            </span>
-                          </div>
-                          <span style={{display: "block", padding: "9px 12px", borderRadius: "12px", background: "#EAEAE8", fontSize: "12px", lineHeight: "1.5", color: "#4A4F4B"}}>{d.source}</span>
-                          {shows(d.pending) ? (
-                            <>
-                            <div style={{display: "flex", gap: "8px"}}>
-                              <button type="button" onClick={d.confirm} data-run="1" style={{flex: "1", height: "38px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>Confirm</button>
-                              <button type="button" onClick={d.dismiss} data-ghost="1" style={{flex: "1", height: "38px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Dismiss</button>
-                            </div>
-                            </>
-                          ) : null}
-                          {shows(d.resolved) ? (
-                            <>
-                            <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", height: "38px"}}>
-                              <span style={{fontSize: "12.5px", fontWeight: "500"}}>{d.outcome}</span>
-                              <button type="button" onClick={d.undo} style={{padding: "0", border: "0", background: "transparent", fontFamily: "inherit", fontSize: "12.5px", color: "#4A4F4B", textDecoration: "underline", cursor: "pointer"}}>Undo</button>
-                            </div>
-                            </>
-                          ) : null}
-                        </li>
-                      </Fragment>
-                    ))}
-                  </ul>
-                </section>
+                <section data-card="1" style={{padding:24,borderRadius:22,background:'#F5F5F4'}}><h2 style={{margin:0,fontSize:18,fontWeight:500}}>Published owner emails only</h2><p style={{margin:'10px 0 0',fontSize:13,lineHeight:1.7,color:'#5A5F5C'}}>Import websites to identify their owners or founders. We check the website first, then search public sources for a matching email if needed. A staff profile or a general inbox does not count as an owner email. If the address is not published, we leave it blank.</p></section>
               </div>
               </>
             ) : null}
-            {shows(V.isWebsite) ? (
-              <>
-              <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
-                <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "16px"}}>
-                  <div>
-                    <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
-                      <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Website Lookup</h1>
-                      <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
-                        <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        {V.importStatus}
-                      </span>
-                    </div>
-                    <p style={{margin: "8px 0 0", maxWidth: "80ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>Paste or upload a list of websites — we'll find the business name, address, phone, emails, socials, and LinkedIn for each.</p>
-                  </div>
-                  <span style={{display: "inline-flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "999px", background: "#F5F5F4", fontSize: "12.5px", color: "#4A4F4B"}}>{V.importStatus}</span>
-                </div>
-                <div data-lookuptop="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1.45fr) minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "start"}}>
-                  <section data-card="1" style={{padding: "clamp(22px,3vw,34px)", borderRadius: "22px", background: "linear-gradient(160deg,#E9EDE4 0%,#CBD8BC 100%)", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                    <div style={{display: "flex", alignItems: "center", gap: "12px"}}>
-                      <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "38px", height: "38px", borderRadius: "12px", background: "rgba(255,255,255,.6)", color: "#1C1C1C", flex: "none"}}>
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                          <path d="M9.5 14.5l-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0"></path>
-                          <path d="M14.5 9.5l2-2a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"></path>
-                        </svg>
-                      </span>
-                      <div>
-                        <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Start with a list</h2>
-                        <p style={{margin: "3px 0 0", fontSize: "13.5px", color: "#4C554A"}}>One website per line, or upload a CSV.</p>
-                      </div>
-                    </div>
-                    <div style={{marginTop: "20px", padding: "18px 20px", border: "1.5px dashed rgba(28,28,28,.28)", borderRadius: "18px", background: "rgba(255,255,255,.42)"}}>
-                      <div style={{display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px"}}>
-                        <span style={{fontSize: "11px", fontWeight: "500", letterSpacing: ".14em", textTransform: "uppercase", color: "#4C554A"}}>Paste websites</span>
-                        <span style={{fontSize: "11.5px", color: "#4C554A"}}>{V.importSummary}</span>
-                      </div>
-                      <textarea aria-label="Websites to look up" value={V.impValue} onInput={V.onImpText} placeholder="Paste website URLs here, one per line" style={{width:'100%',minHeight:150,marginTop:12,padding:14,border:0,borderRadius:12,font:'inherit',resize:'vertical',background:'#f5f5f4'}}/>
-                    </div>
-                    <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "18px"}}>
-                      <button type="button" onClick={V.startWebsiteLookup} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                          <path d="M12 15.5V4"></path>
-                          <path d="M8 7.5l4-4 4 4"></path>
-                          <path d="M4.5 19.5h15"></path>
-                        </svg>
-                        {' '}Start lookup{' '}
-                      </button>
-                      <button type="button" data-attn="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "rgba(255,255,255,.62)", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer"}} data-lookup-action="clipboard" onClick={V.pasteWebsiteClipboard}>
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                          <rect x="7" y="3.5" width="12" height="15" rx="3"></rect>
-                          <path d="M5 7.5v11a2.5 2.5 0 0 0 2.5 2.5H15"></path>
-                        </svg>
-                        {' '}Paste from clipboard{' '}
-                      </button>
-                      <button type="button" data-attn="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "rgba(255,255,255,.62)", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer"}} data-lookup-action="csv" onClick={V.uploadWebsiteCsv}>
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                          <path d="M6 3.5h8l4.5 4.5v12.5H6z"></path>
-                          <path d="M14 3.5V8h4.5"></path>
-                        </svg>
-                        {' '}Upload CSV{' '}
-                      </button>
-                    </div>
-                    <p style={{margin: "14px 0 0", fontSize: "12.5px", color: "#4C554A"}}>Supports up to 500 sites per import. Websites already saved on this device are reused without creating duplicates.</p>
-                  </section>
-                  <section data-card="1" style={{padding:28,borderRadius:22,background:'#F5F5F4'}}><h2 style={{fontSize:20,fontWeight:500}}>Your websites, your results</h2><p style={{lineHeight:1.7,color:'#5A5F5C'}}>1. Paste websites or import a CSV.<br/>2. Start the lookup.<br/>3. Review published contact details below.</p><p role="status">{V.importStatus}</p><p>Missing details stay blank. Each scan reads the site's public pages.</p></section>
-                </div>
-                <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                    <div>
-                      <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Results preview</h2>
-                      <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>This is how imported sites will appear once enrichment runs.</p>
-                    </div>
-                    <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "16px"}}>
-                      <span style={{display: "flex", alignItems: "baseline", gap: "7px"}}>
-                        <span style={{fontSize: "26px", fontWeight: "700", letterSpacing: "-.03em", backgroundImage: "radial-gradient(circle at 50% 50%,#1C1C1C 1.45px,transparent 1.55px)", backgroundSize: "3.2px 3.2px", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", WebkitTextFillColor: "transparent", animation: "lsPop .7s cubic-bezier(.22,1,.36,1) both"}}>{V.importAdded}</span>
-                        <span style={{fontSize: "12px", color: "#5A5F5C"}}>sites</span>
-                      </span>
-                      <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>{V.importTally}</span>
-                    </div>
-                  </div>
-                  <div style={{marginTop: "18px", padding: "0 0 11px", borderBottom: "1px solid #DEDFDC", display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1fr) 88px", gap: "12px"}}>
-                    <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956", whiteSpace: "nowrap"}}>Website</span>
-                    <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956", whiteSpace: "nowrap"}}>Business</span>
-                    <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956", whiteSpace: "nowrap"}}>Contact</span>
-                    <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".15em", textTransform: "uppercase", color: "#555956", whiteSpace: "nowrap"}}>Status</span>
-                  </div>
-                  <ul style={{listStyle: "none", margin: "0", padding: "0", display: "flex", flexDirection: "column"}}>
-                    {(V.importRows ?? []).map((r, __ir) => (
-                      <Fragment key={__ir}>
-                        <li style={{display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,1fr) 88px", alignItems: "center", gap: "12px", padding: "14px 0", borderTop: "1px solid #E7E8E5"}}>
-                          <span style={{minWidth:0}}>
-                            <span style={{display: "block", fontSize: "13.5px", color: "#1C1C1C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.domain}</span>
-                          </span>
-                          <span style={{minWidth:0}}>
-                            <span style={{display: "block", fontSize: "13.5px", color: "#1C1C1C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.detail}</span>
-                          </span>
-                          <span style={{minWidth:0}}>
-                            <span style={{display: "block", fontSize: "13.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.contact}</span>
-                          </span>
-                          <span style={{height: "22px", borderRadius: "999px", background: "#EDEEEB"}}>
-                            <span style={{display: "block", padding: "5px 10px", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontSize: "11.5px", textAlign: "center", whiteSpace: "nowrap"}}>{r.status}</span>
-                          </span>
-                        </li>
-                      </Fragment>
-                    ))}
-                  </ul>
-                  {shows(V.importEmptyOn) ? (
-                    <>
-                    <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "26px 0 6px", textAlign: "center"}}>
-                      <p style={{margin: "0", maxWidth: "40ch", fontSize: "14px", lineHeight: "1.6", color: "#5A5F5C", textWrap: "pretty"}}>{V.importEmpty}</p>
-                      <button type="button" onClick={V.openImp} data-more="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "42px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer"}}>
-                        Import websites{' '}
-                        <span aria-hidden="true">↑</span>
-                      </button>
-                    </div>
-                    </>
-                  ) : null}
-                </section>
-              </div>
-              </>
-            ) : null}
+            {shows(V.isWebsite) ? <WebsiteLookupPanel V={V}/> : null}
             {shows(V.isLeads) ? (
               <>
               <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
@@ -3353,11 +2925,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         <li style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
                           <span style={{flex: "1", minWidth: "140px", fontSize: "13.5px", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{sr.domain}</span>
                           <span style={{display: "flex", flexWrap: "wrap", gap: "4px", maxWidth: "100%"}}>
-                            {(sr.chips ?? []).map((p, __ip) => (
-                              <Fragment key={__ip}>
-                                <a href={p.url} target="_blank" rel="noopener noreferrer" data-social-profile-link={p.url} aria-label={`Open ${p.t} profile`} title={p.k} style={{display: "grid", placeItems: "center", minWidth: "24px", height: "24px", padding: "0 7px", borderRadius: "7px", background: "#C8D5BB", color: "#1C1C1C", fontSize: "10.5px", fontWeight: "600", textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer", animation: "lsPanelIn .35s cubic-bezier(.22,1,.36,1) both"}}>{p.t}</a>
-                              </Fragment>
-                            ))}
+                            <SocialProfileLinks profiles={sr.profiles ?? []}/>
                           </span>
                           <span data-impst={sr.pill} style={{display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 11px", borderRadius: "999px", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap"}}>
                             {shows(sr.scanning) ? (
@@ -3422,32 +2990,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </div>
               </>
             ) : null}
-            {shows(V.impOpen) ? (
-              <>
-              <div onClick={(event) => { if (event.target === event.currentTarget) V.closeImp() }} style={{position: "fixed", inset: "0", zIndex: "90", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.62)", animation: "lsScrimIn .35s linear both"}} data-socimp="1" data-impmodal="1">
-                <section style={{width: "100%", maxWidth: "620px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(20px,2.4vw,28px)", borderRadius: "26px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
-                  <h2 style={{margin: "0", fontSize: "clamp(19px,2.1vw,24px)", fontWeight: "400", letterSpacing: "-.02em"}}>Import websites</h2>
-                  <p style={{margin: "6px 0 0", fontSize: "13.5px", lineHeight: "1.55", color: "#5A5F5C"}}>Paste website URLs, one per line.</p>
-                  <ImportSources V={V}/>
-                  <textarea data-imptext="1" value={V.impValue} onInput={V.onImpText} spellCheck="false" aria-label="Website URLs" placeholder="Paste website URLs, one per line" style={{display: "block", width: "100%", height: "170px", marginTop: "16px", padding: "14px 16px", border: "1px dashed #C6C8C4", borderRadius: "16px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "14px", lineHeight: "1.7", color: "#1C1C1C", resize: "vertical", outline: "none"}} data-socimpinput="1"></textarea>
-                  <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "16px"}}>
-                    {shows(V.impHasLines) ? (
-                      <>
-                      <button type="button" data-run="1" onClick={V.impImport} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)", animation: "lsPanelIn .35s cubic-bezier(.22,1,.36,1) both"}} data-socimpgo="1" data-importgo="1">
-                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true">
-                          <circle cx="11" cy="11" r="6.5"></circle>
-                          <path d="M16 16l4.5 4.5"></path>
-                        </svg>
-                        {' '}{V.impScanLabel}{' '}
-                      </button>
-                      </>
-                    ) : null}
-                    <button type="button" onClick={V.closeImp} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "transparent", color: "#4A4F4B", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer"}} data-socimpcancel="1">Cancel</button>
-                  </div>
-                </section>
-              </div>
-              </>
-            ) : null}
+            {V.savedMapsOpen ? <SavedMapsSearches V={V}/> : null}
+            {shows(V.impOpen) ? <ImportWebsitesDialog V={V}/> : null}
             {shows(V.expOpen) ? <ExportDialog title={V.expTitle} summary={V.simpleExportSummary} busy={V.exportBusy} empty={V.simpleExportEmpty} onExport={format => format === 'xlsx' ? V.exportExcel() : V.exportPdf()} onClose={V.closeExp} /> : null}
             {shows(V.profileExportOpen) ? <ExportDialog social title="Export social profiles" summary={V.profileExportSummary} busy={V.exportBusy} empty={false} onExport={format => format === 'xlsx' ? V.exportProfilesExcel() : V.exportProfilesPdf()} onClose={V.closeProfileExport} /> : null}
             {shows(V.chatOpen) ? (

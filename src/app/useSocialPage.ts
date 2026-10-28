@@ -18,6 +18,7 @@ import {
   type SocialRow,
 } from '../lib/social'
 import { localDb } from '../lib/local'
+import { searchSavedRows } from './saved-search'
 import { DEMO_SOCIAL_DONUTS, DEMO_SOCIAL_EXTRAS, DEMO_SOCIAL_ROWS } from './socialDemo'
 
 /**
@@ -188,10 +189,6 @@ const DEMO_ROWS: SocialRowView[] = DEMO_SOCIAL_ROWS.map((row) => ({
 }))
 
 /** The five letter form a name and a search term are compared in. */
-function loose(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
-}
-
 export function useSocialPage(): SocialPage {
   const db = useMemo(() => localDb(), [])
   const [live, setLive] = useState(false)
@@ -290,15 +287,7 @@ export function useSocialPage(): SocialPage {
    */
   const filteredRows = useMemo(() => {
     if (!live) return viewRows
-    const term = loose(search)
-    return viewRows.filter((row) => {
-      if (term) {
-        const inRow = loose(row.name).includes(term) || loose(row.domain).includes(term)
-        const inProfiles = (row.profiles ?? []).some(
-          (profile) => loose(profile.handle).includes(term) || loose(profile.url).includes(term),
-        )
-        if (!inRow && !inProfiles) return false
-      }
+    return searchSavedRows(viewRows,search,row=>[row.name,row.domain,...row.profiles.flatMap(profile=>[profile.handle,profile.url])]).filter((row) => {
       if (filter === 'with') return row.profiles.length > 0
       if (filter === 'pending') return row.isPending
       if (filter === 'nowebsite') return row.domain === 'No website found'

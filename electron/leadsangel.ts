@@ -111,6 +111,7 @@ export async function verifyEmailAddressesWithLeadsAngel(
   addresses: string[],
   signal: AbortSignal,
   onProgress?: (message: string) => void,
+  onResults?: (results:EmailValidityResult[]) => void,
 ): Promise<EmailValidityResult[]> {
   const unique = Array.from(new Set(addresses.map((address) => address.trim().toLowerCase()).filter(Boolean)))
   if (!unique.length) return []
@@ -122,28 +123,36 @@ export async function verifyEmailAddressesWithLeadsAngel(
   if (!/^[a-z0-9-]{8,100}$/i.test(jobId)) throw new EmailVerificationError('LeadsAngel did not return a job ID.', true)
   const deadline = Date.now() + 120_000
   let state = submitted
+  const requested=new Set(unique),results=new Map<string,EmailValidityResult>()
+  const readResults=async()=>{
+    const payload=await post('results',credentials,{job_id:jobId},signal)
+    const fresh:EmailValidityResult[]=[]
+    for(const item of Array.isArray(payload.items)?payload.items:[]){
+      const row=record(item),email=string(row.email).toLowerCase()
+      if(!requested.has(email)||results.has(email)||string(row.status).toLowerCase()!=='done')continue
+      const result=parseLeadsAngelResult(email,row.result);results.set(email,result);fresh.push(result)
+    }
+    if(fresh.length)onResults?.(fresh)
+  }
+  let fetched=0,first=true
   while (!signal.aborted && Date.now() < deadline) {
     const status = string(state.status).toLowerCase()
     if (status === 'completed' || status === 'failed' || status === 'cancelled') break
     onProgress?.(`LeadsAngel job: ${string(state.status) || 'running'} · ${Number(state.succeeded ?? 0)} of ${unique.length} checked…`)
-    await pause(signal, 1200)
+    const succeeded=Number(state.succeeded??0)
+    if(onResults&&succeeded>fetched){await readResults();fetched=succeeded}
+    if(!first)await pause(signal,1200)
+    first=false
     state = await post('status', credentials, { job_id: jobId }, signal)
   }
   if (signal.aborted) throw signal.reason ?? new DOMException('Cancelled', 'AbortError')
-  if (Date.now() >= deadline) throw new EmailVerificationError('LeadsAngel job is still processing. Try again later.', true)
-  const payload = await post('results', credentials, { job_id: jobId }, signal)
-  const items = Array.isArray(payload.items) ? payload.items : []
-  const requested = new Set(unique)
-  const results: EmailValidityResult[] = []
-  for (const item of items) {
-    const row = record(item)
-    const email = string(row.email).toLowerCase()
-    if (!requested.has(email)) continue
-    if (string(row.status).toLowerCase() !== 'done') continue
-    results.push(parseLeadsAngelResult(email, row.result))
+  if (Date.now() >= deadline) {
+    if(results.size)return [...results.values()]
+    throw new EmailVerificationError('LeadsAngel job is still processing. Try again later.', true)
   }
-  if (!results.length && string(state.status).toLowerCase() === 'failed') {
+  await readResults()
+  if (!results.size && string(state.status).toLowerCase() === 'failed') {
     throw new EmailVerificationError(string(state.error) || 'LeadsAngel could not complete this job.', true)
   }
-  return results
+  return [...results.values()]
 }

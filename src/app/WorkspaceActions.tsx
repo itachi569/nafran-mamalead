@@ -1,5 +1,6 @@
 import type { AppValues } from './useAppValues'
 import type { CSSProperties } from 'react'
+import './workspace-actions.css'
 
 const button: CSSProperties = { border: 0, borderRadius: 999, padding: '12px 20px', background: '#1c1c1c', color: '#fff', cursor: 'pointer', font: 'inherit' }
 const light: CSSProperties = { ...button, background: '#e7ebdf', color: '#1c1c1c' }
@@ -57,8 +58,8 @@ export function WebsiteFilter({V}:{V:AppValues}) {
 
 export function MapsResults({V}:{V:AppValues}) {
   return <div data-maps-results-table="1">
+    {V.selectedMapsSearch && <div className="maps-active-search"><div><strong>{V.selectedMapsSearch.title}</strong><small>{V.running?'Current scan':V.mapsRunId==='latest'?'Latest saved search':'Saved search'} · {V.selectedMapsSearch.date}</small></div>{!V.running&&V.mapsRunId!=='latest'&&<button type="button" disabled={V.running} onClick={()=>V.selectMapsRun('latest')}>Back to latest search</button>}</div>}
     <div style={{display:'flex',flexWrap:'wrap',gap:12,alignItems:'end',margin:'18px 0'}}>
-      <label style={{display:'grid',gap:6,fontSize:13}}>Search / Run history<select disabled={V.running} aria-label="Search / Run history" style={field} value={V.mapsRunId} onChange={e=>void V.selectMapsRun(e.target.value)}><option value="latest">Latest search</option>{V.mapsRunOptions.map(run=><option key={run.id} value={run.id}>{run.label}</option>)}</select></label>
       <WebsiteFilter V={V}/>
       <select style={field} aria-label="Send selected leads to" value="" disabled={!V.mapsSelected.length} onChange={e=>V.sendMapsTo(e.target.value)}><option value="">Send {V.mapsSelected.length || ''} selected leads to…</option><option value="social">Social Profiles</option><option value="email">Email Finder</option><option value="phone">Phone Finder</option><option value="dm">Decision Makers</option></select>
       {V.running && <button style={light} onClick={V.restoreRun}>Show scanning progress</button>}
@@ -67,29 +68,16 @@ export function MapsResults({V}:{V:AppValues}) {
   </div>
 }
 
-export function ImportSources({V}:{V:AppValues}) {
-  return <div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:18}}><label style={light}>Import CSV<input aria-label="Import website CSV" type="file" accept=".csv,text/csv" style={{display:'block',maxWidth:230,marginTop:8}} onChange={e=>{const file=e.target.files?.[0];if(file)void V.importCsvFile(file)}}/></label><label style={{display:'grid',gap:6,fontSize:13}}>Use a Google Maps run<select style={field} aria-label="Import from Maps run" defaultValue="" onChange={e=>void V.importSavedRun(e.target.value)}><option value="">Choose a saved run…</option>{V.mapsRunOptions.map(run=><option key={run.id} value={run.id}>{run.label}</option>)}</select></label></div>
-}
-
 export function DecisionResults({V}:{V:AppValues}) {
-  const small: CSSProperties={display:'block',fontSize:11,color:'#66765a',margin:'8px 0 4px'}
-  return <div style={{overflowX:'auto',marginTop:18}}>
-    <p role="status">{V.fDm.scanning ? 'Reading websites → following team/contact pages → collecting published people and contact details…' : 'Scan complete. Direct contacts and website contacts are labelled separately. Missing details stay blank.'}</p>
-    <table style={{width:'100%',minWidth:1250,borderCollapse:'collapse',textAlign:'left',fontSize:13}}>
-      <thead><tr>{['Person / Role','Business','Email addresses','Phone numbers','Business address','Published social links','Source'].map(label=><th key={label} style={{padding:12,borderBottom:'1px solid #d8ded2',fontWeight:500}}>{label}</th>)}</tr></thead>
+  return <div style={{overflowX:'auto',marginTop:18}} data-owner-results="1">
+    <p role="status" style={{fontSize:13,lineHeight:1.6,color:'#5A5F5C'}}>{V.fDm.scanning ? 'Finding the business owner and checking published email evidence…' : 'Only owner/founder contacts are shown. Company inboxes are excluded. Only sourced email addresses are included.'}</p>
+    <table style={{width:'100%',minWidth:640,borderCollapse:'collapse',textAlign:'left',fontSize:13}}>
+      <thead><tr>{['Owner','Business','Owner email','Source'].map(label=><th key={label} style={{padding:12,borderBottom:'1px solid #d8ded2',fontWeight:500}}>{label}</th>)}</tr></thead>
       {V.fDm.rows.map(site=><tbody key={site.leadId} data-scanrow={site.pill}>
         {V.dmRows.filter(person=>person.leadId===site.leadId).map(person=><tr data-person="1" key={person.id}>
-          {[
-            <><strong>{person.name}</strong><br/>{person.title}</>,
-            <><strong>{person.lead}</strong><br/>{person.domain}</>,
-            <>{person.email && <><span style={small}>Direct</span><a href={`mailto:${person.email}`}>{person.email}</a></>}{person.businessEmails.length>0 && <><span style={small}>Website contacts</span>{person.businessEmails.map(email=><a key={email} style={{display:'block',marginBottom:5}} href={`mailto:${email}`}>{email}</a>)}</>}{!person.email && !person.businessEmails.length && 'Not published'}</>,
-            <>{person.phone && <><span style={small}>Direct</span><a href={`tel:${person.phone}`}>{person.phone}</a></>}{person.businessPhones.length>0 && <><span style={small}>Website contacts</span>{person.businessPhones.map(phone=><a key={phone} style={{display:'block',marginBottom:5}} href={`tel:${phone}`}>{phone}</a>)}</>}{!person.phone && !person.businessPhones.length && 'Not published'}</>,
-            person.address || 'Not published',
-            person.socialLinks.length ? person.socialLinks.map(url=><a key={url} href={url} target="_blank" rel="noreferrer" style={{display:'block',marginBottom:8}}>{url.replace(/^https?:\/\/(?:www\.)?/i,'')}</a>) : 'Not published',
-            /^https?:/.test(person.source)?<a href={person.source} target="_blank" rel="noreferrer">View source ↗</a>:person.source,
-          ].map((cell,index)=><td key={index} style={{padding:12,borderBottom:'1px solid #e2e5de',maxWidth:240,overflowWrap:'anywhere',verticalAlign:'top',whiteSpace:index===4?'pre-line':undefined}}>{cell}</td>)}
+          {[<strong>{person.name}</strong>,<><strong>{person.lead}</strong><br/>{person.domain}</>,person.email?<a href={`mailto:${person.email}`}>{person.email}</a>:<span style={{color:'#5A5F5C'}}>Owner email not found</span>,/^https?:/.test(person.source)?<a href={person.source} target="_blank" rel="noreferrer">View published source ↗</a>:'Source unavailable'].map((cell,index)=><td key={index} style={{padding:14,borderBottom:'1px solid #e2e5de',maxWidth:260,overflowWrap:'anywhere',verticalAlign:'top'}}>{cell}</td>)}
         </tr>)}
-        {!V.dmRows.some(person=>person.leadId===site.leadId) && <tr><td colSpan={7} style={{padding:12}}>{site.domain} · {site.scanning?'Reading website…':'No named contact published'}</td></tr>}
+        {!V.dmRows.some(person=>person.leadId===site.leadId) && <tr><td colSpan={4} style={{padding:14,color:'#5A5F5C'}}>{site.domain==='No website' ? site.searchText || site.domain : site.domain} · {site.scanning?'Checking published owner details…':V.fDm.scanOn && site.pill==='pending'?(V.fDm.scanning?'Waiting to scan':'Not scanned'):'Owner not identified from published pages'}</td></tr>}
       </tbody>)}
     </table>
     {V.dmMoreContactsOn && <button style={{...light,marginTop:12}} onClick={V.showAllDmContacts}>{V.dmShowAllLabel}</button>}

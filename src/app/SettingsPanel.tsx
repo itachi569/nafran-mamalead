@@ -241,7 +241,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     ['pay', 'Payment', V.goTabPay],
     ['inv', 'Invoices', V.goTabInv],
     ['acct', 'Account', V.goTabAcct],
-    ['team', 'Members', V.goTabTeam],
   ] as const
   const lookups = [
     ['Email lookups', V.usedEmailLookups, V.meterEmail],
@@ -373,11 +372,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
           <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>App updates</h2><p style={muted}>{V.updateMessage}</p>{V.updateVersion && <p style={muted}>Version {V.updateVersion}</p>}<button type="button" onClick={V.runUpdateAction} disabled={V.updateActionDisabled === '1'} style={button}>{V.updateActionLabel}</button></section>
           <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Your data</h2><p style={muted}>Export your saved leads and lists from this device.</p><button type="button" onClick={V.openExpAll} style={button}>Export everything</button></section>
         </>}
-        {V.tabTeam && <section data-card="1" style={card}>
-          <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Local members</h2>
-          <p style={muted}>These records are stored in this workspace. Invitations and remote access are not available in this local app.</p>
-          <div data-workspace-members="1"><strong>{V.workspaceMembers.length} recorded members</strong><ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0' }}>{V.workspaceMembers.map((member) => <li key={member.user_id} style={row}><span>{member.user_id === 'local' ? 'Local owner' : member.user_id}</span><span style={{ marginLeft: 'auto' }}>{member.role}</span></li>)}</ul></div>
-        </section>}
       </div>
     </div>
   </div>

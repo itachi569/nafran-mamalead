@@ -7,6 +7,13 @@
 //   2. Nothing else changes: labels, counts, copy and behaviour follow the reference so the
 //      interface stays identical.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNotifications } from './useNotifications'
+import { defaultNotificationAction } from './notification-model'
+export type { AppNotification } from './notification-model'
+import { useWebsiteLookup } from './useWebsiteLookup'
+import { importPreview, isProfileLine, pastedLines, websiteListFromCsv } from './website-import'
+import { isBusinessOwner, ownerEmail } from '../../electron/enrichment/owner-contact'
+import { usesRomanUrdu } from '../../electron/assist-language'
 import type {
   CandidateRow,
   DashboardTotals,
@@ -40,6 +47,7 @@ import { PACE_LIMITS, paceToMs, readScraperSettings, storeScraperSettings, type 
 import { paintTheme, readStoredTheme, storeTheme } from './theme'
 import { useEmailPage } from './useEmailPage'
 import { matchesFinderSearch, useFinderScan } from './useFinderScan'
+import { isPhoneSearch, savedSearchScore, searchSavedRows } from './saved-search'
 import { SCRAPER_HEADLESS, useScraper, storedToLead } from './useScraper'
 import { useSocialPage, type SocialPage } from './useSocialPage'
 
@@ -51,53 +59,12 @@ const INITIAL_CHAT_MESSAGES: { who: string; text: string }[] = []
 /** How many leads one page of the ledger draws before its own "Load 20 more" is offered. */
 const LEDGER_PAGE = 200
 const MAX_MAP_KEYWORDS = 8
-const NOTIFICATIONS_STORAGE_KEY = 'nafran.notifications'
 const NOTIFICATIONS_ENABLED_KEY = 'nafran.notifications.enabled'
+const EMAIL_VERIFY_AFTER_SCAN_KEY = 'nafran.email.verifyAfterScan'
 const LIFETIME_CHECKOUT_PENDING_KEY = 'nafran.billing.lifetimeCheckoutUntil'
 const DECISION_CHECKOUT_PENDING_KEY = 'nafran.billing.decisionCheckoutUntil'
 const DECISION_100_ALERT_KEY = 'nafran.billing.decision100Alert'
 const DECISION_500_ALERT_KEY = 'nafran.billing.decision500Alert'
-
-export type AppNotification = {
-  runId?: string
-  id: string
-  title: string
-  body: string
-  at: string
-  level: 'info' | 'success' | 'error'
-  unread: boolean
-}
-
-function readStoredNotifications(): AppNotification[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) ?? '[]') as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((item): item is AppNotification => {
-      if (!item || typeof item !== 'object') return false
-      const value = item as Partial<AppNotification>
-      return (
-        typeof value.id === 'string' &&
-        typeof value.title === 'string' &&
-        typeof value.body === 'string' &&
-        typeof value.at === 'string' &&
-        (value.level === 'info' || value.level === 'success' || value.level === 'error') &&
-        typeof value.unread === 'boolean'
-      )
-    }).slice(0, 20)
-  } catch {
-    return []
-  }
-}
-
-function storeNotifications(items: AppNotification[]): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(items.slice(0, 20)))
-  } catch {
-    // Notifications should never make the app fail when local storage is unavailable.
-  }
-}
 
 function readNotificationsEnabled(): boolean {
   if (typeof window === 'undefined') return true
@@ -239,115 +206,6 @@ function termsOfRun(run: { keywords: string }): string {
   } catch {
     return ''
   }
-}
-
-/** The networks a pasted URL can be a profile on, matching what the profile importer files. */
-const PROFILE_HOSTS = [
-  'instagram.com',
-  'facebook.com',
-  'fb.com',
-  'linkedin.com',
-  'tiktok.com',
-  'youtube.com',
-  'youtu.be',
-  'twitter.com',
-  'x.com',
-]
-
-/**
- * Whether a pasted line is a social profile rather than a website of its own.
- *
- * One modal serves every page: its stated job is "Import websites", and the Social Profiles page
- * opens that same box. So which import a line belongs to is read from the line itself — a URL on a
- * network the app files profiles for is a profile, anything else is a site. That is what stops a
- * pasted website from landing on the profile importer and being reported as nothing to import.
- *
- * A bare `@handle` is a profile because that is the only thing it can be. A bare word is left to the
- * site importer, which is the component that decides whether a domain is usable.
- */
-function isProfileLine(line: string): boolean {
-  const trimmed = line.trim()
-  if (!trimmed || trimmed.startsWith('#')) return false
-  if (trimmed.startsWith('@')) return true
-  if (!/[/.]/.test(trimmed)) return false
-  const withScheme = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-  try {
-    const host = new URL(withScheme).hostname.replace(/^www\./i, '').toLowerCase()
-    return PROFILE_HOSTS.some((known) => host === known || host.endsWith(`.${known}`))
-  } catch {
-    return false
-  }
-}
-
-/** The lines a paste box holds: one per line, trimmed, with blanks and comments dropped. */
-function pastedLines(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-}
-
-/** Reads a small CSV/TSV export without adding a heavyweight parser to the renderer. */
-function csvRows(text: string): string[][] {
-  const delimiter = text.split(/\r?\n/, 1)[0]?.includes('\t')
-    ? '\t'
-    : text.split(/\r?\n/, 1)[0]?.includes(';')
-      ? ';'
-      : ','
-  const rows: string[][] = []
-  let row: string[] = []
-  let cell = ''
-  let quoted = false
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index]
-    const next = text[index + 1]
-    if (char === '"') {
-      if (quoted && next === '"') {
-        cell += '"'
-        index += 1
-      } else quoted = !quoted
-    } else if (char === delimiter && !quoted) {
-      row.push(cell.trim())
-      cell = ''
-    } else if ((char === '\n' || char === '\r') && !quoted) {
-      if (char === '\r' && next === '\n') index += 1
-      row.push(cell.trim())
-      if (row.some(Boolean)) rows.push(row)
-      row = []
-      cell = ''
-    } else cell += char
-  }
-  row.push(cell.trim())
-  if (row.some(Boolean)) rows.push(row)
-  return rows
-}
-
-function looksLikeWebsite(value: string): boolean {
-  const candidate = value.trim().replace(/^['"]|['"]$/g, '')
-  return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/:?#].*)?$/i.test(candidate)
-}
-
-/** Picks a website/domain column from CSV exports, falling back to the first domain-like column. */
-function websiteLinesFromCsv(text: string): string[] {
-  const rows = csvRows(text)
-  if (!rows.length) return []
-  const headerIndex = rows[0].findIndex((value) => /website|domain|url|site/i.test(value))
-  const dataStart = headerIndex >= 0 ? 1 : 0
-  let column = headerIndex >= 0 ? headerIndex : 0
-  if (headerIndex < 0) {
-    let best = 0
-    let bestScore = 0
-    const width = Math.max(...rows.map((row) => row.length))
-    for (let candidate = 0; candidate < width; candidate += 1) {
-      const score = rows.slice(dataStart).filter((row) => looksLikeWebsite(row[candidate] ?? '')).length
-      if (score > bestScore) {
-        best = candidate
-        bestScore = score
-      }
-    }
-    column = best
-  }
-  return [...new Set(rows.slice(dataStart).map((row) => (row[column] ?? '').trim()).filter(looksLikeWebsite))]
 }
 
 /** Explain the saved account while keeping the guest option available before every run. */
@@ -556,6 +414,12 @@ export function useAppValues() {
   const [swWebsite, setSwWebsite] = useState(false)
   const [mapsWebsite, setMapsWebsite] = useState('any')
   const [mapsRunId, setMapsRunId] = useState('latest')
+  const [savedMapsOpen, setSavedMapsOpen] = useState(false)
+  const [savedMapsLoading, setSavedMapsLoading] = useState(false)
+  const [savedMapsError, setSavedMapsError] = useState('')
+  const [savedMapsExporting, setSavedMapsExporting] = useState('')
+  const savedMapsExportRequest = useRef(0)
+  const [mapsResultsLoading, setMapsResultsLoading] = useState(false)
   const [mapsLatestLeads, setMapsLatestLeads] = useState<Lead[]>([])
   const [mapsHistoryLeads, setMapsHistoryLeads] = useState<Lead[] | null>(null)
   const [mapsSelected, setMapsSelected] = useState<string[]>([])
@@ -591,21 +455,16 @@ export function useAppValues() {
   const [licenseNextStep, setLicenseNextStep] = useState('')
   const [swWarn, setSwWarn] = useState(readNotificationsEnabled)
   const [impOpen, setImpOpen] = useState(false)
-  const [impCount, setImpCount] = useState(3)
   const [impValue, setImpValue] = useState('')
+  const [decisionImportSelection,setDecisionImportSelection] = useState<{label:string;leads:Pick<StoredLead,'id'|'name'|'website'>[]}|null>(null)
   // The shared paste box: what is in it, and how many lines that is. The modal's button appears
   // only once there is something to import.
   const impText = useRef('')
-  const [impLines, setImpLines] = useState(0)
-  /**
-   * What the open paste box holds, split by what each line is.
-   *
-   * The modal's job is websites and the Social Profiles page opens the same box, so how many lines
-   * are sites and how many are profiles is what decides the button's words and what it does. Both
-   * counts are kept rather than one total, because a paste can hold either or both.
-   */
-  const [impSites, setImpSites] = useState(0)
-  const [impProfiles, setImpProfiles] = useState(0)
+  // Derive counts from the visible text, so closing/clearing never leaves an old scan count.
+  const impPreview = useMemo(()=>importPreview(impValue),[impValue])
+  const impSites = impPreview.sites.length
+  const impProfiles = impPreview.profiles.length
+  const impCount = impSites + impProfiles
   /** Whether the open import modal is the Social Profiles one, which files profile URLs. */
   const socialImportOpen = social.importOpen
   const [expOpen, setExpOpen] = useState(false)
@@ -635,6 +494,9 @@ export function useAppValues() {
   const [deepKeyFromEnvironment, setDeepKeyFromEnvironment] = useState(false)
   const [leadsAngelConfigured, setLeadsAngelConfigured] = useState(false)
   const [leadsAngelExpiresOn, setLeadsAngelExpiresOn] = useState<string | null>(null)
+  const emailValidityScope=useRef<string[]>([])
+  const [emailAutoVerifyOn,setEmailAutoVerifyOn]=useState(()=>{try{return window.localStorage.getItem(EMAIL_VERIFY_AFTER_SCAN_KEY)==='1'}catch{return false}})
+  const toggleEmailAutoVerify=()=>setEmailAutoVerifyOn(current=>{const next=!current;try{window.localStorage.setItem(EMAIL_VERIFY_AFTER_SCAN_KEY,next?'1':'0')}catch{/* Keep the choice for this session. */}return next})
   /** Number of captured Maps leads the user wants to send through the owner/email pass. */
   const [deepLeadLimit, setDeepLeadLimit] = useState(10)
   const [runFilter, setRunFilter] = useState(0)
@@ -645,7 +507,8 @@ export function useAppValues() {
   const [mailOpen, setMailOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [notifications, setNotifications] = useState<AppNotification[]>(readStoredNotifications)
+  const notificationCenter=useNotifications(swWarn)
+  const {notifications,notify,markRead:markNotificationRead,markAllRead:markNotificationsRead,remove:deleteNotification}=notificationCenter
   const [decisionCheckoutUntil, setDecisionCheckoutUntil] = useState(readPendingDecisionCheckout)
   const [decisionPrompt, setDecisionPrompt] = useState('')
   const [decisionAllowance, setDecisionAllowance] = useState<{ used: number; remaining: number; limit: number; renewsAt: string | null; status: string } | null>(null)
@@ -716,27 +579,25 @@ export function useAppValues() {
     toastTimer.current = window.setTimeout(() => setToast(''), 2800)
   }, [])
 
-  /** Adds to the bell history and, when enabled, asks Electron for an OS-level alert. */
-  const notify = useCallback(
-    (title: string, body: string, level: AppNotification['level'] = 'info', runId?: string) => {
-      const item: AppNotification = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title,
-        body,
-        at: new Date().toISOString(),
-        level,
-        unread: true,
-        runId,
-      }
-      setNotifications((current) => {
-        const next = [item, ...current].slice(0, 20)
-        storeNotifications(next)
-        return next
-      })
-      if (swWarn) void window.desktop?.notifications?.show(title, body).catch(() => undefined)
-    },
-    [swWarn],
-  )
+  useEffect(()=>{
+    const bridge=window.desktop?.notifications
+    if(!bridge)return
+    const offSaved=bridge.onExportSaved(result=>notify('Export saved',result.fileName+' · '+result.rows.toLocaleString()+' rows · '+Math.max(1,Math.ceil(result.bytes/1024))+' KB','success',undefined,{kind:'export',chips:[result.fileName.split('.').pop()?.toUpperCase() || 'File',result.rows.toLocaleString()+' rows'],action:{type:'reveal-export',path:result.path},actionLabel:'Show in folder',eventKey:'export:'+result.eventId}))
+    const offFailed=bridge.onExportFailed(result=>notify('Export could not be saved',result.message,'error',undefined,{kind:'warn',eventKey:'export-failed:'+result.eventId}))
+    return()=>{offSaved();offFailed()}
+  },[notify])
+
+  const previousAccess=useRef<{active:boolean;seen:boolean}>({active:false,seen:false})
+  useEffect(()=>{
+    if(!featureBilling?.connected)return
+    const active=Boolean(featureBilling.coreLicenseActive || (featureBilling.license?.active && featureBilling.license.kind!=='decision'))
+    const previous=previousAccess.current
+    if(previous.seen && previous.active!==active) {
+      const trial=featureBilling.license?.kind==='trial'
+      notify(active?(trial?'1-day trial activated':'Lifetime license activated'):'MamaLead access needs attention',active?'Your '+(trial?'1-day trial':'Lifetime access')+' is active on this device.':'Your trial or Lifetime access is not active. Open Settings & Billing to review your access.',active?'success':'info',undefined,{kind:active?'billing':'warn',action:{type:'view',view:'settings',tab:active?'acct':'plan'},actionLabel:'Open Settings & Billing',eventKey:'core-access:'+active+':'+(featureBilling.license?.activatedAt || featureBilling.license?.expiresAt || 'current')})
+    }
+    previousAccess.current={active,seen:true}
+  },[featureBilling,notify])
 
   const updateDecisionAllowance = useCallback((allowance: { monthlyUsed: number; monthlyRemaining: number; monthlyLimit: number; renewsAt: string | null; periodId?: string | null; status: string } | null) => {
     if (!allowance) { setDecisionAllowance(null); return }
@@ -781,30 +642,6 @@ export function useAppValues() {
       window.removeEventListener('nafran:billing-updated', refresh)
     }
   }, [updateDecisionAllowance])
-
-  const markNotificationsRead = useCallback(() => {
-    setNotifications((current) => {
-      const next = current.map((item) => (item.unread ? { ...item, unread: false } : item))
-      storeNotifications(next)
-      return next
-    })
-  }, [])
-
-  const markNotificationRead = useCallback((id: string) => {
-    setNotifications((current) => {
-      const next = current.map((item) => (item.id === id ? { ...item, unread: false } : item))
-      storeNotifications(next)
-      return next
-    })
-  }, [])
-
-  const deleteNotification = useCallback((id: string) => {
-    setNotifications((current) => {
-      const next = current.filter((item) => item.id !== id)
-      storeNotifications(next)
-      return next
-    })
-  }, [])
 
   useEffect(() => {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.updates
@@ -852,16 +689,17 @@ export function useAppValues() {
     previousScrapeRunning.current = snapshot.running
     if (!wasRunning || snapshot.running) return
     if (snapshot.error) {
-      notify('Maps scrape failed', snapshot.error, 'error')
+      notify('Maps scrape failed',snapshot.error,'error',undefined,{kind:'warn',action:{type:'view',view:'maps',focus:'search'},actionLabel:'Edit search',eventKey:'maps:'+(snapshot.runId || snapshot.activityAt)+':failed'})
       return
     }
     notify(
       'Maps scrape complete',
       `${snapshot.found} lead${snapshot.found === 1 ? '' : 's'} captured. Open Maps or Leads to review the results.`,
-      'success',
+      snapshot.found?'success':'info',
       snapshot.runId,
+      {kind:snapshot.found?'scrape':'warn',chips:[snapshot.found.toLocaleString()+' leads',...(snapshot.request?.location?[snapshot.request.location]:[])],action:{type:'view',view:'maps',runId:snapshot.found?snapshot.runId:undefined,focus:snapshot.found?'results':'search'},actionLabel:snapshot.found?'Review leads':'Edit search',eventKey:'maps:'+snapshot.runId+':done'},
     )
-  }, [notify, snapshot.error, snapshot.found, snapshot.running, snapshot.runId])
+  }, [notify, snapshot.error, snapshot.found, snapshot.running, snapshot.runId, snapshot.request, snapshot.activityAt])
 
   // A worker can fail one job while the rest of the queue continues. Surface that detail without
   // waiting for the final idle notification.
@@ -870,8 +708,11 @@ export function useAppValues() {
     if (!bridge?.onProgress) return
     return bridge.onProgress((progress) => {
       setEnrichmentActivity((current) => [progress, ...current.filter((item) => item.jobId !== progress.jobId)].slice(0, 8))
-      if (progress.status !== 'failed') return
-      notify(`${progress.kind} lookup failed`, progress.message || 'The lookup could not be completed.', 'error')
+      if(progress.status!=='failed' && progress.status!=='done')return
+      if(progress.kind==='website' && progress.status==='done')return
+      const view=progress.kind==='decision-maker' || progress.kind==='deep'?'dm':progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
+      const label=view==='dm'?'Owner email scan':view==='email'?'Email scan':view==='phone'?'Phone scan':view==='social'?'Social profile scan':'Website scan'
+      notify(label+(progress.status==='failed'?' failed':' finished'),progress.message || 'Review the scan results in the app.',progress.status==='failed'?'error':'success',undefined,{kind:progress.status==='failed'?'warn':'import',chips:[progress.processed+(view==='dm'?' leads':' sites'),progress.found+' details found'],action:{type:'view',view},actionLabel:'Open '+(view==='dm'?'Decision Makers':view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:'enrichment:'+(progress.jobId || progress.at)+':'+progress.status})
     })
   }, [notify])
 
@@ -889,10 +730,13 @@ export function useAppValues() {
     try {
       // Quota answers come directly from the billing server. A language model must never guess a
       // paid allowance or repeat an old local counter when another device has used searches.
-      if (/\b(decision\s*makers?|dm\s*searches?)\b/i.test(trimmed) && /\b(kitn\w*|baqi|baki|reh\w*|bach\w*|remaining|left|used|usage|quota|limit)\b/i.test(trimmed)) {
+      const romanUrduQuota=usesRomanUrdu(trimmed)
+      const englishQuotaWords=new Set('how many much decision makers maker dm search searches are is do i we my our have remain remaining left used usage quota limit the this month period please can tell me what s of for now still total and'.split(' '))
+      const englishQuota=/^[\x00-\x7f]*$/.test(trimmed)&&trimmed.toLowerCase().split(/[^a-z]+/).filter(Boolean).every(word=>englishQuotaWords.has(word))
+      if ((romanUrduQuota||englishQuota) && /\b(decision\s*makers?|dm\s*searches?)\b/i.test(trimmed) && /\b(kitn\w*|baqi|baki|reh\w*|bach\w*|remaining|left|used|usage|quota|limit)\b/i.test(trimmed)) {
         const status = await window.desktop?.billing?.status()
         const quota = status?.connected ? status.decisionMaker : null
-        const romanUrdu = /\b(kitn\w*|baqi|baki|reh\w*|bach\w*|mera|mere|hain)\b/i.test(trimmed)
+        const romanUrdu = romanUrduQuota
         const response = !quota
           ? romanUrdu ? 'Abhi billing server se Decision Maker allowance verify nahi ho rahi. Connection check karke dobara poochhein.' : 'I cannot verify your Decision Maker allowance right now. Check the billing connection and try again.'
           : quota.monthlyRemaining > 0
@@ -942,6 +786,30 @@ export function useAppValues() {
     setView(next)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
+
+  const openNotification=useCallback(async (id:string):Promise<string|null>=>{
+    const item=notificationCenter.find(id)
+    if(!item){setNotificationsOpen(true);return null}
+    const action=defaultNotificationAction(item)
+    try {
+      if(action?.type==='reveal-export') {
+        if(!window.desktop?.notifications)throw new Error('Open the desktop app to locate this export.')
+        await window.desktop.notifications.revealExport(action.path)
+      } else if(action?.type==='view') {
+        go(action.view)
+        if(action.view==='settings')setStab(action.tab || 'plan')
+        if(action.view==='maps') {
+          if(action.runId && snapshot.running)setSavedMapsOpen(true)
+          else if(action.runId && action.runId!==mapsRunId){setMapsRunId(action.runId);setMapsHistoryLeads([]);setMapsResultsLoading(true)}
+          setMapsSelected([]);setMapsQuery('');setMapsWebsite('any')
+          window.setTimeout(()=>{if(action.focus==='search')document.querySelector<HTMLInputElement>('[data-location]')?.focus();else document.querySelector('[data-results]')?.scrollIntoView({behavior:'smooth',block:'start'})},100)
+        }
+      }
+      markNotificationRead(id);setNotificationsOpen(false);return null
+    } catch(error) {return error instanceof Error?error.message:'This notification could not be opened.'}
+  },[notificationCenter.find,markNotificationRead,go,mapsRunId,snapshot.running])
+
+  useEffect(()=>window.desktop?.notifications.onOpen(id=>{void openNotification(id).then(message=>{if(message){setNotificationsOpen(true);flash(message)}})}),[openNotification,flash])
 
   const startLifetimeCheckoutWatch = useCallback(() => {
     const until = Date.now() + 60 * 60 * 1000
@@ -1113,7 +981,7 @@ export function useAppValues() {
     const onPointer = (event: PointerEvent) => {
       const target = event.target instanceof Element ? event.target : null
       if (!target?.closest('[data-global-search-root="1"]')) setGlobalOpen(false)
-      if (!target?.closest('[data-notifications-button="1"], [data-notifications-panel="1"]')) setNotificationsOpen(false)
+      if (!target?.closest('[data-notifications-button="1"], [data-notifications-panel="1"], [data-notifications-toast]')) setNotificationsOpen(false)
       if (!target?.closest('[data-assist="1"], [data-chat-panel="1"]')) setChatOpen(false)
     }
     window.addEventListener('keydown', onKey)
@@ -1220,7 +1088,7 @@ export function useAppValues() {
     if (typeof useGoogle !== 'boolean') { setMapsPrompt('google'); return }
     setMapsPrompt(null)
     setRunMinimized(false)
-    setMapsRunId('latest'); setMapsHistoryLeads(null); setMapsSelected([])
+    setMapsRunId('latest'); setMapsHistoryLeads(null); setMapsSelected([]); setMapsQuery(''); setMapsLimit(25)
     // The location field is tagged by the generator. Selecting by position was wrong: the
     // keyword input sits above it, so the run searched whatever the keyword box held.
     const locationField = document.querySelector<HTMLInputElement>('[data-location="1"]')
@@ -1490,6 +1358,9 @@ export function useAppValues() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setImpOpen(false)
+      setImpValue('')
+      impText.current = ''
+      setDecisionImportSelection(null)
       closeBulkKeywords()
       setExpOpen(false)
       setProfileExportOpen(false)
@@ -1576,6 +1447,7 @@ export function useAppValues() {
     void window.desktop?.getInfo().then((info) => setAppVersion(`v${info.version}`)).catch(() => undefined)
   }, [])
   const [runs, setRuns] = useState<StoredRun[]>([])
+  const runsRequest = useRef(0)
   const [runStats, setRunStats] = useState({ runs: 0, clean: 0, places: 0, medianMs: 0 })
   const [dashboard, setDashboard] = useState<DashboardTotals | null>(null)
   const [rangeDashboard, setRangeDashboard] = useState<{ range: typeof range; totals: DashboardTotals } | null>(null)
@@ -1622,7 +1494,8 @@ export function useAppValues() {
   const refreshPhone = useCallback(async () => {
     if (!db) return
     try {
-      const [rows, summary] = await Promise.all([db.phones.ledger({ limit: 200 }), db.phones.summary()])
+      const [rows, summary] = await Promise.all([db.phones.ledger({ limit: 500 }), db.phones.summary()])
+      while(rows.length<summary.total){const page=await db.phones.ledger({limit:500,offset:rows.length});if(!page.length)break;rows.push(...page)}
       setPhone({ rows, summary })
     } catch {
       // Leaving the last good value on screen beats clearing the page on a read failure.
@@ -1632,6 +1505,7 @@ export function useAppValues() {
   const refreshLists = useCallback(async () => {
     if (!db) return
     const request = ++rangeRequest.current
+    const historyRequest = ++runsRequest.current
     try {
       const [stored, history, counts, totals, periodTotals] = await Promise.all([
         db.stats(),
@@ -1643,8 +1517,7 @@ export function useAppValues() {
       setLists(await db.lists.list())
       setStoredLeadCount(stored.total)
       setLeadStats(stored)
-      setRuns(history)
-      setRunStats(counts)
+      if (historyRequest === runsRequest.current) {setRuns(history);setRunStats(counts)}
       setDashboard(totals)
       if (request === rangeRequest.current) setRangeDashboard(periodTotals ? { range, totals: periodTotals } : null)
       // The Phone Finder and Decision Makers pages read their own tables.
@@ -1700,15 +1573,17 @@ export function useAppValues() {
     }
   }, [db, refreshPhone, range])
 
+  const websiteLookup = useWebsiteLookup(db, () => { if (!featureAccessAllowed()) { showAccessPrompt(); return false }; return true }, session => { void refreshLists(); email.refresh(); social.refresh(); reload(); if(emailAutoVerifyOn && session.fields.email && session.status==='done')void verifyEmailValidity(session.rows.filter(row=>row.emails.length>0).map(row=>row.leadId)); const failed=session.rows.filter(row=>row.status==='failed').length; notify(failed?'Website lookup needs attention':'Website lookup finished',session.rows.length+' websites scanned'+(failed?' · '+failed+' need a retry':'. Review the published business contacts.'),failed?'info':'success',undefined,{kind:failed?'warn':'import',chips:[session.rows.length+' sites',session.rows.filter(row=>row.emails.length || row.phones.length || row.socials.length || row.address).length+' with details'],action:{type:'view',view:'website'},actionLabel:'Open Website Lookup',eventKey:'enrichment:'+session.jobId+':'+session.status}) })
+
   const refreshReports = useCallback(async () => {
+    const historyRequest=++runsRequest.current
     setReportsLoading(true)
     setReportsError('')
     try {
       if (!db) throw new Error('Open the desktop app to view your saved reports.')
       const [totals, counts, history] = await Promise.all([db.dashboard(), db.runs.counts(), db.runs.list(5000)])
       setDashboard(totals)
-      setRunStats(counts)
-      setRuns(history)
+      if (historyRequest === runsRequest.current) {setRunStats(counts);setRuns(history)}
     } catch {
       setReportsError('Could not load your saved report. Try refreshing it.')
     } finally {
@@ -1882,15 +1757,16 @@ export function useAppValues() {
   )
 
   /** Checks the email addresses currently represented on the Email Finder page. */
-  const verifyEmailValidity = useCallback(async () => {
-    if (!email.coverage.extracted) {
+  const verifyEmailValidity = useCallback(async (leadIds?:string[]) => {
+    const scope=leadIds ?? emailValidityScope.current
+    if (!scope.length) {
       flash('No email addresses are available to verify yet.')
       return
     }
     try {
-      // No lead filter: each click takes the next unchecked batch from the whole local database,
-      // rather than repeatedly checking only the first 50 leads rendered by this page.
-      const result = await email.verifyValidity()
+      // Check the import/search currently on screen. Show all leads explicitly includes the
+      // complete saved list, while inspecting one business does not start hundreds of checks.
+      const result = await email.verifyValidity(scope)
       if (result.cancelled) {
         flash(`Email validity stopped after ${result.checked} checks. Remaining addresses are ready for the next pass.`)
         return
@@ -1918,7 +1794,7 @@ export function useAppValues() {
 
   const recheckUnknownEmailValidity = useCallback(async () => {
     try {
-      const result = await email.recheckUnknownValidity()
+      const result = await email.recheckUnknownValidity(emailValidityScope.current)
       if (result.cancelled) {
         flash(`LeadsAngel recheck stopped after ${result.checked} emails.`)
       } else {
@@ -1984,13 +1860,10 @@ export function useAppValues() {
       return
     }
     const value = lines.join('\n')
+    setDecisionImportSelection(null)
     impText.current = value
     setImpValue(value)
-    setImpLines(lines.length)
-    setImpSites(lines.length)
-    setImpProfiles(0)
     setImpOpen(true)
-    flash(`${lines.length} website${lines.length === 1 ? '' : 's'} loaded from ${source}. Review and scan.`)
   }, [flash])
 
   const pasteWebsiteClipboard = useCallback(async () => {
@@ -2002,17 +1875,18 @@ export function useAppValues() {
     }
   }, [fillWebsiteImport, flash])
 
+  const chooseWebsiteCsv = useCallback(async () => {
+    if (!window.desktop?.chooseWebsiteCsv) throw new Error('Open MamaLead desktop to browse files on your computer.')
+    return window.desktop.chooseWebsiteCsv()
+  }, [])
   const uploadWebsiteCsv = useCallback(() => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.csv,.tsv,text/csv,text/tab-separated-values'
-    input.addEventListener('change', () => {
-      const file = input.files?.[0]
-      if (!file) return
-      void file.text().then((text) => fillWebsiteImport(websiteLinesFromCsv(text), 'CSV')).catch(() => flash('The CSV could not be read.'))
-    }, { once: true })
-    input.click()
-  }, [fillWebsiteImport, flash])
+    void (async () => {
+      try {
+        const file = await chooseWebsiteCsv()
+        if (file) fillWebsiteImport(pastedLines(websiteListFromCsv(file.content).text), 'CSV')
+      } catch (error) { flash(error instanceof Error ? error.message : 'The file could not be read.') }
+    })()
+  }, [chooseWebsiteCsv, fillWebsiteImport, flash])
 
   /**
    * Scans a paste of websites: each site becomes a lead, then the app reads each one and files the
@@ -2030,7 +1904,7 @@ export function useAppValues() {
       setScan({ phase: 'scanning', jobId: '', urls: sites, leadIds: [], scannedIds: [], activeName: '', found: 0, added: 0 })
       void (async () => {
         try {
-          const result = await db.imports.websites(sites)
+          const result = await db.imports.websites(sites,{enqueue:false})
           if (scanToken.current !== token) return
           if (!result.leadIds.length) {
             // Keep the modal open so a rejected paste can be corrected immediately instead of
@@ -2053,8 +1927,7 @@ export function useAppValues() {
             return
           }
           setScan((current) => ({ ...current, jobId: queued.jobId }))
-          // Both the website import and this foreground social job now exist. Give this scan the
-          // first turn so an older background website pass cannot hold the modal open.
+          // The import queues only this social pass. Older background work yields to it.
           void (window.desktop?.enrichment?.prioritize?.(queued.jobId) ?? window.desktop?.enrichment?.start?.())
           // Refresh the non-social summary in the background; the scan modal does not wait for
           // dashboard/list totals before the foreground social lookup can begin.
@@ -2153,6 +2026,7 @@ export function useAppValues() {
         .importProfiles(flash, lines)
         .then((result) => {
           if (scanToken.current !== token) return
+          notify('Social profile import finished',(result?.added ?? 0)+' profiles added from '+lines.length+' supplied links.','success',undefined,{kind:'import',chips:[lines.length+' links',(result?.added ?? 0)+' profiles'],action:{type:'view',view:'social'},actionLabel:'Open profiles'})
           // The import answers with the leads it landed on, in the order the URLs were given, so the
           // table can hold exactly those — the URLs just imported — and nothing else.
           setScan((current) => ({
@@ -2267,15 +2141,26 @@ export function useAppValues() {
   )
 
   useEffect(() => {
-    if(!db || snapshot.running)return
+    if (!db || snapshot.running) { setMapsResultsLoading(false); return }
     let cancelled=false
     const id=mapsRunId==='latest' ? runs[0]?.id : mapsRunId
-    if(!id){setMapsLatestLeads([]);return}
-    void db.leads.list({runId:id,limit:1600}).then(result=>{
-      if(cancelled)return
-      if(mapsRunId==='latest')setMapsLatestLeads(result.rows.map(storedToLead))
-      else setMapsHistoryLeads(result.rows.map(storedToLead))
-    }).catch(()=>{if(!cancelled)flash('Could not load this saved run. Please try again.')})
+    if (!id) { setMapsLatestLeads([]); setMapsResultsLoading(false); return }
+    setMapsResultsLoading(true)
+    void (async () => {
+      try {
+        const rows: StoredLead[]=[]
+        let total=1
+        while(rows.length<total) {
+          const page=await db.leads.list({runId:id,limit:1000,offset:rows.length})
+          if(cancelled)return
+          total=page.total;rows.push(...page.rows)
+          if(!page.rows.length)break
+        }
+        if(mapsRunId==='latest')setMapsLatestLeads(rows.map(storedToLead))
+        else setMapsHistoryLeads(rows.map(storedToLead))
+      } catch { if(!cancelled)flash('Could not load this saved search. Please try again.') }
+      finally { if(!cancelled)setMapsResultsLoading(false) }
+    })()
     return ()=>{cancelled=true}
   },[db,mapsRunId,runs,snapshot.running,snapshot.revision,flash])
   const mapsDisplayed = snapshot.running ? snapshot.leads : mapsRunId === 'latest' ? mapsLatestLeads : mapsHistoryLeads ?? []
@@ -2320,7 +2205,7 @@ export function useAppValues() {
   // change what the user is about to save.
   function openExport(kind: string, scopeIndex: number) {
     const exportKind = kind === 'runs' || kind === 'invoices' ? kind : 'leads'
-    const columns = EXP_MODES[exportKind].cols.filter(column => column[1]).map(column => column[0])
+    let columns = EXP_MODES[exportKind].cols.filter(column => column[1]).map(column => column[0])
     let count = storedLeadCount
     let title = 'Export leads'
     let description = 'all saved leads'
@@ -2339,6 +2224,7 @@ export function useAppValues() {
         title = 'Export Google Maps leads'; description = selected.size ? 'selected leads' : 'results in the current view'; stem = 'google-maps-leads'
       } else if (view === 'email') {
         leadIds = [...new Set(emailFinder.rows.map(row => row.leadId))]
+        columns=['Business name','Domain','Email','Saved date']
         title = 'Export email results'; description = 'leads in the current view'; stem = 'email-results'
       } else if (view === 'phone') {
         leadIds = [...new Set(phoneFinder.rows.map(row => row.leadId))]
@@ -2356,6 +2242,38 @@ export function useAppValues() {
       ...(leadFilterKey ? {leadFilter:leadFilterKey,search} : {}),
     } })
     setExpOpen(true)
+  }
+
+  const refreshSavedMaps = useCallback(async () => {
+    const historyRequest=++runsRequest.current
+    setSavedMapsLoading(true);setSavedMapsError('')
+    try {
+      if(!db)throw new Error('Open MamaLead desktop to view saved searches.')
+      const [history,counts]=await Promise.all([db.runs.list(5000),db.runs.counts()])
+      if(historyRequest===runsRequest.current){setRuns(history);setRunStats(counts)}
+    } catch(error) {setSavedMapsError(error instanceof Error ? error.message : 'Saved searches could not be loaded.')}
+    finally {setSavedMapsLoading(false)}
+  },[db])
+
+  async function openSavedMapsExport(id: string) {
+    if (!db || savedMapsExporting || exportBusy) return
+    const run=runs.find(item=>item.id===id)
+    if(!run)return
+    const request=++savedMapsExportRequest.current
+    setSavedMapsExporting(id);setSavedMapsError('')
+    try {
+      const {total}=await db.leads.list({runId:id,limit:1})
+      if(request!==savedMapsExportRequest.current)return
+      if(!total)throw new Error('This saved search has no leads to export.')
+      const place=run.location || 'saved search'
+      const date=new Date(run.started_at).toISOString().slice(0,10)
+      const stem=place.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60) || 'saved-search'
+      setExportSelection({title:'Export saved Google Maps search',summary:place+' · '+termsOfRun(run)+' · '+total.toLocaleString()+' saved businesses · '+shortDateTime(run.started_at),request:{
+        kind:'leads',limit:total,runId:id,delimiter:'csv',columns:['Business name','Domain','Phone','Email','Address','Rating','Review count','Socials','Source','Saved date'],fileName:'google-maps-'+stem+'-'+date,
+      }})
+      setExpOpen(true)
+    } catch(error) {if(request===savedMapsExportRequest.current)setSavedMapsError(error instanceof Error ? error.message : 'The saved search could not be exported.')}
+    finally {if(request===savedMapsExportRequest.current)setSavedMapsExporting('')}
   }
 
   const openProfileExport = useCallback(() => setProfileExportOpen(true), [])
@@ -2404,7 +2322,7 @@ export function useAppValues() {
       if (!result) return
       setExpOpen(false)
       flash(`Saved ${result.rows} row${result.rows === 1 ? '' : 's'} to ${result.path}.`)
-      notify('Export saved', result.path, 'success')
+      
     } catch (error) {
       flash(error instanceof Error ? error.message : 'The export could not be written.')
     } finally { exportLock.current = false; setExportBusy(false) }
@@ -2516,7 +2434,7 @@ export function useAppValues() {
         }
         if (enrichmentWasActive.current) {
           enrichmentWasActive.current = false
-          notify('Enrichment complete', 'The lookup queue is idle. Finder results are ready to review.', 'success')
+          
         }
         // It has stopped, so whatever it found is now on file.
         await refreshLists()
@@ -2721,18 +2639,11 @@ export function useAppValues() {
   // The line under the page title: what is running, what the last run captured, or what is on
   // file when nothing has run in this session.
   const runNote = snapshot.running
-    ? snapshot.message || `Scanning ${keywordCount} keywords near ${location} · pass 1 of ${keywordCount}.`
-    : snapshot.leads.length
-      ? (() => {
-          // A restored run may carry no keyword list, so the count falls back to what is set.
-          const used = snapshot.request?.keywords.length || keywordCount
-          const took = snapshot.durationMs ? ` · finished in ${formatDuration(snapshot.durationMs)}` : ''
-          // The count is the last run's own capture, not everything on file: the ledger holds
-          // every run this workspace has done, and the line above it describes one of them.
-          const captured = runs[0]?.found ?? snapshot.leads.length
-          return `${captured} results from ${used} keyword${used === 1 ? '' : 's'} near ${location}${took}.`
-        })()
-      : `${storedLeadCount} leads on file · run a scrape to add more.`
+    ? snapshot.message || 'Scanning Google Maps…'
+    : exportRun
+      ? (exportRun.saved ?? exportRun.found).toLocaleString()+' results · '+(termsOfRun(exportRun) || 'Google Maps search')+' near '+(exportRun.location || 'your selected location')+' · '+shortDateTime(exportRun.started_at)
+      : 'Start a scan. Your searches and their results are saved automatically on this device.'
+
 
   /**
    * Whether the run is still getting Google connected rather than scraping.
@@ -3006,10 +2917,12 @@ export function useAppValues() {
   }, [snapshot.leads])
 
   const emailFinder = useFinderScan({
+    historyScope:'email',
     rows: email.rows.map((row) => ({
       leadId: row.leadId,
       domain: row.domain === '—' ? '' : row.domain,
       searchText: row.name,
+      searchFields:[row.name,row.domain,...row.found.map(address=>address.value)],
       scanned: scannedIds.has(row.leadId),
       items: row.found.map((address) => ({ t: address.value, k: address.page })),
       validityStatuses: row.found.map((address) => address.validationStatus ?? 'unchecked'),
@@ -3031,12 +2944,13 @@ export function useAppValues() {
     mode: 'scan',
     queue: (leadIds) => queueLeads('email', leadIds),
     jobStatus: (jobId) => db?.jobs.status(jobId) ?? Promise.resolve(null),
-    refresh: () => {
-      email.refresh()
+    refresh: async () => {
+      await email.refresh()
       reload()
     },
     ringSource: (rows) => ['Homepage','Contact page','Team page','Structured data'].map(name=>({name,count:rows.filter(row=>row.items.some(item=>item.k===name)).length})),
-    actionLabel: 'Verify all',
+    actionLabel: 'Find emails',
+    onComplete: emailAutoVerifyOn ? leadIds=>{void verifyEmailValidity(leadIds)} : undefined,
     runningLabel: (queued) =>
       queued ? `Reading ${queued} site${queued === 1 ? '' : 's'} for addresses…` : 'Reading the sites on file for addresses…',
     doneLabel: (scanned) => `${scanned} site${scanned === 1 ? '' : 's'} read. Coverage below counts what each one published.`,
@@ -3046,7 +2960,7 @@ export function useAppValues() {
 
   const emailValidityFilter = emailFinder.filter
   const filteringEmailValidity = ['valid', 'invalid', 'risky', 'unknown', 'unchecked'].includes(emailValidityFilter)
-  const emailTableRows = filteringEmailValidity
+  const emailValidityRows = filteringEmailValidity
     ? emailFinder.rows.map((row) => {
       const details = row.emailDetails.filter((address) => (address.validationStatus ?? 'unchecked') === emailValidityFilter)
       if (!details.length) return row
@@ -3066,15 +2980,26 @@ export function useAppValues() {
       }
     })
     : emailFinder.rows
+  const emailTableRows=emailValidityRows.map(row=>{
+    if(!emailFinder.q.trim())return row
+    const details=row.emailDetails.filter(address=>savedSearchScore([address.value],emailFinder.q)>0)
+    if(!details.length)return row
+    return {...row,emailDetails:details,primary:details[0].value,hasExtras:details.length>1,extrasLabel:`+${Math.max(0,details.length-1)}`,statusLabel:`Found ${details.length}`}
+  })
+
+  emailValidityScope.current=Array.from(new Set(emailTableRows.map(row=>row.leadId)))
 
   const phoneFinder = useFinderScan({
+    historyScope:'phone',
     rows: phone.rows.map((row) => ({
       leadId: row.id,
       domain: hostOf(row.website),
       searchText: `${row.name} ${row.address} ${row.areaCode} ${row.phone}`,
+      searchFields:[row.name,row.website,row.address,row.phone,...row.found.map(number=>number.value)],
       hasNumber: row.hasNumber,
       scanned: Boolean(row.lastScannedAt),
-      items: row.found.map((number) => ({ t: number.value, k: pageLabelOf(number.page) })),
+      items: [...(row.hasNumber && !row.found.some(number=>number.value.replace(/\D/g,'')===row.phone.replace(/\D/g,''))?[{t:row.phone,k:'Saved number'}]:[]),...row.found.map(number=>({t:number.value,k:pageLabelOf(number.page)}))],
+      extraNumbers:row.found.filter(number=>number.value.replace(/\D/g,'')!==row.phone.replace(/\D/g,'')),
       // The phone ledger's own words for a row: the kind of line, or that there is none.
       statusLabel: row.hasNumber ? `${row.phone} · ${row.lineType === 'reception' ? 'Reception' : row.lineType === 'mobile' ? 'Mobile' : 'Direct'}` : 'No number',
       // The phone book's own columns, drawn through the finder's rows: the number, the kind of line
@@ -3083,6 +3008,7 @@ export function useAppValues() {
       index: row.index,
       name: row.name,
       phone: row.hasNumber ? row.phone : 'No number found',
+      mainSource: row.mainSource,
       areaCode: row.areaCode || '—',
       address: row.address || 'Address pending',
       lineType: row.lineType === 'reception' ? 'Reception' : row.lineType === 'direct' ? 'Direct line' : row.lineType === 'mobile' ? 'Mobile' : 'No number',
@@ -3107,29 +3033,41 @@ export function useAppValues() {
     resultSelector: '[data-flistcard="phone"]',
   })
 
+  const phoneTableRows=phoneFinder.rows.map(row=>{
+    if(!isPhoneSearch(phoneFinder.q))return row
+    const matched=searchSavedRows(row.items,phoneFinder.q,item=>[item.t])
+    if(!matched.length)return row
+    return {...row,phone:matched[0].t,mainSource:matched[0].t===row.phone?row.mainSource:undefined,extraNumbers:row.items.filter(item=>item.t!==matched[0].t).map(item=>({value:item.t,page:item.k}))}
+  })
   const dmScope = new Set(dmSession.current.leadIds)
-  const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id))
+  const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id) && isBusinessOwner(person.title)).map(person=>({...person,email:ownerEmail(person.full_name,person.email)}))
   const dmSuggestions = suggestions.filter((person) => dmScope.has(person.lead_id) && !dmPeopleRows.some(saved=>saved.lead_id===person.lead_id && saved.full_name.toLowerCase()===person.full_name.toLowerCase()))
   const dmMatchedIds = new Set(dmPeopleRows.map((person) => person.lead_id))
   const dmLinkedinIds = new Set(dmPeopleRows.filter((person) => person.linkedin_url).map((person) => person.lead_id))
+  const dmEmailIds = new Set(dmPeopleRows.filter(person=>person.email).map(person=>person.lead_id))
   const dmPeople = { rows: dmPeopleRows, funnel: {
     total: dmSessionLeads.length, withWebsite: dmSessionLeads.filter((lead) => lead.website).length,
     withLinkedin: dmLinkedinIds.size, named: dmMatchedIds.size, matched: dmMatchedIds.size,
     missing: dmSessionLeads.length - dmMatchedIds.size,
   } }
+  const dmSavedPeople=people.rows.filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:ownerEmail(person.full_name,person.email)}))
+  const dmSearchLeads=[...new Map([...dmSessionLeads.map(lead=>({id:lead.id,name:lead.name,website:lead.website,last_scanned_at:lead.last_scanned_at})),...dmSavedPeople.map(person=>({id:person.lead_id,name:person.lead_name,website:person.lead_website,last_scanned_at:person.last_scanned_at}))].map(lead=>[lead.id,lead])).values()]
   const dmFinder = useFinderScan({
-    rows: dmSessionLeads.map((lead) => {
-      const named = dmPeopleRows.filter((person) => person.lead_id === lead.id)
+    historyScope:'dm',
+    defaultScopeIds:dmSession.current.leadIds,
+    rows: dmSearchLeads.map((lead) => {
+      const named = dmSavedPeople.filter((person) => person.lead_id === lead.id)
       return {
         leadId: lead.id,
         domain: hostOf(lead.website),
         searchText: lead.name,
+        searchFields:[lead.name,lead.website,...named.flatMap(person=>[person.full_name,person.title,person.email])],
         scanned: Boolean(lead.last_scanned_at),
-        items: named.map((person) => ({ t: person.full_name, k: [person.title || 'Role not stated', person.email, person.phone, person.linkedin_url].filter(Boolean).join(' · ') })),
-        statusLabel: named.length ? `${named.length} named` : 'No named contact',
+        items: named.map((person) => ({ t: person.full_name, k: person.email || 'Email not published' })),
+        statusLabel: named.length ? `${named.length} owner${named.length===1?'':'s'}` : 'Owner not identified',
       }
     }),
-    mode: 'review',
+    mode: 'scan',
     queue: async (leadIds) => {
       const result = await queueLeads('decision-maker', leadIds)
       if (leadIds.length && !result.jobId) throw new Error('The Decision Maker scan could not start.')
@@ -3138,15 +3076,14 @@ export function useAppValues() {
     jobStatus: (jobId) => db?.jobs.status(jobId) ?? Promise.resolve(null),
     refresh: refreshPeople,
     ringSource: (rows) => [
-      { name: 'Websites', count: rows.length },
-      { name: 'Website read', count: rows.filter(row=>row.scanned).length },
-      { name: 'LinkedIn found', count: rows.filter(row=>dmLinkedinIds.has(row.leadId)).length },
-      { name: 'Person named', count: rows.filter(row=>dmMatchedIds.has(row.leadId)).length },
+      { name: 'Selected leads', count: rows.length },
+      { name: 'With website', count: rows.filter(row=>row.domain).length },
+      { name: 'Owner identified', count: rows.filter(row=>dmMatchedIds.has(row.leadId)).length },
+      { name: 'Owner email found', count: rows.filter(row=>dmEmailIds.has(row.leadId)).length },
     ],
-    actionLabel: 'Review suggestions',
-    runningLabel: () => 'Reading the imported websites for published people and roles…',
-    doneLabel: () => `${dmPeopleRows.length} named contact${dmPeopleRows.length === 1 ? '' : 's'} found across ${dmSessionLeads.length} imported website${dmSessionLeads.length === 1 ? '' : 's'}. Unpublished details stay blank.`,
-    onStart: () => void buildSuggestions(),
+    actionLabel: 'Find owner emails',
+    runningLabel: () => 'Checking owner/founder evidence and published email addresses…',
+    doneLabel: () => `${dmPeopleRows.filter(person=>person.email).length} published owner email${dmPeopleRows.filter(person=>person.email).length === 1 ? '' : 's'} found. Generic business mailboxes are excluded.`,
     onExport: () => void runDecisionExport('xlsx'),
     // Bring this import's people and direct export buttons into view after the pass settles.
     resultSelector: '[data-fres="dm"]',
@@ -3154,19 +3091,19 @@ export function useAppValues() {
   })
 
   const dmVisibleLeadIds = new Set(dmFinder.rows.map((row) => row.leadId))
-  const dmVisiblePeople = dmPeopleRows.filter((person) => dmVisibleLeadIds.has(person.lead_id) &&
-    matchesFinderSearch([person.full_name, person.title, person.lead_name, person.lead_website, person.email, person.phone, person.linkedin_url].filter(Boolean).join(' '), dmFinder.q))
+  const dmVisiblePeople = (dmFinder.q.trim()?dmSavedPeople:dmPeopleRows).filter((person) => dmVisibleLeadIds.has(person.lead_id) &&
+    matchesFinderSearch([person.full_name,person.title, person.lead_name, person.lead_website, person.email].filter(Boolean).join(' '), dmFinder.q)).sort((a,b)=>dmFinder.rows.findIndex(row=>row.leadId===a.lead_id)-dmFinder.rows.findIndex(row=>row.leadId===b.lead_id))
 
   const runDecisionExport = async (format: 'xlsx' | 'pdf') => {
     if (!db || dmExportLock.current || dmFinder.scanning) return
-    const session = { ...dmSession.current, leadIds: [...dmSession.current.leadIds] }
-    if (!dmPeopleRows.length || !session.leadIds.length) { flash('Scan websites to find people before exporting.'); return }
+    const session = { ...dmSession.current, leadIds: dmFinder.q.trim()?[...dmVisibleLeadIds]:[...dmSession.current.leadIds] }
+    if (!dmVisiblePeople.length || !session.leadIds.length) { flash('Scan websites to find people before exporting.'); return }
     dmExportLock.current = true
     setDmExportBusy(true)
     try {
-      const result = await db.exports.write({ kind: 'people', format, limit: dmPeopleRows.length,
+      const result = await db.exports.write({ kind: 'people', format, limit: dmVisiblePeople.length,
         delimiter: 'csv', fileName: `decision-makers.${format}`, leadIds: session.leadIds,
-        columns: ['Business name', 'Domain', 'Decision maker', 'Role', 'Email', 'Phone', 'Business emails', 'Business phones', 'Business address', 'Published social links', 'LinkedIn', 'Source', 'Saved date'],
+        columns: ['Business name', 'Domain', 'Owner', 'Owner email', 'Source'],
       })
       if (!result || result.rows === 0) return
       if (session.generation === dmSession.current.generation) {
@@ -3183,11 +3120,31 @@ export function useAppValues() {
     finally { dmExportLock.current = false; setDmExportBusy(false) }
   }
 
+  const scanDecisionLeads = useCallback((ids:string[]) => {
+    if (!db || dmFinder.scanning) { flash('Stop the current owner scan before starting another.'); return }
+    const leadIds=[...new Set(ids)]
+    if (!leadIds.length) { flash('Choose a saved Maps search or select some leads first.'); return }
+    setImpOpen(false);setImpValue('');impText.current='';setDecisionImportSelection(null)
+    const generation=dmSession.current.generation+1
+    dmSession.current={generation,leadIds}
+    setDmSessionLeads([]);setDmContactLimit(40);setDmBlockerLimit(40);setDmBlocker('All blockers');dmFinder.reset()
+    void (async()=>{
+      try {
+        await refreshPeople()
+        if(dmSession.current.generation!==generation)return
+        dmFinder.scanImported(leadIds)
+        flash(`${leadIds.length} lead${leadIds.length===1?'':'s'} selected for owner email lookup, including businesses without a website.`)
+      }catch(error){flash(error instanceof Error?error.message:'The selected leads could not be loaded.')}
+    })()
+  },[db,dmFinder,refreshPeople,flash])
+
   const runFinderImport = useCallback(
     (page: 'email' | 'phone' | 'dm', lines: string[]): void => {
       if (!db || !lines.length) return
+      if (page === 'dm' && dmFinder.scanning) { flash('Stop the current owner scan before importing another list.'); return }
       setImpOpen(false)
       setImpValue('')
+      impText.current = ''
       const dmGeneration = page === 'dm' ? dmSession.current.generation + 1 : null
       if (dmGeneration !== null) {
         dmSession.current = { generation: dmGeneration, leadIds: [] }
@@ -3199,7 +3156,8 @@ export function useAppValues() {
       }
       void (async () => {
         try {
-          const result = await db.imports.websites(lines)
+          // This finder queues its own targeted job. Do not also crawl every field in the background.
+          const result = await db.imports.websites(lines,{enqueue:false})
           if (dmGeneration !== null) {
             if (dmGeneration !== dmSession.current.generation) return
             dmSession.current = { generation: dmGeneration, leadIds: [...new Set(result.leadIds)] }
@@ -3363,6 +3321,8 @@ export function useAppValues() {
     closeImp: () => {
       setImpOpen(false)
       setImpValue('')
+      impText.current = ''
+      setDecisionImportSelection(null)
       social.closeImport()
     },
     decMax: () => setMaxResults((current) => Math.max(5, current - 5)),
@@ -3416,6 +3376,10 @@ export function useAppValues() {
       : ''),
     emailTotal: email.coverage.total,
     emailValidityBusy: email.verifying ? '1' : '',
+    emailAutoVerifyOn,
+    toggleEmailAutoVerify,
+    emailScanBusy: emailFinder.scanning || email.verifying,
+    emailCanVerifyResults: !emailFinder.scanning && !email.verifying && emailTableRows.some(row=>row.emailDetails.length>0),
     emailValidityLabel: email.validityProgress.state === 'cancelling'
       ? 'Stopping…'
       : email.verifying ? `Checking ${email.validityProgress.checked}/${email.validityProgress.total}…` : 'Email validity',
@@ -3439,6 +3403,7 @@ export function useAppValues() {
       pick: () => emailFinder.showFilter(item.key),
     })),
     verifyEmailValidity: () => void verifyEmailValidity(),
+    verifyEmailLeadValidity: (leadIds:string[]) => void verifyEmailValidity(leadIds),
     // The next run shares one total cap across all keywords and selected areas.
     foundLabel: snapshot.running
       ? `${found} of ${Math.max(found, snapshot.target || found)} mapped`
@@ -3496,11 +3461,13 @@ export function useAppValues() {
       const field = document.querySelector<HTMLTextAreaElement>('[data-imptext="1"]')
       const raw = field?.value ?? impText.current
       impText.current = raw
-      const lines = pastedLines(raw)
-      const profileLines = lines.filter(isProfileLine)
-      const siteLines = lines.filter((line) => !isProfileLine(line))
+      const { profiles: profileLines, sites: siteLines } = importPreview(raw)
       if (!profileLines.length && !siteLines.length) {
         flash('Paste a website URL first, then choose Scan.')
+        return
+      }
+      if (view === 'website') {
+        void websiteLookup.start(siteLines).then(started=>{if(started){setImpOpen(false);setImpValue('');impText.current=''}})
         return
       }
       if (siteLines.length) {
@@ -3570,7 +3537,7 @@ export function useAppValues() {
     // The Maps page shows what this run captured, which is the leads still in the session.
     // The Maps page shows every place this workspace holds, newest first, so the line above the
     // table says that rather than claiming the whole file came from one run.
-    mapsCaptured: snapshot.running
+    mapsCaptured: mapsResultsLoading ? 'Loading saved search results…' : snapshot.running
       ? `${snapshot.found} ${snapshot.found === 1 ? 'business' : 'businesses'} captured so far.`
       : mapsDisplayed.length
         ? `${mapsDisplayed.length} businesses in the selected search.`
@@ -3616,7 +3583,7 @@ export function useAppValues() {
     }),
     mapsShowing: Math.min(mapsMatches.length, mapsLimit),
     mapsTotal: mapsMatches.length,
-    mapsState: mapsDisplayed.length
+    mapsState: mapsResultsLoading ? 'Loading saved search results…' : mapsDisplayed.length
       ? mapsMatches.length
         ? ''
         : `No place matches “${mapsQuery.trim()}”.`
@@ -3637,7 +3604,7 @@ export function useAppValues() {
     runLocation: location,
     // The ledger spans more than one run, and the map plots all of it, so its caption names every
     // area the pins came from rather than only the one searched last.
-    mapsAreas: (mapsRunId==='latest' ? runs[0] : runs.find(run=>run.id===mapsRunId))?.location || location,
+    mapsAreas: snapshot.running ? snapshot.request?.location || location : (mapsRunId==='latest' ? runs[0] : runs.find(run=>run.id===mapsRunId))?.location || location,
     mapsRadius: pinSpread(mapsDisplayed),
     mapsRadiusShort: pinSpread(mapsDisplayed),
     mapsActivity,
@@ -3679,16 +3646,17 @@ export function useAppValues() {
       const value = event.currentTarget.value
       impText.current = value
       setImpValue(value)
-      const lines = pastedLines(value)
-      const profiles = lines.filter(isProfileLine)
-      setImpLines(lines.length)
-      setImpSites(lines.length - profiles.length)
-      setImpProfiles(profiles.length)
       // The Social page's own preview reads the box as it is typed, so its badge and hint stay in
       // step with what the button is about to do.
       if (social.importOpen) social.importInput(value)
     },
-    impHasLines: impLines > 0,
+    setImportText: (value: string) => {
+      impText.current = value
+      setImpValue(value)
+      if (social.importOpen) social.importInput(value)
+    },
+    impHasLines: impCount > 0,
+    impCountNote: impValue.trim() ? `${impSites} unique website${impSites === 1 ? '' : 's'}${impProfiles ? ` · ${impProfiles} social profile${impProfiles === 1 ? '' : 's'}` : ''}${impPreview.skipped ? ` · ${impPreview.skipped} duplicate or invalid line${impPreview.skipped === 1 ? '' : 's'} skipped` : ''}` : 'Add websites or choose a CSV to see how many will be scanned.',
     impValue,
     impScanLabel: (() => {
       const sites = `Scan ${impSites} site${impSites === 1 ? '' : 's'}`
@@ -3744,7 +3712,7 @@ export function useAppValues() {
       social.setSearch(event.currentTarget.value)
     },
     onSocKey: (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== 'Enter' && event.key !== ',') return
+      if (event.key !== 'Enter') return
       event.preventDefault()
       social.setSearch(event.currentTarget.value)
       social.commitSearch()
@@ -4218,7 +4186,7 @@ export function useAppValues() {
       isMobile: row.lineType === 'mobile',
       isMissing: row.lineType === 'missing',
     })),
-    phoneShowing: phone.rows.length,
+    phoneShowing: phoneFinder.rows.length,
     phoneTotal: phone.summary?.total ?? phone.rows.length,
     // The Backfill card's line, in the card's own words: how many of the leads with no number can
     // still be filled from a website this app has not read yet.
@@ -4237,32 +4205,11 @@ export function useAppValues() {
     // A person can only be named once their company page was read, so the leads with a LinkedIn
     // profile are the population the match works from.
     dmPeopleListed: dmPeople.funnel?.withLinkedin ?? 0,
-    dmRows: dmVisiblePeople.slice(0, dmContactLimit).map((person) => ({
-      id: person.id, leadId: person.lead_id, email: person.email, phone: person.phone, source: person.source,
-      address: person.lead_address,
-      businessEmails: (person.business_emails || '').split('\n').filter(value=>value && value!==person.email),
-      businessPhones: [...new Set([person.lead_phone, ...(person.business_phones || '').split('\n')].filter(value=>value && value!==person.phone))],
-      socialLinks: [...new Set([person.linkedin_url, ...(person.published_socials || '').split('\n')].filter(value=>/^https?:\/\//i.test(value)))],
-      ini: initialsOf(person.full_name),
-      name: person.full_name,
-      title: person.title || 'Role not stated',
-      lead: person.lead_name,
-      domain: person.lead_website ? hostOf(person.lead_website) : 'No website found',
-      // A title that names a role reads as a strong match; anything else is a likely one. The card
-      // shows one badge or the other, so both are offered and the template picks.
-      isStrong: /director|owner|founder|principal|partner|manager|head of/i.test(person.title) ? '1' : '',
-      isLikely: /director|owner|founder|principal|partner|manager|head of/i.test(person.title) ? '' : '1',
-      strong: 'Strong',
-      likely: 'Likely',
-      hasLinkedin: person.linkedin_url ? '1' : '',
-      linkedinUrl: person.linkedin_url,
-      /** True when the card offers a LinkedIn profile, which is what its button points at. */
-      showProfile: person.linkedin_url ? '1' : '',
-    })),
+    dmRows: dmVisiblePeople.slice(0, dmContactLimit).map(person=>({id:person.id,leadId:person.lead_id,name:person.full_name,lead:person.lead_name,domain:hostOf(person.lead_website),email:person.email,source:person.source})),
     dmTotal: dmPeople.funnel?.total ?? 0,
     dmWithLinkedin: dmPeople.funnel?.withLinkedin ?? 0,
     dmWithWebsite: dmPeople.funnel?.withWebsite ?? 0,
-    dmShowingLabel: dmSessionLeads.length ? `${Math.min(dmVisiblePeople.length, dmContactLimit)} of ${dmVisiblePeople.length} matching contacts from the current scan.` : 'Import websites to start a new scan. Earlier searches remain saved in All Leads.',
+    dmShowingLabel: dmFinder.q.trim()?`${dmVisiblePeople.length} matching saved owner contacts.`:dmSessionLeads.length ? `${Math.min(dmVisiblePeople.length, dmContactLimit)} of ${dmVisiblePeople.length} matching contacts from the current scan.` : 'Import websites to start a new scan, or search your saved owners above.',
     dmShowing: dmVisiblePeople.length,
     dmShowAllLabel: `Show all ${dmVisiblePeople.length.toLocaleString('en-GB')}`,
     // Only offered while there are more named contacts than the grid is drawing.
@@ -4358,11 +4305,11 @@ export function useAppValues() {
     dmSugEmpty: dmSuggestions.length ? '0' : '1',
     // The three finder pages: one scan object each, built above from the page's own data.
     fEmail: { ...emailFinder, rows: emailTableRows, count: emailFinder.count, rowsCount: emailFinder.rowsCount },
-    fPhone: phoneFinder,
+    fPhone: {...phoneFinder,rows:phoneTableRows},
     fDm: dmFinder,
     exportDmExcel: () => void runDecisionExport('xlsx'),
     exportDmPdf: () => void runDecisionExport('pdf'),
-    dmExportDisabled: dmExportBusy || dmFinder.scanning || dmPeopleRows.length === 0,
+    dmExportDisabled: dmExportBusy || dmFinder.scanning || dmVisiblePeople.length === 0,
     dmExportBusy,
     dmSuggestionEmpty: dmSuggestions.length === 0 ? '1' : '0',
     dmSuggestionHint: dmSuggestions.length
@@ -4372,6 +4319,7 @@ export function useAppValues() {
       ? `${dmSuggestions.length} name${dmSuggestions.length === 1 ? '' : 's'} inferred from what is on file. Confirm one to move it into the named contacts above.`
       : 'Names inferred from addresses and company pages, kept apart from confirmed contacts until you check them.',
     buildSuggestions: () => void buildSuggestions(),
+    websiteLookup,
     // Website Lookup. The page reports what the last import did and previews the leads it made.
     startWebsiteLookup: () => void runImportText(pastedLines(impValue)),
     importAdded: String(imports.rows.length),
@@ -4495,11 +4443,8 @@ export function useAppValues() {
       event.currentTarget.value = ''
     },
     onImpInput: (event: React.InputEvent<HTMLTextAreaElement>) => {
-      const count = event.currentTarget.value
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean).length
-      if (count !== impCount) setImpCount(count)
+      impText.current = event.currentTarget.value
+      setImpValue(event.currentTarget.value)
     },
     onKwBlur: (event: React.FocusEvent<HTMLInputElement>) => {
       if (event.currentTarget.value.trim()) {
@@ -4525,8 +4470,12 @@ export function useAppValues() {
     // it was opened from: a paste of domains everywhere, a paste of profile URLs on Social
     // Profiles, where the label and the preview then say what each line will become.
     openImp: () => {
+      if (view === 'dm' && dmFinder.scanning) { flash('Stop the current owner scan before importing another list.'); return }
+      if (view === 'website') websiteLookup.clearError()
+      setImpValue('')
+      impText.current = ''
+      setDecisionImportSelection(null)
       setImpOpen(true)
-      setImpCount(3)
       if (view === 'social') social.openImport()
     },
     p1: found >= 1 ? 'y' : 'n',
@@ -4595,26 +4544,59 @@ export function useAppValues() {
     mapsWebsite,
     setMapsWebsite,
     mapsRunId,
-    mapsRunOptions: runs.map(run=>({id:run.id,label:`${new Date(run.started_at).toLocaleString()} · ${run.location}`})),
-    selectMapsRun: (id:string) => {if(id!==mapsRunId){setMapsRunId(id);setMapsHistoryLeads([])}setMapsSelected([])},
+    mapsResultsLoading,
+    savedMapsCount:runStats.runs,
+    savedMapsOpen,savedMapsLoading,savedMapsError,savedMapsExporting,
+    openSavedMaps: () => {setSavedMapsOpen(true);void refreshSavedMaps()},
+    closeSavedMaps: () => {savedMapsExportRequest.current++;setSavedMapsExporting('');setSavedMapsOpen(false)},
+    refreshSavedMaps: () => void refreshSavedMaps(),
+    openSavedMapsExport: (id:string) => void openSavedMapsExport(id),
+    savedMapsRuns: runs.map(run=>({id:run.id,location:run.location || 'No location recorded',keywords:termsOfRun(run) || 'Google Maps search',count:run.saved ?? run.found,date:shortDateTime(run.started_at),status:run.status,error:run.error || '',selected:mapsRunId==='latest' ? run.id===runs[0]?.id : mapsRunId===run.id})),
+    selectedMapsSearch: (()=>{if(snapshot.running)return{title:[snapshot.request?.location || location,(snapshot.request?.keywords ?? keywords).join(', ')].filter(Boolean).join(' · '),date:'Live results update as businesses are found'};const run=mapsRunId==='latest'?runs[0]:runs.find(item=>item.id===mapsRunId);return run?{title:[run.location,termsOfRun(run)].filter(Boolean).join(' · '),date:shortDateTime(run.started_at)}:null})(),
+    mapsRunOptions: runs.map(run=>({id:run.id,label:`${new Date(run.started_at).toLocaleString()} · ${run.location}`,title:[termsOfRun(run),run.location].filter(Boolean).join(' · ') || 'Google Maps search',meta:`${run.found.toLocaleString()} leads · ${run.status}`,date:shortDateTime(run.started_at)})),
+    selectMapsRun: (id:string) => {
+      if(snapshot.running)return
+      if(id!==mapsRunId){setMapsRunId(id);setMapsHistoryLeads([]);setMapsResultsLoading(true)}
+      setMapsSelected([]);setMapsQuery('');setMapsWebsite('any');setMapsLimit(25)
+    },
+    viewSavedMapsRun: (id:string) => {
+      if(snapshot.running)return
+      if(id!==mapsRunId){setMapsRunId(id);setMapsHistoryLeads([]);setMapsResultsLoading(true)}
+      setMapsSelected([]);setMapsQuery('');setMapsWebsite('any');setMapsLimit(25);setSavedMapsOpen(false)
+      window.setTimeout(()=>document.querySelector('[data-results]')?.scrollIntoView({behavior:'smooth',block:'start'}),100)
+    },
     mapsSelected,
     toggleMapsLead: (id:string) => setMapsSelected(ids=>ids.includes(id)?ids.filter(v=>v!==id):[...ids,id]),
     selectAllMaps: () => setMapsSelected(mapsSelected.length===mapsMatches.length ? [] : mapsMatches.map(lead=>lead.id)),
     sendMapsTo: (target:string) => {
-      const websites=[...new Set(mapsMatches.filter(lead=>mapsSelected.includes(lead.id)).map(lead=>lead.website).filter(Boolean))]
+      const selected=mapsMatches.filter(lead=>mapsSelected.includes(lead.id))
+      if(target==='dm'){
+        if(!selected.length){flash('Select businesses to find their owner emails.');return}
+        if(dmFinder.scanning){flash('Stop the current owner scan before importing another list.');return}
+        go(target);setDecisionImportSelection({label:'Selected Google Maps leads',leads:selected.map(({id,name,website})=>({id,name,website}))});setImpValue('');impText.current='';setImpOpen(true);return
+      }
+      const websites=[...new Set(selected.map(lead=>lead.website).filter(Boolean))]
       if(!websites.length){flash('Select businesses with a website to scan.');return}
       go(target);fillWebsiteImport(websites,'selected Maps leads')
     },
-    importSavedRun: async (id:string) => {
-      if(!id || !db)return
-      const result=await db.leads.list({runId:id,limit:1600})
-      const sites=[...new Set(result.rows.map(row=>row.website).filter(Boolean))]
-      fillWebsiteImport(sites,'saved Maps run')
-      if(!sites.length)flash('This run has no websites to scan.')
+    importSavedRun: async (id:string): Promise<string[]> => {
+      if (!id || !db) throw new Error('Saved Maps results are not available in this window.')
+      const result = await db.leads.list({runId:id,limit:1600})
+      return [...new Set(result.rows.map(row=>row.website).filter(Boolean))]
     },
-    importCsvFile: async (file:File) => {
-      try {fillWebsiteImport(websiteLinesFromCsv(await file.text()),'CSV')} catch {flash('The CSV file could not be read.')}
+    importSavedRunLeads: async (id:string): Promise<Pick<StoredLead,'id'|'name'|'website'>[]> => {
+      if(!id || !db)throw new Error('Saved Maps results are not available in this window.')
+      const rows:StoredLead[]=[]
+      for(let offset=0;;){
+        const result=await db.leads.list({runId:id,limit:500,offset})
+        rows.push(...result.rows);offset+=result.rows.length
+        if(!result.rows.length || offset>=result.total)break
+      }
+      return [...new Map(rows.map(({id,name,website})=>[id,{id,name,website}])).values()]
     },
+    decisionImportSelection,
+    scanDecisionLeads,
+    chooseWebsiteCsv,
     reportsOpen,
     openReports: () => { setMapsPrompt(null); setReportsOpen(true); void refreshReports() },
     closeReports: () => setReportsOpen(false),
@@ -4810,25 +4792,13 @@ export function useAppValues() {
     notifications,
     notificationsOpen,
     notify,
-    // The generated template treats the string "0" as hidden; keep this binding string-shaped so
-    // the badge and Mark all read action disappear immediately when the last item is read.
-      unreadNotifications: String(notifications.filter((item) => item.unread).length),
-      notificationsEmpty: notifications.length === 0,
-      notificationsCountLabel: `${notifications.length} saved · ${notifications.filter((item) => item.unread).length} unread`,
-      notificationRows: notifications.map((item) => ({
-      ...item,
-      unread: item.unread ? '1' : '0',
-      when: notificationTime(item.at),
-        color: item.level === 'error' ? '#C46D65' : item.level === 'success' ? '#6F8060' : '#A9BC9B',
-        open: () => {markNotificationRead(item.id);setNotificationsOpen(false);if(item.runId){if(item.runId!==mapsRunId){setMapsRunId(item.runId);setMapsHistoryLeads([])}setMapsSelected([])}go(/maps|scrape/i.test(item.title)?'maps':/email/i.test(item.title)?'email':/phone/i.test(item.title)?'phone':/decision|people/i.test(item.title)?'dm':/social/i.test(item.title)?'social':'runs')},
-        read: () => markNotificationRead(item.id),
-        remove: () => deleteNotification(item.id),
-      })),
-      openNotifications: () => setNotificationsOpen((current) => !current),
-      closeNotifications: () => setNotificationsOpen(false),
-      markNotificationsRead,
-      markNotificationRead,
-      deleteNotification,
+    notificationCenter,
+    openNotification,
+    unreadNotifications: String(notifications.filter(item=>item.unread).length),
+    notificationsCountLabel: notifications.length+' saved · '+notifications.filter(item=>item.unread).length+' unread',
+    openNotifications: () => setNotificationsOpen(current=>!current),
+    closeNotifications: () => setNotificationsOpen(false),
+    markNotificationsRead,markNotificationRead,deleteNotification,
     togEmails: () => setChEmails((current) => !current),
     togLinkedin: () => setChLinkedin((current) => !current),
     togPhones: () => setChPhones((current) => !current),

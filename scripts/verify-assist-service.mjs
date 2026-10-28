@@ -43,3 +43,16 @@ test('workspace data cannot add system messages or override server billing', asy
   assert.equal(context.workspace.totalLeads, 10); assert.equal(context.workspace.secret, undefined)
   assert.equal(context.serverBilling.licenseKind, 'inactive')
 })
+
+test('multilingual policy preserves Roman Urdu/script and honors explicit language changes', async()=>{
+  let sent
+  const {service}=fixture({providerFetch:async(_,request)=>{sent=JSON.parse(request.body);return Response.json({choices:[{message:{content:'Aap Email Finder khol kar Import websites par click karein.'}}]})}})
+  const input='mujy emails kasy nikalny hain?'
+  await service.chat(row,{}, {messages:[{role:'user',content:input}]})
+  assert.match(sent.messages[0].content,/Roman Urdu is Urdu written in Latin letters/)
+  assert.match(sent.messages[0].content,/Do not answer such messages in Hindi, Devanagari, or Urdu script/)
+  assert.match(sent.messages[0].content,/explicit request takes priority/)
+  assert.match(sent.messages[0].content,/language and script of the user's latest message/)
+  assert.match(sent.messages[0].content,/Enter is optional/)
+  assert.equal(sent.messages.at(-1).content,input)
+})

@@ -131,7 +131,7 @@ export function bindHover(): void {
     })
   })
 
-  document.querySelectorAll<HTMLElement>('[data-icon],[data-account],[data-open]').forEach((button) => {
+  document.querySelectorAll<HTMLElement>('[data-icon],[data-open]').forEach((button) => {
     if (!once(button, 'bound')) return
     const background = button.style.background
     const color = button.style.color

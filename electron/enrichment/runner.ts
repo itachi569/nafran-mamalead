@@ -8,10 +8,14 @@
 // hammering them in parallel would be both rude and more likely to be blocked.
 import type { LocalDatabase } from '../db/local-db'
 import { LicenseAccessError } from '../billing/client'
-import { personNameFromLinkedIn, type Repository } from '../db/repository'
+import { type Repository } from '../db/repository'
 import { locationForLead, queryForOwner, queryForOwnerEmail, searchEmails, searchOwnerCandidates } from './dataforseo'
 import type { ExtractedEmail } from './email-extractor'
-import { WebsiteEnricher } from './website'
+import { WebsiteEnricher, isUsablePerson } from './website'
+import { DEFAULT_LOOKUP_FIELDS, emptyLookupRow, lookupOptions, lookupRowFromFindings } from './website-lookup'
+import { findBusinessOwners, findOwnerEmail, type OwnerEmailSource } from './owner-search'
+import {ownerIdentityKey,isBusinessOwner,ownerEmail} from './owner-contact'
+import {compareEmailContacts} from '../email-ranking'
 
 export type JobKind = 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
 
@@ -20,10 +24,11 @@ const JOB_KINDS: JobKind[] = ['email', 'phone', 'social', 'decision-maker', 'web
 export interface EnrichmentProgress {
   jobId: string
   kind: JobKind
-  status: 'running' | 'done' | 'failed' | 'idle'
+  status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'
   processed: number
   total: number
   found: number
+  failed: number
   leadName: string
   message: string
   at: string
@@ -116,6 +121,8 @@ export class EnrichmentRunner {
   private controller: AbortController | null = null
   private looping = false
   private foregroundJobId = ''
+  private activeProgress: EnrichmentProgress | null = null
+  private stoppedJobId = ''
 
   constructor(
     private readonly db: LocalDatabase,
@@ -148,23 +155,33 @@ export class EnrichmentRunner {
         const job = this.repository.nextQueuedJob(this.foregroundJobId)
         if (!job) break
         if (job.id === this.foregroundJobId) this.foregroundJobId = ''
+        this.stoppedJobId = ''
         try {
           const kind = (JOB_KINDS.includes(job.kind as JobKind) ? job.kind : 'website') as JobKind
-          await this.options.authorize?.(kind, true)
+          let total = 0
+          try { total = new Set(JSON.parse(job.lead_ids) as string[]).size } catch { /* runJob reports malformed input */ }
+          this.emit({jobId:job.id,kind,status:'running',processed:0,total,found:0,failed:0,leadName:'',message:'Preparing website scan…'})
+          await waitForAbort(Promise.resolve(this.options.authorize?.(kind, true)), controller.signal)
           await this.runJob(job, controller.signal)
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
             // Stop/prioritize can interrupt a page read. Keep that job durable instead of leaving
             // it permanently "running" after the worker has moved on.
-            this.repository.requeueJob(job.id)
+            const cancelled = this.stoppedJobId === job.id || this.repository.jobStatus(job.workspace_id,job.id)?.status === 'cancelled'
+            if (cancelled) {
+              this.repository.cancelJob(job.id)
+              this.emit({...this.currentProgress(job.id,job.kind as JobKind),status:'cancelled',message:'Scan stopped. Completed results are saved.'})
+            } else this.repository.requeueJob(job.id)
             break
           }
+          const progress = this.currentProgress(job.id,job.kind as JobKind)
           if (error instanceof LicenseAccessError) {
-            this.repository.requeueJob(job.id)
-            this.emit({ jobId: job.id, kind: job.kind as JobKind, status: 'failed', processed: 0, total: 0, found: 0, leadName: '', message: error.message })
+            this.repository.markJob(job.id,'failed',progress.found,error.message)
+            this.emit({...progress,status:'failed',message:error.message})
             break
           }
-          throw error
+          this.repository.markJob(job.id, 'failed', progress.found, error instanceof Error ? error.message : String(error))
+          this.emit({...progress,status:'failed',message:error instanceof Error ? error.message : String(error)})
         }
       }
     } catch (error) {
@@ -184,6 +201,7 @@ export class EnrichmentRunner {
       await this.enricher.close()
       this.controller = null
       this.looping = false
+      this.activeProgress = null
       this.emit({
         jobId: '',
         kind: 'website',
@@ -197,7 +215,12 @@ export class EnrichmentRunner {
     }
   }
 
-  stop(): void {
+  stop(jobId = ''): void {
+    const active = this.activeProgress
+    const target = jobId || active?.jobId || ''
+    if (target) this.repository.cancelJob(target)
+    if (jobId && active?.jobId !== jobId) return
+    this.stoppedJobId = target
     this.controller?.abort()
     void this.enricher.close()
   }
@@ -219,21 +242,29 @@ export class EnrichmentRunner {
   }
 
   private async runJob(
-    job: { id: string; workspace_id: string; kind: string; lead_ids: string },
+    job: { id: string; workspace_id: string; kind: string; lead_ids: string; options?: string },
     signal: AbortSignal,
   ): Promise<void> {
     const kind = (JOB_KINDS.includes(job.kind as JobKind) ? job.kind : 'website') as JobKind
+    const lookup = lookupOptions(job.options)
+    const isLookup = kind === 'website' && lookup.source === 'website-lookup'
+    const fields = lookup.fields ?? DEFAULT_LOOKUP_FIELDS
     let leadIds: string[] = []
     try {
-      leadIds = JSON.parse(job.lead_ids) as string[]
+      const parsed: unknown = JSON.parse(job.lead_ids)
+      if (!Array.isArray(parsed)) throw new Error('Invalid lead list')
+      leadIds = [...new Set(parsed.filter((id): id is string => typeof id === 'string' && Boolean(id.trim())))]
     } catch {
       this.repository.markJob(job.id, 'failed', 0, 'The job carried no usable lead list.')
+      this.emit({jobId:job.id,kind,status:'failed',processed:0,total:0,found:0,failed:0,leadName:'',message:'The job carried no usable lead list.'})
       return
     }
 
     this.repository.markJob(job.id, 'running')
     let found = 0
     let processed = 0
+    let failed = 0
+    let searchFailure: string | null = null
 
     // The deep pass is a search per lead rather than a read of its own site, so it does not need a
     // website and it does not use the browser. It runs through the same queue, which is what makes
@@ -249,14 +280,20 @@ export class EnrichmentRunner {
 
     for (const leadId of leadIds) {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      await this.options.authorize?.(kind, false)
+      await waitForAbort(Promise.resolve(this.options.authorize?.(kind, false)),signal)
       const lead = this.repository.getLead(job.workspace_id, leadId)
-      if (!lead?.website) {
+      if (!lead || (!lead.website && kind !== 'decision-maker')) {
         processed += 1
+        failed += 1
+        searchFailure = 'Some saved businesses have no website to scan.'
+        this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead?.name || '',message:'Skipped a business without a website.'})
         continue
       }
-      if (kind === 'decision-maker') await this.options.consumeDecisionLead?.(leadId)
 
+      let siteFailure: string | null = null
+      try {
+
+      if (isLookup) this.repository.saveWebsiteLookupRow(job.id,{...emptyLookupRow(lead),status:'running'})
       this.emit({
         jobId: job.id,
         kind,
@@ -264,57 +301,93 @@ export class EnrichmentRunner {
         processed,
         total: leadIds.length,
         found,
+        failed,
         leadName: lead.name,
-        message: `Reading ${lead.name}…`,
+        message: lead.website ? `Reading ${lead.name}…` : `Searching public sources for ${lead.name} by business name and location…`,
       })
+      if (kind === 'decision-maker') await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
 
       const inspect = kind === 'social'
         ? this.enricher.inspectSocialFast(lead.website, signal)
         : kind === 'decision-maker'
-          ? this.enricher.inspectPeople(lead.website, signal)
-        : kind === 'email' || kind === 'phone'
-          ? this.enricher.inspectContactFast(lead.website, signal)
+          ? lead.website ? this.enricher.inspectPeople(lead.website, signal) : Promise.resolve({emails:[],phones:[],socials:[],addresses:[],people:[],pagesRead:[],error:null} as import('./website').WebsiteFindings)
+        : kind === 'phone'
+          ? this.enricher.inspectPhoneFast(lead.website, signal)
+        : kind === 'email'
+          ? this.enricher.inspectContactFast(lead.website, signal,true)
           : this.enricher.inspectContactFast(lead.website, signal)
       const findings = await waitForAbort(inspect, signal)
+      if ((kind === 'email' || (isLookup && fields.email)) && !findings.emails.length && !signal.aborted) {
+        this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Checking the website's displayed contact pages for ${lead.name}…`})
+        const renderedSignal=AbortSignal.any([signal,AbortSignal.timeout(35_000)])
+        const closeRendered=()=>{void this.enricher.close()}
+        renderedSignal.addEventListener('abort',closeRendered,{once:true})
+        try {
+          const contact=findings.pagesRead.find(url=>/\/(?:contact(?:-us)?|support|help)(?:\/|\.[a-z]+$|$)/i.test(url)) || lead.website
+          const displayed=await waitForAbort(this.enricher.inspect(contact,renderedSignal),renderedSignal)
+          if (!displayed.error) {
+            findings.error=null;findings.emails=displayed.emails
+            if (isLookup) { findings.phones.push(...displayed.phones); findings.socials.push(...displayed.socials); findings.addresses=[...(findings.addresses ?? []),...(displayed.addresses ?? [])]; findings.businessName ||= displayed.businessName }
+            findings.pagesRead=[...new Set([...findings.pagesRead,...displayed.pagesRead])]
+          } else if (isLookup) findings.error=displayed.error; else siteFailure=displayed.error
+        } catch (error) {
+          if (signal.aborted)throw new DOMException('Enrichment cancelled','AbortError')
+          if (isLookup) findings.error='The displayed contact pages could not finish loading. Retry this website.'
+          else siteFailure='The displayed contact pages could not finish loading. Retry this website.'
+        } finally { renderedSignal.removeEventListener('abort',closeRendered);await this.enricher.close() }
+      }
       // Social scans deliberately stay on the bounded HTTP path. Falling back to Chromium after a
       // 403/timeout brings back the long modal that this foreground pass is meant to avoid; the
       // result is still durable and the user can retry a site that does not expose server HTML.
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
+      findings.emails.sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
+      findings.emails=findings.emails.slice(0,1)
+      if (isLookup) this.repository.saveWebsiteLookupRow(job.id,lookupRowFromFindings(lead,findings,fields))
+      if(kind==='decision-maker' && !findings.people.length){
+        this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Looking for ${lead.name}'s owner on public sources…`})
+        const discovery=await waitForAbort(findBusinessOwners(lead,{key:this.options.deepKey?.(),signal,searchWeb:(query,abort)=>this.enricher.searchPublicWeb(query,abort)}),signal)
+        findings.people.push(...discovery.people)
+        if(discovery.people.length)findings.error=null
+        else if(discovery.error)siteFailure=`Public owner search could not finish: ${discovery.error}`
+      }
       if (findings.error) {
         processed += 1
+        failed += 1
+        searchFailure = findings.error
+        this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead.name,message:findings.error})
         continue
       }
 
-      this.repository.fillLeadAddress(leadId, findings.addresses ?? [])
+      if (kind === 'decision-maker') {
+        // Cofounders often publish contact details on the same pages. Share only this scan's
+        // in-flight reads; each person's identity/email evidence is still checked separately.
+        const pageCache:import('./owner-search').OwnerPageCache=new Map()
+        await Promise.all(findings.people.filter(person=>!person.email).slice(0,3).map(async owner=>{
+          this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Searching public sources for ${owner.fullName}'s email…`})
+          const knownSources=this.db.query<OwnerEmailSource & {title:string}>(`select d.full_name as fullName,d.title,d.email,d.source,l.website from decision_makers d join leads l on l.id=d.lead_id where d.workspace_id=? and d.lead_id<>? and d.email<>''`,[job.workspace_id,leadId]).filter(person=>isBusinessOwner(person.title) && ownerIdentityKey(person.fullName)===ownerIdentityKey(owner.fullName) && ownerEmail(person.fullName,person.email))
+          const match=await waitForAbort(findOwnerEmail(lead,owner,{key:this.options.deepKey?.(),signal,knownSources,scannedPages:findings.pagesRead,pageCache,searchWeb:(query,abort)=>this.enricher.searchPublicWeb(query,abort)}),signal)
+          if (match.email) { owner.email=match.email;owner.evidence=match.source }
+          else if (match.error) siteFailure=`Public email search for ${owner.fullName} could not finish: ${match.error}`
+        }))
+      }
+
+      if (kind !== 'decision-maker' && (kind !== 'website' || fields.address)) this.repository.fillLeadAddress(leadId, findings.addresses ?? [])
       // Email and website jobs both fill addresses; social fills profiles; phone fills numbers.
-      if (kind === 'email' || kind === 'website' || kind === 'decision-maker') {
-        for (const email of findings.emails) {
-          this.repository.upsertContact({
-            leadId,
-            kind: 'email',
-            value: email.value,
-            // The page it was read from, not just "website": the Email Finder's coverage rings
-            // report which page of a site each address came off, and only the harvester knows.
-            source: email.page || 'website',
-            // A mailbox on the business's own domain is verified by construction; anything else
-            // is recorded as a lead to check rather than as a fact.
-            verified: email.score >= 70 && email.value.endsWith(`@${new URL(lead.website).host.replace(/^www\./i, '')}`),
-            score: email.score,
-          })
-          found += 1
-        }
+      if (kind === 'email' || (kind === 'website' && fields.email)) {
+        this.repository.replaceMainEmail(leadId,findings.emails[0])
+        found+=findings.emails.length
       }
 
-      if (kind === 'phone' || kind === 'website' || kind === 'decision-maker') {
+      if (kind === 'phone') this.repository.replaceScannedPhones(leadId,findings.phones,findings.pagesRead)
+      if (kind === 'phone' || (kind === 'website' && fields.phone)) {
         for (const phone of findings.phones) {
-          // The Maps listing usually wins; only fill a gap.
-          if (lead.phone && kind !== 'decision-maker') break
-          this.repository.upsertContact({ leadId, kind: 'phone', value: phone.value, source: phone.page || 'website', verified: false })
+          // Preserve the primary Maps number while storing every published website number.
+          this.repository.upsertContact({ leadId, kind: 'phone', value: phone.value, source: phone.page || 'website', verified: false, score: phone.score })
           found += 1
         }
       }
 
-      if (kind === 'social' || kind === 'website' || kind === 'decision-maker') {
+      if (kind === 'social' || (kind === 'website' && fields.social)) {
         for (const social of findings.socials) {
           this.repository.upsertSocialProfile({
             workspaceId: job.workspace_id,
@@ -322,13 +395,23 @@ export class EnrichmentRunner {
             platform: social.platform,
             handle: social.handle,
             profileUrl: social.profileUrl,
-            source: 'website',
+            source: social.page || lead.website || 'website',
           })
           found += 1
         }
       }
 
-      if (kind === 'decision-maker' || kind === 'website') {
+      if (kind === 'decision-maker') {
+        if (!siteFailure) this.repository.pruneNoisyPeople(isUsablePerson,leadId)
+        // A corrected current-owner scan must also remove an older schema-only result from
+        // this business. Never replace every saved person simply because a partial crawl
+        // missed them; only the specific names superseded by current visible evidence qualify.
+        const currentOwners=new Set(findings.people.map(person=>ownerIdentityKey(person.fullName)))
+        const superseded=new Set((findings.supersededOwnerNames ?? []).map(ownerIdentityKey).filter(name=>!currentOwners.has(name)))
+        if(superseded.size){
+          const previous=this.db.query<{id:string;full_name:string}>('select id,full_name from decision_makers where workspace_id=? and lead_id=?',[job.workspace_id,leadId])
+          for(const person of previous)if(superseded.has(ownerIdentityKey(person.full_name)))this.db.run('delete from decision_makers where id=? and workspace_id=? and lead_id=?',[person.id,job.workspace_id,leadId])
+        }
         for (const person of findings.people) {
           this.repository.addDecisionMaker({
             workspaceId: job.workspace_id,
@@ -336,32 +419,21 @@ export class EnrichmentRunner {
             fullName: person.fullName,
             title: person.title,
             email: person.email,
+            replaceEmail: !siteFailure,
             phone: person.phone,
             linkedinUrl: person.linkedinUrl,
-            source: person.evidence || 'website',
+            // An interrupted email check must not relabel a retained mailbox with a new bio URL.
+            source: siteFailure && !person.email ? '' : person.evidence || 'website',
           })
-          found += 1
+          found += kind === 'decision-maker' ? (person.email ? 1 : 0) : 1
         }
 
-        // A LinkedIn profile found on the site names somebody, but reading a profile URL is not
-        // the same as the business confirming a role, so it is suggested rather than asserted.
-        for (const social of findings.socials) {
-          if (social.platform !== 'linkedin' || !/\/in\//i.test(social.profileUrl)) continue
-          const name = personNameFromLinkedIn(social.profileUrl)
-          if (!name || findings.people.some(person => person.fullName.toLowerCase() === name.toLowerCase())) continue
-          const result = this.repository.suggestPerson({
-            workspaceId: job.workspace_id,
-            leadId,
-            fullName: name,
-            source: 'linkedin',
-            evidence: social.profileUrl,
-            linkedinUrl: social.profileUrl,
-          })
-          if (result.created) found += 1
-        }
       }
 
+      if (isLookup) this.repository.fillPublishedBusiness(leadId,findings.businessName || '',fields.phone ? findings.phones[0]?.value || '' : '')
+
       processed += 1
+      if (siteFailure) { failed += 1; searchFailure = siteFailure }
       // The site has now been read, whatever came back. The finder pages show the leads that are
       // covered so far, so this is written before the next lead is started rather than at the end.
       this.repository.markLeadScanned(leadId)
@@ -372,26 +444,38 @@ export class EnrichmentRunner {
         processed,
         total: leadIds.length,
         found,
+        failed,
         leadName: lead.name,
-        message: found
+        message: kind === 'phone' ? `${lead.name} · ${findings.phones.length} published phone number${findings.phones.length===1?'':'s'}` : kind === 'decision-maker' ? `${lead.name} · ${findings.people.filter(person=>person.email).length} published owner emails` : found
           ? `${lead.name} · ${findings.emails.length} address${findings.emails.length === 1 ? '' : 'es'}, ${findings.socials.length} social`
           : `${lead.name} · nothing published`,
       })
 
-      // Other people's servers: leave a gap between them.
-      await new Promise((resolve) => setTimeout(resolve, PACE_MS))
+      } catch (error) {
+        if (signal.aborted) throw new DOMException('Enrichment cancelled','AbortError')
+        if (error instanceof LicenseAccessError) throw error
+        processed += 1
+        failed += 1
+        searchFailure = error instanceof Error ? error.message : String(error)
+        if (isLookup) this.repository.saveWebsiteLookupRow(job.id,{...emptyLookupRow(lead),status:'failed',error:searchFailure})
+        this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead.name,message:`Could not finish ${lead.name}: ${searchFailure}`})
+      }
+      // Other people's servers: leave a gap between them, with an immediate Stop response.
+      if (processed < leadIds.length) await waitForAbort(new Promise(resolve=>setTimeout(resolve,PACE_MS)),signal)
     }
 
-    this.repository.markJob(job.id, 'done', found)
+    if (signal.aborted) throw new DOMException('Enrichment cancelled','AbortError')
+    this.repository.markJob(job.id, searchFailure ? 'failed' : 'done', found, searchFailure)
     this.emit({
       jobId: job.id,
       kind,
-      status: 'done',
+      status: searchFailure ? 'failed' : 'done',
       processed,
       total: leadIds.length,
       found,
+      failed,
       leadName: '',
-      message: `Enrichment finished · ${found} detail${found === 1 ? '' : 's'} found across ${processed} lead${processed === 1 ? '' : 's'}`,
+      message: searchFailure ? `Scan finished · ${processed} of ${leadIds.length} websites checked; ${failed} could not finish. ${searchFailure}` : `Enrichment finished · ${found} ${kind === 'decision-maker' ? 'owner emails' : 'details'} found across ${processed} leads`,
     })
   }
 
@@ -419,13 +503,13 @@ export class EnrichmentRunner {
 
     for (const leadId of leadIds) {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      await this.options.authorize?.('deep', false)
+      await waitForAbort(Promise.resolve(this.options.authorize?.('deep', false)),signal)
       const lead = this.repository.getLead(job.workspace_id, leadId)
       if (!lead) {
         processed += 1
         continue
       }
-      await this.options.consumeDecisionLead?.(leadId)
+      await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
 
       this.emit({
         jobId: job.id,
@@ -444,14 +528,14 @@ export class EnrichmentRunner {
       // DataForSEO's standard queue can legitimately take longer than its first minute during a
       // multi-lead pass. Keep polling for the same 90-second window used by the live API check so
       // a slow task is not reported as queued while the rest of the batch continues.
-      const ownerResult = await searchOwnerCandidates(key, queryForOwner(lead), where, { waitMs: 90_000 })
+      const ownerResult = await waitForAbort(searchOwnerCandidates(key, queryForOwner(lead), where, { waitMs: 90_000, signal }),signal)
       spent += ownerResult.cost
       if (ownerResult.error && !failure) failure = ownerResult.error
 
       const owners = ownerResult.owners.filter((owner) => aboutThisOwner(owner, lead)).slice(0, 3)
       for (const owner of owners) {
         if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-        const emailResult = await searchEmails(key, queryForOwnerEmail(lead, owner), where, { waitMs: 90_000 })
+        const emailResult = await waitForAbort(searchEmails(key, queryForOwnerEmail(lead, owner), where, { waitMs: 90_000, signal }),signal)
         spent += emailResult.cost
         if (emailResult.error && !failure) failure = emailResult.error
         // An address in the same results as the business is not automatically the business's.
@@ -507,7 +591,16 @@ export class EnrichmentRunner {
     })
   }
 
-  private emit(progress: Omit<EnrichmentProgress, 'at'>): void {
-    this.options.onProgress?.({ ...progress, at: new Date().toISOString() })
+  private currentProgress(jobId: string, kind: JobKind): Omit<EnrichmentProgress,'at'> {
+    return this.activeProgress?.jobId === jobId ? this.activeProgress : {jobId,kind,status:'running',processed:0,total:0,found:0,failed:0,leadName:'',message:''}
+  }
+
+  private emit(progress: Omit<EnrichmentProgress, 'at' | 'failed'> & {failed?:number}): void {
+    const complete: EnrichmentProgress = {...progress,failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
+    if (progress.jobId) {
+      this.activeProgress = complete
+      this.repository.saveJobProgress(progress.jobId,complete)
+    }
+    this.options.onProgress?.(complete)
   }
 }

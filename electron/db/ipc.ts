@@ -3,6 +3,7 @@
 // One channel per operation, all of them thin: the main process owns the database and the
 // renderer never sees SQL. Every call resolves to a result envelope instead of rejecting, so a
 // database problem surfaces as a message the page can show rather than an unhandled rejection.
+import { randomUUID } from 'node:crypto'
 import { ipcMain, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { isUsableEmail } from '../enrichment/website'
 import { writeExport } from '../export/writer'
@@ -62,6 +63,8 @@ export const LOCAL_CHANNELS = [
   'db:jobs:status',
   'db:jobs:usage',
   'db:jobs:covered',
+  'db:lookup:start',
+  'db:lookup:get',
   'db:imports:list',
   'db:imports:ledger',
   'db:imports:websites',
@@ -128,7 +131,7 @@ export function registerLocalDatabase(
     },
     'db:leads:needing': (_repo, _workspace, payload: { kind: 'email' | 'phone' | 'social'; limit?: number }) =>
       repository.leadsNeedingContact(workspace.id, payload.kind, payload.limit),
-    'db:phones:ledger': (_repo, _workspace, payload: { limit?: number } = {}) => repository.phoneLedger(workspace.id, payload.limit),
+    'db:phones:ledger': (_repo, _workspace, payload: { limit?: number;offset?:number } = {}) => repository.phoneLedger(workspace.id, payload.limit,payload.offset),
     'db:phones:summary': () => repository.phoneSummary(workspace.id),
 
     'db:runs:list': (_repo, _workspace, payload: { limit?: number } = {}) => repository.listRuns(workspace.id, payload.limit),
@@ -204,6 +207,13 @@ export function registerLocalDatabase(
     'db:jobs:covered': (_repo, _workspace, payload: { kind: string; statuses: string[] }) =>
       Array.from(repository.coveredLeads(workspace.id, payload.kind, payload.statuses)),
 
+    'db:lookup:start': (_repo, _workspace, payload: { input: string[]; fields: import('../enrichment/website-lookup').WebsiteLookupFields }) => {
+      if (!Array.isArray(payload?.input) || payload.input.some(value=>typeof value !== 'string')) throw new Error('Choose a valid website list.')
+      const session=repository.startWebsiteLookup(workspace.id,payload.input,payload.fields)
+      void onImported?.(session.rows.map(row=>row.leadId))
+      return session
+    },
+    'db:lookup:get': (_repo, _workspace, payload?: { jobId?: string }) => repository.websiteLookupSession(workspace.id,payload?.jobId),
     'db:imports:list': (_repo, _workspace, payload: { limit?: number } = {}) => repository.listImports(workspace.id, Math.min(5000, Math.max(1, payload.limit ?? 20))),
     'db:imports:ledger': () => repository.importLedger(workspace.id),
     // What has been searched on a page, so the search box can offer it back. Keeping it in the
@@ -233,11 +243,12 @@ export function registerLocalDatabase(
       const lines = Array.isArray(payload.input) ? payload.input : String(payload.input ?? '').split(/\r?\n/)
       return repository.previewSocialImport(workspace.id, lines, payload.platform ?? '')
     },
-    'db:imports:websites': (_repo, _workspace, payload: { input: string[] | string }) => {
+    'db:imports:websites': (_repo, _workspace, payload: { input: string[] | string; enqueue?: boolean }) => {
       const lines = Array.isArray(payload.input) ? payload.input : String(payload.input ?? '').split(/\r?\n/)
-      const result = repository.importWebsites(workspace.id, lines)
+      const enqueue=payload.enqueue!==false
+      const result = repository.importWebsites(workspace.id, lines,enqueue)
       // A fresh import is exactly the work the enrichment worker exists for.
-      void onImported?.(result.leadIds)
+      if(enqueue)void onImported?.(result.leadIds)
       return result
     },
     // Social profiles arrive already found: the paste is the profile, so nothing is crawled and no
@@ -250,8 +261,16 @@ export function registerLocalDatabase(
       repository.recordExport({ ...payload, workspaceId: workspace.id }),
     // The only handler that reaches the file system, so it is the only one that needs the window
     // its save dialog should hang off.
-    'db:exports:write': (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people'; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) =>
-      writeExport(BrowserWindow.fromWebContents(event.sender), repo, current, payload),
+    'db:exports:write': async (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people' | 'website'; lookupJobId?: string; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) => {
+      try {
+        const result=await writeExport(BrowserWindow.fromWebContents(event.sender),repo,current,payload)
+        if(result)event.sender.send('notifications:export-saved',{...result,eventId:randomUUID(),kind:payload.kind})
+        return result
+      } catch(error) {
+        event.sender.send('notifications:export-failed',{eventId:randomUUID(),message:error instanceof Error?error.message:'The export could not be saved.'})
+        throw error
+      }
+    },
 
     'db:coverage:email': () => ({ totals: repository.emailCoverage(workspace.id), bands: repository.emailConfidence(workspace.id) }),
     'db:coverage:social': () => repository.socialCoverage(workspace.id),

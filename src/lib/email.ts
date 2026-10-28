@@ -7,6 +7,7 @@
 //
 // Outside Electron there is no database and the caller falls back to the reference sample rows.
 import type { LocalApi, StoredLead } from '../types/desktop'
+import {compareEmailContacts} from '../../electron/email-ranking'
 
 type Db = LocalApi
 type ContactRow = Record<string, unknown>
@@ -240,7 +241,7 @@ function validityLabel(address: EmailAddress): string {
 
 function bestOf(addresses: EmailAddress[]): EmailAddress | null {
   if (!addresses.length) return null
-  return addresses.reduce((best, address) => ((address.score ?? -1) > (best.score ?? -1) ? address : best))
+  return [...addresses].sort(compareEmailContacts)[0]
 }
 
 /**
@@ -274,7 +275,7 @@ export async function fetchEmailRows(
   }
 
   const rows: EmailRow[] = leadRows.map((lead: StoredLead, position: number) => {
-    const addresses = (byLead.get(lead.id) ?? []).sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+    const addresses = (byLead.get(lead.id) ?? []).sort(compareEmailContacts).slice(0,1)
     const best = bestOf(addresses)
     const domain = domainOf(lead.website)
 
@@ -455,7 +456,9 @@ async function countEmailPages(db: Db): Promise<CoverageRing[]> {
 }
 
 export async function fetchEmailPage(db: Db, options: { limit?: number } = {}): Promise<EmailPageData> {
-  const { rows, total } = await fetchEmailRows(db, options)
+  const first=await fetchEmailRows(db,{limit:options.limit ?? 500})
+  const rows=[...first.rows],total=first.total
+  while(rows.length<total){const page=await fetchEmailRows(db,{limit:500,offset:rows.length});if(!page.rows.length)break;rows.push(...page.rows)}
   const coverage = await fetchEmailCoverage(db, { showing: rows.length })
   return { rows, total, coverage }
 }
