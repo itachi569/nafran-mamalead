@@ -1,17 +1,23 @@
-# MamaLead 1.4.17 — release handoff, publication pending
+# MamaLead 1.4.17 — installer and website deployed
 
 ## Status recorded 29 October 2026
 
-The desktop source and Windows release tag are pushed. Signed CI is pending;
-this document does **not** confirm a published 1.4.17 installer, updater feed,
-website or billing deployment. The previous verified public release is
-[1.4.16](release-1.4.16.md). Update this handoff with the final signed artifact
-hashes, canonical website commit and public checks after publication.
+The signed Windows installer, updated website and Assist server prompt are
+deployed. Owner approval was accepted by the release guard for the exact
+canonical commit, and `mamalead-publish` completed at `2026-10-28T21:01Z`.
+The complete public installer download matches the signed CI artifact; all
+24 published landing files match their reviewed source. The final production
+browser check passed on VM115 against the real public site at desktop and mobile sizes.
 
 - Desktop commit: `344c937c9e31b6b75a437d4c04bc0e2729e02670`.
 - Windows tag: `v1.4.17-r2-windows` (new immutable candidate; the earlier tag was not moved).
-- Signed Windows CI: [run 40764761517](https://github.com/itachi569/nafran-mamalead/actions/runs/40764761517), pending.
-- Website/billing source alignment and guarded server rollout: pending.
+- Signed Windows CI: [run 40764761517](https://github.com/itachi569/nafran-mamalead/actions/runs/40764761517), completed successfully.
+- Signed installer: `335381112` bytes, SHA-256 `74b0814aedcf08ade50cea25693ee0dd6390a66cb5285e8b0d53a8a87cc27183`.
+- Signed CI installer and complete public download: matching size, SHA-256 and SHA-512; Authenticode **Valid**, publisher **Nafran LTD**, timestamp present.
+- Installer publication backup: `/var/lib/mamalead-publish/installer-backups/20261028T205614Z-1.4.17`.
+- Desktop repository website commit: `4eb9604255fbacf7c62ded7607e48818e7284038`, pushed.
+- Canonical website/Assist commit: `bee9af72a08ae64450a3a9ce7a1b46a13f951941`, pushed to `aamirmursleen/mamalead` main and deployed successfully.
+- API health: `ok`; payment mode remains `test`. No payment-mode change was made.
 - Mac downloads remain paused; this tag selects the Windows signing job only.
 
 ## Included desktop changes
@@ -44,7 +50,7 @@ hashes, canonical website commit and public checks after publication.
   corrected, and the unused Members settings section is removed.
 - Notifications use the new design and persistent states. Assist matches the
   user's language, including Roman Urdu; its companion server prompt change
-  still needs the separately reviewed billing deployment.
+  was deployed with the reviewed billing service rollout.
 
 ## Local build and controlled verification
 
@@ -58,7 +64,7 @@ must not replace the production signed download:
 - SHA-256: `9881ba87c81c42960f8ac6593d09017e96970f54a0a08e20d95c8cf21af88f20`.
 - Local Windows signature status: `NotSigned`.
 
-The final packaged import/progress pass completed 26 checks: six selected-lead
+An earlier packaged import/progress pass in this release work completed 26 checks: six selected-lead
 checks, eleven import-count checks and nine progress checks. It verified 15/50
 saved business selections, 100 CSV websites, cleared stale 13-site drafts,
 17/17 completed owner fixture results and accurate 0–100% progress. Stop
@@ -71,7 +77,7 @@ The final candidate's isolated UI checks also verified Decision Makers website
 coverage of 13/15 (87%), and Email Finder displaying `Checking 1/3` with Stop
 while verification remained scoped to the same three imported lead IDs.
 
-Seven additional packaged owner-repair checks used captured public page
+Seven additional earlier packaged owner-repair checks used captured public page
 fixtures. They removed false Shopify heading rows, retained the sourced founder,
 cleared an unsupported inbox, obtained the published personal email from the
 Usama Bajwa fixture, and replaced a specifically superseded Fathom owner with
@@ -109,7 +115,7 @@ one simultaneous six-site batch or a production-wide success rate:
 | Rubenstein Law | Robert Rubenstein identified; no owner mailbox verified in that run | 19.9 s |
 | Haber Law (`haber.law`) | David B. Haber and his published address found | 5.4 s |
 
-The final packaged build also performed an isolated live Haber Law lookup in
+The earlier packaged build also performed an isolated live Haber Law lookup in
 6.0 seconds and verified the email on the fetched source. The different
 `haberlaw.com` hostname had a TLS failure and was not silently treated as the
 same verified website. No TLS protection was disabled.
@@ -140,33 +146,46 @@ The total result cap, website-status filter and saved-run workflows are separate
 implemented paths. Repairing these dormant controls is recorded for follow-up;
 no additional app changes were made during website alignment for this release.
 
-## Remaining release actions
+## Website verification and guarded rollout
 
-1. Wait for the exact Windows CI run above to finish successfully. Require both
-   Azure signing steps, signature verification, refreshed metadata and draft
-   release asset upload. Do not substitute the unsigned local installer.
-2. Verify the draft's exact three assets against GitHub SHA-256/size, updater
-   SHA-512/path/version, and Windows Authenticode publisher `Nafran LTD` with a
-   timestamp. The task helper `work/stage-signed-1.4.17.cjs <run-id> <full-sha>`
-   must target `v1.4.17-r2-windows` and the exact commit/run above. It prepares a
-   local verified copy and stages the same files under
-   `/home/ahmed/deploy-staging/1.4.17/signed/`; it does not publish them.
-3. Align reviewed website files into `landing/` and companion billing files into
-   `app/` in canonical repository `aamirmursleen/mamalead`, checked out at
-   `/home/ahmed/mamalead`. Keep runtime secrets and customer databases separate.
-   Record the final canonical commit and candidate browser/build evidence.
-4. Use `mamalead-publish --check` and `mamalead-publish` through the current
-   server release guard. Homepage/routing/schema rules and approval state are
-   checked against the actual candidate, not inferred from an older release.
-5. Publish the verified installer with `mamalead-installer-publish 1.4.17`.
-   The configured publisher handles signature trust, metadata, backup/rollback,
-   feed switching and health checks. Its certificate trust fix was completed
-   for 1.4.16; do not recreate the signing identity or disable validation.
-6. Verify public homepage/assets, updater version, full installer hash and
-   signature, byte ranges, download endpoint and service health. Record the
-   publication commit, signed digest, backup path and final results here.
+Website files are aligned into `landing/` and the companion Assist server change
+into `app/` in canonical repository `aamirmursleen/mamalead`. The reviewed
+candidate is `bee9af72a08ae64450a3a9ce7a1b46a13f951941`.
 
-Website and installer publication are separate guarded actions. Coordinate
-release availability claims with the actual signed installer selected by the
-public endpoint. Stripe mode must be verified from current server health; this
-release does not authorize a payment-mode change.
+- VM115 build `29d8baf2`: **36/36 checks passed**.
+- Candidate Playwright review `mamalead-1417-review3`: passed, covering 19
+  screenshots, eight modules and 29 FAQs.
+- Candidate review evidence: `/tmp/vm115-playwright/mamalead-1.4.17-review3`.
+- The exact-SHA owner approval was accepted; the guard reported
+  `homepage_approved=yes` for the canonical commit above.
+- Final rollout VM115 build: `afc84db2`.
+- `mamalead-publish` completed successfully at `2026-10-28T21:01Z`, restarting
+  `nafran-billing` and `nafran-landing`. Database checks passed; public health
+  checks passed **4/4**.
+- The guarded publisher created source backup
+  `source-20261028T210109Z-bee9af72a08a.tar.gz` and database backup
+  `billing-20261028T210109Z-bee9af72a08a.sqlite3`. These were produced by the
+  configured publisher, not by manual live-file replacement.
+- All **24 landing files** match the canonical reviewed source after source
+  normalization: 19 PNG screenshots, two HTML files and three metadata files.
+- Public homepage SHA-256:
+  `f93965d5b8637138b2890a8f01c8727c87ea8a4a7e2388f5caaada6a64fe51a1`.
+- API health is `ok` and reports payment mode `test`.
+
+The full public installer download is `335381112` bytes and matches the signed
+CI artifact's SHA-256 and SHA-512. Authenticode verification reports Valid,
+Nafran LTD, timestamped. Public artifact verification is complete; the production
+browser's rendered-page review is the remaining check recorded below.
+
+## Final public browser verification
+
+VM115 job `mamalead-1417-production` passed against the real public site, without
+substituting local page or asset responses. It verified the approved HTML hash,
+all 19 screenshots, eight modules, the Email Finder validity gallery, Decision
+Makers progress/selected-business galleries, desktop/mobile layouts and FAQs.
+No page errors, failed resources, payment actions or download actions occurred.
+Evidence: `/tmp/vm115-playwright/mamalead-1.4.17-production/`.
+
+Website and installer publication used their separate guarded actions. The
+existing signer configuration and release safeguards were retained. Stripe is
+still in test mode; this release did not authorize a payment-mode change.

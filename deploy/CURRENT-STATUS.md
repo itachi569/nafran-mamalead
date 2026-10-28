@@ -1,19 +1,43 @@
 # MamaLead self-hosted test deployment
 
-## 29 October 2026: 1.4.17 prepared; signed CI and publication pending
+## 29 October 2026: 1.4.17 installer and website deployed
 
 The latest desktop source is pushed at
 `344c937c9e31b6b75a437d4c04bc0e2729e02670`, tagged `v1.4.17-r2-windows`.
 [Signed CI run 40764761517](https://github.com/itachi569/nafran-mamalead/actions/runs/40764761517)
-is pending. The local package passed the documented packaged-app checks but is
-unsigned; it is not a replacement for the production signed installer.
+completed successfully. The signed CI installer verified as Authenticode Valid,
+Nafran LTD, timestamped, and `mamalead-installer-publish 1.4.17` completed.
+The signed installer is `335381112` bytes with SHA-256
+`74b0814aedcf08ade50cea25693ee0dd6390a66cb5285e8b0d53a8a87cc27183`.
+Publication backup:
+`/var/lib/mamalead-publish/installer-backups/20261028T205614Z-1.4.17`.
+The complete public download matches the CI artifact's size, SHA-256 and
+SHA-512 and verifies as timestamped Authenticode Valid for Nafran LTD.
+
+Canonical website/Assist commit `bee9af72a08ae64450a3a9ce7a1b46a13f951941`
+is pushed to `aamirmursleen/mamalead` main; desktop repository website commit
+`4eb9604255fbacf7c62ded7607e48818e7284038` is also pushed. VM115 build
+`29d8baf2` passed 36/36 checks and candidate Playwright review
+`mamalead-1417-review3` passed. Owner approval was accepted by the guard
+(`homepage_approved=yes`). `mamalead-publish` deployed that exact canonical
+commit at `2026-10-28T21:01Z`, using final VM115 build `afc84db2` and restarting
+`nafran-billing` and `nafran-landing`. Database checks and all four public health
+checks passed. The website and Assist server prompt are live.
+
+All 24 landing files (19 screenshots, two HTML and three metadata files) match
+their canonical reviewed source. Public homepage SHA-256:
+`f93965d5b8637138b2890a8f01c8727c87ea8a4a7e2388f5caaada6a64fe51a1`.
+The publisher created `source-20261028T210109Z-bee9af72a08a.tar.gz` and
+`billing-20261028T210109Z-bee9af72a08a.sqlite3` backups. API health is `ok`;
+payment mode remains `test`. Final VM115 public browser check
+`mamalead-1417-production` passed: approved HTML, all 19 screenshots, eight
+modules, Email Finder validity, Decision Makers galleries and desktop/mobile layouts.
 
 See the [1.4.17 release handoff](release-1.4.17.md) for changes, controlled/live
-test evidence, remaining website alignment, signed asset staging and guarded
-publication steps. No 1.4.17 server or public installer rollout is confirmed in
-this status. The previous verified public website and Windows release is
-[1.4.16, deployed 26 October](release-1.4.16.md); its signer trust configuration
-is already working. Older dated entries below are historical records.
+test evidence, signed artifact details, known Maps-control limitation and
+remaining production visual check. The previous release was
+[1.4.16, deployed 26 October](release-1.4.16.md). Older dated entries below are
+historical records.
 
 ## 22 October 2026: audited Windows 1.4.14 and refreshed website
 
