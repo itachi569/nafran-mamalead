@@ -52,10 +52,52 @@ GitHub Actions artifact storage reached its quota on 20 October 2026 after a suc
 
 ## Fleet server publication
 
-The landing service uses `deploy/landing-server.mjs` as `/opt/billing/landing/server.mjs`, with `deploy/windows-update-feed.mjs` beside it. It serves a strict allowlist from `/opt/billing/artifacts/windows-updates` at `/updates/windows/`; metadata is not cached, and artifacts support single byte ranges. The app disables multiple-range requests. When installing files as `ahmed`, explicitly grant the service user `nafran-billing` read access with `setfacl -m u:nafran-billing:r <files>` and traversal access on the feed directory with `setfacl -m u:nafran-billing:rx <directory>` before restarting. `install -m 640` does not retain the destination ACL.
+The current deployment path uses the server's guarded publishers. The canonical
+website/billing repository is `aamirmursleen/mamalead`, checked out at
+`/home/ahmed/mamalead`; it is separate from the Electron source repository.
+Website files belong in canonical `landing/`, billing files in `app/`. Follow
+the current server `AGENTS.md` and publisher checks for the candidate commit.
 
-For each release, upload the signed installer and its refreshed blockmap into the feed directory first, retaining the original filenames from `latest.yml`. Verify their hashes, then atomically publish `latest.yml` last. Keep prior versioned artifacts for existing updater clients. Create a copy or hard link named `/opt/billing/artifacts/MamaLead-Setup-<version>.exe`, atomically update `/opt/billing/app/.installer-path`, and restart only `nafran-billing.service` with `sudo fleet-dev restart mamalead nafran-billing`.
+After signed CI succeeds for the exact reviewed tag/commit, obtain only the
+three draft release assets: `MamaLead Setup <version>.exe`, its `.blockmap`,
+and `latest.yml`. GitHub may normalize spaces to dots in release asset names;
+restore the exact filenames referenced by `latest.yml` when staging. Verify
+GitHub SHA-256 digests and sizes, installer SHA-512 against update metadata,
+and valid timestamped Windows Authenticode for `Nafran LTD`. Require the CI
+application-signing, installer-signing and signature-verification steps to pass.
 
-Before changes, save the existing landing server and installer path under `~/deploy-staging/<version>/rollback/`. After publication verify the public feed, byte-range response, installer signature, download endpoint, and API health. The feed contains no credentials or customer data.
+Stage the verified files and `SHA256SUMS` under
+`/home/ahmed/deploy-staging/<version>/signed/`. Staging must not write production
+artifact paths, switch `.installer-path`, publish the feed or restart services.
+Use the reviewed staging helper for the release; never log GitHub credentials
+or temporary signed download URLs, and never distribute private secret files.
+
+From `/home/ahmed/mamalead`, `mamalead-publish --check` verifies the canonical
+source candidate, and `mamalead-publish` performs the source rollout through
+VM115 validation and the release guard. Protected homepage/routing/schema
+changes may require candidate-specific staging evidence and owner approval;
+inspect the current guard result rather than assuming an older SHA approval
+covers new files. Routine release permissions and certificate configuration
+do not need to be recreated for each version.
+
+Publish staged Windows artifacts using `mamalead-installer-publish <version>`.
+The guarded installer publisher performs hash/metadata and Nafran LTD signature
+checks, preserves rollback data, switches the download selection/feed and
+checks health and public availability. Its Microsoft signing-root trust
+configuration was repaired and successfully used for 1.4.16 on 26 October 2026.
+Do not fall back to the older direct-copy scripts or disable signature checks.
+
+The landing service serves a strict allowlist from
+`/opt/billing/artifacts/windows-updates` at `/updates/windows/`; metadata is not
+cached and artifacts support single byte ranges. The app disables multiple-range
+requests. The publisher owns production file permissions, feed ordering,
+installer selection and service changes. Website and installer publication are
+independent; advertise a new downloadable version only when its signed files
+are actually selected by the public endpoint.
+
+After publication verify homepage/assets, updater version, full installer
+hash/signature, byte-range response, download endpoint and API health. Record
+the deployed source commit, signed hashes and publisher rollback path in the
+versioned release document. The feed contains no credentials or customer data.
 
 Artifact Signing gives the installer a verified publisher identity. Microsoft states that SmartScreen reputation still builds over time, so an early signed release can continue to show a warning until the publisher or file has sufficient reputation.

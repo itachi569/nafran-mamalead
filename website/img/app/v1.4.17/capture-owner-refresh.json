@@ -1,0 +1,35 @@
+{
+  "version": "1.4.17",
+  "packaged": true,
+  "capturedAt": "2026-10-28T20:37:46.004Z",
+  "theme": "light",
+  "viewport": {
+    "width": 1440,
+    "height": 960
+  },
+  "data": "Fictional sample businesses and .example domains in a temporary isolated profile; no customer data",
+  "liveNetworkCalls": 0,
+  "actualBillingCalls": 0,
+  "selectedBusinesses": 15,
+  "withWebsite": 13,
+  "withoutWebsite": 2,
+  "websiteCoveragePercent": 87,
+  "capturedProgress": {
+    "percent": 40,
+    "processed": 6,
+    "total": 15,
+    "remaining": 9,
+    "stopVisible": true
+  },
+  "completed": {
+    "processed": 15,
+    "owners": 13,
+    "emails": 10
+  },
+  "files": [
+    "dm.png",
+    "dm-progress.png",
+    "dm-saved-leads.png"
+  ],
+  "rendererErrors": []
+}

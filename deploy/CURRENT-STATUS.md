@@ -1,5 +1,20 @@
 # MamaLead self-hosted test deployment
 
+## 29 October 2026: 1.4.17 prepared; signed CI and publication pending
+
+The latest desktop source is pushed at
+`344c937c9e31b6b75a437d4c04bc0e2729e02670`, tagged `v1.4.17-r2-windows`.
+[Signed CI run 40764761517](https://github.com/itachi569/nafran-mamalead/actions/runs/40764761517)
+is pending. The local package passed the documented packaged-app checks but is
+unsigned; it is not a replacement for the production signed installer.
+
+See the [1.4.17 release handoff](release-1.4.17.md) for changes, controlled/live
+test evidence, remaining website alignment, signed asset staging and guarded
+publication steps. No 1.4.17 server or public installer rollout is confirmed in
+this status. The previous verified public website and Windows release is
+[1.4.16, deployed 26 October](release-1.4.16.md); its signer trust configuration
+is already working. Older dated entries below are historical records.
+
 ## 22 October 2026: audited Windows 1.4.14 and refreshed website
 
 Windows 1.4.14 is now selected by the public download endpoint and updater feed.

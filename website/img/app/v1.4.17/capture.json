@@ -1,0 +1,28 @@
+{
+  "version": "1.4.17",
+  "packaged": true,
+  "workspace": "Fictional sample data, not customer records",
+  "size": {
+    "width": 1440,
+    "height": 960
+  },
+  "capturedAt": "2026-10-28T16:14:04.959Z",
+  "files": [
+    "dashboard-light.png",
+    "dm.png",
+    "email.png",
+    "import-websites.png",
+    "leads.png",
+    "lists.png",
+    "live-search.png",
+    "maps-light.png",
+    "notifications.png",
+    "phone.png",
+    "runs.png",
+    "saved-searches.png",
+    "settings-account.png",
+    "settings.png",
+    "social.png",
+    "website.png"
+  ]
+}

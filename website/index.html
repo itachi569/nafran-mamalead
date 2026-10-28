@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<title>MamaLead — Google Maps leads, website contacts and owner emails</title>
+<meta name="description" content="Collect Google Maps leads, find published business contacts and owner emails, search your saved results live, and export branded PDF or Excel files with MamaLead for Windows.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/png" href="/img/mamalead-favicon.png?v=2">
 <script src="./support.js"></script>
@@ -26,6 +28,27 @@
   @keyframes popIn { from { opacity: 0; transform: translateY(34px) scale(.985); } to { opacity: 1; transform: none; } }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes modalIn { from { opacity: 0; transform: translateY(24px) scale(.97); } to { opacity: 1; transform: none; } }
+
+  .latest-eyebrow{margin:0;font-size:11px;letter-spacing:.12em;color:#42473f;line-height:1.6}
+  .latest-heading{margin:12px 0 22px;font-size:clamp(26px,3.3vw,42px);line-height:1.12;letter-spacing:-.035em;max-width:850px}
+  .latest-feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,225px),1fr));gap:24px}
+  .latest-feature-grid h3{font-size:16px;line-height:1.35;margin:0 0 10px;font-weight:700}
+  .latest-feature-grid p{margin:0;font-size:13.5px;line-height:1.7;color:#42473f}
+  .latest-workflow{padding:clamp(24px,4vw,44px);border-radius:28px;background:#e5ebdd;border:1px solid #1c1c1c14}
+  #latest .latest-feature-grid,.latest-workflow .latest-feature-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .latest-workflow-shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px;margin-top:32px}
+  .latest-workflow-shots figure{margin:0;padding:8px;border-radius:20px;background:#f5f5f4;min-width:0}
+  .latest-workflow-shots img{display:block;width:100%;height:auto;border-radius:14px;max-height:360px;object-fit:contain;background:#efefef}
+  .latest-workflow-shots figcaption{padding:12px 8px 6px;font-size:12px;line-height:1.6;color:#51594d}
+  .latest-assist{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:26px;align-items:center;margin-top:30px;padding:28px;border-radius:22px;background:#f5f5f4}
+  .latest-assist h3{font-size:26px;line-height:1.15;letter-spacing:-.025em;margin:12px 0 14px}
+  .latest-assist p{font-size:13.5px;line-height:1.7;color:#42473f;margin:12px 0}
+  .latest-assist small{display:block;font-size:12px;line-height:1.6;color:#555d51}
+  .latest-assist-example{padding:22px;border-radius:18px;background:#1c1c1c;color:#f5f5f4}
+  .latest-assist-example span{font-size:11px;letter-spacing:.08em;color:#c8d5bb}
+  .latest-assist-example p{color:#e8ece3}
+  @media(max-width:900px){#latest .latest-feature-grid,.latest-workflow .latest-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:640px){.latest-assist{grid-template-columns:minmax(0,1fr);padding:20px}.latest-feature-grid{gap:22px}#latest .latest-feature-grid,.latest-workflow .latest-feature-grid{grid-template-columns:minmax(0,1fr)}.latest-workflow-shots img{max-height:none}}
 </style>
 </helmet>
 <div style="position: relative; background: #EFEFEF; overflow-x: hidden;">
@@ -35,10 +58,10 @@
   <header style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
     <div style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
       <a href="#top" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-        <span style="width: 32px; height: 32px; border-radius: 10px; background: #1C1C1C; color: #C8D5BB; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">L</span>
+        <img data-brand-logo="mamalead" src="/img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" decoding="async" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
         <span style="line-height: 1.1;">
           <span style="display: block; font-size: 15.5px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
-          <span style="display: block; font-size: 10.5px; color: #555956;">v1.4.16 &middot; Windows app</span>
+          <span style="display: block; font-size: 10.5px; color: #555956;">Windows desktop app</span>
         </span>
       </a>
       <nav style="margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); overflow-x: auto; max-width: 100%;">
@@ -60,7 +83,7 @@
     <div style="position: relative; max-width: 1180px; margin: 0 auto; padding: 0 24px; text-align: center;">
       <span style="display: inline-flex; align-items: center; gap: 9px; padding: 7px 15px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10.5px; letter-spacing: .14em; color: #1C1C1C; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M3 5.3l7.4-1v7.2H3zM11.4 4.1L21 2.8v8.7h-9.6zM3 12.5h7.4v7.2L3 18.7zM11.4 12.5H21v8.7l-9.6-1.3z"></path></svg>WINDOWS DESKTOP APP &middot; 10 / 11, 64-BIT</span>
       <h1 style="margin: 24px auto 0; max-width: 900px; font-size: clamp(36px, 5.4vw, 70px); line-height: 1.02; letter-spacing: -.045em; font-weight: 700; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .06s;">Google Maps leads, scraped and enriched on your own PC.</h1>
-      <p style="margin: 22px auto 0; max-width: 640px; font-size: 16px; line-height: 1.6; color: #1C1C1C; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .14s;">MamaLead runs on your computer. Give it a keyword and a city: it collects each business from Google Maps, reads the business's own website for emails, phones, social profiles and decision makers, and keeps every row in a SQLite file on your machine.</p>
+      <p style="margin: 22px auto 0; max-width: 640px; font-size: 16px; line-height: 1.6; color: #1C1C1C; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .14s;">Collect businesses from Google Maps, find the contact details their websites publish, and keep your results on your PC. Search saved records while you type, find owner emails in a separate workflow, and export a clear PDF or Excel file.</p>
       <div style="margin: 32px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; animation: rise .9s cubic-bezier(.16,1,.3,1) both; animation-delay: .22s;">
         <a href="#download" style="display: inline-flex; align-items: center; gap: 10px; padding: 15px 26px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 14.5px; font-weight: 500; white-space: nowrap; box-shadow: 0 14px 30px -14px rgba(28,28,28,.7); transition: transform .35s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-2px); color: #FFFFFF;">Download for Windows</a>
         <a href="#modules" style="display: inline-flex; align-items: center; gap: 9px; padding: 15px 24px; border-radius: 999px; background: rgba(255,255,255,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 10px 26px -16px rgba(28,28,28,.3); font-size: 14.5px; font-weight: 500; white-space: nowrap; transition: transform .35s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-2px);">See the 8 modules<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></a>
@@ -96,34 +119,34 @@
       <div style="margin: 46px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px;">
         <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;" style-hover="transform: translateY(-8px);">
           <button type="button" onClick="{{ openStep1 }}" aria-label="Open the Google Maps Scraper module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
-            <img src="img/app/v1.4.16/maps-light.png" alt="Latest light-mode Google Maps Scraper page with keywords, location and filters" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+            <img src="img/app/v1.4.17/maps-light.png" alt="Latest light-mode Google Maps Scraper page with keywords, location and filters" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
           </button>
           <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
             <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">01</span>
             <h3 style="margin: 16px 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Scrape Google Maps</h3>
-            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Enter keywords and a city. The app opens Google Maps in its own browser window, from your Google account if you sign it in, and saves the name, address, phone, website, rating and review count. Set one total lead limit for the run; it stops at that limit or earlier when fewer results are available.</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Enter keywords and a city. MamaLead uses its own browser profile, with an optional visible window and Google sign-in. It saves the name, address, phone, website, rating and review count. Set one total lead limit; the run stops at that limit or earlier when fewer results are available.</p>
             <p style="margin: auto 0 0; padding-top: 16px; font-size: 12px; color: #42473F;">Screenshot: Google Maps page, before a run.</p>
           </div>
         </div>
         <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .08s;" style-hover="transform: translateY(-8px);">
           <button type="button" onClick="{{ openStep2 }}" aria-label="Open the Email Finder module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
-            <img src="img/app/v1.4.15/email.png" alt="Light-mode Email Finder page showing the email coverage and verification cascade" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+            <img src="img/app/v1.4.17/email.png" alt="Latest Email Finder overview with optional validity, Cascade, Confidence mix and saved-email search" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain;" />
           </button>
           <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
             <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">02</span>
             <h3 style="margin: 16px 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Enrich from each website</h3>
-            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">A queue visits every business's own website and pulls out the emails, phone numbers, social profiles and named people it publishes, then writes them to the same lead.</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Read public website pages for business emails, phone numbers and social links. Use Website Lookup to choose the details you need, or the separate Decision Makers workflow for sourced owner emails.</p>
             <p style="margin: auto 0 0; padding-top: 16px; font-size: 12px; color: #42473F;">Screenshot: Email Finder and its cascade.</p>
           </div>
         </div>
         <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .16s;" style-hover="transform: translateY(-8px);">
           <button type="button" onClick="{{ openStep3 }}" aria-label="Open the All Leads, Saved Lists and Run History module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
-            <img src="img/app/v1.4.15/leads.png" alt="Latest light-mode All Leads page with the permanent store and lead ledger" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+            <img src="img/app/v1.4.17/leads.png" alt="Latest light-mode All Leads page with the permanent store and lead ledger" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
           </button>
           <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
             <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">03</span>
             <h3 style="margin: 16px 0 10px; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Work the list, export</h3>
-            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Score and filter the leads, bookmark the ones worth calling into saved lists, and export CSV or Excel files straight to disk.</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Search and filter your saved leads, keep useful businesses in named lists, and export branded PDF or Excel tables straight to your computer.</p>
             <p style="margin: auto 0 0; padding-top: 16px; font-size: 12px; color: #42473F;">Screenshot: All Leads, the permanent store.</p>
           </div>
         </div>
@@ -131,15 +154,20 @@
     </div>
   </section>
 
-  <section aria-labelledby="latest-heading" style="max-width: 1180px; margin: 0 auto; padding: 0 24px 28px;">
-    <div style="padding: 26px; border-radius: 24px; background: #E4EBDD;">
-      <p style="margin: 0; font-size: 11px; letter-spacing: .12em; color: #42473F;">LATEST APP · WINDOWS 1.4.16</p>
-      <h2 id="latest-heading" style="margin: 10px 0 18px; font-size: 26px; letter-spacing: -.03em;">From your first trial to your next export</h2>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 20px; font-size: 13px; line-height: 1.6;">
-        <div><strong>One lead limit per run</strong><p style="margin: 5px 0 0;">Set 25 or 40. Maps stops at your total, or earlier when fewer results are available.</p></div>
-        <div><strong>Find what you saved</strong><p style="margin: 5px 0 0;">Clear search guidance for saved profiles, emails, phone numbers and decision makers.</p></div>
-        <div><strong>People Found → PDF or Excel</strong><p style="margin: 5px 0 0;">Scan a website, review its published contacts and save the current results directly.</p></div>
-        <div><strong>Get started from the welcome notice</strong><p style="margin: 5px 0 0;">Open Settings &amp; Billing for your 1-day trial or Lifetime access.</p></div>
+  <section id="latest" aria-labelledby="latest-heading" style="max-width:1180px;margin:0 auto;padding:0 24px 28px">
+    <div style="padding:clamp(24px,3vw,36px);border-radius:26px;background:#e4ebdd">
+      <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.17</p>
+      <h2 id="latest-heading" class="latest-heading">From your selected businesses to results you can trace.</h2>
+      <div class="latest-feature-grid">
+        <article><h3>Every selected business counts</h3><p>Send a saved Maps run or selected leads to Decision Makers. Businesses with shared websites or no website stay in the scan, with the full lead count shown before you start.</p></article>
+        <article><h3>See progress. Stop when needed.</h3><p>Decision Makers shows the percentage checked, completed and remaining leads, and current business. Stop scan keeps completed results. A finished check may still have no published email.</p></article>
+        <article><h3>Owner emails, with evidence</h3><p>Checks founder profiles, team pages, relevant company stories and other public sources. An email needs a connection to the owner and business; generic inboxes and guessed addresses stay out.</p></article>
+        <article><h3>Live search, no extra click</h3><p>Type a name, email, phone or profile URL. Related saved matches appear below the search bar; a complete phone number narrows to exact matches.</p></article>
+        <article><h3>Your history stays useful</h3><p>Open earlier finder searches from History, or revisit a whole Maps run with Saved searches. Your search history stays available when you reopen the app.</p></article>
+        <article><h3>Choose a website list</h3><p>Paste links, open the Windows file picker for CSV/TSV, or reuse a Maps run. Website imports show ready, duplicate and skipped counts alongside their Scan controls.</p></article>
+        <article><h3>One main email. Your choice to verify.</h3><p>Email Finder shows one main email published on each business website. Choose validity on the page or check the current results later. Follow the checked count and use Stop checking when needed.</p></article>
+        <article><h3>Social profiles without the clutter</h3><p>Repeated links to the same account are merged. Profile results leave out share, login, post and video links, with saved company and profile search as you type.</p></article>
+        <article><h3>Results come into view</h3><p>Website Lookup moves to its results when the scan finishes. Review the published details and source pages, then export the current scan or selected websites.</p></article>
       </div>
     </div>
   </section>
@@ -157,7 +185,7 @@
               <span role="img" aria-label="{{ m.thumbAlt }}" style="display: block; width: 100%; height: 100%; background-image: url({{ m.thumb }}); background-size: cover; background-position: 100% 0;"></span>
             </span>
             <span style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 16px 8px 0;">
-              <span style="flex: none; width: 36px; height: 36px; border-radius: 11px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ m.d1 }}"></path><path d="{{ m.d2 }}"></path></svg></span>
+              <span style="flex: none; width: 36px; height: 36px; border-radius: 11px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path sc-camel-d="{{ m.d1 }}"></path><path sc-camel-d="{{ m.d2 }}"></path></svg></span>
               <span style="margin-left: auto; font-size: 30px; line-height: 1; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.3px, transparent 1.4px); background-size: 3px 3px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">{{ m.num }}</span>
             </span>
             <span style="display: block; padding: 14px 8px 0; font-size: 17px; font-weight: 700; letter-spacing: -.02em; line-height: 1.25;">{{ m.name }}</span>
@@ -169,27 +197,14 @@
     </div>
   </section>
 
-  <section id="latest" aria-labelledby="latest-title" style="padding: 0 0 80px;">
-    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
-      <div style="padding: clamp(24px,4vw,44px); border-radius: 28px; background: #E5EBDD; border: 1px solid rgba(28,28,28,.08);">
-        <span style="font-size: 10.5px; letter-spacing: .16em; color: #42473F;">WHAT'S NEW · 1.4.16</span>
-        <h2 id="latest-title" style="margin: 14px 0 0; font-size: clamp(28px,3.4vw,42px); line-height: 1.1; letter-spacing: -.04em;">More detail. A clearer view of your work.</h2>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,240px),1fr)); gap: 26px; margin-top: 28px;">
-          <div><h3 style="font-size: 17px; margin: 0 0 9px;">Contacts with context</h3><p style="font-size: 13.5px; line-height: 1.65; color: #42473F; margin: 0;">Decision Makers brings together published emails, phones, office addresses and social links. See which details belong to a person and which are website contacts.</p></div>
-          <div><h3 style="font-size: 17px; margin: 0 0 9px;">Your totals, one click away</h3><p style="font-size: 13.5px; line-height: 1.65; color: #42473F; margin: 0;">Open Insights / Reports to review saved leads, named people, Maps searches and contact coverage. Refresh whenever you want the latest saved totals.</p></div>
-          <div><h3 style="font-size: 17px; margin: 0 0 9px;">Simple exports and scan controls</h3><p style="font-size: 13.5px; line-height: 1.65; color: #42473F; margin: 0;">Choose Excel or PDF, keep your current results if you cancel, and return to a minimized scan from any module. Maps runs stay within your requested total.</p></div>
-        </div>
-        <p style="margin: 24px 0 0; font-size: 12px; color: #555D51; line-height: 1.6;">Contact availability depends on what a website publishes and makes accessible. Missing details are never guessed.</p>
-      </div>
-    </div>
-  </section>
+  <section id="workflow" aria-labelledby="workflow-heading" style="padding:20px 0 90px"><div style="max-width:1180px;margin:0 auto;padding:0 24px"><div class="latest-workflow"><p class="latest-eyebrow">YOUR EVERYDAY WORKFLOW</p><h2 id="workflow-heading" class="latest-heading">A clearer path from a website to a useful contact.</h2><div class="latest-feature-grid"><article><h3>The main number comes first</h3><p>Phone Finder prioritises the website's main contact number, keeps extra numbers one click away and preserves saved Maps numbers. Targeted checks keep scans responsive, with bounded waits for slow websites.</p></article><article><h3>Read the relevant contact pages</h3><p>Email Finder keeps one main email published on each business website, including Contact Us pages found through links and sitemaps. Optional validity checks apply to the current list.</p></article><article><h3>Pick the details you need</h3><p>Website Lookup lets you choose emails, phones, social profiles and addresses separately. When the scan finishes, its results come into view with each site's status and sources.</p></article><article><h3>Exports you can use</h3><p>PDF and Excel files include the MamaLead logo, column headings and properly arranged rows. Owner-email exports keep their focused Owner, Business, Owner email and Source columns.</p></article><article><h3>Saved Maps searches, up top</h3><p>Open an earlier city or keyword run from Saved searches and export just that run. The current scan continues to show its own leads in Results.</p></article><article><h3>Updates with a next step</h3><p>Notifications has All and Unread views, read controls and delete with Undo. Open the related result, revisit a saved Maps run or reveal an exported file in its folder.</p></article></div><div class="latest-workflow-shots"><figure><img src="img/app/v1.4.17/live-search.png" alt="Live saved Phone Finder search in the latest MamaLead app" loading="lazy" decoding="async"><figcaption>Saved matches appear as you type. Fictional sample businesses.</figcaption></figure><figure><img src="img/app/v1.4.17/import-websites.png" alt="Latest MamaLead Import websites dialog with Paste links, Upload a file and From a Maps run" loading="lazy" decoding="async"><figcaption>Compact imports keep counts and Scan controls visible. Paste links, choose a file or reuse a Maps run.</figcaption></figure></div><div class="latest-assist"><div><p class="latest-eyebrow">MAMALEAD ASSIST</p><h3>Ask in the language you use.</h3><p>Get help with the app in English, Urdu, Roman Urdu and other supported languages. Roman Urdu stays in Latin letters, including short follow-ups, rather than switching to Hindi. Ask explicitly if you want a different reply language.</p><p>The assistant keeps app button names recognisable. It connects through the MamaLead service, with no personal AI-provider key to enter.</p><small>Internet access and your plan's AI allowance apply. Assist provides guidance; it does not run app actions for you.</small></div><div class="latest-assist-example"><span>For example · Roman Urdu</span><p>“mujy saved phone number kasy dhondna h?”</p><p>Phone Finder khol kar search bar mein naam ya number likhein. Matches neeche aa jayenge; Enter zaroori nahi.</p></div></div><p style="margin:24px 0 0;font-size:12px;color:#555d51;line-height:1.6">Results depend on public information the website makes accessible. Missing details stay blank; published contact information is not a guarantee of an active mailbox or an answered phone.</p></div></div></section>
 
   <section id="privacy" data-screen-label="Privacy" style="padding: 40px 0 90px;">
     <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
       <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
         <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">PRIVACY</span>
         <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Your leads stay on this PC</h2>
-        <p style="margin: 14px auto 0; max-width: 620px; font-size: 15px; line-height: 1.6; color: #42473F;">Your leads database stays on your PC. License checks use our server; MamaLead Assist contacts its AI provider when you use it.</p>
+        <p style="margin: 14px auto 0; max-width: 620px; font-size: 15px; line-height: 1.6; color: #42473F;">Your lead database stays on your PC. Activation and billing use the MamaLead service; optional Assist messages and limited workspace context pass through it to the AI provider.</p>
       </div>
       <div style="margin: 44px 0 0; display: flex; flex-wrap: wrap; gap: 18px; align-items: stretch;">
         <div style="flex: 1 1 460px; min-width: 0; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0; box-shadow: 0 50px 90px -50px rgba(28,28,28,.6); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;">
@@ -255,7 +270,7 @@
             <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>300 Google Maps leads total</span>
             <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Website enrichment: emails, phones and socials</span>
             <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>All Leads, Saved Lists, Run History</span>
-            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>CSV / Excel export to disk</span>
+            <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>PDF / Excel export to disk</span>
             <span style="display: flex; gap: 10px;"><span style="flex: none; width: 18px; height: 18px; border-radius: 50%; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>Data stays on your machine</span>
           </div>
           <div style="margin: 24px 0 20px; padding: 16px 18px; border-radius: 16px; background: #E9EDE5; border: 1px solid rgba(28,28,28,.06);">
@@ -312,7 +327,7 @@
           <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Download for Windows</h2>
           <div style="margin: 20px 0 0; display: flex; flex-wrap: wrap; gap: 8px;">
             <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Windows 10 / 11, 64-bit</span>
-            <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Windows 1.4.16</span>
+            <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Desktop installer</span>
             <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Choose your install folder</span>
           </div>
           <div style="margin: 26px 0 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
@@ -361,11 +376,11 @@
       <div style="display: flex; flex-wrap: wrap; gap: 26px; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0;">
         <div style="flex: 1 1 300px; min-width: 0;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="width: 32px; height: 32px; border-radius: 10px; background: #C8D5BB; color: #1C1C1C; font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;">L</span>
+            <img data-footer-brand-logo="mamalead" src="/img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
             <span style="font-size: 17px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
           </div>
           <p style="margin: 14px 0 0; max-width: 340px; font-size: 13px; line-height: 1.6; color: #B9BEB6;">A local-first desktop lead generation app. It finds and organises business data; it does not contact anyone on your behalf.</p>
-          <p style="margin: 18px 0 0; font-size: 11.5px; color: #8E948B;">Windows app &middot; v1.4.16 &middot; &copy; 2026 Nafran</p>
+          <p style="margin: 18px 0 0; font-size: 11.5px; color: #8E948B;">Windows desktop app &middot; &copy; 2026 Nafran</p>
         </div>
         <nav style="flex: 1 1 300px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 20px; align-content: start; font-size: 13.5px;">
           <a href="#how" style="color: #E9EBE7;">How it works</a>
@@ -420,156 +435,449 @@
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;heroShot&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dashboard&quot;,&quot;Google Maps&quot;,&quot;All Leads&quot;],&quot;default&quot;:&quot;Dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;showPainting&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;openModuleOnLoad&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;min&quot;:0,&quot;max&quot;:8,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Modules&quot;}}">
-const circ = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${r * 2} 0a${r} ${r} 0 1 0 ${-r * 2} 0z`;
-const rect = (x, y, w, h, r) => `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}z`;
-
 const MODULES = [
   {
-    num: '01', name: 'Google Maps Scraper', short: 'Keyword and city in, one row per business out.',
-    d1: 'M9 4.5l-5 2v13l5-2 6 2 5-2v-13l-5 2-6-2z', d2: 'M9 4.5v13M15 6.5v13',
-    where: 'Sidebar \u2192 Scraper \u2192 Google Maps',
-    lead: 'Enter keywords, a city and your maximum total results. MamaLead collects available listings into your local database and stops at your limit, across all keywords and selected areas.',
-    bullets: [
-      'One total cap per run: request 40 and collect at most 40. If only 10 are available, the run finishes with 10.',
-      'Saves name, category, address, postcode, phone, website, rating, review count, coordinates and the Maps link.',
-      'Sponsored entries are skipped and duplicates are merged by name and address.',
-      'Filters for minimum rating, minimum reviews, has website and has phone.',
-      'Use the separate Decision Makers page to search for named contacts with your Decision Makers allowance.',
-      'Choose Google sign-in or a private guest session, and choose whether to show the browser window.',
-      'Minimize the progress panel and use Back to scan to return from another module. Review the captured places and live activity.'
+    "num": "01",
+    "name": "Google Maps Scraper",
+    "short": "A clear limit, live results and every saved search.",
+    "d1": "M9 4.5l-5 2v13l5-2 6 2 5-2v-13l-5 2-6-2z",
+    "d2": "M9 4.5v13M15 6.5v13",
+    "where": "Sidebar → Scraper → Google Maps",
+    "lead": "Search Google Maps by keyword and city. Set one total lead limit for the run, watch results arrive, and return to any saved search without starting again.",
+    "bullets": [
+      "The total applies across all keywords and selected areas. Request 40 and collect at most 40; if only 10 are available, the run finishes with 10.",
+      "Bulk import keywords and city or district targeting can form up to eight keyword/location searches in a run, all sharing that one total lead limit.",
+      "Save business names, websites, phone numbers, addresses, ratings, review counts and their Maps source.",
+      "Current results appear below the search while the scan runs. Saved searches has its own button near the top.",
+      "Select result rows and send those businesses to Social Profiles, Email Finder, Phone Finder or Decision Makers. The website-status filter helps you find businesses with or without websites.",
+      "Open a saved city or keyword search and export that search alone as PDF or Excel.",
+      "Choose Google sign-in or a guest session, and decide whether to show the browser window. Back to scan returns to minimized progress.",
+      "Owner-email searches live in the separate Decision Makers module, so they are not started by a Maps enrichment toggle."
     ],
-    shots: [
-      { src: 'img/app/v1.4.16/maps-light.png', label: 'Query and filters', caption: 'Set a maximum total for all keywords and selected areas. Find named contacts from the dedicated Decision Makers page.', alt: 'Light-mode Google Maps Scraper page with keywords, location and Maps filters' },
-      { src: 'img/app/v1.4.16/coverage-map.png', label: 'Coverage and results', caption: 'Current coverage view, results and live activity.', alt: 'Light-mode coverage view with captured lead labels, results and live activity' }
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/maps-light.png",
+        "label": "Google Maps",
+        "caption": "Keywords, location, one total limit and Saved searches. Illustrative sample workspace.",
+        "alt": "MamaLead 1.4.17 Google Maps Scraper with Saved searches at the top",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/saved-searches.png",
+        "label": "Saved searches",
+        "caption": "Reopen a saved run and export its own results as PDF or Excel. Illustrative sample workspace.",
+        "alt": "Saved Maps searches panel with locations, dates and per-run export controls",
+        "ratio": "3 / 2"
+      }
     ]
   },
   {
-    num: '02', name: 'Social Profiles', short: 'Which platforms each business is on.',
-    d1: circ(12, 12, 8.5), d2: 'M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z',
-    where: 'Sidebar \u2192 Add-ons \u2192 Social Profiles',
-    lead: 'Reads each lead\u2019s own website for links to its social accounts and shows how many of your leads are present on each platform.',
-    bullets: [
-      'Finds Instagram, Facebook, LinkedIn, YouTube, TikTok and X links published on the business\u2019s site.',
-      'Platform coverage shows the share of enriched leads on each network.',
-      'Reads published profile links, including numeric Facebook profiles and links embedded in website data. Missing links stay blank.',
-      'Search saved profiles by business, domain, handle or profile URL. Import websites to scan a new site.'
+    "num": "02",
+    "name": "Social Profiles",
+    "short": "Published social links, with live saved-profile search.",
+    "d1": "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0z",
+    "d2": "M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z",
+    "where": "Sidebar → Add-ons → Social Profiles",
+    "lead": "Find the social accounts a business links from its website, then search your saved profiles by company name, website, handle or profile URL.",
+    "bullets": [
+      "Reads published Instagram, Facebook, LinkedIn, YouTube, TikTok and X links, including links embedded in website data.",
+      "Repeated links to the same profile are merged. Login, share, post and video links are filtered out so each row stays focused on business accounts.",
+      "Each platform has one badge. If a business publishes several different accounts on that platform, open +N accounts to see them; Hide accounts collapses the list.",
+      "Import pasted website links, a CSV/TSV file or websites from a saved Maps run. The scan stays on the websites you selected.",
+      "Matches appear below the search bar while you type. Enter is optional, and exact matches appear before related names.",
+      "Earlier searches are saved in History. Use them again without rescanning a website.",
+      "Review platform coverage and export saved results as PDF or Excel. Unpublished or inaccessible links stay blank."
     ],
-    shots: [{ src: 'img/app/v1.4.15/social.png', label: 'Social Profiles', caption: 'Saved social profiles, clear search guidance and published profile links.', alt: 'Social Profiles page with coverage rings for Instagram, Facebook and LinkedIn and bars for YouTube, TikTok and X' }]
-  },
-  {
-    num: '03', name: 'Email Finder', short: 'Published emails, traced through a cascade.',
-    d1: rect(3.5, 5.5, 17, 13, 3), d2: 'M4 7.5l8 5.5 8-5.5',
-    where: 'Sidebar \u2192 Add-ons \u2192 Email Finder',
-    lead: 'Visits each business\u2019s website and extracts the email addresses it publishes, then shows where every lead sits in the pipeline.',
-    bullets: [
-      'The cascade: scraped, website found, emails extracted, verified.',
-      'Review email validity results and confidence before outreach; a result is not a delivery guarantee.',
-      'Run in bulk for the leads that still have no address on file.',
-      'Search saved emails by business, domain or address. Stop a verification pass and keep its completed results.'
-    ],
-    shots: [{ src: 'img/app/v1.4.15/email.png', label: 'Email Finder', caption: 'Saved-email search, website imports and email validity controls.', alt: 'Light-mode Email Finder page showing the current coverage cascade and verification controls' }]
-  },
-  {
-    num: '04', name: 'Phone Finder', short: 'Every number, by line type and area code.',
-    d1: 'M6.6 3.5h2.6l1.4 4-2 1.5a11 11 0 0 0 6.4 6.4l1.5-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z', d2: 'M15.5 4.6a5 5 0 0 1 3.9 3.9',
-    where: 'Sidebar \u2192 Add-ons \u2192 Phone Finder',
-    lead: 'Phone numbers from Google Maps load with the scrape. Leads without one can be backfilled by reading the business\u2019s own website.',
-    bullets: [
-      'Splits numbers into direct line, reception and mobile.',
-      'Groups numbers by area code, so you can see where they dial to.',
-      'Find phones for missing visits each lead\u2019s website to fill the gaps.',
-      'Search saved numbers by business, area or phone number, including numbers entered with spaces or punctuation.'
-    ],
-    shots: [{ src: 'img/app/v1.4.15/phone.png', label: 'Phone Finder', caption: 'Saved-phone search by business, area or number, alongside coverage and backfill.', alt: 'Phone Finder page with numbers split into direct line, reception, mobile and no number, grouped by area code' }]
-  },
-  {
-    num: '05', name: 'Decision Makers', short: 'Named people, only when the site says so.',
-    d1: circ(12, 8, 3.5), d2: 'M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5',
-    where: 'Sidebar \u2192 Add-ons \u2192 Decision Makers',
-    lead: 'Import a business website and scan its published contact and team information. The app moves to People Found and shows contacts from your current import.',
-    bullets: [
-      'Reads published team, leadership, contact and individual profile pages for names and roles.',
-      'Shows published emails, phone numbers, office addresses and social links. Direct person contacts and website contacts are labelled separately.',
-      'Download the current contacts directly as PDF or Excel. A successful export resets the current view; cancelling keeps the results.',
-      'Search saved contacts by person, role or business. Excel and PDF include contact details and source links; unpublished details stay blank.'
-    ],
-    shots: [{ src: 'img/app/v1.4.15/dm.png', label: 'Decision Makers', caption: 'People Found: names, roles, direct and website contacts, addresses and social links. Fictional sample records.', alt: 'Latest Decision Makers page showing people from the current website scan and direct PDF and Excel buttons' }]
-  },
-  {
-    num: '06', name: 'Website Lookup', short: 'Start from a list of websites instead of Maps.',
-    d1: 'M9.5 14.5l-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0', d2: 'M14.5 9.5l2-2a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0',
-    where: 'Sidebar \u2192 Add-ons \u2192 Website Lookup',
-    lead: 'Paste a list of websites, one per line, and the app fills in the business behind each one.',
-    bullets: [
-      'Returns business name, address, phone, emails, social profiles and LinkedIn for each site.',
-      'Imported sites join the same lead database as your Maps runs.',
-      'Shows queued, reading, completed and retry states for your current lookup. Missing information is left blank.'
-    ],
-    shots: [{ src: 'img/app/v1.4.15/website.png', label: 'Website Lookup', caption: 'Paste websites; each comes back as a filled-in record.', alt: 'Current Website Lookup page with website input and lookup progress controls' }]
-  },
-  {
-    num: '07', name: 'All Leads, Saved Lists & Run History', short: 'One permanent store, your lists and a full log.',
-    d1: 'M8.5 6.5h12M8.5 12h12M8.5 17.5h12', d2: 'M4 6.5h.01M4 12h.01M4 17.5h.01',
-    where: 'Sidebar \u2192 Data \u2192 All Leads \u00b7 Saved Lists \u00b7 Run History',
-    lead: 'Captured leads stay in your local database. Repeated scans merge duplicates and update available contact details, while named lists help organise your work.',
-    bullets: [
-      'Search, and filter by has phone, has email, has socials or no contact yet.',
-      'Bookmark leads into your own named saved lists, with counts from your stored records.',
-      'Run History logs every scrape, import and enrichment pass, with re-run.',
-      'Use the same simple Excel (.xlsx) and PDF download choices across the app. Files are saved straight to your computer.',
-      'Click Insights / Reports on Dashboard or Social Profiles to see saved leads, named people and contact coverage; refresh for current totals.'
-    ],
-    shots: [
-      { src: 'img/app/v1.4.15/leads.png', label: 'All Leads', caption: 'All Leads: the permanent store and what is on file.', alt: 'Current light-mode All Leads page showing saved leads, their sources and the lead ledger' },
-      { src: 'img/app/v1.4.15/lists.png', label: 'Saved Lists', caption: 'Saved Lists: sort the last run and bookmark the keepers.', alt: 'Current light-mode Saved Lists page with saved lead groups' },
-      { src: 'img/app/v1.4.15/reports.png', label: 'Insights / Reports', caption: 'Saved leads and named Decision Makers are counted separately. Sample workspace shown.', alt: 'Insights and Reports showing saved leads and Decision Maker totals' },
-      { src: 'img/app/v1.4.15/runs.png', label: 'Run History', caption: 'Run History: every pass, what it captured and how long it took.', alt: 'Current light-mode Run History page with scrape and import activity' }
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/social.png",
+        "label": "Social Profiles",
+        "caption": "Published social profiles and live search across saved results. Illustrative sample workspace.",
+        "alt": "Latest Social Profiles page with saved profile search, History and platform coverage",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/import-websites.png",
+        "label": "Import websites",
+        "caption": "Paste links, upload CSV/TSV or choose a saved Maps run. Illustrative sample workspace.",
+        "alt": "Current shared Import websites dialog with three input sources",
+        "ratio": "3 / 2"
+      }
     ]
   },
   {
-    num: '08', name: 'Settings & Billing', short: 'Your plan, usage, payments, invoices and licence.',
-    d1: 'M4 8h9M17 8h3M4 16h3M11 16h9', d2: circ(15, 8, 2.2) + circ(9, 16, 2.2),
-    where: 'Sidebar \u2192 System \u2192 Settings & Billing',
-    lead: 'Manage your plan and licence in one place. The Usage, Payment, Invoices, Account and Members sections show what is active on this device.',
-    bullets: [
-      'Get a 1-day trial with 300 Maps leads, or buy Lifetime for Rs 10,000 and unlimited Maps, email, phone and social lookups.',
-      'Lifetime includes 1,000 Decision Makers searches in the first 30 days. A separate Rs 1,000 pass ends after 1,000 searches or 30 days, whichever comes first; pay manually to renew.',
-      'Buy Lifetime in the app; Stripe collects your email and card, then the emailed key is entered in Account. A Decision Makers pass activates after verified payment without an emailed key.',
-      'The app guides new users to the 1-day trial, Get Lifetime key or existing-key activation. Each choice opens the relevant Settings & Billing section.',
-      'Correct a trial email before activation. A replacement invalidates the previous key; changing email does not restart a used trial.',
-      'MamaLead Assist connects through the MamaLead service; customers do not need to enter a Cerebras API key.',
-      'See remaining allowances and local usage, saved alerts at 500 and 100 Decision Makers searches, payments and invoices.'
+    "num": "03",
+    "name": "Email Finder",
+    "short": "One main website email. Optional validity checks.",
+    "d1": "M6.5 5.5h11a3 3 0 0 1 3 3v7a3 3 0 0 1 -3 3h-11a3 3 0 0 1 -3 -3v-7a3 3 0 0 1 3 -3z",
+    "d2": "M4 7.5l8 5.5 8-5.5",
+    "where": "Sidebar → Add-ons → Email Finder",
+    "lead": "Find one main email published on each business website. Keep its source, search saved results live, and choose whether to check email validity.",
+    "bullets": [
+      "Prioritises Contact Us pages found through site navigation and page sitemaps, with relevant follow-up pages when needed.",
+      "Reads published email links, supported email obfuscation and structured website data; checks displayed contact pages when the initial read finds no email.",
+      "Search saved records by company, website or email while typing. The current import stays separate until you choose a different saved search.",
+      "Choose Verify found emails On or Off on the Email Finder page before scanning; your choice is remembered. The website-import dialog stays focused on the URL or file list. With Off, Check email validity remains available beside the results.",
+      "Validity checks cover the import or filtered search currently on screen when an authorised provider is configured. Show all leads deliberately widens the list; checking one imported company does not start checks for your other saved companies.",
+      "See Checking X/Y and a progress message while validity runs. Stop checking keeps completed results; remaining or failed addresses can be checked on the next pass. Emails already carrying a result are skipped in a normal check.",
+      "Valid, Invalid, Risky, Unknown and Not checked remain separate row statuses. When LeadsAngel is configured and Unknown results are present, Recheck Unknown checks those addresses again. A result is not a delivery guarantee.",
+      "The Cascade and Confidence mix summarise the saved workspace. The scan's Email Coverage shows which website pages supplied its emails; live search brings matching address rows directly under the search bar.",
+      "Run the cascade queues saved leads with websites that are still missing an email. Finding an address and checking its validity remain separate steps.",
+      "PDF and Excel exports keep the same main email shown in the result. History keeps previous searches; cancelling an export preserves the current results."
     ],
-    shots: [
-      { src: 'img/app/v1.4.15/settings.png', ratio: '1065 / 1127', label: 'Lifetime plan', caption: 'Current Settings & Billing page showing the Rs 10,000 Lifetime plan.', alt: 'Light-mode Settings and Billing page showing the Rs 10,000 Lifetime plan' },
-      { src: 'img/app/v1.4.15/settings-plans.png', ratio: '1065 / 419', label: 'Trial and Decision Makers pass', caption: 'The 1-day trial has 300 Maps leads; each Decision Makers pass is Rs 1,000 for 1,000 searches or 30 days, whichever comes first.', alt: 'Current light-mode Settings and Billing page showing the trial and Decision Makers pass' },
-      { src: 'img/app/v1.4.15/settings-account.png', ratio: '1173 / 299', label: 'Account and licence', caption: 'Paste the emailed trial or Lifetime key in Settings & Billing → Account.', alt: 'Light-mode Settings and Billing Account page with the licence activation field' }
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/email.png",
+        "label": "Email Finder",
+        "caption": "Optional validity, saved search, Cascade and Confidence mix, with an Unknown recheck when available. Illustrative sample workspace.",
+        "alt": "Email Finder overview with optional validity, saved-email search, Cascade, Confidence mix and Recheck Unknown controls",
+        "ratio": "18 / 13"
+      },
+      {
+        "src": "img/app/v1.4.17/email-validity.png",
+        "label": "Scoped email validity",
+        "caption": "Check the current import or saved-search results, follow Checking X/Y and use Stop checking. Illustrative sample workspace and verification run.",
+        "alt": "Email Finder showing main business emails, current verification count, a progress message and Stop checking",
+        "ratio": "18 / 13"
+      },
+      {
+        "src": "img/app/v1.4.17/import-websites.png",
+        "label": "Import websites",
+        "caption": "Scan only the website list you choose. Illustrative sample workspace.",
+        "alt": "Website import dialog with paste, file and Maps-run choices",
+        "ratio": "3 / 2"
+      }
+    ]
+  },
+  {
+    "num": "04",
+    "name": "Phone Finder",
+    "short": "The main published contact number comes first.",
+    "d1": "M6.6 3.5h2.6l1.4 4-2 1.5a11 11 0 0 0 6.4 6.4l1.5-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z",
+    "d2": "M15.5 4.6a5 5 0 0 1 3.9 3.9",
+    "where": "Sidebar → Add-ons → Phone Finder",
+    "lead": "Bring together saved Maps numbers and numbers published by the business website. Phone Finder gives priority to the website's main contact number and keeps extra numbers available.",
+    "bullets": [
+      "Uses reception and Call us links, contact information, header/footer placement and repeated website evidence to prioritise the main number.",
+      "The main website number is shown first. Expand a row to see additional published numbers; saved Maps numbers are retained.",
+      "Find phones for missing starts with saved businesses that have a website but no number. Use Import websites to scan a new list.",
+      "Prioritises the homepage and relevant contact pages, with time limits for slow websites. Scan time depends on the site's response.",
+      "Type a partial number to see related matches. A complete saved number leaves its exact matches; spaces and punctuation are accepted.",
+      "Search all saved phone records by company, website or number. History keeps previous searches, and PDF/Excel exports include website-found numbers.",
+      "Check numbers reads website details for the current finder list. Phone Coverage summarises saved numbers and line categories; it does not place calls or prove that a line is active.",
+      "Website evidence does not measure call volume or guarantee that a line is answered. Missing numbers remain blank."
+    ],
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/phone.png",
+        "label": "Phone Finder",
+        "caption": "Main contact numbers, extra numbers, coverage and backfill. Illustrative sample workspace.",
+        "alt": "Latest Phone Finder showing saved phone results and main website contact labels",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/live-search.png",
+        "label": "Live saved search",
+        "caption": "Type a company or number to bring matching saved results directly below the bar. Illustrative sample workspace.",
+        "alt": "Phone Finder live saved search with matching business rows",
+        "ratio": "3 / 2"
+      }
+    ]
+  },
+  {
+    "num": "05",
+    "name": "Decision Makers",
+    "short": "The business owner's published email, with a source.",
+    "d1": "M8.5 8a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0z",
+    "d2": "M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5",
+    "where": "Sidebar → Add-ons → Decision Makers",
+    "lead": "Identify an owner or founder from published evidence, then look for that person's email. Follow the progress of every selected business and keep the source beside each result.",
+    "bullets": [
+      "A saved Maps run or selected Maps leads keep every selected business in the scan, including businesses sharing a website and those without one. The button shows the selected lead count.",
+      "Contact Coverage shows the percentage checked, completed and remaining leads, and the business being checked. Stop scan cancels the remaining work and keeps completed results.",
+      "Checks About, team, leadership and founder profiles for evidence that a person belongs to this business. Co-founders can be returned when each is supported by the source.",
+      "Looks for a published owner email on relevant contact, FAQ and company-story pages, then other public sources when needed. A business without a website is searched by its name and location.",
+      "Published personal addresses, including Gmail, can qualify when the source ties them to the owner and business. Related-business matches need identity evidence and a fresh source check; a name match alone is not enough.",
+      "Uses evidence for this business's owner, excluding unrelated people and generic company inboxes. Email addresses are never guessed.",
+      "Results show Owner, Business, Owner email and Source. Phone numbers, office addresses and social links belong in the other modules.",
+      "A completed check can still show Owner email not found. Progress measures businesses checked, not how many emails were found; slow or unavailable pages can require a retry.",
+      "Search saved owners by person, role, company, website or email while typing. Prior searches remain in History.",
+      "Download the current owner results as a branded PDF or Excel table. A successful scan export resets its view; cancellation keeps the results.",
+      "Uses the separate Decision Makers search allowance. A search is not a guarantee that a published owner email will be found."
+    ],
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/dm.png",
+        "label": "Owner emails",
+        "caption": "Owner identity and a published email are separate checks. Each available contact keeps its source. Illustrative sample workspace.",
+        "alt": "Latest Decision Makers results with only Owner, Business, Owner email and Source columns",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/dm-progress.png",
+        "label": "Scan progress and Stop",
+        "caption": "See the percentage checked, completed and remaining leads. Stop scan keeps completed results. Illustrative sample workspace.",
+        "alt": "Decision Makers Contact Coverage with percentage progress, checked and remaining lead counts, and Stop scan",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/dm-saved-leads.png",
+        "label": "Every selected business",
+        "caption": "15 selected businesses: 13 with websites and 2 without. All 15 stay in the scan. Illustrative sample workspace.",
+        "alt": "Decision Makers saved-lead import showing the selected lead count and businesses with and without websites",
+        "ratio": "3 / 2"
+      }
+    ]
+  },
+  {
+    "num": "06",
+    "name": "Website Lookup",
+    "short": "One website list. Choose the details you need.",
+    "d1": "M9.5 14.5l-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0",
+    "d2": "M14.5 9.5l2-2a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0",
+    "where": "Sidebar → Add-ons → Website Lookup",
+    "lead": "Start with websites rather than a Maps search. Choose emails, phone numbers, social profiles and business addresses independently, then review one clear result for each site.",
+    "bullets": [
+      "Paste websites, import CSV/TSV or reuse websites from a saved Maps run. Supports up to 500 websites per import.",
+      "Select only the details you want. Unchecked categories stay out of the results and export.",
+      "See processed, remaining and error counts, alongside the website currently being read. Results come into view automatically after the scan.",
+      "Each website keeps its own Found, No public details or Retry needed status and source pages. Expand the page count to open the public pages that were read.",
+      "Retry failed checks just the unsuccessful websites; Rescan all reads the current list again when no failures remain. Existing saved websites are reused without creating duplicate leads.",
+      "When emails are selected, choose optional validity before scanning or check found emails from the results. The choice applies to this scan, rather than old saved companies.",
+      "Results belong to the current website list and survive an app restart. Export the current scan or selected rows as PDF or Excel.",
+      "Website Lookup collects business contact details. It does not create owner records or spend Decision Makers searches."
+    ],
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/website.png",
+        "label": "Website Lookup",
+        "caption": "Selected fields, progress, per-site results and source pages. Illustrative sample workspace.",
+        "alt": "Latest Website Lookup with separate email, phone, social and address options and saved results",
+        "ratio": "3 / 2"
+      }
+    ]
+  },
+  {
+    "num": "07",
+    "name": "All Leads, Saved Lists & Run History",
+    "short": "A saved workspace, useful reports and branded exports.",
+    "d1": "M8.5 6.5h12M8.5 12h12M8.5 17.5h12",
+    "d2": "M4 6.5h.01M4 12h.01M4 17.5h.01",
+    "where": "Sidebar → Data → All Leads · Saved Lists · Run History",
+    "lead": "Keep your collected businesses on this PC, organise them into named lists and revisit the runs that produced them.",
+    "bullets": [
+      "All Leads searches the saved business database; repeated imports reuse matching websites rather than creating duplicate businesses.",
+      "Saved Lists groups the leads you choose. Run History records Maps searches, imports and enrichment work.",
+      "Saved searches near the top of Google Maps opens each earlier city/keyword run, with its own PDF and Excel export.",
+      "PDF and Excel files use the MamaLead logo, clear column headings and data rows. Missing details remain blank.",
+      "Insights / Reports shows saved businesses, named owner contacts, Maps searches and email, phone and social coverage. The named-owner count records identified people, whether or not an email was found. Refresh to read the latest saved counts.",
+      "The notification centre groups real scan, export and account updates. Filter All/Unread, mark as read, delete or Undo a deletion."
+    ],
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/leads.png",
+        "label": "All Leads",
+        "caption": "Your saved business records and available contacts. Illustrative sample workspace.",
+        "alt": "Latest All Leads page with saved lead records",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/lists.png",
+        "label": "Saved Lists",
+        "caption": "Named groups for the businesses you want to keep together. Illustrative sample workspace.",
+        "alt": "Latest Saved Lists page with a sample shortlist",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/runs.png",
+        "label": "Run History",
+        "caption": "Saved runs and their recorded activity. Illustrative sample workspace.",
+        "alt": "Latest Run History page",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/notifications.png",
+        "label": "Notifications",
+        "caption": "All/Unread filters and actions that open the relevant result. Illustrative sample workspace.",
+        "alt": "Latest notification centre with real event categories and saved-result actions",
+        "ratio": "3 / 2"
+      }
+    ]
+  },
+  {
+    "num": "08",
+    "name": "Settings & Billing",
+    "short": "Plan, licence and usage for this desktop app.",
+    "d1": "M4 8h9M17 8h3M4 16h3M11 16h9",
+    "d2": "M12.8 8a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0zM6.8 16a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0z",
+    "where": "Sidebar → System → Settings & Billing",
+    "lead": "Manage Usage, Payment, Invoices and Account in one place, with your plan, licence and remaining allowances for this desktop app.",
+    "bullets": [
+      "Request the 1-day trial or buy Lifetime in Settings & Billing. Activate the emailed trial or Lifetime key in Account.",
+      "The trial starts at activation and includes up to 300 Maps leads for 24 hours. Lifetime and Decision Makers offers are shown below.",
+      "Correct an unactivated trial email through the replacement flow. Changing email does not restart an activated or completed trial.",
+      "A Decision Makers pass activates on the purchasing device after verified payment, with its remaining searches and end date visible in the app.",
+      "Feature access prompts offer the 1-day trial, Get Lifetime key and existing-key activation, taking you to the relevant Settings & Billing section.",
+      "Payment opens the Stripe billing portal when this installation has a connected customer. Invoices shows available Stripe invoice numbers, dates, totals and statuses, with Open invoice links.",
+      "Account shows the local workspace name, time zone and data location. App updates checks for an available release and guides its download and installation.",
+      "Your data offers Export everything for the saved leads and lists on this device.",
+      "MamaLead Assist connects through the MamaLead service. Ask in your language, including Roman Urdu, without entering a personal AI-provider key.",
+      "Account and billing notifications stay in the notification centre. Public-site availability, your plan and any configured verification provider still apply."
+    ],
+    "shots": [
+      {
+        "src": "img/app/v1.4.17/settings.png",
+        "label": "Usage and plan",
+        "caption": "Manage the active plan, Decision Makers allowance and purchases. Illustrative sample workspace.",
+        "alt": "Latest Settings and Billing Usage page with the active plan and remaining allowances",
+        "ratio": "3 / 2"
+      },
+      {
+        "src": "img/app/v1.4.17/settings-account.png",
+        "label": "Account and licence",
+        "caption": "Trial and Lifetime activation, update controls and local account settings. Illustrative sample workspace.",
+        "alt": "Latest Settings and Billing Account page",
+        "ratio": "3 / 2"
+      }
     ]
   }
 ];
 
 const FAQS = [
-  ['What contact details can Decision Makers find?', 'The scan reads publicly accessible team, profile and contact pages. It can save names, roles, emails, phone numbers, office addresses and social links. Personal contacts and website contacts are labelled separately. Private, blocked or unpublished details cannot be guaranteed.'],
-  ['Where can I see my totals?', 'Click the Insights / Reports card on Dashboard or Social Profiles. It shows the records currently saved on this device: leads, named Decision Makers, Maps searches and contact coverage. A business can have several named people. Use Refresh report for the latest counts.'],
-  ['Can I return to a minimized scan?', 'Yes. Back to scan stays available while you use another module. When the scan finishes, View scan results takes you to its results.'],
-  ['Can I correct my trial email?', 'Before activation, change the email in Settings & Billing and request a replacement key. The previous key becomes invalid. An activated or completed trial cannot be restarted by changing email.'],
-  ['Do I need an API key?', 'No provider API key is needed for Google Maps scraping, website enrichment or MamaLead Assist. The assistant connects through the MamaLead service. After installing, use the welcome notice to open Settings & Billing and request or activate your plan.'],
-  ['What does the search box in each finder do?', 'It searches the saved results in the current list. Social Profiles, Email Finder, Phone Finder and Decision Makers explain what you can search. To scan a new website, choose Import websites.'],
-  ['Will a Maps run exceed my lead limit?', 'The maximum applies to the entire run, across all keywords and selected areas. A limit of 25 returns at most 25 leads; if fewer results are available, it finishes with those results.'],
-  ['How do I export Decision Makers?', 'Import a website, scan it and review People Found. Use Download PDF or Download Excel for the current results. After a successful save the view resets; cancelling or a failed save keeps the results on screen.'],
-  ['How do I buy Lifetime?', 'Choose Buy now in the desktop app. Stripe Checkout asks for your email and card. After payment is verified, your Lifetime key is emailed and Account opens in the app so you can activate it.'],
-  ['Does a Decision Makers pass need a key?', 'No separate key is emailed for a new pass. Install the app first; the website Subscribe button opens its payment flow. After verified payment, the purchasing app receives access and shows the remaining searches.'],
-  ['When does a Decision Makers pass end?', 'It ends after 1,000 searches or 30 days, whichever comes first. The app saves alerts at 500 and 100 remaining. There is no automatic renewal; pay manually for another Rs 1,000 pass when you want one.'],
-  ['Is scraping Google Maps allowed?', 'The app reads public business listings through your own signed-in browser window, at a human pace, and stops if Google shows a challenge. It does not bypass consent screens or CAPTCHAs. Automated access is against Google\u2019s terms of service; for high volume, Google\u2019s official Places API is the sanctioned route.'],
-  ['Which countries does it work in?', 'United Kingdom, Pakistan, India, UAE, Saudi Arabia, Bangladesh, United States, Canada, Australia, Ireland, Germany, France, Spain, Italy, Netherlands, Turkey, Malaysia, Singapore, South Africa, Qatar, Kuwait, Oman and Bahrain.'],
-  ['Where is my data, and what happens when I uninstall?', 'Everything is in %APPDATA%\\nafran-leads-scraper\\leads.db. Uninstalling removes the app but leaves that folder in place, so your leads survive a reinstall. Delete the folder yourself if you want the data gone.'],
-  ['Does the app need to stay open?', 'Yes, while a scrape or enrichment pass is running: the work happens inside the app, on your PC. Places captured before you close it are already saved to the database.']
+  [
+    "Can I find emails without checking validity?",
+    "Yes. On the Email Finder page, leave Verify found emails Off to find published emails only. Turn it On before scanning for an automatic check, or use Check email validity beside the scan results or Addresses table later. This choice is remembered and is not repeated inside Email Finder's website-import dialog. Website Lookup also offers optional validity when emails are selected. An authorised verification provider is required."
+  ],
+  [
+    "Will email validity check my whole saved database?",
+    "It checks the emails belonging to the import or filtered search currently on screen. For example, after importing one company's website, the check stays on that company's result. Show all leads widens the list when you choose it. Normal checks skip emails that already have a result, so they are not repeatedly submitted."
+  ],
+  [
+    "Can I follow or stop an email validity check?",
+    "Yes. Email Finder shows Checking X/Y and a progress message while the check runs. Stop checking keeps the results already completed; addresses still waiting or failing can be checked in a later pass. Unknown means the provider could not reach a conclusive result. When LeadsAngel is configured, Recheck Unknown lets you retry those addresses. Valid, Invalid, Risky, Unknown and Not checked remain distinct; no status guarantees delivery."
+  ],
+  [
+    "What does Decision Makers find?",
+    "It looks for evidence linking an owner or founder to the business, then checks public pages for that person's email. Relevant team, leadership, contact, FAQ and company-story pages can supply evidence. A published personal email may qualify, including Gmail, when its source supports the identity and business connection. Results show Owner, Business, Owner email and Source. Staff, customer stories, other companies' founders and generic inboxes do not establish ownership; missing emails remain labelled as not found."
+  ],
+  [
+    "Will Decision Makers scan all the Maps leads I select?",
+    "Yes. A saved Maps run or selected Maps leads keep every selected business. If you select 15 businesses and only 13 have websites, the button still shows Scan 15 leads. Businesses without a website are checked by name and location; separate businesses sharing a website keep their own place in the scan. Pasted website lists and CSV/TSV website imports merge duplicate URLs, and show their unique website count."
+  ],
+  [
+    "What does the scan percentage mean, and can I stop?",
+    "Contact Coverage shows how many selected businesses have been checked, how many remain, and the current business. The percentage measures completed checks, not emails found. Stop scan stops the remaining work and keeps completed results. A stopped or incomplete scan stays labelled that way, and a completed business check can still have no published owner email."
+  ],
+  [
+    "Where can I see my totals?",
+    "Click the Insights / Reports card on Dashboard or Social Profiles. It shows the records currently saved on this device: leads, named Decision Makers, Maps searches and contact coverage. A business can have several named people. Use Refresh report for the latest counts."
+  ],
+  [
+    "Where did Recent searches go?",
+    "Previous searches are kept in History on Social Profiles, Email Finder, Phone Finder and Decision Makers. Open History to select an earlier search. Finder history is saved on this device and remains after restarting the app; the extra Recent chips no longer sit below the search bar."
+  ],
+  [
+    "Which phone number appears first?",
+    "Phone Finder prioritises the main contact number published by the website using reception/Call us labels, contact information and repeated header/footer evidence. Additional numbers remain available in the row. It preserves saved Maps numbers. This is a ranking of published evidence, not a measurement of how often a number is called or a guarantee of an answered line."
+  ],
+  [
+    "How do I import websites?",
+    "Choose Import websites in a finder. Use Paste links, Upload a file for CSV/TSV, or From a Maps run. Website lists show ready, duplicate and skipped counts before Scan N sites; Decision Makers saved-run imports show the full selected business count before Scan N leads. The file picker is the Windows dialog, files can also be dropped into the import window, and the website column is detected automatically."
+  ],
+  [
+    "How is Website Lookup different from Decision Makers?",
+    "Website Lookup collects your selected public business emails, phone numbers, social links and addresses in one scan. Decision Makers separately identifies owners or founders and their published emails. Website Lookup does not create owner records or consume the Decision Makers allowance."
+  ],
+  [
+    "Can MamaLead Assist reply in Roman Urdu?",
+    "Yes. Ask in your own language and style. Roman Urdu replies use Latin letters instead of switching to Hindi or Urdu script. You can also use English, native Urdu and other supported languages, or explicitly ask to change the reply language. App control names such as Import websites stay recognisable. The assistant needs an internet connection and is subject to your access and usage allowance."
+  ],
+  [
+    "What appears in Notifications?",
+    "The bell keeps scan results, completed exports, account updates and errors. Use All or Unread, mark messages as read, or delete and Undo. Actions open the relevant module or saved Maps search; an export notification can show the saved file in its folder. Turning off native desktop alerts does not remove in-app history."
+  ],
+  [
+    "Why is there only one social badge for each platform?",
+    "Duplicate links to the same profile are merged, and post, video, login and share links are filtered out. If the website publishes several distinct accounts on the same platform, the row shows +N accounts. Expand it to view the individual account links, then use Hide accounts to collapse them."
+  ],
+  [
+    "What if some Website Lookup results need a retry?",
+    "The scan shows processed, remaining and error counts, with a status beside each website. Retry failed scans only the unsuccessful websites; when there are no failures, Rescan all reads the current list again. Previously saved businesses are reused. You can inspect each site's source pages and export the current results or selected rows as PDF or Excel."
+  ],
+  [
+    "Can I export an older Maps search?",
+    "Yes. Open Saved searches near the top of Google Maps, find the city or keyword run, and use its PDF or Excel option. The export belongs to that selected search, rather than mixing in all your saved businesses."
+  ],
+  [
+    "Can I return to a minimized scan?",
+    "Yes. Back to scan stays available while you use another module. When the scan finishes, View scan results takes you to its results."
+  ],
+  [
+    "Can I correct my trial email?",
+    "Before activation, change the email in Settings & Billing and request a replacement key. The previous key becomes invalid. An activated or completed trial cannot be restarted by changing email."
+  ],
+  [
+    "Do I need an API key?",
+    "No personal AI-provider key is needed for MamaLead Assist. Google Maps and public website reads use the app workflows. Email validity requires an authorised verification provider to be configured; the app shows its availability. After installation, open Settings & Billing to request or activate the access your chosen feature requires."
+  ],
+  [
+    "Do I need to press Enter to search saved results?",
+    "No. Type a company, website, email, number, owner name or profile URL in the relevant finder. Matches appear directly below the bar as you type. Partial text shows related matches; a complete phone number isolates exact matches when available. This searches saved records and does not start a website scan or spend lookup credits. Use Import websites when you want a new scan."
+  ],
+  [
+    "Will a Maps run exceed my lead limit?",
+    "The maximum applies to the entire run, across all keywords and selected areas. A limit of 25 returns at most 25 leads; if fewer results are available, it finishes with those results."
+  ],
+  [
+    "How do I export owner emails?",
+    "Scan a website in Decision Makers and review Owner emails. Choose Download PDF or Download Excel for the current results. Files contain clear headings, rows, owner emails and sources with MamaLead branding. A successful scan export resets the view; cancelling or a failed save keeps the results."
+  ],
+  [
+    "How do I buy Lifetime?",
+    "Choose Buy now in the desktop app. Stripe Checkout asks for your email and card. After payment is verified, your Lifetime key is emailed and Account opens in the app so you can activate it."
+  ],
+  [
+    "Does a Decision Makers pass need a key?",
+    "No separate key is emailed for a new pass. Install the app first; the website Subscribe button opens its payment flow. After verified payment, the purchasing app receives access and shows the remaining searches."
+  ],
+  [
+    "When does a Decision Makers pass end?",
+    "It ends after 1,000 searches or 30 days, whichever comes first. The app saves alerts at 500 and 100 remaining. There is no automatic renewal; pay manually for another Rs 1,000 pass when you want one."
+  ],
+  [
+    "Is scraping Google Maps allowed?",
+    "The app reads public business listings through your own signed-in browser window, at a human pace, and stops if Google shows a challenge. It does not bypass consent screens or CAPTCHAs. Automated access is against Google’s terms of service; for high volume, Google’s official Places API is the sanctioned route."
+  ],
+  [
+    "Which countries does it work in?",
+    "United Kingdom, Pakistan, India, UAE, Saudi Arabia, Bangladesh, United States, Canada, Australia, Ireland, Germany, France, Spain, Italy, Netherlands, Turkey, Malaysia, Singapore, South Africa, Qatar, Kuwait, Oman and Bahrain."
+  ],
+  [
+    "Where is my data, and what happens when I uninstall?",
+    "Your saved leads, lists and run records are in %APPDATA%\\nafran-leads-scraper\\leads.db. Finder history and app preferences are also stored on this device. Uninstalling leaves the application-data folder in place so your records survive a reinstall; remove that folder if you want to delete local app data. Activation, billing and optional online features process the information described in our Privacy Policy."
+  ],
+  [
+    "Does the app need to stay open?",
+    "Yes, while a scrape or enrichment pass is running: the work happens inside the app, on your PC. Places captured before you close it are already saved to the database."
+  ]
 ];
 
 const HERO = {
-  'Dashboard': { src: 'img/app/v1.4.15/dashboard-light.png', alt: 'MamaLead 1.4.15 light-mode dashboard with sample leads, contact coverage and run history', caption: 'Latest light-mode dashboard with an illustrative sample workspace.' },
-  'Google Maps': { src: 'img/app/v1.4.16/maps-light.png', alt: 'Google Maps Scraper page with keywords, location and Maps filters', caption: 'Google Maps Scraper: keywords, location and filters.' },
-  'All Leads': { src: 'img/app/v1.4.15/leads.png', alt: 'All Leads page with the permanent store and lead ledger', caption: 'All Leads: every captured place in one permanent store.' }
+  "Dashboard": {
+    "src": "img/app/v1.4.17/dashboard-light.png",
+    "alt": "MamaLead 1.4.17 light-mode dashboard with an illustrative saved workspace",
+    "caption": "Latest desktop design. Screenshots use fictional sample businesses."
+  },
+  "Google Maps": {
+    "src": "img/app/v1.4.17/maps-light.png",
+    "alt": "Latest Google Maps Scraper with a total lead limit and top Saved searches button",
+    "caption": "Set one run limit, watch current results and reopen saved searches."
+  },
+  "All Leads": {
+    "src": "img/app/v1.4.17/leads.png",
+    "alt": "Latest All Leads saved business workspace",
+    "caption": "Collected businesses stay in your local saved workspace."
+  }
 };
 
 class Component extends DCLogic {
@@ -636,7 +944,7 @@ class Component extends DCLogic {
         q, a,
         expanded: isOpen ? 'true' : 'false',
         rot: isOpen ? '45deg' : '0deg',
-        max: isOpen ? '320px' : '0px',
+        max: isOpen ? '1000px' : '0px',
         op: isOpen ? '1' : '0',
         line: i === FAQS.length - 1 ? 'transparent' : 'rgba(28,28,28,.08)',
         onToggle: () => this.setState({ faq: isOpen ? -1 : i })
