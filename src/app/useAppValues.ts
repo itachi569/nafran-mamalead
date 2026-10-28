@@ -3059,7 +3059,7 @@ export function useAppValues() {
       const named = dmSavedPeople.filter((person) => person.lead_id === lead.id)
       return {
         leadId: lead.id,
-        domain: hostOf(lead.website),
+        domain: lead.website?.trim() ? hostOf(lead.website) : '',
         searchText: lead.name,
         searchFields:[lead.name,lead.website,...named.flatMap(person=>[person.full_name,person.title,person.email])],
         scanned: Boolean(lead.last_scanned_at),
