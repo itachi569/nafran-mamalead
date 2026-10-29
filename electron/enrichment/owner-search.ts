@@ -15,6 +15,8 @@ type Options={key?:string;signal?:AbortSignal;knownSources?:OwnerEmailSource[];s
 const decode=(text:string)=>text.replace(/&quot;/g,'"').replace(/&apos;|&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
 const plain=(html:string)=>decode(html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ')
 const normal=(value:string)=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+const mentionsOwner=(text:string,name:string)=>(' '+ownerIdentityKey(text)+' ').includes(' '+ownerIdentityKey(name)+' ')
+const queryOwnerName=(name:string)=>name.split(/\s+/).filter(word=>!/^([a-z]|mr|mrs|ms|dr|prof)\.?$/i.test(word)).join(' ')
 const hostOf=(url:string)=>{try{return new URL(url).hostname.replace(/^www\./i,'').toLowerCase()}catch{return ''}}
 const mentionsWebsite=(html:string,host:string)=>new RegExp(`(?:^|[^a-z0-9_.-])(?:www\\.)?${host.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=$|[^a-z0-9_.-])`,'i').test(html)
 // Leave room for source verification after a slower completed provider response. Successful
@@ -49,7 +51,10 @@ async function readPage(url:string,signal:AbortSignal,ownHost=''){
  try{
   const response=await fetch(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(ownHost && hostOf(url)===ownHost?8500:4500)]),headers:{accept:'text/html,application/xhtml+xml'}})
   if(!response.ok || /^(?:image|audio|video)\/|application\/(?:pdf|octet-stream|zip)/i.test(response.headers.get('content-type') ?? ''))return null
-  const html=stripContactCodeExamples(decodePublishedEmailHtml((await response.text()).slice(0,2_000_000))),result={url:response.url || url,html,text:plain(html),at:Date.now()}
+  // Hydration payloads, executable scripts and CSS are not published contact evidence.
+  // Excluding them avoids repeatedly parsing megabytes of framework data; keep JSON-LD.
+  const source=(await response.text()).slice(0,2_000_000).replace(/<(script|style)\b([^>]*)>[\s\S]*?<\/\1>/gi,(block,tag,attrs)=>tag.toLowerCase()==='script' && /type\s*=\s*["']application\/ld\+json["']/i.test(attrs)?block:'')
+  const html=stripContactCodeExamples(decodePublishedEmailHtml(source)),result={url:response.url || url,html,text:plain(html),at:Date.now()}
   return result
  }catch{return null}
 }
@@ -130,10 +135,14 @@ function publishedMail(page:PublicPage,lead:Lead,owner:{fullName:string},ownerPr
  const businessHost=hostOf(lead.website)
  if(!businessHost){const scope=namedBusinessScope(page,lead,owner);if(!scope)return '';page=scope}
  const own=Boolean(businessHost) && hostOf(page.url)===businessHost
- const relatedOwner=Boolean(ownerProof && sameOwnerProof(ownerProof,lead,owner) && referencesOtherBusiness(ownerProof,page.url))
- if(!own && !relatedOwner && (!normal(page.text).includes(normal(owner.fullName)) || !aboutCompany(lead,page.html)))return ''
  const mailto=Array.from(page.html.matchAll(/href\s*=\s*["']mailto:([^"'?<>\s]+)/gi),match=>{try{return decodeURIComponent(decode(match[1]))}catch{return ''}})
  const emails=[...new Set([...extractPublishedEmails(page.text),...mailto])].filter(email=>ownerEmail(owner.fullName,email))
+ if(!emails.length)return ''
+ let relatedOwner=false
+ if(!own && !(mentionsOwner(page.text,owner.fullName) && aboutCompany(lead,page.html))){
+  relatedOwner=Boolean(ownerProof && referencesOtherBusiness(ownerProof,page.url) && sameOwnerProof(ownerProof,lead,owner))
+  if(!relatedOwner)return ''
+ }
  const names=ownerIdentityKey(owner.fullName).split(' ').filter(name=>name.length>=3)
  const matching=emails.filter(email=>{
   if(own || Boolean(businessHost) && !relatedOwner && email.split('@')[1]===businessHost)return true
@@ -155,7 +164,7 @@ type OwnerContactOptions = {
 
 export function ownerContactQuery(lead:Lead,ownerName=''):string{
  const company=hostOf(lead.website) || [lead.name,locality(lead)].filter(Boolean).join(' ').replace(/["\r\n]/g,' ').trim()
- return ownerName ? `"${ownerName}" "${company}" email address` : `"${company}" founder owner email address`
+ return ownerName ? `"${queryOwnerName(ownerName)}" "${company}" email address` : `"${company}" founder owner email address`
 }
 
 /** Adaptive, source-verified discovery. Stop on a match; otherwise use distinct targeted
@@ -166,7 +175,7 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
  if(!options.key?.trim() && !options.search)return {...result,error:'Owner search is not configured. Add the DataForSEO credential in Settings → Account.'}
  const sources=new AbortController()
  const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),sources.signal,AbortSignal.timeout(options.timeoutMs ?? 60_000)])
- const started=Date.now(),activeBudgetMs=options.activeBudgetMs ?? 45_000
+ const started=Date.now(),activeBudgetMs=options.activeBudgetMs ?? 25_000
  let waitingMs=0,linkedReads=0
  const remainingMs=()=>Math.max(0,activeBudgetMs-(Date.now()-started-waitingMs))
  const checkBudget=()=>{signal.throwIfAborted();if(remainingMs()<=0)throw new Error('Owner lookup reached its time limit. Saved findings are kept; retry this business to finish.')}
@@ -188,8 +197,18 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
   if(response.error)throw new Error(response.error)
   return response.hits
  }
- const candidates=(hits:import('./dataforseo').OrganicSearchHit[])=>preferredHits([...new Map(hits.filter(hit=>isPublicSourceUrl(hit.url)).map(hit=>[hit.url,hit])).values()],host).slice(0,6)
+ const candidates=(hits:import('./dataforseo').OrganicSearchHit[])=>{
+  const ranked=preferredHits([...new Map(hits.filter(hit=>isPublicSourceUrl(hit.url)).map(hit=>[hit.url,hit])).values()],host)
+  const bonus=(hit:PublicSearchHit)=>{
+   const owner=owners.values().next().value?.person
+   const namedEmail=extractPublishedEmails(hit.description).some(email=>owner?Boolean(ownerEmail(owner.fullName,email)):email.split('@')[1]===host && !/^(?:info|hello|contact|support|sales|office|admin|team|help|notice|privacy|legal|billing|no.?reply)(?:[._-]|@)/i.test(email))
+   const identity=hostOf(hit.url)===host && /\/(?:about(?:-us)?|our-team|team|leadership|founders?)(?:\/|$|\?)/i.test(new URL(hit.url).pathname)
+   return (namedEmail?400:0)+(!owner && identity?500:0)
+  }
+  return ranked.sort((a,b)=>bonus(b)-bonus(a)).slice(0,6)
+ }
  const owners=new Map<string,{person:FoundPerson;proof:PublicPage}>()
+ const checkedMail=new Map<string,string>(),linkedPages=new Set<string>()
  const learn=(page:PublicPage)=>{
   const own=Boolean(host) && hostOf(page.url)===host
   if(!own && (!aboutCompany(lead,page.html) || host && !mentionsWebsite(page.html,host)))return
@@ -205,7 +224,9 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
  const match=(hits:import('./dataforseo').OrganicSearchHit[],only?:{person:FoundPerson;proof:PublicPage})=>{
   for(const owner of only?[only]:owners.values()){
    for(const page of pages){
-    const email=publishedMail(page,lead,owner.person,owner.proof,true)
+    const key=ownerIdentityKey(owner.person.fullName)+'|'+page.url
+    if(!checkedMail.has(key))checkedMail.set(key,publishedMail(page,lead,owner.person,owner.proof,true))
+    const email=checkedMail.get(key)!
     if(email)return {...owner.person,email,evidence:page.url,emailEvidence:'page' as const}
    }
    for(const hit of hits){
@@ -228,7 +249,7 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
    for(let j=0;j<batch.length;j++){
     const page=await batch[j]
     checkBudget()
-    if(page && !pages.some(prior=>prior.url===page.url)){pages.push(page);if(!only)learn(page)}
+    if(page && !pages.some(prior=>prior.url===page.url)){pages.push(page);if(!owners.size)learn(page)}
     options.onSources?.(step,i+j+1,urls.length)
     const found=match(hits,only);if(found)return found
    }
@@ -239,7 +260,8 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
   if(!host || linkedReads>=3)return null
   const links=new Map<string,import('./dataforseo').OrganicSearchHit>()
   for(const page of pages){
-   if(hostOf(page.url)!==host)continue
+   if(hostOf(page.url)!==host || linkedPages.has(page.url))continue
+   linkedPages.add(page.url)
    const visit=(node:DefaultTreeAdapterMap['node'])=>{
     if('tagName' in node && node.tagName==='a'){
      const href=node.attrs.find(a=>a.name==='href')?.value
@@ -262,13 +284,13 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
   while(result.searches<6){
    checkBudget()
    const owner=owners.values().next().value
-   const name=owner?.person.fullName.replace(/["\r\n]/g,' ').trim()
+   const name=owner?queryOwnerName(owner.person.fullName).replace(/["\r\n]/g,' ').trim():''
    const queries=owner?[
     ownerContactQuery(lead,name),
-    `"${name}" "${company}" contact email`,
-    `"${name}" "${company}" "@gmail.com"`,
+    `"${name}" "${searchBrand(lead)}" email`,
+    `"${name}" email contact`,
+    `"${name}" Gmail`,
     ...(host?[`site:${host} "${name}" (email OR contact)`]:[]),
-    `"${name}" "${searchBrand(lead)}" email contact`,
    ]:identityQueries
    const query=queries.find(q=>!searched.has(q))
    if(!query)break
@@ -292,8 +314,11 @@ function indexedOwnerMail(hit:PublicSearchHit,lead:Lead,owner:{fullName:string},
  if(!host || !proof || !isPublicSourceUrl(hit.url))return ''
  const established=contactFindingsFromHtml(proof.html,proof.url).people.some(person=>ownerIdentityKey(person.fullName)===name && isBusinessOwner(person.title))
  if(!established || !ownerBelongsToBusiness(proof.html,lead.website,owner.fullName,proof.url))return ''
- const description=decode(hit.description),context=normal(description)
- if(!normal(hit.title).includes(normal(owner.fullName)) || !context.includes(normal(owner.fullName)))return ''
+ const description=decode(hit.description)
+ if(!mentionsOwner(description,owner.fullName))return ''
+ // A company directory can use a generic page title. Its indexed excerpt must
+ // explicitly associate the named owner with this business, not just list a mail.
+ if(!mentionsOwner(hit.title,owner.fullName) && !(aboutCompany(lead,description) && /\b(?:owner|founder|proprietor)\b/i.test(description)))return ''
  if(!/\b(?:contact|email|e-mail|reach)\b/i.test(description) || /\b(?:example|sample|format|pattern|guess|former|previous|no longer)\b/i.test(description))return ''
  const emails=[...new Set(extractPublishedEmails(description).map(value=>ownerEmail(owner.fullName,value)).filter(value=>value && value.split('@')[1]===host))]
  return emails.length===1?emails[0]:''

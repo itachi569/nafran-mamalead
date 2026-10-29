@@ -18,6 +18,7 @@ import { ImportWebsitesDialog } from './ImportWebsitesDialog'
 import { SocialProfileLinks } from './SocialProfileLinks'
 import { EmailValidityChoice } from './EmailValidityChoice'
 import { DecisionScanProgress } from './DecisionScanProgress'
+import { FinderScanProgress } from './FinderScanProgress'
 import { OwnerBrowserControl } from './OwnerBrowserControl'
 import mamaLeadIcon from '../../build/mamalead-icon.png'
 
@@ -1222,7 +1223,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>Social Profiles</h1>
                       <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#E3E4E1", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em", color: "#4A4F4B"}}>
                         <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#8B908C"}}></span>
-                        {V.fPhone.scanning ? 'CHECKING' : 'IDLE'}{' '}
+                        {V.covScanning ? 'SCANNING' : 'IDLE'}{' '}
                       </span>
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>All scraped leads with their social profile URLs. Same engine as Email Finder — different lens.</p>
@@ -1285,6 +1286,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   <p id="saved-social-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search all saved profiles by company, website, handle or profile URL. Matches appear below as you type.</p>
                   
                 </div>
+                {V.socialScanProgress.scanOn && <FinderScanProgress kind="social" scan={V.socialScanProgress}/>}
                 <div data-podium="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "start"}}>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                     <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
@@ -1294,14 +1296,6 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       </div>
                       <span data-open="1" aria-hidden="true" style={{display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "999px", background: "#EAEAE8", fontSize: "14px", flex: "none"}}>↗</span>
                     </div>
-                    {shows(V.covScanning) ? (
-                      <>
-                      <div style={{display: "flex", alignItems: "center", gap: "10px", marginTop: "16px", padding: "10px 14px", borderRadius: "14px", background: "#E7EDE0", animation: "lsPanelIn .4s cubic-bezier(.22,1,.36,1) both"}}>
-                        <span aria-hidden="true" style={{width: "12px", height: "12px", borderRadius: "999px", border: "2px solid rgba(28,28,28,.2)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite", flex: "none"}}></span>
-                        <span style={{fontSize: "13px", fontWeight: "500"}}>{V.covBadge}</span>
-                      </div>
-                      </>
-                    ) : null}
                     {shows(V.covResult) ? (
                       <>
                       <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "16px", padding: "8px 8px 8px 14px", borderRadius: "14px", background: "#E7EDE0", animation: "lsPanelIn .4s cubic-bezier(.22,1,.36,1) both"}}>
@@ -1523,48 +1517,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 </div>
                 {shows(V.fEmail.scanOn) ? (
                   <>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                    <h2 data-fcov="email" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Email Coverage</h2>
-                    <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.fEmail.scanSub}</p>
-                    {shows(V.fEmail.scanning) ? (
-                      <>
-                      <div style={{display: "flex", alignItems: "center", gap: "10px", marginTop: "16px", padding: "10px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
-                        <span aria-hidden="true" style={{width: "12px", height: "12px", borderRadius: "999px", border: "2px solid rgba(28,28,28,.2)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite", flex: "none"}}></span>
-                        <span style={{fontSize: "13px", fontWeight: "500"}}>{V.fEmail.scanBadge}</span>
-                      </div>
-                      </>
-                    ) : null}
-                    {shows(V.fEmail.scanOn) ? (
-                      <>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "16px", padding: "8px 8px 8px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
-                        <span style={{flex: "1", minWidth: "180px", fontSize: "13px", fontWeight: "500"}}>{V.fEmail.scanLabel}</span>
-                        <button type="button" onClick={V.fEmail.exit} style={{height: "32px", padding: "0 14px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}} data-exitscan="1">Show all leads</button>
-                      </div>
-                      </>
-                    ) : null}
-                    <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(96px,1fr))", gap: "14px", marginTop: "20px"}}>
-                      {(V.fEmail.rings ?? []).map((r, __ir) => (
-                        <Fragment key={__ir}>
-                          <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "10px"}}>
-                            <span style={{position: "relative", display: "grid", placeItems: "center", width: "98px", height: "98px"}}>
-                              <svg viewBox="0 0 100 100" aria-hidden="true" style={{position: "absolute", inset: "0", width: "100%", height: "100%", transform: "rotate(-90deg)"}}>
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="#DADCD7" strokeWidth="7"></circle>
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="#1C1C1C" strokeWidth="7" strokeLinecap="round" strokeDasharray="276.5" strokeDashoffset={r.off}></circle>
-                              </svg>
-                              <span style={{fontSize: "22px", fontWeight: "400", letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums"}}>
-                                {r.pct}
-                                <span style={{fontSize: "11px", color: "#5A5F5C"}}>%</span>
-                              </span>
-                            </span>
-                            <span style={{textAlign: "center"}}>
-                              <span style={{display: "block", fontSize: "13.5px", fontWeight: "500"}}>{r.name}</span>
-                              <span style={{display: "block", marginTop: "2px", fontSize: "12px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{r.leads}</span>
-                            </span>
-                          </div>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </section>
+                  <FinderScanProgress kind="email" scan={V.fEmail}/>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                       <h2 data-fres="email" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Emails found</h2>
@@ -1966,48 +1919,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 </div>
                 {shows(V.fPhone.scanOn) ? (
                   <>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                    <h2 data-fcov="phone" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Phone Coverage</h2>
-                    <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.fPhone.scanSub}</p>
-                    {shows(V.fPhone.scanning) ? (
-                      <>
-                      <div style={{display: "flex", alignItems: "center", gap: "10px", marginTop: "16px", padding: "10px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
-                        <span aria-hidden="true" style={{width: "12px", height: "12px", borderRadius: "999px", border: "2px solid rgba(28,28,28,.2)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite", flex: "none"}}></span>
-                        <span style={{fontSize: "13px", fontWeight: "500"}}>{V.fPhone.scanBadge}</span>
-                      </div>
-                      </>
-                    ) : null}
-                    {shows(V.fPhone.scanOn) ? (
-                      <>
-                      <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", marginTop: "16px", padding: "8px 8px 8px 14px", borderRadius: "14px", background: "#E7EDE0"}}>
-                        <span style={{flex: "1", minWidth: "180px", fontSize: "13px", fontWeight: "500"}}>{V.fPhone.scanLabel}</span>
-                        <button type="button" onClick={V.fPhone.exit} style={{height: "32px", padding: "0 14px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}} data-exitscan="1">Show all leads</button>
-                      </div>
-                      </>
-                    ) : null}
-                    <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(96px,1fr))", gap: "14px", marginTop: "20px"}}>
-                      {(V.fPhone.rings ?? []).map((r, __ir) => (
-                        <Fragment key={__ir}>
-                          <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "10px"}}>
-                            <span style={{position: "relative", display: "grid", placeItems: "center", width: "98px", height: "98px"}}>
-                              <svg viewBox="0 0 100 100" aria-hidden="true" style={{position: "absolute", inset: "0", width: "100%", height: "100%", transform: "rotate(-90deg)"}}>
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="#DADCD7" strokeWidth="7"></circle>
-                                <circle cx="50" cy="50" r="44" fill="none" stroke="#1C1C1C" strokeWidth="7" strokeLinecap="round" strokeDasharray="276.5" strokeDashoffset={r.off}></circle>
-                              </svg>
-                              <span style={{fontSize: "22px", fontWeight: "400", letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums"}}>
-                                {r.pct}
-                                <span style={{fontSize: "11px", color: "#5A5F5C"}}>%</span>
-                              </span>
-                            </span>
-                            <span style={{textAlign: "center"}}>
-                              <span style={{display: "block", fontSize: "13.5px", fontWeight: "500"}}>{r.name}</span>
-                              <span style={{display: "block", marginTop: "2px", fontSize: "12px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{r.leads}</span>
-                            </span>
-                          </div>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </section>
+                  <FinderScanProgress kind="phone" scan={V.fPhone}/>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                       <h2 data-fres="phone" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Numbers found</h2>
@@ -2896,56 +2808,6 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   <button type="button" onClick={V.clearShist} style={{padding: "0", border: "0", background: "transparent", fontFamily: "inherit", fontSize: "12.5px", color: "#4A4F4B", textDecoration: "underline", cursor: "pointer"}}>Clear history</button>
                 </div>
               </aside>
-              </>
-            ) : null}
-            {shows(V.scanOverlay) ? (
-              <>
-              <div onClick={(event) => { if (event.target === event.currentTarget && !shows(V.scanCancelVisible)) V.exitScan() }} style={{position: "fixed", inset: "0", zIndex: "95", display: "grid", placeItems: "center", padding: "clamp(14px,3vw,32px)", background: "rgba(28,28,28,.66)", animation: "lsScrimIn .35s linear both"}} data-scanscrim="1">
-                <section style={{width: "100%", maxWidth: "520px", maxHeight: "92vh", overflowY: "auto", padding: "clamp(22px,3vw,32px)", borderRadius: "28px", background: "#F5F5F4", boxShadow: "0 40px 80px -40px rgba(28,28,28,.8)", animation: "lsPanelIn .5s cubic-bezier(.22,1,.36,1) both"}}>
-                  <div style={{display: "flex", alignItems: "center", gap: "18px"}}>
-                    <span aria-hidden="true" style={{position: "relative", display: "block", width: "78px", height: "78px", borderRadius: "999px", background: "#E7EDE0", overflow: "hidden", flex: "none"}}>
-                      <span style={{position: "absolute", inset: "0", borderRadius: "999px", background: "conic-gradient(from 0deg,rgba(143,163,130,0) 0deg,rgba(143,163,130,.9) 70deg,rgba(143,163,130,0) 72deg)", animation: "lsSpin 1.6s linear infinite"}}></span>
-                      <span style={{position: "absolute", inset: "14px", borderRadius: "999px", border: "1px solid rgba(28,28,28,.14)"}}></span>
-                      <span style={{position: "absolute", inset: "28px", borderRadius: "999px", border: "1px solid rgba(28,28,28,.14)"}}></span>
-                      <span style={{position: "absolute", left: "50%", top: "50%", width: "8px", height: "8px", margin: "-4px 0 0 -4px", borderRadius: "999px", background: "#1C1C1C"}}></span>
-                    </span>
-                    <div style={{minWidth: "0"}}>
-                      <h2 style={{margin: "0", fontSize: "clamp(20px,2.3vw,26px)", fontWeight: "400", letterSpacing: "-.02em"}}>{V.ovTitle}</h2>
-                      <p style={{margin: "5px 0 0", fontSize: "13px", color: "#5A5F5C"}}>{V.ovNote}</p>
-                    </div>
-                  </div>
-                  <div style={{height: "6px", marginTop: "20px", borderRadius: "3px", background: "#E3E4E1", overflow: "hidden"}}>
-                    <span style={{display: "block", height: "100%", width: V.ovPct, borderRadius: "3px", background: "#1C1C1C", transition: "width .5s cubic-bezier(.22,1,.36,1)"}}></span>
-                  </div>
-                  <div style={{display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", marginTop: "16px"}}>
-                    {shows(V.scanCancelVisible) ? (
-                      <>
-                      <button type="button" onClick={V.cancelScan} data-scan-cancel="1" style={{height: "36px", padding: "0 16px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer"}}>Cancel scan</button>
-                      </>
-                    ) : null}
-                  </div>
-                  <ul style={{listStyle: "none", margin: "16px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
-                    {(V.scanRows ?? []).map((sr, __isr) => (
-                      <Fragment key={__isr}>
-                        <li style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", padding: "11px 0", borderTop: "1px solid #E4E5E2"}}>
-                          <span style={{flex: "1", minWidth: "140px", fontSize: "13.5px", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{sr.domain}</span>
-                          <span style={{display: "flex", flexWrap: "wrap", gap: "4px", maxWidth: "100%"}}>
-                            <SocialProfileLinks profiles={sr.profiles ?? []}/>
-                          </span>
-                          <span data-impst={sr.pill} style={{display: "inline-flex", alignItems: "center", gap: "6px", padding: "5px 11px", borderRadius: "999px", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap"}}>
-                            {shows(sr.scanning) ? (
-                              <>
-                              <span aria-hidden="true" style={{width: "9px", height: "9px", borderRadius: "999px", border: "1.5px solid rgba(28,28,28,.25)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite"}}></span>
-                              </>
-                            ) : null}
-                            {' '}{sr.status}{' '}
-                          </span>
-                        </li>
-                      </Fragment>
-                    ))}
-                  </ul>
-                </section>
-              </div>
               </>
             ) : null}
             {shows(V.bulkKeywordsOpen) ? (

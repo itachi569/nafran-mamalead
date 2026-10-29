@@ -10,6 +10,7 @@ WebsiteEnricher.prototype.inspectPeople=async()=>{throw Error('Legacy crawler mu
 WebsiteEnricher.prototype.searchPublicWeb=async()=>{throw Error('Alternative search must not run')}
 let slowStarted
 async function main(){
+ let fixtureDomain=''
  global.fetch=async(raw,options)=>{
   const url=new URL(String(raw))
   if(url.hostname==='api.dataforseo.com'){
@@ -17,7 +18,7 @@ async function main(){
    const q=JSON.parse(options.body)[0].keyword;queries.push(q)
    if(q.includes('slow-owner.test')){slowStarted?.();await new Promise((_,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true}))}
    if(q.includes('error-owner.test'))return Response.json({tasks:[{status_code:50000,status_message:'Fixture provider unavailable'}]})
-   const domain=q.match(/([\w.-]+\.test)/)?.[1] || q.match(/(named-owner|missing-owner|error-owner)/)[1]+'.test'
+   const domain=(fixtureDomain=q.match(/([\w.-]+\.test)/)?.[1] || (q.match(/(named-owner|missing-owner|error-owner)/)?.[1]?q.match(/(named-owner|missing-owner|error-owner)/)[1]+'.test':fixtureDomain))
    const path=q.includes('Janet Cole')?'/contact':'/about'
    return Response.json({tasks:[{status_code:20000,result:[{items:domain.startsWith('empty-')?[]:[{type:'organic',title:'Owner',url:'https://'+domain+path,description:'Published source'}]}]}]})
   }

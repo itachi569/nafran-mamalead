@@ -8,7 +8,7 @@ async function main(){
    const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'))
    const {db,repository:repo}=req('./dist-electron/db/index.js').openDatabase(),ws=db.ensureWorkspace().id,{EnrichmentRunner}=req('./dist-electron/enrichment/runner.js')
    const state={db,repo,ws,queries:[],jobs:[],exports:[],slow:false,hold:true,resume:null,providerFailed:true};globalThis.__ownerTwo=state
-   const original=globalThis.fetch
+   let fixtureDomain=''; const original=globalThis.fetch
    globalThis.fetch=async(raw,options)=>{
     const u=new URL(String(raw))
     if(u.hostname==='api.dataforseo.com'){
@@ -17,7 +17,7 @@ async function main(){
      await new Promise(resolve=>setTimeout(resolve,600))
      if(query.includes('slow-owner.test')){state.slow=true;await new Promise((_,reject)=>{if(options.signal.aborted)reject(new DOMException('Aborted','AbortError'));else options.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true})})}
      if(query.includes('error-owner.test') && state.providerFailed)return Response.json({tasks:[{status_code:40101,status_message:'Internal SE Server Error.'}]})
-     const domain=query.match(/([\w.-]+\.test)/)?.[1] || query.match(/(named-owner|missing-owner|error-owner)/)[1]+'.test',page=query.includes('Janet Cole')?'/contact':'/about'
+     const domain=(fixtureDomain=query.match(/([\w.-]+\.test)/)?.[1] || (query.match(/(named-owner|missing-owner|error-owner)/)?.[1]?query.match(/(named-owner|missing-owner|error-owner)/)[1]+'.test':fixtureDomain)),page=query.includes('Janet Cole')?'/contact':'/about'
      return Response.json({tasks:[{status_code:20000,result:[{items:[{type:'organic',title:'Owner',url:'https://'+domain+page,description:'Published source'}]}]}]})
     }
     if(u.hostname.endsWith('.test'))return new Response(u.pathname==='/about'?'<article><h2>Janet Cole</h2><p>Founder</p></article>':u.hostname==='named-owner.test'?'<p>Janet Cole</p><a href="mailto:janet@named-owner.test">Email Janet</a>':'<p>No email published</p>')
@@ -62,7 +62,8 @@ async function main(){
   const prior=await app.evaluate(()=>{const t=globalThis.__ownerTwo;t.providerFailed=false;return t.queries.length})
   await retry.click();await panel.getByText('Scan complete',{exact:true}).waitFor({timeout:20000})
   const retried=await app.evaluate((_,prior)=>globalThis.__ownerTwo.queries.slice(prior),prior)
-  assert.equal(retried.length,6);assert.ok(retried.every(q=>q.includes('error-owner')));assert.doesNotMatch(await result.innerText(),/Search failed|old@/)
+  assert.equal(retried.length,4); // The two broad name queries reuse this run's completed search cache.
+  assert.ok(retried[0].includes('error-owner.test'));assert.ok(retried.every(q=>!q.includes('missing-owner')));assert.doesNotMatch(await result.innerText(),/Search failed|old@/)
   await scan('slow-owner.test\nnever-owner.test',2);await app.evaluate(async()=>{const start=Date.now();while(!globalThis.__ownerTwo.slow&&Date.now()-start<15000)await new Promise(r=>setTimeout(r,50));if(!globalThis.__ownerTwo.slow)throw Error('Slow fixture did not start')})
   await page.locator('[data-decision-progress]').getByRole('button',{name:/Stop scan/}).click();await page.getByText('Scan stopped. Completed results are saved below.',{exact:true}).first().waitFor({timeout:10000})
   const final=await app.evaluate(()=>{const t=globalThis.__ownerTwo;return {job:t.repo.jobStatus(t.ws,t.jobs.at(-1)),queries:t.queries}});assert.equal(final.job.status,'cancelled');assert.ok(!final.queries.some(q=>q.includes('never-owner')));assert.match(await result.innerText(),/Not scanned/)

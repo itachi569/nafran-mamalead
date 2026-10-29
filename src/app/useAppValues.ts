@@ -388,6 +388,10 @@ export function useAppValues() {
    */
   const [scan, setScan] = useState<{
     phase: 'idle' | 'scanning' | 'done' | 'covered'
+    stopping?: boolean
+    stopped?: boolean
+    failed?: number
+    message?: string
     /** The social enrichment job created by this website scan, if one was queued. */
     jobId: string
     /** What was pasted, which is what the coverage card counts. */
@@ -1348,13 +1352,15 @@ export function useAppValues() {
   const stopRun = useCallback(() => setMapsPrompt('stop'), [])
 
   const cancelScan = useCallback(() => {
-    const jobId = scan.jobId
-    scanToken.current += 1
-    if (scan.phase === 'scanning') void window.desktop?.enrichment?.stop()
-    if (jobId && db) void db.jobs.cancel(jobId).catch(() => undefined)
-    setScan({ phase: 'idle', jobId: '', urls: [], leadIds: [], scannedIds: [], activeName: '', found: 0, added: 0 })
-    flash('Scan cancelled.')
-  }, [db, flash, scan.jobId, scan.phase])
+    if (scan.phase !== 'scanning' || scan.stopping) return
+    setScan(current=>({...current,stopping:true}))
+    if (scan.jobId) void window.desktop?.enrichment?.stop(scan.jobId).catch(()=>{
+      setScan(current=>({...current,stopping:false}))
+      flash('Could not stop the scan. Please try again.')
+    })
+  }, [flash, scan.jobId, scan.phase, scan.stopping])
+  const socialStopRequested=useRef(false)
+  socialStopRequested.current=Boolean(scan.stopping)
 
   const exitScan = useCallback(() => {
     scanToken.current += 1
@@ -1919,6 +1925,7 @@ export function useAppValues() {
   const runWebsiteScan = useCallback(
     (sites: string[]): void => {
       if (!db || !sites.length) return
+      if (scan.phase==='scanning') { flash('Stop the current social scan before importing another list.'); return }
       const token = ++scanToken.current
       setScan({ phase: 'scanning', jobId: '', urls: sites, leadIds: [], scannedIds: [], activeName: '', found: 0, added: 0 })
       void (async () => {
@@ -1946,6 +1953,7 @@ export function useAppValues() {
             return
           }
           setScan((current) => ({ ...current, jobId: queued.jobId }))
+          if (socialStopRequested.current) { await window.desktop?.enrichment?.stop(queued.jobId); return }
           // The import queues only this social pass. Older background work yields to it.
           void (window.desktop?.enrichment?.prioritize?.(queued.jobId) ?? window.desktop?.enrichment?.start?.())
           // Refresh the non-social summary in the background; the scan modal does not wait for
@@ -1957,76 +1965,47 @@ export function useAppValues() {
         }
       })()
     },
-    [db, refreshLists, reload, flash],
+    [db, refreshLists, reload, flash, scan.phase],
   )
 
-  /**
-   * The pass reports itself as it goes, and the panel follows it site by site.
-   *
-   * The worker names the lead it is reading before it reads it, so a row becomes "done" when the
-   * next name arrives and the row being read is the one showing the spinner. A pass that has
-   * stopped — with nothing running and nothing queued — is the end of the scan.
-   */
+  // Follow this import's durable counters, never infer progress from a business name.
   useEffect(() => {
     if (!db || scan.phase !== 'scanning' || !scan.jobId) return
-    const bridge = typeof window === 'undefined' ? undefined : window.desktop?.enrichment
-    if (!bridge?.onProgress) return
-
-    let cancelled = false
-    let timer: number | undefined
-
-    const unsubscribe = bridge.onProgress((progress) => {
-      // The worker also reports progress for older queued cascades. Only the job opened by this
-      // import belongs in this modal; otherwise an unrelated 50-lead pass can make a one-site scan
-      // show somebody else's found count and active business forever.
-      if (cancelled || progress.jobId !== scan.jobId || (progress.kind !== 'social' && progress.kind !== 'website')) return
-      if (progress.status === 'running' && progress.leadName) {
-        // The name being read now marks everything before it as read.
-        setScan((current) => {
-          const at = current.leadIds.findIndex((id, index) => index >= current.scannedIds.length && current.activeName === '')
-          return {
-            ...current,
-            activeName: progress.leadName,
-            found: progress.found,
-            scannedIds: at >= 0 ? current.leadIds.slice(0, at) : current.scannedIds,
-          }
-        })
-        return
-      }
-      if (progress.status === 'done') {
-        // The runner emits this after the durable row is marked done. Finish the foreground panel
-        // from the event itself instead of waiting for the next 1.2s status poll.
-        social.refresh()
-        void reload()
-        setScan((current) => ({ ...current, phase: 'done', found: progress.found, activeName: '' }))
-      }
+    let cancelled=false
+    let timer:number|undefined
+    let lastProcessed=-1
+    const apply=(progress:Pick<EnrichmentProgress,'status'|'processed'|'found'|'failed'|'leadName'|'message'>)=>{
+      if(cancelled)return
+      const finished=['done','failed','cancelled'].includes(progress.status)
+      setScan(current=>({...current,
+        phase:finished?'done':'scanning',stopping:finished?false:current.stopping,
+        stopped:progress.status==='cancelled',failed:progress.failed ?? 0,
+        scannedIds:current.leadIds.slice(0,progress.processed),found:progress.found,
+        activeName:finished?'':progress.leadName,message:progress.message,
+      }))
+      if(progress.processed!==lastProcessed || finished){lastProcessed=progress.processed;social.refresh();void reload()}
+    }
+    const unsubscribe=window.desktop?.enrichment?.onProgress(progress=>{
+      if(progress.jobId===scan.jobId && progress.kind==='social')apply(progress)
     })
-
-    // The worker's last word is silent — it stops rather than announcing that it has — so the queue
-    // is what says the pass is over. Only the leads this scan queued are waited for.
-    const poll = async (): Promise<void> => {
+    const poll=async()=>{
       try {
-        const status = await db.jobs.status(scan.jobId)
-        if (cancelled) return
-        if (!status || status.status === 'queued' || status.status === 'running') {
-          timer = window.setTimeout(() => void poll(), 450)
-          return
-        }
-        social.refresh()
-        reload()
-        setScan((current) => ({ ...current, phase: 'done', activeName: '' }))
-      } catch {
-        if (!cancelled) timer = window.setTimeout(() => void poll(), 900)
-      }
+        const status=await db.jobs.status(scan.jobId)
+        if(cancelled)return
+        if(status && status.status!=='queued')apply({...status,status:status.status})
+        if(status && !['queued','running'].includes(status.status))return
+      }catch{/* Retry without inventing completion. */}
+      if(!cancelled)timer=window.setTimeout(()=>void poll(),450)
     }
-    timer = window.setTimeout(() => void poll(), 450)
+    void poll()
+    return ()=>{cancelled=true;unsubscribe?.();if(timer)window.clearTimeout(timer)}
+  },[db,scan.jobId,scan.phase,social.refresh,reload])
 
-    return () => {
-      cancelled = true
-      unsubscribe()
-      if (timer) window.clearTimeout(timer)
-    }
-  }, [db, scan.jobId, scan.phase, social, reload])
+  useEffect(()=>{
+    if(scan.phase!=='scanning')return
+    const frame=requestAnimationFrame(()=>document.querySelector('[data-finder-progress="social"]')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'}))
+    return ()=>cancelAnimationFrame(frame)
+  },[scan.phase])
 
   /**
    * Files a paste of profile URLs, which needs no pass: the URL already says where the profile is.
@@ -2975,6 +2954,7 @@ export function useAppValues() {
     doneLabel: (scanned) => `${scanned} site${scanned === 1 ? '' : 's'} read. Coverage below counts what each one published.`,
     onExport: () => openExport('leads', 0),
     resultSelector: '[data-flistcard="email"]',
+    progressSelector: '[data-finder-progress="email"]',
   })
 
   const emailValidityFilter = emailFinder.filter
@@ -3050,6 +3030,7 @@ export function useAppValues() {
     doneLabel: (scanned) => `${scanned} site${scanned === 1 ? '' : 's'} read. Coverage below counts the lines each one published.`,
     onExport: () => openExport('leads', 0),
     resultSelector: '[data-flistcard="phone"]',
+    progressSelector: '[data-finder-progress="phone"]',
   })
 
   const phoneTableRows=phoneFinder.rows.map(row=>{
@@ -3796,7 +3777,7 @@ export function useAppValues() {
       const total = scan.leadIds.length || scan.urls.length
       const scanned = new Set(scan.scannedIds)
       const activeIndex = scan.activeName
-        ? social.rows.findIndex((row) => row.name === scan.activeName && scan.leadIds.includes(row.leadId))
+        ? scan.leadIds.findIndex(id=>social.rows.some(row=>row.leadId===id && row.name===scan.activeName))
         : -1
       return scan.urls.slice(0, total || scan.urls.length).map((url, index) => {
         const leadId = scan.leadIds[index]
@@ -3805,12 +3786,7 @@ export function useAppValues() {
         // the first that has not been read yet.
         const isActive =
           scan.phase === 'scanning' && (index === activeIndex || (activeIndex < 0 && index === scan.scannedIds.length))
-        // A finished scan leaves every row done, whether or not the worker got as far as reporting
-        // it: the pass is over, and a row still saying "Waiting" would be a scan that never ends.
-        const isDone =
-          scan.phase !== 'scanning' ||
-          scanned.has(leadId ?? '') ||
-          (Boolean(leadId) && !isActive && scan.scannedIds.length > index)
+        const isDone = scanned.has(leadId ?? '')
         const host = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '')
         return {
           phase: isActive ? 'scanning' : isDone ? 'done' : 'wait',
@@ -3823,31 +3799,9 @@ export function useAppValues() {
           chips: (row?.profiles ?? []).map((profile) => ({ t: profile.short, k: profile.label, url: profile.url })),
           none: !isActive && isDone && row?.noProfiles ? '1' : '',
           pill: isActive ? 'scanning' : isDone ? 'done' : 'pending',
-          status: isActive ? 'Scanning' : isDone ? 'Done' : 'Waiting',
+          status: isActive ? 'Scanning' : isDone ? 'Done' : scan.stopped ? 'Not scanned' : 'Waiting',
         }
       })
-    })(),
-    // The panel the design draws while a pass runs, in the design's own words: what it is reading,
-    // how far it has got, and what it has found so far.
-    scanOverlay: scan.phase === 'scanning' || scan.phase === 'done',
-    scanCancelVisible: scan.phase === 'scanning' ? '1' : '',
-    ovTitle: (() => {
-      const total = scan.leadIds.length || scan.urls.length
-      if (scan.phase !== 'scanning') return 'Scan complete'
-      return `Scanning ${total} website${total === 1 ? '' : 's'}`
-    })(),
-    ovNote: (() => {
-      const total = scan.leadIds.length || scan.urls.length
-      const done = scan.phase === 'scanning' ? scan.scannedIds.length : total
-      const found = scan.found
-      return `${done} of ${total} done · ${found} profile${found === 1 ? '' : 's'} found so far`
-    })(),
-    ovPct: (() => {
-      const total = scan.leadIds.length || scan.urls.length
-      if (!total) return '0%'
-      // A site being read counts as half, which is what makes the bar move while the pass works.
-      const done = scan.scannedIds.length + (scan.phase === 'scanning' && scan.scannedIds.length < total ? 0.5 : 0)
-      return `${Math.round((Math.min(total, done) / total) * 100)}%`
     })(),
     exportProfiles: openProfileExport,
     profileExportOpen,
@@ -4793,6 +4747,16 @@ export function useAppValues() {
     importHint: social.importHint,
     // The coverage card's own two states: the spinner while the import is filing, and the bar that
     // reports what landed. The updated design has no separate overlay, so these are what is left.
+    socialScanProgress: {
+      scanOn:scan.phase!=='idle',scanning:scan.phase==='scanning',stopping:Boolean(scan.stopping),stopped:Boolean(scan.stopped),
+      scanSub:scan.message || `${scan.scannedIds.length} websites checked · ${scan.found} profiles found.`,
+      progress:{total:scan.leadIds.length || scan.urls.length,processed:scan.scannedIds.length,
+        remaining:Math.max(0,(scan.leadIds.length || scan.urls.length)-scan.scannedIds.length),
+        failed:scan.failed ?? 0,found:scan.found,
+        percent:Math.floor(100*scan.scannedIds.length/Math.max(1,scan.leadIds.length || scan.urls.length)),
+        current:scan.activeName,message:scan.message || 'Checking selected websites for published social profiles…'},
+      rings:[],stop:cancelScan,refresh:social.refresh,exit:exitScan,
+    },
     covScanning: scan.phase === 'scanning',
     covResult: scan.phase === 'done' || scan.phase === 'covered',
     covBadge: `Filing ${scan.urls.length} profile${scan.urls.length === 1 ? '' : 's'} — coverage fills in with what lands`,
