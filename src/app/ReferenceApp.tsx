@@ -1452,13 +1452,16 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <input data-fq="email" type="search" onInput={V.fEmail.onInput} onKeyDown={V.fEmail.onKey} onBlur={V.fEmail.onBlur} placeholder="Search saved emails…" aria-label="Search saved emails" aria-describedby="saved-email-search-help" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fEmail.q} />
                     </div>
                     <span style={{position: "relative", display: "block"}}>
-                      <select onChange={V.fEmail.onState} aria-label="Filter rows" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
-                        <option>All</option>
-                        <option>Has email</option>
-                        <option>High confidence</option>
-                        <option>Needs verify</option>
-                        <option>Pending</option>
-                        <option>No website</option>
+                      <select value={V.fEmail.filter} onChange={V.fEmail.onState} aria-label="Filter rows" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
+                        <option value="all">All</option>
+                        <option value="has">Has email</option>
+                        <option value="valid">Valid</option>
+                        <option value="invalid">Invalid</option>
+                        <option value="risky">Risky</option>
+                        <option value="unknown">Unknown</option>
+                        <option value="unchecked">Not checked</option>
+                        <option value="pending">Pending</option>
+                        <option value="nowebsite">No website</option>
                       </select>
                       <span aria-hidden="true" style={{position: "absolute", right: "14px", top: "15px", display: "block", pointerEvents: "none", color: "#4A4F4B"}}>
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

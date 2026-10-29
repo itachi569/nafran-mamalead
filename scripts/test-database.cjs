@@ -142,7 +142,7 @@ const again = repo.upsertContact({ leadId: target.id, kind: 'email', value: 'hel
 repo.updateEmailValidation(again.id, { status: 'valid', verified: true, score: 96, message: 'Mailbox confirmed', provider: 'mailverifier' })
 check('re-adding the same address updates it rather than duplicating', Boolean(again.id))
 const emails = repo.listContacts(workspace.id, 'email')
-check('both addresses are on file', emails.length === 2, `${emails.length} addresses`)
+check('one main business address stays active', emails.length === 1, `${emails.length} addresses`)
 check('the re-added address kept its identity', emails.filter((row) => row.value === 'hello@deansgate.test').length === 1)
 check('and picked up the new score', emails.find((row) => row.value === 'hello@deansgate.test').score === 96)
 
@@ -187,8 +187,8 @@ check('the social coverage view groups by platform', coverage.length === 1 && co
 // ---------------------------------------------------------------- email coverage views
 
 const emailCoverage = repo.emailCoverage(workspace.id)
-check('the email coverage view counts leads and addresses', emailCoverage.leads === 5 && emailCoverage.emails === 2, JSON.stringify(emailCoverage))
-check('and separates verified from outstanding', emailCoverage.verified === 1 && emailCoverage.needs_verify === 1)
+check('the email coverage view counts leads and the active main address', emailCoverage.leads === 5 && emailCoverage.emails === 1, JSON.stringify(emailCoverage))
+check('and separates verified from outstanding', emailCoverage.verified === 1 && emailCoverage.needs_verify === 0)
 const confidence = repo.emailConfidence(workspace.id)
 check('confidence bands are bucketed to five points', confidence.every((band) => band.band_from % 5 === 0), JSON.stringify(confidence))
 
@@ -342,7 +342,9 @@ check('a company page names nobody', personNameFromLinkedIn('https://uk.linkedin
 check('a company page with a name in it still names nobody', personNameFromLinkedIn('https://www.linkedin.com/company/dr-rizwan-phsiotherapy-home-service') === null)
 
 // The offline pass builds suggestions from rows already on file.
-const suggestionLead = ledger.rows[0]
+// Use a different business: adding a secondary personal mailbox must not replace
+// the already-selected main contact address on the first business.
+const suggestionLead = ledger.rows[2]
 repo.upsertContact({ leadId: suggestionLead.id, kind: 'email', value: 'ruth.ellery@deansgate.test', source: 'website', score: 86 })
 const built = repo.buildSuggestions(workspace.id)
 check('suggestions are built from what is on file', built.suggested > 0, `${built.suggested} suggested`)
@@ -353,16 +355,17 @@ check('building twice does not duplicate', repo.buildSuggestions(workspace.id).s
 check('candidate totals are reported', repo.candidateTotals(workspace.id).suggested === candidates.length)
 
 // The confirmed table is only ever written to by a confirmation.
-const beforeConfirm = repo.decisionMakerLedger(workspace.id)
+const beforeConfirm = repo.listDecisionMakers(workspace.id)
 const toConfirm = candidates.find((c) => c.full_name === 'Ruth Ellery')
 const confirmed = repo.confirmCandidate(workspace.id, toConfirm.id)
 check('a suggestion can be confirmed', confirmed.confirmed)
-const afterConfirm = repo.decisionMakerLedger(workspace.id)
+const afterConfirm = repo.listDecisionMakers(workspace.id)
 const alreadyNamed = beforeConfirm.some((row) => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name)
 check('confirming stores the named contact without duplicating an existing person',
   afterConfirm.length === beforeConfirm.length + (alreadyNamed ? 0 : 1) &&
   afterConfirm.some((row) => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name && row.email === toConfirm.email))
 check('and removes it from the suggestions', !repo.listCandidates(workspace.id).some((c) => c.id === toConfirm.id))
+check('an inferred name without an owner role is not presented as an owner', !repo.decisionMakerLedger(workspace.id).some(row => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name))
 
 const toDismiss = repo.listCandidates(workspace.id)[0]
 if (toDismiss) {

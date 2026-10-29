@@ -32,7 +32,11 @@ async function main() {
     ? {executablePath:resolve('release/win-unpacked/MamaLead.exe'),args:[`--user-data-dir=${userData}`],env}
     : {args:['.',`--user-data-dir=${userData}`],cwd:process.cwd(),env})
   try {
+    await app.evaluate(({ipcMain})=>{ipcMain.removeHandler('billing:status');ipcMain.handle('billing:status',()=>({connected:true,coreLicenseActive:true,lifetime:{active:true},license:{active:true,kind:'lifetime'}}))})
     const page = await app.firstWindow()
+    await page.reload()
+    await app.evaluate(({BrowserWindow})=>{const win=BrowserWindow.getAllWindows()[0];win.show();win.focus()})
+    await page.bringToFront()
     const errors=[]; page.on('pageerror',e=>errors.push(e.message))
     await page.waitForSelector('[data-view="social"]')
     for (const [view,selector,terms] of [
@@ -52,8 +56,11 @@ async function main() {
       }
       await field.fill('no-such-contact-xyz')
       await page.waitForFunction(() => document.querySelectorAll('[data-rowgrid][data-row="1"]').length === 0)
-      await field.fill('')
-      await page.waitForFunction(() => document.querySelectorAll('[data-rowgrid][data-row="1"]').length === 2)
+      await field.press('ControlOrMeta+a')
+      await field.press('Backspace')
+      await page.waitForFunction(() => document.querySelectorAll('[data-rowgrid][data-row="1"]').length === 2, null, {timeout:10000}).catch(async error => {
+        console.error(JSON.stringify({view, value:await field.inputValue(),rows:await rows.allTextContents()})); throw error
+      })
       console.log(`PASS ${view}: advertised fields, no match, clear restores rows`)
     }
     assert.deepEqual(errors,[])

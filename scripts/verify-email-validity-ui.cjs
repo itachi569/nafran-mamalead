@@ -10,22 +10,27 @@ async function main() {
   delete env.VITE_DEV_SERVER_URL
   const app = await _electron.launch({ args: ['.', `--user-data-dir=${userData}`], cwd: process.cwd(), env, timeout: 60_000 })
   try {
+    await app.evaluate(({app,ipcMain}) => {
+      const req=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/package.json')
+      req('./dist-electron/billing/client.js').requireActiveLicense=async()=>{}
+      ipcMain.removeHandler('billing:status');ipcMain.handle('billing:status',()=>({connected:true,coreLicenseActive:true,lifetime:{active:true},license:{active:true,kind:'lifetime'}}))
+    })
     const page = await app.firstWindow()
     const pageErrors = []
     page.on('pageerror', (error) => pageErrors.push(error.message))
     await page.waitForSelector('[data-view="dashboard"]', { timeout: 30_000 })
-    const lead = await page.evaluate(() => window.desktop.local.imports.websites(['https://example.com']))
-    assert.equal(lead.added, 1)
-    const ids = await page.evaluate(async (leadId) => {
+    const lead = await page.evaluate(() => window.desktop.local.imports.websites(Array.from({length:10},(_,i)=>`https://validity-${i}.fixture.test`), {enqueue:false}))
+    assert.equal(lead.added, 10)
+    const ids = await page.evaluate(async (leadIds) => {
       const contacts = []
       for (let index = 0; index < 10; index++) {
         const added = await window.desktop.local.contacts.upsert({
-          leadId, kind: 'email', value: `validity-ui-${index}@example.com`, source: 'test',
+          leadId:leadIds[index], kind: 'email', value: `validity-ui-${index}@example.com`, source: 'test',
         })
         contacts.push(added.id)
       }
       return contacts
-    }, lead.leadIds[0])
+    }, lead.leadIds)
     await page.click('[data-view="email"]')
     await page.locator('[data-email-validity="1"]').first().waitFor({ state: 'visible' })
     await page.evaluate(() => window.desktop.test.mockSlowEmailValidity())
