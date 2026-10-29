@@ -2,7 +2,7 @@ import {decodePublishedEmailHtml,extractPublishedEmails,extractPeople,stripConta
 import {locationForLead,searchOrganicLive} from './dataforseo'
 import {isBusinessOwner,ownerEmail,ownerIdentityKey} from './owner-contact'
 import {contactFindingsFromHtml,isUsablePerson,ownerBelongsToBusiness,ownerNameOutsideTestimonials,type FoundPerson} from './website'
-import {searchPublicSources,type PublicSearchHit} from './public-search'
+import {isPublicSourceUrl,searchPublicSources,type PublicSearchHit} from './public-search'
 import {parse,serialize,type DefaultTreeAdapterMap} from 'parse5'
 import {parseAddress} from '../scraper/location'
 import {discoverOwnerContactPages} from './owner-sitemap'
@@ -25,6 +25,14 @@ const locality=(lead:Lead)=>parseAddress(lead.address || '').area || parseAddres
 // Quote domains so search engines do not replace a less familiar brand with a similarly named
 // company (for example MamaLead/Marmalead). A different company's founder is never a fallback.
 const searchIdentity=(lead:Lead)=>hostOf(lead.website)?`"${hostOf(lead.website)}"`:[lead.name.trim(),locality(lead)].filter(Boolean).join(' ')
+// Keep the domain for precise free discovery. A brand query can find a press release or
+// register that names the company but never spells out its domain; affiliation is still
+// verified on the source page before accepting the owner.
+const searchBrand=(lead:Lead)=>{
+ const host=hostOf(lead.website)
+ const name=lead.name.trim().replace(/^https?:\/\//i,'').replace(/^www\./i,'').replace(/\/$/,'')
+ return (host && (!name || name.toLowerCase()===host)?host.split('.')[0]:name).replace(/["\r\n]/g,' ').trim()
+}
 
 function aboutCompany(lead:Lead,value:string,requirePlace=true):boolean{
  const text=normal(value),host=hostOf(lead.website)
@@ -140,8 +148,9 @@ export async function findBusinessOwners(lead:Lead,options:Options={}):Promise<{
  if(!identity)return {people:[],error:'This saved business has no usable name or website.'}
  try{
   const verify=async(hits:PublicSearchHit[])=>{
-   const candidates=preferredHits([...new Map(hits.filter(hit=>/^https?:\/\//i.test(hit.url) && (Boolean(host) && hostOf(hit.url)===host || aboutCompany(lead,`${hit.title} ${hit.description} ${hit.url}`,false))).map(hit=>[hit.url,hit])).values()],host).slice(0,3)
-   const results=await Promise.all(candidates.map(async hit=>{
+   const candidates=preferredHits([...new Map(hits.filter(hit=>isPublicSourceUrl(hit.url) && (Boolean(host) && hostOf(hit.url)===host || aboutCompany(lead,`${hit.title} ${hit.description} ${hit.url}`,false))).map(hit=>[hit.url,hit])).values()],host).slice(0,6)
+   for(let index=0;index<candidates.length && !signal.aborted;index+=3){
+   const results=await Promise.all(candidates.slice(index,index+3).map(async hit=>{
    const page=await read(hit.url);if(!page || (hostOf(page.url)!==host && !aboutCompany(lead,page.html)))return []
    const prose=extractPeople(page.text).filter(person=>isBusinessOwner(person.title) && isUsablePerson(person.fullName,person.title))
    const cards=contactFindingsFromHtml(page.html,page.url).people.filter(person=>isBusinessOwner(person.title) && isUsablePerson(person.fullName,person.title))
@@ -151,13 +160,16 @@ export async function findBusinessOwners(lead:Lead,options:Options={}):Promise<{
    }).filter(person=>ownerNameOutsideTestimonials(page.html,person.fullName) && (!host || ownerBelongsToBusiness(page.html,lead.website,person.fullName,page.url))).map(person=>({...person,email:publishedMail(page,lead,person),phone:'',linkedinUrl:'',evidence:page.url}))
     .filter(person=>Boolean(host) || Boolean(namedBusinessScope(page,lead,person)))
    }))
-   return [...new Map(results.flat().map(person=>[normal(person.fullName),person])).values()].slice(0,3)
+   const people=[...new Map(results.flat().map(person=>[normal(person.fullName),person])).values()].slice(0,3)
+   if(people.length)return people
+   }
+   return []
   }
   let people=await verify(await publicHits(query,options,signal))
   // A keyword match is only a discovery hint. Try the configured index when those pages do not
   // actually establish an owner, including when an index returns only an unhelpful homepage.
   if(!people.length && options.key && !signal.aborted){
-   const paid=await searchOrganicLive(options.key,query,locationForLead(lead),signal)
+   const paid=await searchOrganicLive(options.key,host && searchBrand(lead)?`"${searchBrand(lead)}" founder`:query,locationForLead(lead),signal)
    people=await verify(paid.hits)
    if(paid.error && !people.length)return {people:[],error:paid.error}
   }
@@ -181,7 +193,7 @@ export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:
   }
   const query=`"${owner.fullName}" ${searchIdentity(lead)} email address`
   const verify=async(hits:PublicSearchHit[])=>{
-   const candidates=preferredHits([...new Map(hits.filter(hit=>/^https?:\/\//i.test(hit.url) && (hostOf(hit.url)===host || normal(`${hit.title} ${hit.description}`).includes(normal(owner.fullName)))).map(hit=>[hit.url,hit])).values()],host).slice(0,6)
+   const candidates=preferredHits([...new Map(hits.filter(hit=>isPublicSourceUrl(hit.url) && (hostOf(hit.url)===host || normal(`${hit.title} ${hit.description}`).includes(normal(owner.fullName)))).map(hit=>[hit.url,hit])).values()],host).slice(0,6)
    // A public register may follow three official pages which contain no mailbox. Try the
    // second bounded batch only when the preferred sources have not produced a verified email.
    for(let index=0;index<candidates.length && !signal.aborted;index+=3){
@@ -196,6 +208,7 @@ export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:
   const firstName=ownerIdentityKey(owner.fullName).split(' ')[0]
   const searches=[publicHits(query,options,signal)]
   if(host && firstName?.length>=3)searches.push(searchPublicSources(`site:${host} "${firstName}" email`,signal))
+  const searchCount=searches.length
   if(host){
    const pageKey=(value:string)=>{try{const url=new URL(value);return hostOf(value)+url.pathname.replace(/\/$/,'')+url.search}catch{return value}}
    const scanned=new Set((options.scannedPages ?? []).map(pageKey))
@@ -207,13 +220,15 @@ export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:
   }
   const indexes=await Promise.allSettled(searches)
   signal.throwIfAborted()
-  if(!options.key && indexes.every(result=>result.status==='rejected'))throw (indexes[0] as PromiseRejectedResult).reason
   let match=await verify(indexes.flatMap(result=>result.status==='fulfilled'?result.value:[]))
   if(!match && options.key && !signal.aborted){
    const paid=await searchOrganicLive(options.key,query,locationForLead(lead),signal)
    match=await verify(paid.hits)
    if(paid.error && !match)return {...empty,error:paid.error}
   }
+  // Empty sitemap/story results are not successful search responses. Surface an index
+  // outage only after trying the official sources, rather than calling it "not found".
+  if(!match && !options.key && indexes.slice(0,searchCount).every(result=>result.status==='rejected'))throw (indexes[0] as PromiseRejectedResult).reason
   return match ?? {...empty,error:signal.aborted?'Public email search reached its time limit. Retry this website.':null}
  }catch(error){if(options.signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError');return {...empty,error:signal.aborted?'Public email search reached its time limit. Retry this website.':error instanceof Error?error.message:'Public email search could not finish.'}}
 }

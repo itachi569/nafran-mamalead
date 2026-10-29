@@ -1,6 +1,16 @@
 import {parse, type DefaultTreeAdapterMap} from 'parse5'
 
 export type PublicSearchHit={title:string;description:string;url:string}
+
+/** Search navigation and account forms are not public evidence about a business owner. */
+export function isPublicSourceUrl(value:string):boolean{
+  try{
+    const url=new URL(value),host=url.hostname.toLowerCase()
+    return /^https?:$/.test(url.protocol) && !url.username && !url.password
+      && !/(?:^|\.)(?:google\.[a-z.]+|bing\.com|duckduckgo\.com)$/.test(host)
+      && !/(?:^|\/)(?:log-?in|sign-?in|sign-?up|register|auth|oauth)(?:\/|$)/i.test(url.pathname)
+  }catch{return false}
+}
 type Node=DefaultTreeAdapterMap['node']
 type Element=DefaultTreeAdapterMap['element']
 const decode=(value:string)=>value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/&quot;/g,'"').replace(/&apos;|&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
@@ -25,6 +35,7 @@ export function relevantSearchHits(hits:PublicSearchHit[],query:string):PublicSe
   const requiredSites=sites.filter(site=>!site.exclude),requiredCount=terms.length+requiredSites.length
   if(invalidSite || !requiredCount)return []
   return hits.filter(hit=>{
+    if(!isPublicSourceUrl(hit.url))return false
     if(sites.length){
       let url:URL
       try{url=new URL(hit.url);if(!/^https?:$/.test(url.protocol))return false}catch{return false}

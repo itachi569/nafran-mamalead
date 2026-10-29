@@ -16,6 +16,7 @@
 //     Reading a snippet is not the same as the business telling you who works there.
 import { knownLocale } from '../scraper/location'
 import { extractEmailsFromResult, extractPeopleFromResult, type ExtractedEmail } from './email-extractor'
+import { isPublicSourceUrl } from './public-search'
 
 const API_ROOT = 'https://api.dataforseo.com/v3'
 
@@ -135,7 +136,7 @@ export async function searchOrganicLive(
       if (Array.isArray(value)) { value.forEach(visit); return }
       if (!value || typeof value !== 'object') return
       const item = value as Record<string, unknown>
-      if (typeof item.url === 'string' && /^https?:\/\//i.test(item.url) && typeof item.title === 'string') {
+      if (typeof item.url === 'string' && isPublicSourceUrl(item.url) && typeof item.title === 'string') {
         hits.push({ title: item.title, description: String(item.description ?? item.snippet ?? ''), url: item.url })
       }
       if (Array.isArray(item.items)) item.items.forEach(visit)

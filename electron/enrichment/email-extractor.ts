@@ -353,8 +353,11 @@ function cleanPersonName(value: string): string {
     .replace(/\s+/g, ' ')
     .trim()
   const words = stripped.split(' ')
-  const cut = words.findIndex((word, index) => index >= 2 && TITLE_WORD.test(word))
-  return cut >= 2 ? words.slice(0, cut).join(' ') : stripped
+  const cut = words.findIndex((word, index) => index >= 2 && (TITLE_WORD.test(word) || /^[\p{Ll}]/u.test(word) && !/^(?:van|von|de|der|den|la|le|al|bin|ibn|da|di)$/.test(word)))
+  const name = cut >= 2 ? words.slice(0, cut).join(' ') : stripped
+  // The surrounding sentence is case-insensitive; its trailing "in London" or full stop
+  // must not become part of a capitalized person's name and make the entire match fail.
+  return name.replace(/([\p{L}]{2,})[.;:]$/u,'$1')
 }
 
 /**
@@ -394,11 +397,13 @@ export function extractPeople(text: string, limit = 8): ExtractedPerson[] {
     found.set(key, { fullName, title: title.replace(/[-]+/g, ' ').replace(/\s+/g, ' ').trim(), source: snippetAround(text, Math.max(0, text.indexOf(name)), name.length), url: '' })
   }
 
+  // A date and a job title can sit inside a founding statement. Process the explicit
+  // founding evidence before a nearby CEO title so the staff role cannot hide ownership.
+  const foundedBy = new RegExp(`\\b(?:co[- ]?founded|founded|started|established)(?:\\s+in\\s+\\d{4})?\\s+by\\s+(?:(?:the\\s+)?(?:then\\s+)?(?:CEO|chief executive officer|president)\\s+)?(${PERSON_NAME})`, 'giu')
+  for (const match of text.matchAll(foundedBy)) add(match[1], 'Founder', text)
+
   const titleFirst = new RegExp(`\\b(${PERSON_TITLE})\\b\\s*(?:is|:|-|–|—|,)?\\s+(${PERSON_NAME})`, 'giu')
   for (const match of text.matchAll(titleFirst)) add(match[2], match[1], text)
-
-  const foundedBy = new RegExp(`\\b(?:co[- ]?founded|founded|started|established)\\s+by\\s+(${PERSON_NAME})`, 'giu')
-  for (const match of text.matchAll(foundedBy)) add(match[1], 'Founder', text)
 
   // A separator is required here: without it, the company in “Northern Spine founder Ruth
   // Taylor” would be mistaken for a person before the title-first rule sees Ruth Taylor.

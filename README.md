@@ -1,8 +1,25 @@
-# Nafran Leads Scraper
+# MamaLead
 
-Cross-platform Electron desktop app with a React + strict TypeScript renderer, a real Chromium
-Google Maps scraping worker, and a **local-first SQLite database**. No server, no cloud account,
-no API key — everything runs and stays on the machine.
+Electron desktop app with a React + strict TypeScript renderer, a Chromium Google Maps
+scraping worker, and a local SQLite database. Licensing, payments, AI assistance, and
+optional search/verification providers also use configured server APIs.
+
+## Current source
+
+`main` contains the latest app and website source. The Windows public download is the
+signed **1.4.17** release; newer source commits do not automatically replace that installer.
+
+- Desktop: `src/` and `electron/`.
+- Public website, images, and screenshots: `website/`.
+- Billing and AI backend: `billing-server/`.
+- Production release evidence: [deploy/CURRENT-STATUS.md](deploy/CURRENT-STATUS.md).
+- Current owner-email investigation and its remaining Namecheap limitation:
+  [deploy/owner-discovery-investigation.md](deploy/owner-discovery-investigation.md).
+
+Run `npm ci`, `npm run build`, then `npm run dev` for desktop development. Use `npm run typecheck`
+and `npm run build` to validate changes. Follow [AGENTS.md](AGENTS.md) for local
+installer checks and the release documentation for signed publication. Credentials
+and customer databases must remain outside Git and packaged artifacts.
 
 ## Architecture
 

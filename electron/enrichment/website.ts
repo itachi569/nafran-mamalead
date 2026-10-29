@@ -514,9 +514,9 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
   for(const text of scoped){
     const at=text.indexOf(wanted),context=text.slice(at+ wanted.length,at+wanted.length+220)
     const before=text.slice(Math.max(0,at-180),at)
-    const passive=before.match(/([\p{L}0-9][\p{L}0-9 &'’.-]{1,90})[, ]+(?:co[- ]?founded|founded|established)\s+by\s+(?:[\p{L}]+-born\s+)?$/iu)?.[1]
+    const passive=before.match(/([\p{L}0-9][\p{L}0-9 &'’.-]{1,90})[, ]+(?:was\s+)?(?:co[- ]?founded|founded|started|established)(?:\s+in\s+\d{4})?\s+by\s+(?:(?:the\s+)?(?:then\s+)?(?:CEO|chief executive officer|president)\s+)?(?:[\p{L}]+-born\s+)?$/iu)?.[1]
     if(passive){
-      const company=passive.split(/\b(?:that|where|when)\s+/i).at(-1)!.replace(/[^a-z0-9]/g,'')
+      const company=passive.split(/\b(?:that|where|when)\s+/i).at(-1)!.replace(/\s+was\s*$/i,'').replace(/[^a-z0-9]/g,'')
       explicit=true
       if(matchesCompany(company))matched=true
     }
