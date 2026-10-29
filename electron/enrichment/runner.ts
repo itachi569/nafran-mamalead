@@ -44,7 +44,7 @@ export interface EnrichmentOptions {
    * writes it: the main process holds it in memory only, so there is no file of it to leak.
    */
   deepKey?: () => string
-  ownerSearch?: (query:string,signal:AbortSignal,progress:(message:string)=>void) => Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null}>
+  ownerSearch?: (query:string,signal:AbortSignal,progress:(message:string)=>void,remainingMs?:number) => Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null;waitingMs?:number}>
   prepareOwnerSearch?: (signal:AbortSignal,progress:(message:string)=>void) => Promise<void>
 }
 
@@ -222,7 +222,7 @@ export class EnrichmentRunner {
     let failed = 0
     let searchFailure: string | null = null
 
-    // Every owner action shares the same two-query ceiling and Stop/progress lifecycle.
+    // Every owner action shares adaptive source discovery and the Stop/progress lifecycle.
     if (kind === 'decision-maker' || kind === 'deep') {
       await this.runOwnerJob(job, leadIds, signal,kind)
       return
@@ -391,17 +391,18 @@ export class EnrichmentRunner {
       if(!lead){processed++;failed++;outcomes[leadId]={status:'error',searches:0,error:'Saved business no longer exists.'};progress('','Skipped a missing business.');continue}
       try{
         await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
+        let lookupPhase:'owner'|'email'='owner'
         const result=await waitForAbort(findOwnerContact(lead,{key:this.options.deepKey?.(),signal,
           // Interactive Google checks have their own deadline. Normal pages still return immediately.
           timeoutMs:this.options.ownerSearch?12*60*1000:undefined,
-          search:this.options.ownerSearch?(query,abort)=>this.options.ownerSearch!(query,abort,message=>progress(lead.name,message)):undefined,
-          onSources:(step,checked,total)=>progress(lead.name,`Search ${step} of 2 · checking published sources · ${checked} of ${total} pages checked…`),
-          onStep:(step,_query,retrying)=>progress(lead.name,retrying?`Search ${step} of 2 · reconnecting to Google after a temporary error. Retrying this query once…`:step===1?`Search 1 of 2 · finding ${lead.name}'s founder and email…`:`Search 2 of 2 · checking the named owner's email…`)}),signal)
+          search:this.options.ownerSearch?(query,abort,remainingMs)=>this.options.ownerSearch!(query,abort,message=>progress(lead.name,message),remainingMs):undefined,
+          onSources:(step,checked,total)=>progress(lead.name,`Search ${step} · checking published ${lookupPhase==='email'?'owner email':'owner identity'} sources · ${checked} of ${total} pages checked…`),
+          onStep:(step,_query,retrying,phase)=>{lookupPhase=phase ?? 'owner';progress(lead.name,retrying?`Search ${step} · reconnecting to Google after a temporary error. Retrying this query once…`:phase==='email'?`Search ${step} · matching owner email to published sources…`:`Search ${step} · finding ${lead.name}'s founder and email…`)}}),signal)
         signal.throwIfAborted()
         if(result.error){failed++;outcomes[leadId]={status:'error',searches:result.searches,error:result.error}}
         else {
           // A successful fresh scan replaces its previous automatically sourced results, so an
-          // old email cannot be presented as something the two current searches just found.
+          // old email cannot be presented as something the current searches just found.
           this.db.transaction(()=>{
             this.db.run("delete from decision_makers where workspace_id=? and lead_id=? and (source like 'http%' or source='website')",[job.workspace_id,leadId])
             for(const person of result.people)this.repository.addDecisionMaker({workspaceId:job.workspace_id,leadId,fullName:person.fullName,title:person.title,email:person.email,emailEvidence:person.emailEvidence,replaceEmail:true,phone:'',linkedinUrl:'',source:person.evidence})
@@ -424,7 +425,7 @@ export class EnrichmentRunner {
     }
     const error=failed?`${failed} business search${failed===1?'':'es'} could not finish. Retry the rows marked Search failed.`:null
     this.repository.markJob(job.id,error?'failed':'done',found,error)
-    progress('',error || `Owner scan finished · ${found} owner emails found across ${processed} leads. Maximum two searches per business.`,error?'failed':'done')
+    progress('',error || `Owner scan finished · ${found} published owner emails found across ${processed} leads.`,error?'failed':'done')
   }
 
   private currentProgress(jobId: string, kind: JobKind): Omit<EnrichmentProgress,'at'> {

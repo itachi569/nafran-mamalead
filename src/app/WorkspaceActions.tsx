@@ -70,7 +70,7 @@ export function MapsResults({V}:{V:AppValues}) {
 
 export function DecisionResults({V}:{V:AppValues}) {
   return <div style={{overflowX:'auto',marginTop:18}} data-owner-results="1">
-    <p role="status" style={{fontSize:13,lineHeight:1.6,color:'#5A5F5C'}}>{V.fDm.scanning ? 'Finding the owner and email together. A second search runs only when the owner is identified without an email…' : 'Up to two searches per business. Only sourced owner emails are shown; company inboxes are excluded. Not published means no sourced owner email was found in these searches.'}</p>
+    <p role="status" style={{fontSize:13,lineHeight:1.6,color:'#5A5F5C'}}>{V.fDm.scanning ? 'Finding the owner and email together, then checking targeted searches and linked sources as needed…' : 'Only sourced owner emails are shown, including Gmail when it matches the owner. Company inboxes are excluded. Not published means no sourced owner email was found in the checked sources.'}</p>
     <table style={{width:'100%',minWidth:640,borderCollapse:'collapse',textAlign:'left',fontSize:13}}>
       <thead><tr>{['Owner','Business','Owner email','Source'].map(label=><th key={label} style={{padding:12,borderBottom:'1px solid #d8ded2',fontWeight:500}}>{label}</th>)}</tr></thead>
       {V.fDm.rows.map(site=><tbody key={site.leadId} data-scanrow={site.pill}>

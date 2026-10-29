@@ -1208,7 +1208,7 @@ if (ownsInstance) app.whenReady().then(() => {
     // there, and it is handed over for as long as the app is open. Nothing here writes it down.
     deepKey: () => deepApiKey,
     prepareOwnerSearch: (signal,progress)=>ownerBrowser.prepare(signal,progress),
-    ownerSearch: (query,signal,progress)=>ownerBrowser.search(query,signal,progress),
+    ownerSearch: (query,signal,progress,remainingMs)=>ownerBrowser.search(query,signal,progress,remainingMs),
   })
   // Resume durable enrichment work after a restart. The runner prioritises fresh one-site scans,
   // so a saved queue cannot make a domain import look frozen while the window is open.

@@ -17,7 +17,7 @@ async function main(){
      await new Promise(resolve=>setTimeout(resolve,600))
      if(query.includes('slow-owner.test')){state.slow=true;await new Promise((_,reject)=>{if(options.signal.aborted)reject(new DOMException('Aborted','AbortError'));else options.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true})})}
      if(query.includes('error-owner.test') && state.providerFailed)return Response.json({tasks:[{status_code:40101,status_message:'Internal SE Server Error.'}]})
-     const domain=query.match(/(?:name of |owner of )([\w.-]+\.test)/)[1],page=query.startsWith('name of ')?'/about':'/contact'
+     const domain=query.match(/([\w.-]+\.test)/)?.[1] || query.match(/(named-owner|missing-owner|error-owner)/)[1]+'.test',page=query.includes('Janet Cole')?'/contact':'/about'
      return Response.json({tasks:[{status_code:20000,result:[{items:[{type:'organic',title:'Owner',url:'https://'+domain+page,description:'Published source'}]}]}]})
     }
     if(u.hostname.endsWith('.test'))return new Response(u.pathname==='/about'?'<article><h2>Janet Cole</h2><p>Founder</p></article>':u.hostname==='named-owner.test'?'<p>Janet Cole</p><a href="mailto:janet@named-owner.test">Email Janet</a>':'<p>No email published</p>')
@@ -38,7 +38,7 @@ async function main(){
   const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.setViewportSize({width:1400,height:1000});await page.reload();await page.locator('[data-view="dm"]').click()
   async function scan(value,count){await page.getByRole('button',{name:'Import websites',exact:true}).click();const modal=page.locator('[data-impmodal]');await modal.locator('textarea').fill(value);await modal.getByRole('button',{name:`Scan ${count} ${count===1?'site':'sites'}`,exact:true}).click();await modal.waitFor({state:'detached'})}
   await scan('named-owner.test\nmissing-owner.test\nerror-owner.test',3)
-  await page.locator('[data-decision-progress]').getByText(/Search 1 of 2/).waitFor({timeout:15000})
+  await page.locator('[data-decision-progress]').getByText(/Search 1 ·/).waitFor({timeout:15000})
   const panel=page.locator('[data-decision-progress]')
   await panel.screenshot({path:path.join(out,packaged?'packaged-running.png':'source-running.png'),animations:'disabled'})
   assert.notEqual(await page.locator('.dm-orbit-outer').evaluate(el=>getComputedStyle(el).animationName),'none')
@@ -55,18 +55,18 @@ async function main(){
   await page.getByRole('button',{name:'Download PDF',exact:true}).click()
   await page.waitForFunction(()=>!document.querySelector('[data-dm-export-options] button')?.disabled)
   const exported=await app.evaluate(()=>{const t=globalThis.__ownerTwo;return {requests:t.queries.length,exports:t.exports.map(p=>({...p,domains:p.leadIds.map(id=>t.repo.getLead(t.ws,id).website)}))}})
-  assert.equal(exported.requests,6);assert.equal(exported.exports.length,1);assert.equal(exported.exports[0].leadIds.length,2);assert.ok(exported.exports[0].domains.every(d=>!d.includes('error-owner')))
+  assert.equal(exported.requests,10);assert.equal(exported.exports.length,1);assert.equal(exported.exports[0].leadIds.length,2);assert.ok(exported.exports[0].domains.every(d=>!d.includes('error-owner')))
   await scan('missing-owner.test\nerror-owner.test',2)
   const retry=panel.getByRole('button',{name:'Retry 1 failed business',exact:true});await retry.waitFor({timeout:20000})
   assert.match(await result.innerText(),/not a rejected API key/)
   const prior=await app.evaluate(()=>{const t=globalThis.__ownerTwo;t.providerFailed=false;return t.queries.length})
   await retry.click();await panel.getByText('Scan complete',{exact:true}).waitFor({timeout:20000})
   const retried=await app.evaluate((_,prior)=>globalThis.__ownerTwo.queries.slice(prior),prior)
-  assert.equal(retried.length,2);assert.ok(retried.every(q=>q.includes('error-owner.test')));assert.doesNotMatch(await result.innerText(),/Search failed|old@/)
+  assert.equal(retried.length,6);assert.ok(retried.every(q=>q.includes('error-owner')));assert.doesNotMatch(await result.innerText(),/Search failed|old@/)
   await scan('slow-owner.test\nnever-owner.test',2);await app.evaluate(async()=>{const start=Date.now();while(!globalThis.__ownerTwo.slow&&Date.now()-start<15000)await new Promise(r=>setTimeout(r,50));if(!globalThis.__ownerTwo.slow)throw Error('Slow fixture did not start')})
   await page.locator('[data-decision-progress]').getByRole('button',{name:/Stop scan/}).click();await page.getByText('Scan stopped. Completed results are saved below.',{exact:true}).first().waitFor({timeout:10000})
   const final=await app.evaluate(()=>{const t=globalThis.__ownerTwo;return {job:t.repo.jobStatus(t.ws,t.jobs.at(-1)),queries:t.queries}});assert.equal(final.job.status,'cancelled');assert.ok(!final.queries.some(q=>q.includes('never-owner')));assert.match(await result.innerText(),/Not scanned/)
-  assert.deepEqual(errors,[]);const report={passed:true,packaged,checks:['exact two-search flow through real Electron queue','animated light/dark and narrow loading panel','reduced-motion preference respected','progress and 100% completion','Not published versus provider error','stale failure excluded from table and PDF export','40101 retry targets only failed businesses and recovers','Stop skips remaining businesses','no renderer errors'],exported};fs.writeFileSync(path.join(out,packaged?'packaged-ui.json':'source-ui.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2))
+  assert.deepEqual(errors,[]);const report={passed:true,packaged,checks:['adaptive search flow through real Electron queue','animated light/dark and narrow loading panel','reduced-motion preference respected','progress and 100% completion','Not published versus provider error','stale failure excluded from table and PDF export','40101 retry targets only failed businesses and recovers','Stop skips remaining businesses','no renderer errors'],exported};fs.writeFileSync(path.join(out,packaged?'packaged-ui.json':'source-ui.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2))
  }finally{await app.close()}
 }
 main().catch(e=>{console.error(e);process.exitCode=1})

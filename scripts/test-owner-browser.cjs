@@ -21,7 +21,7 @@ async function main(){
  const result=(url,title='Northstar founder')=>`<div class="result"><a href="${url}"><h3>${title}</h3></a><p>Published company contact details.</p></div>`
  await context.route('https://www.google.com/**',async route=>{
   const u=new URL(route.request().url());const q=u.searchParams.get('q');if(q)searches.push(q)
-  const html=mode==='blocked'?'<form id="captcha-form">Verify you are human</form>':mode==='empty'?'<p>Your search did not match any documents</p>':mode==='unknown'?'<p>Unexpected result page</p>':result('https://northstar.test/'+(q?.startsWith('Janet')?'contact':'about'))+result('https://www.google.com/ignore','Ignored')+`<section data-text-ad>${result('https://ads.test','Sponsored')}</section><section><h2>AI Overview</h2><p>Invented email wrong@northstar.test</p><a href="https://northstar.test/ai">Source</a></section>`
+  const html=mode==='blocked'?'<form id="captcha-form">Verify you are human</form>':mode==='empty'?'<p>Your search did not match any documents</p>':mode==='unknown'?'<p>Unexpected result page</p>':result('https://northstar.test/'+(q?.startsWith('"Janet')?'contact':'about'))+result('https://www.google.com/ignore','Ignored')+`<section data-text-ad>${result('https://ads.test','Sponsored')}</section><section><h2>AI Overview</h2><p>Invented email wrong@northstar.test</p><a href="https://northstar.test/ai">Source</a></section>`
   await route.fulfill({contentType:'text/html',body:html+(mode==='slow-assets'?'<script defer src="https://assets.owner.test/slow.js"></script>':'')})
  })
  const signal=new AbortController().signal
@@ -32,8 +32,8 @@ async function main(){
   return new Response(String(url).endsWith('/contact')?'<p>Janet Cole</p><a href="mailto:janet@northstar.test">Email Janet</a>':'<article><h2>Janet Cole</h2><p>Founder of Northstar.</p></article>')
  }
  searches.length=0
- const owner=await findOwnerContact({name:'Northstar',website:'https://northstar.test'},{search:(q,s)=>browser.search(q,s)})
- assert.equal(owner.error,null);assert.equal(owner.people[0].email,'janet@northstar.test');assert.equal(searches.length,2);assert.match(searches[1],/^Janet Cole owner of/);checks.push('Real Chrome DOM → two queries → publicly sourced owner email, with no API key')
+ const owner=await findOwnerContact({name:'Northstar',website:'https://northstar.test'},{search:(q,s,remaining)=>browser.search(q,s,undefined,remaining)})
+ assert.equal(owner.error,null);assert.equal(owner.people[0].email,'janet@northstar.test');assert.equal(searches.length,2);assert.match(searches[1],/^"Janet Cole"/);checks.push('Real Chrome DOM → targeted queries → publicly sourced owner email, with no API key')
  mode='slow-assets';const readStarted=Date.now()
  try{const fast=await browser.search('slow-assets',signal);assert.ok(fast.hits.length);assert.ok(Date.now()-readStarted<2500,'Visible results waited for deferred scripts');checks.push('visible Google results return while deferred scripts are still loading')}finally{releaseAsset?.()}
  mode='blocked';const blocked=new AbortController(),start=Date.now();const pending=browser.search('blocked',blocked.signal)
@@ -41,7 +41,7 @@ async function main(){
  blocked.abort();await assert.rejects(pending,{name:'AbortError'});assert.ok(Date.now()-start<4000);checks.push('CAPTCHA pauses for user; Stop cancels promptly without bypass or Not published')
  const resume=browser.search('resume',signal)
  while(browser.status().phase!=='verification')await new Promise(r=>setTimeout(r,25))
- mode='normal';await page.goto('https://www.google.com/search?q=resume');assert.equal((await resume).hits.length,2);checks.push('User-completed Google check resumes the same query')
+ await new Promise(r=>setTimeout(r,150));mode='normal';await page.goto('https://www.google.com/search?q=resume');const resumed=await resume;assert.equal(resumed.hits.length,2);assert.ok(resumed.waitingMs>=150);checks.push('User-completed Google check resumes the same query and reports excluded waiting time')
  mode='empty';assert.deepEqual((await browser.search('empty',signal)).hits,[]);checks.push('Genuine empty results distinguished from blocked or unreadable pages')
  // Fake test session exists only in this disposable profile, never the user's profile.
  await context.addCookies([{name:'SID',value:'fixture-only',domain:'.google.com',path:'/',secure:true,expires:Math.floor(Date.now()/1000)+3600}])

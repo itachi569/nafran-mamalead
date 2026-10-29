@@ -5,9 +5,9 @@ export function DecisionScanProgress({scan}:{scan:FinderScan<{leadId:string}>}) 
   const p=scan.progress
   const waitingForGoogle=scan.scanning && /Sign in to Google|Google needs your attention/i.test(p.message)
   const title=scan.stopping?'Stopping scan…':scan.stopped?'Scan stopped':waitingForGoogle?'Waiting for Google':scan.scanning?(p.current?'Scanning leads':'Preparing scan…'):p.failed?'Finished with issues':p.remaining?'Scan incomplete':'Scan complete'
-  const secondSearch=/Search 2 of 2/.test(p.message)
+  const secondSearch=/matching owner email|owner email sources/i.test(p.message)
   const failedIds=[...new Set(scan.rows.filter(row=>row.lookupOutcome?.status==='error').map(row=>row.leadId))]
-  const phase=scan.stopping?'Saving your progress…':waitingForGoogle?'Your Google connection needs attention':!p.current?'Getting things ready…':/checking published sources/i.test(p.message)?'Checking published sources…':/reconnecting to Google/i.test(p.message)?'Reconnecting to search…':secondSearch?"Checking the owner's email…":'Finding the owner & email…'
+  const phase=scan.stopping?'Saving your progress…':waitingForGoogle?'Your Google connection needs attention':!p.current?'Getting things ready…':/checking published .*sources/i.test(p.message)?'Checking published sources…':/reconnecting to Google/i.test(p.message)?'Reconnecting to search…':secondSearch?"Checking the owner's email…":'Finding the owner & email…'
   return <section data-card="1" data-decision-progress="1" className="dm-progress-card">
     <div className="dm-progress-heading">
       <div><h2 data-fcov="dm">Contact Coverage</h2><p>{scan.scanOn?'Owner email checks for every selected business.':'Coverage of your saved owner results.'}</p></div>
@@ -30,9 +30,9 @@ export function DecisionScanProgress({scan}:{scan:FinderScan<{leadId:string}>}) 
           </div>
         </div>
         <div className="dm-search-steps" aria-label="Current business search steps">
-          <span data-active={!secondSearch} data-complete={secondSearch}><b>{secondSearch?'✓':'1'}</b>Owner + email</span>
+          <span data-active={!secondSearch} data-complete={secondSearch}><b>{secondSearch?'✓':'1'}</b>Identify the owner</span>
           <i aria-hidden="true"/>
-          <span data-active={secondSearch}><b>2</b>Named email search<small>Only if needed</small></span>
+          <span data-active={secondSearch}><b>2</b>Match a published email<small>Targeted follow-up searches</small></span>
         </div>
       </>}
       <div className="dm-progress-numbers"><div><strong data-scan-percent>{p.percent}<small>%</small></strong><span>{title}</span></div><p><b>{p.processed}</b> of <b>{p.total}</b> leads checked<span><b>{p.remaining}</b> remaining{p.failed>0?` · ${p.failed} need retry`:''}</span></p></div>

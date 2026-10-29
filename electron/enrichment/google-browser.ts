@@ -170,7 +170,7 @@ export class GoogleOwnerBrowser {
       throw new Error('Google sign-in is still needed. Finish signing in, close Chrome and connect, then retry the scan.')
     }catch(error){this.emit(signal.aborted?this.state.phase:'error',signal.aborted?'Scan stopped. You can finish signing in and connect before the next scan.':error instanceof Error?error.message:String(error));throw error}
   }
-  async search(query:string,signal:AbortSignal,progress:(message:string)=>void=()=>{}):Promise<{hits:OrganicSearchHit[];error:string|null}>{
+  async search(query:string,signal:AbortSignal,progress:(message:string)=>void=()=>{},remainingMs=15000):Promise<{hits:OrganicSearchHit[];error:string|null;waitingMs:number}>{
     if(this.searching)throw new Error('MamaLead Chrome is already checking another business. Wait for that scan or stop it first.')
     if(!this.browser?.isConnected() || !this.page || this.page.isClosed())throw new Error('MamaLead Chrome was closed. Open it and retry the scan.')
     this.searching=true
@@ -182,8 +182,9 @@ export class GoogleOwnerBrowser {
       signal.throwIfAborted();this.emit('searching',`Searching Google: ${query}`)
       // Start reading once the document arrives. Slow scripts/ads must not hold up
       // results already displayed; navigation and reading share one bounded window.
-      let deadline=Date.now()+15000,waiting=false
-      await page.goto('https://www.google.com/search?'+new URLSearchParams({q:query,hl:'en',num:'10'}),{waitUntil:'commit',timeout:12000})
+      const readBudget=Math.max(1,Math.min(15000,remainingMs))
+      let deadline=Date.now()+readBudget,waiting=false,waitStarted=0,waitingMs=0,budgetBeforeWait=readBudget
+      await page.goto('https://www.google.com/search?'+new URLSearchParams({q:query,hl:'en',num:'10'}),{waitUntil:'commit',timeout:Math.min(12000,readBudget)})
       for(;;){
         signal.throwIfAborted()
         if(page.isClosed())throw new Error('MamaLead Chrome was closed. Open it and retry the scan.')
@@ -197,12 +198,12 @@ export class GoogleOwnerBrowser {
         })
         if(!result){if(Date.now()>deadline)throw new Error('Google results could not be read. Retry this search.');await pause(250,signal);continue}
         if(result.challenge){
-          if(!waiting){waiting=true;deadline=Date.now()+5*60*1000;const message='Google needs your attention. Complete the sign-in, consent or verification in MamaLead Chrome; the scan will resume.';this.emit('verification',message);progress(message);await page.bringToFront()}
+          if(!waiting){waiting=true;waitStarted=Date.now();budgetBeforeWait=Math.max(1,deadline-waitStarted);deadline=waitStarted+5*60*1000;const message='Google needs your attention. Complete the sign-in, consent or verification in MamaLead Chrome; the scan will resume.';this.emit('verification',message);progress(message);await page.bringToFront()}
         }else{
-          if(waiting){waiting=false;deadline=Date.now()+12000;this.emit('searching','Google check completed. Reading results…');progress('Google check completed. Reading results…')}
+          if(waiting){waiting=false;waitingMs+=Date.now()-waitStarted;deadline=Date.now()+budgetBeforeWait;this.emit('searching','Google check completed. Reading results…');progress('Google check completed. Reading results…')}
           const current=new URL(page.url())
           if(current.hostname==='www.google.com' && current.pathname==='/search' && current.searchParams.get('q')===query){
-            if(result.hits.length || result.empty){this.emit('ready','Search read. Checking the linked public sources…');return {hits:result.hits,error:null}}
+            if(result.hits.length || result.empty){this.emit('ready','Search read. Checking the linked public sources…');return {hits:result.hits,error:null,waitingMs}}
           }
         }
         if(Date.now()>deadline)throw new Error(waiting?'Google verification was not completed. Finish the check and retry.':'Google results could not be read. Open MamaLead Chrome, check the search page, then retry.')

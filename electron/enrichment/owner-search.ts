@@ -144,39 +144,46 @@ function publishedMail(page:PublicPage,lead:Lead,owner:{fullName:string},ownerPr
 }
 
 export type OwnerContactResult = {people:FoundPerson[];searches:number;retries:number;error:string|null}
-type TwoSearchOptions = {
+type OwnerContactOptions = {
  key?:string;signal?:AbortSignal;
  timeoutMs?:number;
- onStep?:(step:1|2,query:string,retrying?:boolean)=>void;
- onSources?:(step:1|2,checked:number,total:number)=>void;
- search?:(query:string,signal:AbortSignal)=>Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null}>;
+ activeBudgetMs?:number;
+ onStep?:(step:number,query:string,retrying?:boolean,phase?:'owner'|'email')=>void;
+ onSources?:(step:number,checked:number,total:number)=>void;
+ search?:(query:string,signal:AbortSignal,remainingMs?:number)=>Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null;waitingMs?:number}>;
 }
 
 export function ownerContactQuery(lead:Lead,ownerName=''):string{
  const company=hostOf(lead.website) || [lead.name,locality(lead)].filter(Boolean).join(' ').replace(/["\r\n]/g,' ').trim()
- return ownerName ? `${ownerName} owner of ${company} email address` : `name of ${company} founder and his email must be present`
+ return ownerName ? `"${ownerName}" "${company}" email address` : `"${company}" founder owner email address`
 }
 
-/** At most two distinct Google queries per company, plus one visible retry of a 40101
- * failure. Only their linked sources are read; there is no sitemap or third keyword. */
-export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Promise<OwnerContactResult>{
+/** Adaptive, source-verified discovery. Stop on a match; otherwise use distinct targeted
+ * queries within a short active-work budget. Human Google checks do not use that budget. */
+export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={}):Promise<OwnerContactResult>{
  const result:OwnerContactResult={people:[],searches:0,retries:0,error:null}
  if(!lead.name.trim() && !hostOf(lead.website))return {...result,error:'This business has no usable name or website.'}
  if(!options.key?.trim() && !options.search)return {...result,error:'Owner search is not configured. Add the DataForSEO credential in Settings → Account.'}
  const sources=new AbortController()
  const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),sources.signal,AbortSignal.timeout(options.timeoutMs ?? 60_000)])
+ const started=Date.now(),activeBudgetMs=options.activeBudgetMs ?? 45_000
+ let waitingMs=0,linkedReads=0
+ const remainingMs=()=>Math.max(0,activeBudgetMs-(Date.now()-started-waitingMs))
+ const checkBudget=()=>{signal.throwIfAborted();if(remainingMs()<=0)throw new Error('Owner lookup reached its time limit. Saved findings are kept; retry this business to finish.')}
  const host=hostOf(lead.website),cache:OwnerPageCache=new Map(),pages:PublicPage[]=[],unreadable=new Set<string>()
  const read=(url:string)=>{
   let value=cache.get(url)
-  if(!value){value=readPage(url,AbortSignal.any([signal,AbortSignal.timeout(3500)]),host).then(page=>{if(!page)unreadable.add(url);return page});cache.set(url,value)}
+  if(!value){checkBudget();value=readPage(url,AbortSignal.any([signal,AbortSignal.timeout(Math.max(1,Math.floor(Math.min(3500,remainingMs()))))]),host).then(page=>{if(!page)unreadable.add(url);return page});cache.set(url,value)}
   return value
  }
- const search=async(step:1|2,owner='')=>{
-  const query=ownerContactQuery(lead,owner);options.onStep?.(step,query);result.searches++
-  const response=await (options.search?options.search(query,signal):searchOrganicLive(options.key!,query,locationForLead(lead),signal,{includeAiOverview:step===1,recover:()=>{
+ const searched=new Set<string>()
+ const search=async(query:string,phase:'owner'|'email')=>{
+  checkBudget();searched.add(query);const step=++result.searches;options.onStep?.(step,query,false,phase)
+  const response=await (options.search?options.search(query,signal,remainingMs()):searchOrganicLive(options.key!,query,locationForLead(lead),AbortSignal.any([signal,AbortSignal.timeout(Math.max(1,Math.floor(remainingMs())))]),{includeAiOverview:step===1,recover:()=>{
    if(result.retries>=1)return false
-   result.retries++;options.onStep?.(step,query,true);return true
+   result.retries++;options.onStep?.(step,query,true,phase);return true
   }}))
+  if('waitingMs' in response && typeof response.waitingMs==='number')waitingMs+=Math.max(0,Math.min(response.waitingMs,Date.now()-started-waitingMs))
   signal.throwIfAborted()
   if(response.error)throw new Error(response.error)
   return response.hits
@@ -193,6 +200,7 @@ export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Pr
    const key=ownerIdentityKey(person.fullName)
    if(!owners.has(key))owners.set(key,{person:{...person,email:'',phone:'',linkedinUrl:'',evidence:page.url},proof:page})
   }
+  if(!result.people.length && owners.size)result.people=[owners.values().next().value!.person]
  }
  const match=(hits:import('./dataforseo').OrganicSearchHit[],only?:{person:FoundPerson;proof:PublicPage})=>{
   for(const owner of only?[only]:owners.values()){
@@ -209,17 +217,17 @@ export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Pr
   }
   return null
  }
- const inspect=async(hits:import('./dataforseo').OrganicSearchHit[],step:1|2,only?:{person:FoundPerson;proof:PublicPage})=>{
+ const inspect=async(hits:import('./dataforseo').OrganicSearchHit[],step:number,only?:{person:FoundPerson;proof:PublicPage})=>{
   const urls=candidates(hits)
   options.onSources?.(step,0,urls.length)
   for(let i=0;i<urls.length;i+=3){
-   signal.throwIfAborted()
+   checkBudget()
    // Prefetch three sources, but inspect each in priority order as it arrives.
    // A complete first source can return without waiting for the two slower peers.
    const batch=urls.slice(i,i+3).map(hit=>read(hit.url))
    for(let j=0;j<batch.length;j++){
     const page=await batch[j]
-    signal.throwIfAborted()
+    checkBudget()
     if(page && !pages.some(prior=>prior.url===page.url)){pages.push(page);if(!only)learn(page)}
     options.onSources?.(step,i+j+1,urls.length)
     const found=match(hits,only);if(found)return found
@@ -227,17 +235,49 @@ export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Pr
   }
   return null
  }
+ const followContacts=async()=>{
+  if(!host || linkedReads>=3)return null
+  const links=new Map<string,import('./dataforseo').OrganicSearchHit>()
+  for(const page of pages){
+   if(hostOf(page.url)!==host)continue
+   const visit=(node:DefaultTreeAdapterMap['node'])=>{
+    if('tagName' in node && node.tagName==='a'){
+     const href=node.attrs.find(a=>a.name==='href')?.value
+     if(href)try{
+      const url=new URL(decode(href),page.url);url.hash=''
+      const title=plain(serialize(node))
+      if(hostOf(url.href)===host && isPublicSourceUrl(url.href) && !cache.has(url.href) && /contact|about|team|founder|leadership|biograph/i.test(url.pathname+' '+title))links.set(url.href,{url:url.href,title,description:''})
+     }catch{/* Ignore malformed/non-web links. */}
+    }
+    if('childNodes' in node)node.childNodes.forEach(visit)
+   }
+   visit(parse(page.html))
+  }
+  const next=candidates([...links.values()]).slice(0,3-linkedReads);linkedReads+=next.length
+  return next.length?inspect(next,result.searches):null
+ }
  try{
-  const first=await search(1),complete=await inspect(first,1)
-  signal.throwIfAborted()
-  if(complete)return {...result,people:[complete]}
-  if(candidates(first).length && !pages.length)throw new Error('Search results were found, but their source pages could not be read. Retry this business.')
-  const owner=owners.values().next().value
-  if(!owner)return result // No established owner: do not invent a name for search two.
-  result.people=[owner.person]
-  const second=await search(2,owner.person.fullName),found=await inspect(second,2,owner)
-  signal.throwIfAborted()
-  if(found)result.people=[found]
+  const company=host || [lead.name,locality(lead)].filter(Boolean).join(' ').replace(/["\r\n]/g,' ').trim()
+  const identityQueries=[ownerContactQuery(lead),...(host?[`site:${host} (founder OR owner OR "co-founder")`]:[]),`"${company}" founder owner`,`"${company}" about leadership founder`]
+  while(result.searches<6){
+   checkBudget()
+   const owner=owners.values().next().value
+   const name=owner?.person.fullName.replace(/["\r\n]/g,' ').trim()
+   const queries=owner?[
+    ownerContactQuery(lead,name),
+    `"${name}" "${company}" contact email`,
+    `"${name}" "${company}" "@gmail.com"`,
+    ...(host?[`site:${host} "${name}" (email OR contact)`]:[]),
+    `"${name}" "${searchBrand(lead)}" email contact`,
+   ]:identityQueries
+   const query=queries.find(q=>!searched.has(q))
+   if(!query)break
+   const hits=await search(query,owner?'email':'owner')
+   const found=await inspect(hits,result.searches,owner) || await followContacts()
+   if(found)return {...result,people:[found]}
+  }
+  checkBudget()
+  if(unreadable.size && !pages.length)throw new Error('Search results were found, but their source pages could not be read. Retry this business.')
   return result
  }catch(error){
   if(options.signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')

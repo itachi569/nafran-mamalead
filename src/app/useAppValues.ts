@@ -4162,7 +4162,7 @@ export function useAppValues() {
             if (!showDecisionPassPrompt(result.error)) flash(result.error)
             return
           }
-          flash(`${result.queued} selected lead${result.queued === 1 ? '' : 's'} queued — up to two searches per business for a published owner email.`)
+          flash(`${result.queued} selected lead${result.queued === 1 ? '' : 's'} queued — finding owners and matching their published emails.`)
         })
         .catch(() => flash('The deep pass could not be queued.'))
     },

@@ -9,8 +9,8 @@ async function main(){
  for(const domain of ['onesmartsheep.com','namecheap.com']){
   const controller=new AbortController(),queries=[],start=Date.now();let attention=''
   try{
-   const result=await findOwnerContact({name:domain,website:'https://'+domain},{signal:controller.signal,search:async(q,s)=>{
-    const response=await browser.search(q,s,message=>{if(/needs your attention/.test(message)){attention=message;controller.abort()}})
+   const result=await findOwnerContact({name:domain,website:'https://'+domain},{signal:controller.signal,search:async(q,s,remaining)=>{
+    const response=await browser.search(q,s,message=>{if(/needs your attention/.test(message)){attention=message;controller.abort()}},remaining)
     queries.push({query:q,hits:response.hits});return response
    }})
    report.push({domain,seconds:(Date.now()-start)/1000,queries,result})

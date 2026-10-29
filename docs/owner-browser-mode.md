@@ -28,16 +28,28 @@ choose **Sign in to Google** to reopen the normal manual window. Sign-in is neve
 attempted inside the controlled search window. The app does not handle passwords,
 rewrite session-cookie expiry, solve CAPTCHAs, or suppress browser security checks.
 
-Each business uses at most two distinct searches:
+Each business uses an adaptive search sequence:
 
-1. `name of <domain> founder and his email must be present`
-2. Only if an owner was established without an email:
-   `<owner name> owner of <domain> email address`
+1. `"<domain>" founder owner email address`
+2. Check the linked public pages for ownership and the person's published email.
+3. If no owner was established, try targeted founder/about queries for that domain.
+4. Once identified, search `"<owner name>" "<domain>" email address`, then
+   contact, Gmail and site-specific variations only as needed.
+5. Stop at the first verified owner/email match and retain the public source link.
+
+The sequence has a maximum of six distinct queries and 45 seconds of active work
+per company. Google checks that require the user have a separate wait allowance.
+Each query has at most six ranked sources, three prefetched together, with a
+3.5-second source-read ceiling. Up to three relevant contact/about links from
+the company's own pages can be followed without spending another Google query.
+Source URLs are read once per company. There is no unbounded crawl.
 
 Organic result links and AI Overview citations feed the existing public-source
 verification. AI answer text is not accepted as proof of an email. A direct owner
 email must match the established person; generic company inboxes and guessed
-addresses remain excluded. No established owner means no speculative second query.
+addresses remain excluded. Published Gmail addresses are allowed when their
+source ties them to the established owner and business. Missing emails remain
+blank; an exhausted time budget is a retryable error, not proof of absence.
 
 Starting a scan scrolls once to Contact Coverage, with Stop in view. Progress ticks
 do not override the user's subsequent scrolling; completion reveals the results.
@@ -49,7 +61,7 @@ so a deferred third-party script cannot delay visible results. Normal navigation
 and DOM reading share a 15-second deadline (user verification has a separate wait).
 Up to three linked sources are prefetched, then inspected in priority order.
 A complete verified result returns immediately and aborts unnecessary peer reads;
-the two-query ceiling and source-validation rules remain unchanged.
+source validation remains required even when Google displays a convincing summary.
 
 Sign-in happens before consuming a company credit. Google consent/verification
 pauses the scan for up to five minutes for the user. Stop cancels the wait. A closed
@@ -66,14 +78,15 @@ repository and installers. Normal Chrome can remain open at the same time.
 Validation:
 
 - `node scripts/test-owner-browser.cjs`: disposable Chrome profile, real DOM
-  fixtures, two-query source verification, manual-check resume, Stop, profile
+  fixtures, source verification, manual-check resume, Stop, profile
   persistence, setup before credits, and batch failure accounting.
 - `node scripts/verify-owner-browser-ui.cjs [--packaged]`: isolated Electron
-  workspace and Chrome profile; real main-process routing and preload, two
-  searches, one company credit, zero DataForSEO calls, light/dark UI.
+  workspace and Chrome profile; real main-process routing and preload, adaptive
+  follow-up searches, one credit per company, zero DataForSEO calls, light/dark UI.
 - `node scripts/test-owner-two-search.cjs` and
   `node scripts/test-owner-two-search-runner.cjs`: existing owner-source rules,
-  two-query limits, durable outcomes, 50-company scope and cancellation.
+  adaptive limits, fast early exit, Gmail matching, linked contact pages,
+  durable outcomes, 50-company scope and cancellation.
 - `node scripts/verify-owner-browser-live.cjs`: anonymous live smoke check;
   stops and reports if Google asks for human verification.
 
