@@ -13,7 +13,7 @@ async function main(){
  let r=await run({'https://northstar.test/':'<a href="/company">Company</a><a href="/contact">Contact</a>','https://northstar.test/company':owner,'https://northstar.test/contact':mail})
  assert.equal(r.result.people[0].email,'janet@northstar.test');assert.equal(r.queries.length,0);assert.equal(r.reads.length,3);checks.push('linked company and contact pages find owner email without Google')
  r=await run({'https://northstar.test/':owner,'https://northstar.test/contact':mail},async()=>({hits:[{url:'https://northstar.test/contact',title:'Contact Janet',description:''}],error:null}))
- assert.equal(r.queries[0],'"Janet Cole" "northstar.test" email address');assert.equal(r.result.people[0].email,'janet@northstar.test');assert.equal(r.queries.length,1);checks.push('known owner skips broad identity searches')
+ assert.equal(r.queries[0],'"Janet Cole" "Northstar" email address');assert.equal(r.result.people[0].email,'janet@northstar.test');assert.equal(r.queries.length,1);checks.push('known owner skips broad identity searches')
  r=await run({'https://northstar.test/':new TypeError('fetch failed',{cause:Object.assign(new Error('DNS'),{code:'ENOTFOUND'})})})
  assert.match(r.result.error,/website address and spelling/);assert.equal(r.queries.length,0);checks.push('nonexistent website fails immediately with actionable spelling error')
  r=await run({'https://northstar.test/':null,'https://northstar.test/about':owner+mail},async()=>({hits:[{url:'https://northstar.test/about',title:'About',description:''}],error:null}))

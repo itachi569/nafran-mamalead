@@ -1,7 +1,7 @@
 import {decodePublishedEmailHtml,extractPublishedEmails,extractPeople,stripContactCodeExamples} from './email-extractor'
 import {locationForLead,searchOrganicLive} from './dataforseo'
 import {isBusinessOwner,ownerEmail,ownerIdentityKey} from './owner-contact'
-import {contactFindingsFromHtml,isUsablePerson,ownerBelongsToBusiness,ownerNameOutsideTestimonials,type FoundPerson} from './website'
+import {readableHtml,contactFindingsFromHtml,isUsablePerson,ownerBelongsToBusiness,ownerNameOutsideTestimonials,type FoundPerson} from './website'
 import {isPublicSourceUrl,searchPublicSources,type PublicSearchHit} from './public-search'
 import {parse,serialize,type DefaultTreeAdapterMap} from 'parse5'
 import {parseAddress} from '../scraper/location'
@@ -54,7 +54,7 @@ async function readPage(url:string,signal:AbortSignal,ownHost='',failed?:(error:
   // Hydration payloads, executable scripts and CSS are not published contact evidence.
   // Excluding them avoids repeatedly parsing megabytes of framework data; keep JSON-LD.
   const source=(await response.text()).slice(0,2_000_000).replace(/<(script|style)\b([^>]*)>[\s\S]*?<\/\1>/gi,(block,tag,attrs)=>tag.toLowerCase()==='script' && /type\s*=\s*["']application\/ld\+json["']/i.test(attrs)?block:'')
-  const html=stripContactCodeExamples(decodePublishedEmailHtml(source)),result={url:response.url || url,html,text:plain(html),at:Date.now()}
+  const html=stripContactCodeExamples(decodePublishedEmailHtml(source)),result={url:response.url || url,html,text:readableHtml(html),at:Date.now()}
   return result
  }catch(error){failed?.(error);return null}
 }
@@ -172,7 +172,7 @@ type OwnerContactOptions = {
 
 export function ownerContactQuery(lead:Lead,ownerName=''):string{
  const company=hostOf(lead.website) || [lead.name,locality(lead)].filter(Boolean).join(' ').replace(/["\r\n]/g,' ').trim()
- return ownerName ? `"${queryOwnerName(ownerName)}" "${company}" email address` : `"${company}" founder owner email address`
+ return ownerName ? `"${queryOwnerName(ownerName)}" "${searchBrand(lead) || company}" email address` : `"${company}" founder owner email address`
 }
 
 /** Adaptive, source-verified discovery. Stop on a match; otherwise use distinct targeted
@@ -194,7 +194,7 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
   if(!value){checkBudget();value=readPage(url,AbortSignal.any([signal,AbortSignal.timeout(Math.max(1,Math.floor(Math.min(3500,remainingMs()))))]),host,error=>{
    const failure=error as {code?:string;cause?:{code?:string}}
    if(checkWebsite && /^(?:ENOTFOUND|EAI_NONAME)$/.test(failure.cause?.code || failure.code || ''))websiteMissing=true
-  }).then(page=>{if(!page)unreadable.add(url);return page});cache.set(url,value)}
+  }).then(page=>{if(!page)unreadable.add(url);else if(page.url!==url)cache.set(page.url,Promise.resolve(page));return page});cache.set(url,value)}
   return value
  }
  const searched=new Set<string>()
@@ -215,7 +215,8 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
    const owner=owners.values().next().value?.person
    const namedEmail=extractPublishedEmails(hit.description).some(email=>owner?Boolean(ownerEmail(owner.fullName,email)):email.split('@')[1]===host && !/^(?:info|hello|contact|support|sales|office|admin|team|help|notice|privacy|legal|billing|no.?reply)(?:[._-]|@)/i.test(email))
    const identity=hostOf(hit.url)===host && /\/(?:about(?:-us)?|our-team|team|company|who-we-are|leadership|founders?)(?:\/|$|\?)/i.test(new URL(hit.url).pathname)
-   return (namedEmail?400:0)+(!owner && identity?500:0)
+   const founderSnippet=extractPeople(hit.description).some(person=>isBusinessOwner(person.title) && isUsablePerson(person.fullName,person.title))
+   return (namedEmail?400:0)+(!owner && identity?500:0)+(!owner && founderSnippet?300:0)
   }
   return ranked.sort((a,b)=>bonus(b)-bonus(a)).slice(0,6)
  }
@@ -224,7 +225,7 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
  const learn=(page:PublicPage)=>{
   // Menu labels beside marketing copy cannot establish an owner identity.
   const html=page.html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi,'')
-  page={...page,html,text:plain(html)}
+  page={...page,html,text:readableHtml(html)}
   const own=Boolean(host) && hostOf(page.url)===host
   if(!own && (!aboutCompany(lead,page.html) || host && !mentionsWebsite(page.html,host)))return
   const extracted=[...contactFindingsFromHtml(page.html,page.url).people,...extractPeople(page.text).map(person=>({...person,evidence:page.url,linkedinUrl:''}))]
@@ -312,9 +313,9 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
    const name=owner?queryOwnerName(owner.person.fullName).replace(/["\r\n]/g,' ').trim():''
    const queries=owner?[
     ownerContactQuery(lead,name),
-    `"${name}" "${searchBrand(lead)}" email`,
-    `"${name}" email contact`,
-    `"${name}" Gmail`,
+    `"${name}" "${company}" email address`,
+    `"${name}" "${searchBrand(lead)}" email contact`,
+    `"${name}" "${searchBrand(lead)}" Gmail`,
     ...(host?[`site:${host} "${name}" (email OR contact)`]:[]),
    ]:identityQueries
    const query=queries.find(q=>!searched.has(q))

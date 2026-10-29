@@ -7,7 +7,7 @@
 //
 // Nothing here writes to the database; it returns findings and the caller decides what to keep.
 import { chromium, type Browser } from 'playwright'
-import { parse, serialize, type DefaultTreeAdapterMap } from 'parse5'
+import { parse, parseFragment, serialize, type DefaultTreeAdapterMap } from 'parse5'
 import { isBusinessOwner, ownerEmail } from './owner-contact'
 import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, stripContactCodeExamples } from './email-extractor'
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
@@ -150,17 +150,16 @@ export function socialLinksFromHtml(html: string, baseHref: string): FoundSocial
 }
 
 /** Turns server HTML into enough readable text for mailboxes, numbers and named people. */
-function readableHtml(html: string): string {
-  return decodeHtml(
-    html
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<\/?(?:h[1-6]|p|div|section|article|li|br|tr|address)\b[^>]*>/gi, '\n')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/[^\S\n]+/g, ' ')
-      .replace(/ *\n */g, '\n')
-      .replace(/\n+/g, '\n'),
-  ).trim()
+export function readableHtml(html: string): string {
+  // Read text nodes, not a regex-stripped HTML string: attributes can contain markup,
+  // JSON and > characters which must never become a visible person's name.
+  const walk=(node:DefaultTreeAdapterMap['node']):string=>{
+    if('value' in node)return node.value
+    if('tagName' in node && /^(?:script|style|template|noscript|head|title|svg)$/.test(node.tagName))return ''
+    const text='childNodes' in node?node.childNodes.map(walk).join(' '):''
+    return 'tagName' in node && /^(?:h[1-6]|p|div|section|article|li|br|tr|address|table|ul|ol)$/.test(node.tagName)?'\n'+text+'\n':text
+  }
+  return walk(parseFragment(html)).replace(/[^\S\n]+/g,' ').replace(/ *\n */g,'\n').replace(/\n+/g,'\n').trim()
 }
 
 /** Read a published brand name, without inventing a name from a page title or domain. */
@@ -438,7 +437,7 @@ export function isUsablePerson(fullName: string, title: string): boolean {
   if (!name || name.length > 40) return false
   if (/^(?:a|an|the|our|your|this|that|latest|featured|company|business|meet|read|learn|how|why|what|for|start|quick)\b/i.test(name)) return false
   if (/[\n\r]/.test(name)) return false
-  if (/\b(?:pricing|login|signup|sign|menu|subscribe|download|started)\b/i.test(name)) return false
+  if (/\b(?:pricing|login|signup|sign|menu|subscribe|download|started|websites?|domains?|portfolio|internet|properties|get)\b/i.test(name)) return false
   if (/^(?:ceo|cto|cfo|coo|cmo|chief|director|manager|officer)\b/i.test(name)) return false
   if (/^(?:e-?mail|call|telephone|phone|contact|meet|message|connect with)\b/i.test(name)) return false
   if (PERSON_NOISE.test(name) || PERSON_NOISE.test(title.trim())) return false
@@ -489,7 +488,13 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
   const matchesCompany=(company:string)=>brands.some(value=>company.startsWith(value))
   const normal=(value:string)=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim()
   const wanted=normal(fullName),blocks:string[]=[]
+  let companyFactTable=false
+  if(brands.includes(wanted.replace(/[^a-z0-9]/g,'')))return false
   const visit=(node:DefaultTreeAdapterMap['node'])=>{
+    if('tagName' in node && /^(?:table|dl)$/.test(node.tagName)){
+      const text=normal(readableHtml(serialize(node)))
+      if(text.length<2500 && text.includes(wanted) && /\b(?:founders?|owners?)\b/.test(text) && brands.some(brand=>text.replace(/[^a-z0-9]/g,'').includes(brand)))companyFactTable=true
+    }
     if('tagName' in node && /^(?:p|li|article|section|div)$/.test(node.tagName)){
       const text=normal(readableHtml(serialize(node)))
       if(text.length<2500 && text.includes(wanted) && /\b(?:co[- ]?found(?:ers?|ed)|founders?|founded|founding|owners?|owns|proprietor|started|established)\b/i.test(text))blocks.push(text)
@@ -504,6 +509,8 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
     return /\b(?:former|retired|previous|ex[- ])\s*(?:co[- ]?)?(?:founder|owner)\s*[,;:\-–—]?\s*$/i.test(before) || /^[\s,;:\-–—]*(?:(?:is|was)\s+)?(?:a\s+|the\s+)?(?:former|retired|previous|ex[- ])\s*(?:co[- ]?)?(?:founder|owner)\b/i.test(after)
   }))return false
   if(!scoped.length){
+    if(companyFactTable)return true
+    if(!sameHost)return false
     // JSON-LD can be the sole published owner evidence, but a flattened heading plus a bio name
     // is not a real name. Retain only an exact schema name when no visible owner block matches.
     const schemaOwner=(value:unknown,inherited=false):boolean=>{
@@ -555,7 +562,9 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
       if(matchesCompany(label.replace(/[^a-z0-9]/g,'')))matched=true
     }
   }
-  return !explicit || matched
+  if(explicit)return matched
+  // A role on a parent company's page does not make that person the subsidiary's founder.
+  return sameHost || companyFactTable || scoped.some(text=>brands.some(brand=>text.replace(/[^a-z0-9]/g,'').includes(brand)))
 }
 
 function isContactLink(href: string, text: string): boolean {

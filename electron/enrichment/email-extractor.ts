@@ -372,7 +372,7 @@ const NOT_A_NAME_START = /^(?:i|i['’]?m|im|we|we['’]?re|my|our|me|us|he|she|
 function isPersonName(value: string): boolean {
   const words = value.split(/\s+/)
   if (words.length < 2 || words.length > 4) return false
-  if (TITLE_WORD.test(words[0])) return false
+  if (TITLE_WORD.test(words[0]) || /\b(?:websites?|domains?|portfolio|internet|properties|pricing|signup|login|get|menu)\b/i.test(value)) return false
   if (!words.every((word,index) => /^\p{Lu}[\p{L}'’.-]*$/u.test(word) && (!/[.,;:!?]$/.test(word) || /^\p{Lu}\.$/u.test(word)) || index>0 && /^(?:van|von|de|der|den|la|le|al|bin|ibn|da|di)$/.test(word))) return false
   if (/^(?:stories|ecommerce|migration|inspiring|insights|resources|business|entrepreneurs)\b|\b(?:founder|founders|owner|owners)\b/i.test(value)) return false
   if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company)\.?$/i.test(value)) return false
@@ -403,6 +403,11 @@ export function extractPeople(text: string, limit = 8): ExtractedPerson[] {
   const foundedBy = new RegExp(`\\b(?:co[- ]?founded|founded|started|established)(?:\\s+in\\s+\\d{4})?\\s+by\\s+(?:(?:the\\s+)?(?:then\\s+)?(?:CEO|chief executive officer|president)\\s+)?(${PERSON_NAME})`, 'giu')
   for (const match of text.matchAll(foundedBy)) add(match[1], 'Founder', text)
 
+  // Public company records often list co-founders together under a plural label.
+  for(const match of text.matchAll(/\b(?:co[- ]?)?(?:founders|owners)\s*:\s*([^\r\n]{1,160})/gi)){
+    for(const name of match[1].split(/\s+(?:and|&)\s+|[,;]/))add(name,'Founder',text)
+  }
+
   const titleFirst = new RegExp(`\\b(${PERSON_TITLE})\\b\\s*(?:is|:|-|–|—|,)?\\s+(${PERSON_NAME})`, 'giu')
   for (const match of text.matchAll(titleFirst)) add(match[2], match[1], text)
 
@@ -413,7 +418,7 @@ export function extractPeople(text: string, limit = 8): ExtractedPerson[] {
 
   const nameBeforeIs = new RegExp(`\\b(${PERSON_NAME})\\s+(?:is|was)\\s+(?:the\\s+)?(${PERSON_TITLE})\\b`, 'giu')
   for (const match of text.matchAll(nameBeforeIs)) add(match[1], match[2], text)
-  const nameFounded = new RegExp(`\\b(${PERSON_NAME})\\s+(?:has\\s+)?(?:co[- ]?founded|founded|started|established)\\b`, 'giu')
+  const nameFounded = new RegExp(`\\b(${PERSON_NAME})\\s+(?:has\\s+)?(?:co[- ]?founded|founded|started|established)\\b`, 'gu')
   for (const match of text.matchAll(nameFounded)) add(match[1], 'Founder', text)
   // A joint founder sentence is evidence for both people, not a single concatenated name.
   const photoPosition='(?:\\s*\\((?:left|right|centre|center)\\))?'
