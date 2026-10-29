@@ -447,6 +447,7 @@ export function isUsablePerson(fullName: string, title: string): boolean {
   if (/^(?:stories|ecommerce|migration|inspiring|insights|resources|entrepreneurs)\b|\b(?:founder|founders|owner|owners)\b/i.test(name)) return false
   if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company|co)\.?$/i.test(name)) return false
   if (/\b(?:introduction|pro|when|where|who|which|what|why|how|overview)\b/i.test(name)) return false
+  if (/^(?:type|industry|headquarters|key people|website|services|private|public)\b/i.test(name)) return false
 
   const words = name.split(/\s+/)
   if (words.length > 4) return false
@@ -518,9 +519,13 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
     const before=text.slice(Math.max(0,at-180),at)
     const passive=before.match(/([\p{L}0-9][\p{L}0-9 &'’.-]{1,90})[, ]+(?:was\s+)?(?:co[- ]?founded|founded|started|established)(?:\s+in\s+\d{4})?\s+by\s+(?:(?:the\s+)?(?:then\s+)?(?:CEO|chief executive officer|president)\s+)?(?:[\p{L}]+-born\s+)?$/iu)?.[1]
     if(passive){
-      const company=passive.split(/\b(?:that|where|when)\s+/i).at(-1)!.replace(/\s+was\s*$/i,'').replace(/[^a-z0-9]/g,'')
-      explicit=true
-      if(matchesCompany(company))matched=true
+      const company=passive.split(/[.!?]\s+|\b(?:that|where|when)\s+/i).at(-1)!.replace(/\s+was\s*$/i,'').replace(/[^a-z0-9]/g,'')
+      // A biography often uses "It was founded by…" after naming the company. That
+      // pronoun is not a different company and must not invalidate the actual founder.
+      if(!/^(?:it|we|this|thecompany|thebusiness|thefirm)$/.test(company)){
+        explicit=true
+        if(matchesCompany(company))matched=true
+      }
     }
     const patterns=[
       /^(?:[\s,]+)(?:has\s+)?(?:co[- ]?founded|founded|started|established|owns)\s+([^.;!?]+)/i,

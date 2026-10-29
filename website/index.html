@@ -169,7 +169,7 @@
       <div class="latest-feature-grid">
         <article><h3>Automatic updates, your choice</h3><p>Turn on background downloads in Account. Get a new-release notice, follow progress and restart when you are ready. Your leads and settings stay on this PC.</p></article><article><h3>Short answers. Straight to the page.</h3><p>MamaLead Assist keeps replies concise and adds the relevant page name below the answer. Click it to open a module, Reports or App updates.</p></article><article><h3>Read a notification with one click</h3><p>Click anywhere on an unread card to mark it read. All/Unread, Mark all read, delete with Undo and links to the related result remain available.</p></article><article><h3>Every selected business counts</h3><p>Send a saved Maps run or selected leads to Decision Makers. Businesses with shared websites or no website stay in the scan, with the full lead count shown before you start.</p></article>
         <article><h3>See progress. Stop when needed.</h3><p>Decision Makers shows the percentage checked, completed and remaining leads, and current business. Stop scan keeps completed results. A finished check may still have no published email.</p></article>
-        <article><h3>Owner emails, with evidence</h3><p>Confirms the owner and business first, then searches public sources in parallel. Readable-page and search-indexed emails keep distinct source labels, including in PDF and Excel. Generic and guessed emails stay out.</p></article>
+        <article><h3>Owner emails, with evidence</h3><p>Asks for the owner and email together, then uses one named email query only if needed. Source-page and search-index evidence stay distinct in the app, PDF and Excel. Generic and guessed emails stay out.</p></article>
         <article><h3>Live search, no extra click</h3><p>Type a name, email, phone or profile URL. Related saved matches appear below the search bar; a complete phone number narrows to exact matches.</p></article>
         <article><h3>Your history stays useful</h3><p>Open earlier finder searches from History, or revisit a whole Maps run with Saved searches. Your search history stays available when you reopen the app.</p></article>
         <article><h3>Choose a website list</h3><p>Paste links, open the Windows file picker for CSV/TSV, or reuse a Maps run. Website imports show ready, duplicate and skipped counts alongside their Scan controls.</p></article>
@@ -599,21 +599,21 @@ const MODULES = [
     "d1": "M8.5 8a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0z",
     "d2": "M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5",
     "where": "Sidebar → Add-ons → Decision Makers",
-    "lead": "Identify the business owner or founder, then search for that person's published email. Follow every selected business and see whether an email came from a readable page or a search index.",
+    "lead": "Find the owner and email together, with at most one follow-up search. Follow every selected business, stop the scan when needed, and see the source behind each result.",
     "bullets": [
       "A saved Maps run or selected Maps leads keep every selected business in the scan, including businesses sharing a website and those without one. The button shows the selected lead count.",
       "Contact Coverage shows the percentage checked, completed and remaining leads, and the business being checked. Stop scan cancels the remaining work and keeps completed results.",
-      "Checks About, team, leadership and founder profiles for evidence that a person belongs to this business. Co-founders can be returned when each is supported by the source.",
-      "Searches relevant contact pages, sitemaps, founder stories and public search results in parallel, returning matching evidence as it becomes available. A business without a website is searched by its name and location; slow sites can still need a retry.",
+      "The first Google search asks for the company founder and email together. A sourced owner email finishes that business immediately. If only an owner is established, one second search uses that name and the company.",
+      "Reads a bounded set of linked sources to check the owner and email. There is no third search or open-ended crawl. Businesses without websites use their name and location; API errors and timeouts are shown separately from completed checks.",
       "Published personal addresses, including Gmail, can qualify when the source ties them to the owner and business. Related-business matches need identity evidence and a fresh source check; a name match alone is not enough.",
       "Ownership evidence must belong to the selected business. External owner sources must refer to its exact website; a brand match, customer testimonial or guest-founder story is not enough. Generic inboxes, masked and guessed emails are excluded.",
       "Results show Owner, Business, Owner email and Source. Phone numbers, office addresses and social links belong in the other modules.",
       "When a source page cannot be read, a clearly published search-index email may be retained only after independently confirming the owner and matching a person-specific address on the exact business domain. It is labelled Search-indexed email · live page unavailable, with its source link.",
       "A readable page that no longer shows the email cannot rely on an older search snippet. Search-index evidence can be outdated; finding an address is separate from checking mailbox validity.",
-      "A completed check can still show Owner email not found. Progress measures businesses checked, not how many emails were found; slow or unavailable pages can require a retry.",
+      "Not published means no sourced owner email was found within this search limit. It does not claim the address is absent everywhere. Progress counts businesses checked; errors and stopped rows remain distinct.",
       "Search saved owners by person, role, company, website or email while typing. Prior searches remain in History.",
       "Download the current owner results as a branded PDF or Excel table. Search-indexed evidence keeps its label in both exports. A successful scan export resets its view; cancellation keeps the results.",
-      "Uses the separate Decision Makers search allowance. A search is not a guarantee that a published owner email will be found."
+      "Uses the separate Decision Makers allowance once per business lookup, not once per provider query. Finding a published owner email is not guaranteed."
     ],
     "shots": [
       {
@@ -815,7 +815,7 @@ const FAQS = [
   ],
   [
     "What does Decision Makers find?",
-    "It first establishes which owner or founder belongs to the business, then searches relevant pages and public results for that person's email. Co-founders can appear when each has supporting evidence. A published personal email, including Gmail, may qualify when a readable source connects the person and business. Generic inboxes, employees, customer testimonials, guest founders and same-name companies do not prove ownership. Missing owner emails remain labelled as not found."
+    "The first search asks for the company founder and email together. A sourced name and email finish the lookup. If only the owner is established, one second search uses that name and company. After that, it stops and shows Not published when no sourced email was found. Published personal addresses, including Gmail, may qualify; generic inboxes and guessed addresses do not. A temporary search-service error gets one visible retry of the same query. If it still fails, use Retry failed business. Errors and timeouts show Search failed, not Not published."
   ],
   [
     "Will Decision Makers scan all the Maps leads I select?",

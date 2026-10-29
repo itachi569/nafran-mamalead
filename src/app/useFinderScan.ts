@@ -62,6 +62,7 @@ export interface FinderSourceRow {
  * it narrows what it holds.
  */
 export type FinderRowOf<Row> = Row & {
+  lookupOutcome?: NonNullable<EnrichmentJobStatus['outcomes']>[string]
   domain: string
   scanning: boolean
   scanLabel: string
@@ -153,7 +154,7 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
 }
 
 const CIRCUMFERENCE = 276.5
-const EMPTY_PROGRESS = { total: 0, processed: 0, failed: 0, found: 0, leadName: '', message: '' }
+const EMPTY_PROGRESS = { total: 0, processed: 0, failed: 0, found: 0, leadName: '', message: '', outcomes:{} as NonNullable<EnrichmentJobStatus['outcomes']> }
 
 /** Search normalization so "Northern  Spine" finds "Northern Spine & Sports Clinic". */
 export function matchesFinderSearch(haystack: string, needle: string): boolean {
@@ -381,7 +382,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         const status = await statusForJob(jobId)
         if (cancelled) return
         if (status) {
-          setProgress({ total: status.total, processed: status.processed, failed: status.failed, found: status.found, leadName: status.leadName, message: status.message })
+          setProgress({ total: status.total, processed: status.processed, failed: status.failed, found: status.found, leadName: status.leadName, message: status.message, outcomes:status.outcomes ?? {} })
           if (status.processed !== lastProcessed) {
             lastProcessed = status.processed
             await sourceRef.current.refresh()
@@ -453,6 +454,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         const checking = running && (tracked ? position === progress.processed : !row.scanned)
         return ({
         ...row,
+        lookupOutcome: tracked ? progress.outcomes[row.leadId] : undefined,
         domain: row.domain || 'No website',
         scanning: checking,
         scanLabel: checking ? 'Scanning…' : tracked && !attempted ? 'Not scanned yet' : '',
@@ -464,7 +466,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         status: attempted ? 'Done' : checking ? 'Scanning' : tracked ? 'Not scanned yet' : row.statusLabel || 'Pending',
         onThisSite: row.items.length > 0,
       })}),
-    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed],
+    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed,progress.outcomes],
   )
 
   const scanned = useMemo(
@@ -476,7 +478,13 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     const population = scanOn ? scopedRows : sourceRows
     const counts = source.ringSource(population)
     const denominator = Math.max(1, population.length)
-    return counts.map((ring) => {
+    return counts.map((savedRing) => {
+      const ring={...savedRing}
+      // A previous saved email must not inflate this new scan's coverage before it is checked.
+      if(scanOn && source.historyScope==='dm'){
+        if(ring.name==='Owner email found')ring.count=population.filter(row=>progress.outcomes[row.leadId]?.status==='found').length
+        if(ring.name==='Owner identified')ring.count=population.filter(row=>{const outcome=progress.outcomes[row.leadId];return outcome && outcome.status!=='error' && row.items.length>0}).length
+      }
       const pct = Math.min(100, Math.max(0, Math.round((ring.count / denominator) * 100)))
       const arc = (Math.min(100, pct) / 100) * CIRCUMFERENCE
       return {
@@ -486,7 +494,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         off: String(Math.round(CIRCUMFERENCE - arc)),
       }
     })
-  }, [scanOn, scopedRows, sourceRows, source])
+  }, [scanOn, scopedRows, sourceRows, source, progress.outcomes])
 
   const exit = useCallback(() => {
     if (active.current) return

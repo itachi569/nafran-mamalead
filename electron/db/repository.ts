@@ -1772,17 +1772,17 @@ export class Repository {
   }
 
   /** The state of one queued pass, so a page can wait for its own scan rather than the whole queue. */
-  jobStatus(workspaceId: string, jobId: string): { status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string } | null {
+  jobStatus(workspaceId: string, jobId: string): { status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'; processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string; outcomes?: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}> } | null {
     const row = this.db.one<{ status: 'queued' | 'running' | 'done' | 'failed'; lead_ids: string; options: string; found: number; error: string | null; finished_at: string | null }>(
       'select status, lead_ids, options, found, error, finished_at from enrichment_jobs where workspace_id = ? and id = ?',
       [workspaceId, jobId],
     )
     if (!row) return null
     let total = 0
-    let progress: Partial<{ processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string }> = {}
+    let progress: Partial<{ processed: number; total: number; found: number; failed: number; leadName: string; message: string; at: string; outcomes: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}> }> = {}
     try { total = new Set(JSON.parse(row.lead_ids) as string[]).size } catch { /* malformed jobs are reported by the worker */ }
     try { progress = JSON.parse(row.options || '{}').progress || {} } catch { /* older jobs have no progress */ }
-    return { status: row.error === 'Cancelled by user' ? 'cancelled' : row.status, total, processed: Math.min(total, Math.max(0, Number(progress.processed ?? (row.status === 'done' ? total : 0)) || 0)), found: row.found || 0, failed: Number(progress.failed) || 0, leadName: progress.leadName || '', message: row.error === 'Cancelled by user' ? 'Scan stopped. Completed results are saved.' : row.error || progress.message || '', at: progress.at || row.finished_at || '' }
+    return { status: row.error === 'Cancelled by user' ? 'cancelled' : row.status, total, processed: Math.min(total, Math.max(0, Number(progress.processed ?? (row.status === 'done' ? total : 0)) || 0)), found: row.found || 0, failed: Number(progress.failed) || 0, leadName: progress.leadName || '', message: row.error === 'Cancelled by user' ? 'Scan stopped. Completed results are saved.' : row.error || progress.message || '', at: progress.at || row.finished_at || '', ...(progress.outcomes ? {outcomes:progress.outcomes} : {}) }
   }
 
   /**

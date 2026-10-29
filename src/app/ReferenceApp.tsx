@@ -2294,7 +2294,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   </section>
                   </>
                 ) : null}
-                <section data-card="1" style={{padding:24,borderRadius:22,background:'#F5F5F4'}}><h2 style={{margin:0,fontSize:18,fontWeight:500}}>Published owner emails only</h2><p style={{margin:'10px 0 0',fontSize:13,lineHeight:1.7,color:'#5A5F5C'}}>Import websites to identify their owners or founders. We check the website first, then search public sources for a matching email if needed. A staff profile or a general inbox does not count as an owner email. If the address is not published, we leave it blank.</p></section>
+                <section data-card="1" style={{padding:24,borderRadius:22,background:'#F5F5F4'}}><h2 style={{margin:0,fontSize:18,fontWeight:500}}>Published owner emails only</h2><p style={{margin:'10px 0 0',fontSize:13,lineHeight:1.7,color:'#5A5F5C'}}>The first search asks for the founder and email together. If only an owner is found, one final search checks that person's email. A staff profile or general inbox does not count. Not published means no sourced owner email was found in these searches.</p></section>
               </div>
               </>
             ) : null}

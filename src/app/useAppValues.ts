@@ -3110,12 +3110,13 @@ export function useAppValues() {
   })
 
   const dmVisibleLeadIds = new Set(dmFinder.rows.map((row) => row.leadId))
-  const dmVisiblePeople = (dmFinder.q.trim()?dmSavedPeople:dmPeopleRows).filter((person) => dmVisibleLeadIds.has(person.lead_id) &&
+  const dmCompletedLeadIds = new Set(dmFinder.rows.filter(row=>!dmFinder.scanOn || Boolean(row.lookupOutcome && row.lookupOutcome.status!=='error')).map(row=>row.leadId))
+  const dmVisiblePeople = (dmFinder.q.trim()?dmSavedPeople:dmPeopleRows).filter((person) => dmVisibleLeadIds.has(person.lead_id) && dmCompletedLeadIds.has(person.lead_id) &&
     matchesFinderSearch([person.full_name,person.title, person.lead_name, person.lead_website, person.email].filter(Boolean).join(' '), dmFinder.q)).sort((a,b)=>dmFinder.rows.findIndex(row=>row.leadId===a.lead_id)-dmFinder.rows.findIndex(row=>row.leadId===b.lead_id))
 
   const runDecisionExport = async (format: 'xlsx' | 'pdf') => {
     if (!db || dmExportLock.current || dmFinder.scanning) return
-    const session = { ...dmSession.current, leadIds: dmFinder.q.trim()?[...dmVisibleLeadIds]:[...dmSession.current.leadIds] }
+    const session = { ...dmSession.current, leadIds: [...new Set(dmVisiblePeople.map(person=>person.lead_id))] }
     if (!dmVisiblePeople.length || !session.leadIds.length) { flash('Scan websites to find people before exporting.'); return }
     dmExportLock.current = true
     setDmExportBusy(true)
@@ -4166,7 +4167,7 @@ export function useAppValues() {
             if (!showDecisionPassPrompt(result.error)) flash(result.error)
             return
           }
-          flash(`${result.queued} selected lead${result.queued === 1 ? '' : 's'} queued — owner search, then top-10 email search.`)
+          flash(`${result.queued} selected lead${result.queued === 1 ? '' : 's'} queued — up to two searches per business for a published owner email.`)
         })
         .catch(() => flash('The deep pass could not be queued.'))
     },

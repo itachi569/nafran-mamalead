@@ -9,12 +9,9 @@
 import type { LocalDatabase } from '../db/local-db'
 import { LicenseAccessError } from '../billing/client'
 import { type Repository } from '../db/repository'
-import { locationForLead, queryForOwner, queryForOwnerEmail, searchEmails, searchOwnerCandidates } from './dataforseo'
-import type { ExtractedEmail } from './email-extractor'
-import { WebsiteEnricher, isUsablePerson } from './website'
+import { WebsiteEnricher } from './website'
 import { DEFAULT_LOOKUP_FIELDS, emptyLookupRow, lookupOptions, lookupRowFromFindings } from './website-lookup'
-import { findBusinessOwners, findOwnerEmail, type OwnerEmailSource } from './owner-search'
-import {ownerIdentityKey,isBusinessOwner,ownerEmail} from './owner-contact'
+import { findOwnerContact } from './owner-search'
 import {compareEmailContacts} from '../email-ranking'
 
 export type JobKind = 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
@@ -32,6 +29,7 @@ export interface EnrichmentProgress {
   leadName: string
   message: string
   at: string
+  outcomes?: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}>
 }
 
 export interface EnrichmentOptions {
@@ -70,50 +68,6 @@ async function waitForAbort<T>(operation: Promise<T>, signal: AbortSignal): Prom
   } finally {
     if (onAbort) signal.removeEventListener('abort', onAbort)
   }
-}
-
-/** The host of a lead's website, bare, so it can be compared with an address or a result URL. */
-function websiteHost(website: string): string {
-  return website
-    .trim()
-    .toLowerCase()
-    .replace(/^[a-z]+:\/\//, '')
-    .replace(/^www\./, '')
-    .split(/[/?#]/)[0]
-}
-
-/**
- * Whether a search hit is about this business.
- *
- * A top-10 for one company also quotes other people. An address counts when the result names the
- * business, or when the address itself is on the business's domain. A result that does neither is
- * left out, the way an address for a different executive is left out of a search for one person.
- * A business whose name is too short to recognise is given the benefit of the doubt.
- */
-function aboutThisLead(email: ExtractedEmail, lead: { name: string; website: string }): boolean {
-  const haystack = `${email.context} ${email.source} ${email.url}`.toLowerCase()
-  const host = websiteHost(lead.website)
-  if (host && (email.value.endsWith(`@${host}`) || email.value.endsWith(`.${host}`) || haystack.includes(host))) return true
-  const words = lead.name
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length > 3)
-  if (!words.length) return true
-  return words.some((word) => haystack.includes(word))
-}
-
-/** Keeps a named person tied to the company searched, rather than a similarly named result. */
-function aboutThisOwner(owner: { source: string; url: string }, lead: { name: string; website: string }): boolean {
-  const haystack = `${owner.source} ${owner.url}`.toLowerCase()
-  const host = websiteHost(lead.website)
-  if (host && haystack.includes(host)) return true
-  const words = lead.name
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length > 3)
-  // Some directory snippets omit the company name but still carry a valid person/title claim. The
-  // search itself was company-scoped, so a lead with no useful words gets the benefit of the doubt.
-  return !words.length || words.some((word) => haystack.includes(word))
 }
 
 export class EnrichmentRunner {
@@ -266,15 +220,9 @@ export class EnrichmentRunner {
     let failed = 0
     let searchFailure: string | null = null
 
-    // The deep pass is a search per lead rather than a read of its own site, so it does not need a
-    // website and it does not use the browser. It runs through the same queue, which is what makes
-    // one progress bar and one Stop button cover every kind of pass.
-    if (kind === 'deep') {
-      await this.runDeepJob(job, leadIds, signal, (count) => {
-        found = count
-      }, (count) => {
-        processed = count
-      })
+    // Every owner action shares the same two-query ceiling and Stop/progress lifecycle.
+    if (kind === 'decision-maker' || kind === 'deep') {
+      await this.runOwnerJob(job, leadIds, signal,kind)
       return
     }
 
@@ -282,7 +230,7 @@ export class EnrichmentRunner {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
       await waitForAbort(Promise.resolve(this.options.authorize?.(kind, false)),signal)
       const lead = this.repository.getLead(job.workspace_id, leadId)
-      if (!lead || (!lead.website && kind !== 'decision-maker')) {
+      if (!lead || !lead.website) {
         processed += 1
         failed += 1
         searchFailure = 'Some saved businesses have no website to scan.'
@@ -305,12 +253,9 @@ export class EnrichmentRunner {
         leadName: lead.name,
         message: lead.website ? `Reading ${lead.name}…` : `Searching public sources for ${lead.name} by business name and location…`,
       })
-      if (kind === 'decision-maker') await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
 
       const inspect = kind === 'social'
         ? this.enricher.inspectSocialFast(lead.website, signal)
-        : kind === 'decision-maker'
-          ? lead.website ? this.enricher.inspectPeople(lead.website, signal) : Promise.resolve({emails:[],phones:[],socials:[],addresses:[],people:[],pagesRead:[],error:null} as import('./website').WebsiteFindings)
         : kind === 'phone'
           ? this.enricher.inspectPhoneFast(lead.website, signal)
         : kind === 'email'
@@ -343,13 +288,6 @@ export class EnrichmentRunner {
       findings.emails.sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
       findings.emails=findings.emails.slice(0,1)
       if (isLookup) this.repository.saveWebsiteLookupRow(job.id,lookupRowFromFindings(lead,findings,fields))
-      if(kind==='decision-maker' && !findings.people.length){
-        this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Looking for ${lead.name}'s owner on public sources…`})
-        const discovery=await waitForAbort(findBusinessOwners(lead,{key:this.options.deepKey?.(),signal,searchWeb:(query,abort)=>this.enricher.searchPublicWeb(query,abort)}),signal)
-        findings.people.push(...discovery.people)
-        if(discovery.people.length)findings.error=null
-        else if(discovery.error)siteFailure=`Public owner search could not finish: ${discovery.error}`
-      }
       if (findings.error) {
         processed += 1
         failed += 1
@@ -358,20 +296,7 @@ export class EnrichmentRunner {
         continue
       }
 
-      if (kind === 'decision-maker') {
-        // Cofounders often publish contact details on the same pages. Share only this scan's
-        // in-flight reads; each person's identity/email evidence is still checked separately.
-        const pageCache:import('./owner-search').OwnerPageCache=new Map()
-        await Promise.all(findings.people.filter(person=>!person.email).slice(0,3).map(async owner=>{
-          this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Searching public sources for ${owner.fullName}'s email…`})
-          const knownSources=this.db.query<OwnerEmailSource & {title:string}>(`select d.full_name as fullName,d.title,d.email,d.source,l.website from decision_makers d join leads l on l.id=d.lead_id where d.workspace_id=? and d.lead_id<>? and d.email<>''`,[job.workspace_id,leadId]).filter(person=>isBusinessOwner(person.title) && ownerIdentityKey(person.fullName)===ownerIdentityKey(owner.fullName) && ownerEmail(person.fullName,person.email))
-          const match=await waitForAbort(findOwnerEmail(lead,owner,{key:this.options.deepKey?.(),signal,knownSources,scannedPages:findings.pagesRead,pageCache,searchWeb:(query,abort)=>this.enricher.searchPublicWeb(query,abort)}),signal)
-          if (match.email) { owner.email=match.email;owner.evidence=match.source;owner.emailEvidence=match.emailEvidence ?? 'page' }
-          else if (match.error) siteFailure=`Public email search for ${owner.fullName} could not finish: ${match.error}`
-        }))
-      }
-
-      if (kind !== 'decision-maker' && (kind !== 'website' || fields.address)) this.repository.fillLeadAddress(leadId, findings.addresses ?? [])
+      if (kind !== 'website' || fields.address) this.repository.fillLeadAddress(leadId, findings.addresses ?? [])
       // Email and website jobs both fill addresses; social fills profiles; phone fills numbers.
       if (kind === 'email' || (kind === 'website' && fields.email)) {
         this.repository.replaceMainEmail(leadId,findings.emails[0])
@@ -401,36 +326,6 @@ export class EnrichmentRunner {
         }
       }
 
-      if (kind === 'decision-maker') {
-        if (!siteFailure) this.repository.pruneNoisyPeople(isUsablePerson,leadId)
-        // A corrected current-owner scan must also remove an older schema-only result from
-        // this business. Never replace every saved person simply because a partial crawl
-        // missed them; only the specific names superseded by current visible evidence qualify.
-        const currentOwners=new Set(findings.people.map(person=>ownerIdentityKey(person.fullName)))
-        const superseded=new Set((findings.supersededOwnerNames ?? []).map(ownerIdentityKey).filter(name=>!currentOwners.has(name)))
-        if(superseded.size){
-          const previous=this.db.query<{id:string;full_name:string}>('select id,full_name from decision_makers where workspace_id=? and lead_id=?',[job.workspace_id,leadId])
-          for(const person of previous)if(superseded.has(ownerIdentityKey(person.full_name)))this.db.run('delete from decision_makers where id=? and workspace_id=? and lead_id=?',[person.id,job.workspace_id,leadId])
-        }
-        for (const person of findings.people) {
-          this.repository.addDecisionMaker({
-            workspaceId: job.workspace_id,
-            leadId,
-            fullName: person.fullName,
-            title: person.title,
-            email: person.email,
-            emailEvidence: person.emailEvidence,
-            replaceEmail: !siteFailure,
-            phone: person.phone,
-            linkedinUrl: person.linkedinUrl,
-            // An interrupted email check must not relabel a retained mailbox with a new bio URL.
-            source: siteFailure && !person.email ? '' : person.evidence || 'website',
-          })
-          found += kind === 'decision-maker' ? (person.email ? 1 : 0) : 1
-        }
-
-      }
-
       if (isLookup) this.repository.fillPublishedBusiness(leadId,findings.businessName || '',fields.phone ? findings.phones[0]?.value || '' : '')
 
       processed += 1
@@ -447,7 +342,7 @@ export class EnrichmentRunner {
         found,
         failed,
         leadName: lead.name,
-        message: kind === 'phone' ? `${lead.name} · ${findings.phones.length} published phone number${findings.phones.length===1?'':'s'}` : kind === 'decision-maker' ? `${lead.name} · ${findings.people.filter(person=>person.email).length} published owner emails` : found
+        message: kind === 'phone' ? `${lead.name} · ${findings.phones.length} published phone number${findings.phones.length===1?'':'s'}` : found
           ? `${lead.name} · ${findings.emails.length} address${findings.emails.length === 1 ? '' : 'es'}, ${findings.socials.length} social`
           : `${lead.name} · nothing published`,
       })
@@ -476,120 +371,48 @@ export class EnrichmentRunner {
       found,
       failed,
       leadName: '',
-      message: searchFailure ? `Scan finished · ${processed} of ${leadIds.length} websites checked; ${failed} could not finish. ${searchFailure}` : `Enrichment finished · ${found} ${kind === 'decision-maker' ? 'owner emails' : 'details'} found across ${processed} leads`,
+      message: searchFailure ? `Scan finished · ${processed} of ${leadIds.length} websites checked; ${failed} could not finish. ${searchFailure}` : `Enrichment finished · ${found} details found across ${processed} leads`,
     })
   }
 
-  /**
-   * The deep pass: one search per lead, and what the results say about its people.
-   *
-   * What comes back is filed as a suggestion rather than as a contact. A search snippet is somebody
-   * else's claim — a directory page, a forum, an AI answer — and the app's own rule is that only a
-   * site naming a person, a named mailbox or a LinkedIn profile is a decision maker. A hit from a
-   * snippet is a lead to check, which is what the page's "Suggestions to review" are for.
-   */
-  private async runDeepJob(
-    job: { id: string; workspace_id: string },
-    leadIds: string[],
-    signal: AbortSignal,
-    setFound: (count: number) => void,
-    setProcessed: (count: number) => void,
-  ): Promise<void> {
-    const key = this.options.deepKey?.() ?? ''
-    if (!key) throw new Error('Add a DataForSEO key in Settings → Account before running a deep pass.')
-    let found = 0
-    let processed = 0
-    let spent = 0
-    let failure: string | null = null
-
-    for (const leadId of leadIds) {
-      if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-      await waitForAbort(Promise.resolve(this.options.authorize?.('deep', false)),signal)
-      const lead = this.repository.getLead(job.workspace_id, leadId)
-      if (!lead) {
-        processed += 1
-        continue
+  /** Shared by every owner entry point; one company consumes one credit, not one per query. */
+  private async runOwnerJob(job:{id:string;workspace_id:string},leadIds:string[],signal:AbortSignal,kind:JobKind):Promise<void>{
+    let processed=0,found=0,failed=0
+    const outcomes:NonNullable<EnrichmentProgress['outcomes']>={}
+    const progress=(leadName:string,message:string,status:EnrichmentProgress['status']='running')=>this.emit({jobId:job.id,kind,status,processed,total:leadIds.length,found,failed,leadName,message,outcomes:{...outcomes}})
+    for(const leadId of leadIds){
+      signal.throwIfAborted()
+      await waitForAbort(Promise.resolve(this.options.authorize?.(kind,false)),signal)
+      const lead=this.repository.getLead(job.workspace_id,leadId)
+      if(!lead){processed++;failed++;outcomes[leadId]={status:'error',searches:0,error:'Saved business no longer exists.'};progress('','Skipped a missing business.');continue}
+      try{
+        await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
+        const result=await waitForAbort(findOwnerContact(lead,{key:this.options.deepKey?.(),signal,onStep:(step,_query,retrying)=>progress(lead.name,retrying?`Search ${step} of 2 · reconnecting to Google after a temporary error. Retrying this query once…`:step===1?`Search 1 of 2 · finding ${lead.name}'s founder and email…`:`Search 2 of 2 · checking the named owner's email…`)}),signal)
+        signal.throwIfAborted()
+        if(result.error){failed++;outcomes[leadId]={status:'error',searches:result.searches,error:result.error}}
+        else {
+          // A successful fresh scan replaces its previous automatically sourced results, so an
+          // old email cannot be presented as something the two current searches just found.
+          this.db.transaction(()=>{
+            this.db.run("delete from decision_makers where workspace_id=? and lead_id=? and (source like 'http%' or source='website')",[job.workspace_id,leadId])
+            for(const person of result.people)this.repository.addDecisionMaker({workspaceId:job.workspace_id,leadId,fullName:person.fullName,title:person.title,email:person.email,emailEvidence:person.emailEvidence,replaceEmail:true,phone:'',linkedinUrl:'',source:person.evidence})
+          })
+          const count=result.people.filter(person=>person.email).length;found+=count
+          outcomes[leadId]={status:count?'found':'not-published',searches:result.searches}
+          this.repository.markLeadScanned(leadId)
+        }
+        processed++
+        progress(lead.name,result.error?`${lead.name} · ${result.error}`:`${lead.name} · ${outcomes[leadId].status==='found'?'Owner email found':'Not published'} · ${result.searches} search${result.searches===1?'':'es'}`)
+      }catch(error){
+        if(signal.aborted)throw new DOMException('Enrichment cancelled','AbortError')
+        if(error instanceof LicenseAccessError)throw error
+        processed++;failed++;outcomes[leadId]={status:'error',searches:0,error:error instanceof Error?error.message:'Owner search could not finish.'};progress(lead.name,outcomes[leadId].error!)
       }
-      await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
-
-      this.emit({
-        jobId: job.id,
-        kind: 'deep',
-        status: 'running',
-        processed,
-        total: leadIds.length,
-        found,
-        leadName: lead.name,
-        message: `Searching for ${lead.name}…`,
-      })
-
-      // Step one names a founder/owner from the top ten Google results. Only after a person is
-      // named do we spend the follow-up search for that person's mailbox.
-      const where = locationForLead(lead)
-      // DataForSEO's standard queue can legitimately take longer than its first minute during a
-      // multi-lead pass. Keep polling for the same 90-second window used by the live API check so
-      // a slow task is not reported as queued while the rest of the batch continues.
-      const ownerResult = await waitForAbort(searchOwnerCandidates(key, queryForOwner(lead), where, { waitMs: 90_000, signal }),signal)
-      spent += ownerResult.cost
-      if (ownerResult.error && !failure) failure = ownerResult.error
-
-      const owners = ownerResult.owners.filter((owner) => aboutThisOwner(owner, lead)).slice(0, 3)
-      for (const owner of owners) {
-        if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-        const emailResult = await waitForAbort(searchEmails(key, queryForOwnerEmail(lead, owner), where, { waitMs: 90_000, signal }),signal)
-        spent += emailResult.cost
-        if (emailResult.error && !failure) failure = emailResult.error
-        // An address in the same results as the business is not automatically the business's.
-        // The page has to mention the business, or the address has to be on its own domain.
-        const email = emailResult.emails.find((candidate) => aboutThisLead(candidate, lead))
-        const emailEvidence = email
-          ? ` ${email.value} — unverified, from ${email.url || 'a search snippet'}${email.obfuscated ? ', written obfuscated' : ''}. ${email.source}`
-          : ' No owner mailbox was published in the top 10 results.'
-        const created = this.repository.suggestPerson({
-          workspaceId: job.workspace_id,
-          leadId,
-          fullName: owner.fullName,
-          title: owner.title || 'Founder / owner',
-          source: 'email',
-          evidence: `${owner.title || 'Founder / owner'} found in ${owner.url || 'a Google result'}: ${owner.source}.${emailEvidence}`,
-          email: email?.value,
-        })
-        if (created.created) found += 1
-      }
-
-      processed += 1
-      setFound(found)
-      setProcessed(processed)
-      this.emit({
-        jobId: job.id,
-        kind: 'deep',
-        status: 'running',
-        processed,
-        total: leadIds.length,
-        found,
-        leadName: lead.name,
-        message: owners.length
-          ? `${lead.name} · ${owners.length} owner${owners.length === 1 ? '' : 's'} found; email search complete`
-          : `${lead.name} · no founder or owner found in the top 10`,
-      })
-
-      // Searches are paid for and rate-limited: a gap keeps a long pass inside both.
-      await new Promise((resolve) => setTimeout(resolve, PACE_MS))
+      if(processed<leadIds.length)await waitForAbort(new Promise(resolve=>setTimeout(resolve,PACE_MS)),signal)
     }
-
-    this.repository.markJob(job.id, failure && !found ? 'failed' : 'done', found, failure)
-    this.emit({
-      jobId: job.id,
-      kind: 'deep',
-      status: failure && !found ? 'failed' : 'done',
-      processed,
-      total: leadIds.length,
-      found,
-      leadName: '',
-      message: failure
-        ? `Deep pass stopped · ${failure}`
-        : `Deep pass finished · ${found} suggestion${found === 1 ? '' : 's'} across ${processed} lead${processed === 1 ? '' : 's'} · $${spent.toFixed(4)}`,
-    })
+    const error=failed?`${failed} business search${failed===1?'':'es'} could not finish. Retry the rows marked Search failed.`:null
+    this.repository.markJob(job.id,error?'failed':'done',found,error)
+    progress('',error || `Owner scan finished · ${found} owner emails found across ${processed} leads. Maximum two searches per business.`,error?'failed':'done')
   }
 
   private currentProgress(jobId: string, kind: JobKind): Omit<EnrichmentProgress,'at'> {

@@ -6,7 +6,7 @@ async function until(read,test,timeout=60000){const start=Date.now();while(Date.
 (async()=>{
  const env={...process.env,APPDATA:fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-site-private-'))};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;delete env.DATAFORSEO_API_KEY;delete env.DATAFORSEO_API_KEY_FILE;
  const profile=fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-site-owner-refresh-'));
- const app=await _electron.launch({executablePath:path.join(root,'release/owner-lookup/win-unpacked/MamaLead.exe'),args:['--user-data-dir='+profile],env,timeout:60000});
+ const app=await _electron.launch({executablePath:path.join(root,'release/win-unpacked/MamaLead.exe'),args:['--user-data-dir='+profile],env,timeout:60000});
  try{
   await app.evaluate(({app,ipcMain,BrowserWindow})=>{
    const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'));
@@ -21,11 +21,17 @@ async function until(read,test,timeout=60000){const start=Date.now();while(Date.
    const override=(channel,fn)=>{ipcMain.removeHandler(channel);ipcMain.handle(channel,fn)};
    override('billing:status',()=>({connected:true,configured:true,mode:'live',coreLicenseActive:true,license:{active:true,kind:'lifetime',maxDevices:2,devicesUsed:1},lifetime:{active:true,amount:1000000,currency:'pkr'},decisionMaker:{active:true,available:true,status:'paid',monthlyLimit:1000,monthlyRemaining:1000-state.credits.length,monthlyUsed:state.credits.length,amount:100000,currency:'pkr'}}));
    override('billing:invoices',()=>({invoices:[]}));override('notifications:show',()=>({shown:true}));
-   const runner=new EnrichmentRunner(db,repository,{authorize:async()=>{},consumeDecisionLead:async id=>{state.credits.push(id);if(state.credits.length===7)await new Promise(resolve=>{state.resume=resolve})},deepKey:()=>'',onProgress:progress=>{state.progress.push(progress);for(const win of BrowserWindow.getAllWindows())win.webContents.send('enrichment:progress',progress)}});state.runner=runner;
+   const runner=new EnrichmentRunner(db,repository,{authorize:async()=>{},consumeDecisionLead:async id=>{state.credits.push(id);if(state.credits.length===7)await new Promise(resolve=>{state.resume=resolve})},deepKey:()=> 'fixture',onProgress:progress=>{state.progress.push(progress);for(const win of BrowserWindow.getAllWindows())win.webContents.send('enrichment:progress',progress)}});state.runner=runner;
    override('enrichment:prioritize',(_,payload)=>{void runner.prioritize(payload.jobId);return{started:true}});override('enrichment:start',()=>({started:true}));override('enrichment:stop',(_,payload)=>{runner.stop(payload?.jobId);return{stopped:true}});
    WebsiteEnricher.prototype.searchPublicWeb=async query=>query.includes('Liam Brooks')?[{title:'Liam Brooks — founder of Elm Dental Studio',description:'Liam Brooks founded Elm Dental Studio, elmdentalstudio.example. Published founder contact.',url:'https://founder-studio.example/liam-brooks'}]:[];
-   global.fetch=async raw=>{
+   global.fetch=async (raw,options)=>{
     const url=new URL(typeof raw==='string'||raw instanceof URL?String(raw):raw.url),host=url.hostname.replace(/^www\./,'');state.requests.push(url.href);
+    if(host==='api.dataforseo.com'){
+      const query=JSON.parse(options.body)[0].keyword;
+      const i=hosts.findIndex((host,index)=>query.includes(host)||query.includes(names[index]));
+      const source=i<0||i>=13?'':query.startsWith('Liam Brooks owner of ')?'https://founder-studio.example/liam-brooks':'https://'+hosts[i]+'/about';
+      return Response.json({tasks:[{status_code:20000,result:[{items:source?[{type:'organic',title:'Published founder',description:'Company source',url:source}]:[]}]}]});
+    }
     if(host==='bing.com')return new Response('<rss><channel></channel></rss>',{headers:{'content-type':'application/xml'}});
     if(host==='html.duckduckgo.com')return new Response('<html><body>No sample search results</body></html>',{headers:{'content-type':'text/html'}});
     if(host==='founder-studio.example')return new Response('<html><article><h2>Liam Brooks</h2><p>Founder of Elm Dental Studio, elmdentalstudio.example.</p><a href="mailto:liam.brooks@founder-studio.example">Contact Liam</a></article></html>',{headers:{'content-type':'text/html'}});
@@ -48,7 +54,7 @@ async function until(read,test,timeout=60000){const start=Date.now();while(Date.
   await page.evaluate(()=>window.scrollTo(0,0));await page.mouse.move(5,5);await page.screenshot({path:path.join(out,'dm-progress.png')});
   await app.evaluate(()=>globalThis.__siteOwnerShot.resume());await until(()=>bar.getAttribute('aria-valuenow'),value=>value==='100');
   const search=page.getByRole('searchbox',{name:'Search saved decision makers'});await search.fill('Studio');const table=page.locator('[data-owner-results]');await until(()=>table.locator('tbody tr').count(),count=>count===4);await page.evaluate(()=>window.scrollTo(0,0));await page.mouse.move(5,5);await page.waitForTimeout(400);await page.screenshot({path:path.join(out,'dm.png')});
-  const tableText=await table.innerText();if(!tableText.includes('Owner email not found')||!tableText.includes('liam.brooks@founder-studio.example'))throw Error('Owner result screenshot must include a sourced external email and an honest missing-email row');
+  const tableText=await table.innerText();if(!tableText.includes('Not published')||!tableText.includes('liam.brooks@founder-studio.example'))throw Error('Owner result screenshot must include a sourced external email and an honest missing-email row');
   const state=await app.evaluate(()=>{const s=globalThis.__siteOwnerShot;return{credits:s.credits.length,people:s.db.query('select full_name,email,source from decision_makers'),jobs:s.db.query('select status,found,error from enrichment_jobs'),requests:s.requests,progress:s.progress}});
   if(state.credits!==15||state.jobs.at(-1).status!=='done'||state.people.length!==13||errors.length)throw Error('Capture validation failed: '+JSON.stringify({credits:state.credits,jobs:state.jobs,people:state.people.length,errors}));
   const report={version:await app.evaluate(({app})=>app.getVersion()),packaged:true,capturedAt:new Date().toISOString(),theme:'light',viewport:{width:1440,height:960},data:'Fictional sample businesses and .example domains in a temporary isolated profile; no customer data',liveNetworkCalls:0,actualBillingCalls:0,selectedBusinesses:15,withWebsite:13,withoutWebsite:2,websiteCoveragePercent:87,capturedProgress:{percent:40,processed:6,total:15,remaining:9,stopVisible:true},completed:{processed:15,owners:13,emails:state.people.filter(person=>person.email).length},files:['dm.png','dm-progress.png','dm-saved-leads.png'],rendererErrors:errors};

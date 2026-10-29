@@ -104,7 +104,7 @@ const DEFAULT_QUEUED_RETRIES = 2
 
 type SerpTask = { status_code?: number; cost?: number; result?: unknown[] }
 
-export interface OrganicSearchHit { title: string; description: string; url: string }
+export interface OrganicSearchHit { title: string; description: string; url: string; aiOverview?: boolean }
 const liveResultCache = new Map<string, OrganicSearchHit[]>()
 // Live responses are normally much faster, but a 10s cutoff discarded otherwise valid searches
 // during provider latency spikes. The caller has a separate end-to-end budget for source checks.
@@ -116,30 +116,50 @@ export async function searchOrganicLive(
   query: string,
   where: SearchLocation = DEFAULT_LOCATION,
   signal?: AbortSignal,
+  options: { includeAiOverview?: boolean; recover?: () => boolean } = {},
 ): Promise<{ hits: OrganicSearchHit[]; cost: number; error: string | null }> {
   const empty = { hits: [] as OrganicSearchHit[], cost: 0, error: null as string | null }
   if (!key.trim() || !query.trim()) return { ...empty, error: 'A search credential and query are required.' }
   signal?.throwIfAborted()
-  const id = cacheKey(query, where)
+  const id = cacheKey(query, where) + (options.includeAiOverview ? '|ai-overview' : '')
   const cached = liveResultCache.get(id)
   if (cached) return { ...empty, hits: cached.map(hit => ({ ...hit })) }
+  const timeoutMs = options.includeAiOverview ? 25_000 : LIVE_REQUEST_TIMEOUT_MS
   try {
-    const body = await call('/serp/google/organic/live/advanced', key.trim(), {
+    const request = {
       method: 'POST', signal,
       body: JSON.stringify([{ keyword: query, location_name: where.location, language_code: where.language,
+        // Cached AI citations can still be read below. Do not make the foreground lookup
+        // wait for Google to generate an asynchronous overview before returning its SERP.
         se_domain: where.domain, device: 'desktop', depth: 10, load_async_ai_overview: false }]),
-    }, LIVE_REQUEST_TIMEOUT_MS) as { tasks?: { status_code?: number; status_message?: string; cost?: number; result?: {items?: unknown[]}[] }[] }
-    const task = body.tasks?.[0], cost = task?.cost ?? 0
-    if (!task || task.status_code !== 20000) return { ...empty, cost, error: task?.status_message || 'The live search could not finish.' }
+    }
+    type LiveBody = { tasks?: { status_code?: number; status_message?: string; cost?: number; result?: {items?: unknown[]}[] }[] }
+    let body = await call('/serp/google/organic/live/advanced', key.trim(), request, timeoutMs) as LiveBody
+    let task = body.tasks?.[0], cost = task?.cost ?? 0
+    signal?.throwIfAborted()
+    // Recover only the confirmed transient search-engine failure. The caller shares one
+    // recovery allowance across both queries. Same keyword/location, no retry loop.
+    if (task?.status_code === 40101 && options.recover?.()) {
+      signal?.throwIfAborted()
+      body = await call('/serp/google/organic/live/regular', key.trim(), request, LIVE_REQUEST_TIMEOUT_MS) as LiveBody
+      task = body.tasks?.[0]; cost += task?.cost ?? 0
+    }
+    if (task?.status_code === 40102) return { ...empty, cost } // A completed search with no matching results.
+    if (!task || task.status_code !== 20000) return { ...empty, cost, error: task?.status_code === 40101
+      ? 'Google could not return search results through DataForSEO (40101). Retry this business. This is a search-service error, not a rejected API key.'
+      : task?.status_message || 'The live search could not finish.' }
     const hits: OrganicSearchHit[] = []
-    const visit = (value: unknown): void => {
-      if (Array.isArray(value)) { value.forEach(visit); return }
+    const visit = (value: unknown, aiOverview = false): void => {
+      if (Array.isArray(value)) { value.forEach(item=>visit(item,aiOverview)); return }
       if (!value || typeof value !== 'object') return
       const item = value as Record<string, unknown>
+      const ai = aiOverview || String(item.type ?? '').startsWith('ai_overview')
       if (typeof item.url === 'string' && isPublicSourceUrl(item.url) && typeof item.title === 'string') {
-        hits.push({ title: item.title, description: String(item.description ?? item.snippet ?? ''), url: item.url })
+        // AI references are discovery links, never proof that generated email text is published.
+        hits.push({ title: item.title, description: String(item.description ?? item.snippet ?? item.text ?? ''), url: item.url, ...(ai ? {aiOverview:true} : {}) })
       }
-      if (Array.isArray(item.items)) item.items.forEach(visit)
+      if (Array.isArray(item.items)) item.items.forEach(child=>visit(child,ai))
+      if (options.includeAiOverview && Array.isArray(item.references)) item.references.forEach(child=>visit(child,true))
     }
     visit(task.result)
     const unique = [...new Map(hits.map(hit => [hit.url, hit])).values()].slice(0, 10)
@@ -149,7 +169,7 @@ export async function searchOrganicLive(
   } catch (error) {
     // Preserve the caller's reason: an overall deadline is not the user's Stop action.
     signal?.throwIfAborted()
-    return { ...empty, error: error instanceof Error && error.name === 'AbortError' ? 'The search provider did not respond within 15 seconds. Retry this website.' : error instanceof Error ? error.message : 'The live search could not finish.' }
+    return { ...empty, error: error instanceof Error && error.name === 'AbortError' ? `The search provider did not respond within ${timeoutMs/1000} seconds. Retry this website.` : error instanceof Error ? error.message : 'The live search could not finish.' }
   }
 }
 
