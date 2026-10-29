@@ -62,7 +62,14 @@ async function main(){
   const prior=await app.evaluate(()=>{const t=globalThis.__ownerTwo;t.providerFailed=false;return t.queries.length})
   await retry.click();await panel.getByText('Scan complete',{exact:true}).waitFor({timeout:20000})
   const retried=await app.evaluate((_,prior)=>globalThis.__ownerTwo.queries.slice(prior),prior)
-  assert.equal(retried.length,4); // The two broad name queries reuse this run's completed search cache.
+  assert.deepEqual(retried,[
+   '"error-owner.test" founder owner email address',
+   '"Janet Cole" "error-owner" email address',
+   '"Janet Cole" "error-owner.test" email address',
+   '"Janet Cole" "error-owner" email contact',
+   '"Janet Cole" "error-owner" Gmail',
+   'site:error-owner.test "Janet Cole" (email OR contact)',
+  ]); // Every retry query stays scoped to this business; no broad name cache crosses companies.
   assert.ok(retried[0].includes('error-owner.test'));assert.ok(retried.every(q=>!q.includes('missing-owner')));assert.doesNotMatch(await result.innerText(),/Search failed|old@/)
   await scan('slow-owner.test\nnever-owner.test',2);await app.evaluate(async()=>{const start=Date.now();while(!globalThis.__ownerTwo.slow&&Date.now()-start<15000)await new Promise(r=>setTimeout(r,50));if(!globalThis.__ownerTwo.slow)throw Error('Slow fixture did not start')})
   await page.locator('[data-decision-progress]').getByRole('button',{name:/Stop scan/}).click();await page.getByText('Scan stopped. Completed results are saved below.',{exact:true}).first().waitFor({timeout:10000})
