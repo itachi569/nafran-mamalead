@@ -596,7 +596,8 @@ export interface DesktopApi {
     status: () => Promise<UpdateStatus>
     check: () => Promise<UpdateStatus>
     download: () => Promise<UpdateStatus>
-    install: () => Promise<{ started: boolean }>
+    setAutoDownload: (enabled:boolean) => Promise<UpdateStatus>
+    install: () => Promise<{ started: boolean; message?:string }>
     onStatus: (listener: (status: UpdateStatus) => void) => () => void
   }
   /**
@@ -661,6 +662,9 @@ export type UpdateStatus = {
   version: string | null
   percent: number | null
   message: string
+  enabled: boolean
+  autoDownload: boolean
+  lastCheckedAt: string | null
 }
 
 declare global {

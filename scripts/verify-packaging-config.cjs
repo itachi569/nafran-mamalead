@@ -6,6 +6,7 @@ function load(overrides = {}) {
   const names = [
     'LEADSNAP_UPDATE_URL',
     'REQUIRE_UPDATE_FEED',
+    'MAMALEAD_DISABLE_UPDATES',
     'REQUIRE_CODE_SIGNING',
     'REQUIRE_NOTARIZATION',
     'WIN_CSC_LINK',
@@ -48,6 +49,8 @@ check('macOS exposes DMG and ZIP targets', local.mac.target.includes('dmg') && l
 check('Linux exposes AppImage and DEB targets', local.linux.target.includes('AppImage') && local.linux.target.includes('deb'))
 check('macOS hardened runtime is enabled', local.mac.hardenedRuntime === true)
 check('local builds do not require unavailable signing credentials', local.forceCodeSigning !== true)
+check('Windows builds default to the official update feed', process.platform !== 'win32' || local.publish?.url === 'https://mamalead.com/updates/windows/')
+check('offline test builds can explicitly disable update feeds', load({MAMALEAD_DISABLE_UPDATES:'1'}).publish === undefined)
 check('Store package uses full trust and the MamaLead application id', local.appx.capabilities.includes('runFullTrust') && local.appx.applicationId === 'MamaLead')
 
 const store = load({

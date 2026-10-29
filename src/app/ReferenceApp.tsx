@@ -3015,6 +3015,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   {(V.msgs ?? []).map((m, __im) => (
                     <Fragment key={__im}>
                       <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}>{m.text}</span>
+                      {m.who==='bot' && Boolean(m.actions?.length) && <div className="assist-shortcuts" aria-label="Open a related page">{m.actions!.map(key=><a key={key} href={`#${key}`} data-assist-destination={key} onClick={event=>{event.preventDefault();V.openAssistDestination(key)}}>{V.assistDestinations[key].label}<span aria-hidden="true">↗</span></a>)}</div>}
                     </Fragment>
                   ))}
                   {shows(V.chatTyping) ? (

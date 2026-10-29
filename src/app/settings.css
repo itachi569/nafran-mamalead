@@ -14,6 +14,36 @@
   container-type: inline-size;
 }
 
+.app-updates { padding: 26px; border-radius: 24px; background: var(--settings-surface); }
+.app-updates-heading, .app-updates-toggle-row, .app-updates-actions { display: flex; justify-content: space-between; align-items: center; gap: 22px; }
+.app-updates h2 { margin: 0; font-size: 24px; font-weight: 500; letter-spacing: -.02em; }
+.app-updates-eyebrow { margin: 0 0 8px; font-size: 10px; letter-spacing: .14em; color: var(--settings-muted); }
+.app-updates-version { background: var(--settings-subtle); color: var(--settings-muted); border-radius: 99px; padding: 7px 12px; font-size: 12px; white-space: nowrap; }
+.app-updates-toggle-row { margin-top: 24px; padding: 20px; border: 1px solid var(--settings-line); border-radius: 18px; }
+.app-updates h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.app-updates-toggle-row p, .app-updates-reminder { color: var(--settings-muted); font-size: 13px; line-height: 1.55; margin: 0; }
+.app-updates-reminder { margin: 15px 2px 20px; }
+.app-updates button.app-updates-switch { flex: 0 0 52px; width: 52px; height: 30px; padding: 4px; border: 1px solid #7b8578; border-radius: 99px; background: #d5dbd1; cursor: pointer; }
+.app-updates-switch span { display: block; height: 20px; width: 20px; border-radius: 50%; background: #263022; transition: transform .16s ease; }
+.app-updates button.app-updates-switch[aria-checked="true"] { background: #c8d5b9; border-color: #56634e; }
+.app-updates-switch[aria-checked="true"] span { transform: translateX(22px); }
+.app-updates button:disabled { opacity: .55; cursor: default; }
+.app-updates button:focus-visible { outline: 3px solid #798a6d; outline-offset: 3px; }
+.app-updates-status { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.55; background: var(--settings-subtle); padding: 14px 16px; border-radius: 14px; }
+.app-updates-status-dot { width: 7px; height: 7px; margin-top: 6px; background: #69755f; border-radius: 50%; flex-shrink: 0; }
+.app-updates-status.is-ready { background: #e4eadc; color: #263022; }
+.app-updates-progress { height: 6px; border-radius: 99px; overflow: hidden; background: var(--settings-line); margin: 10px 0 0; }
+.app-updates-progress span { height: 100%; display: block; background: #718561; transition: width .15s linear; }
+.app-updates-actions { margin-top: 20px; flex-wrap: wrap; gap: 16px; }
+.app-updates-actions strong { display: block; margin-bottom: 4px; font-size: 13px; }
+.app-updates-actions small { display: block; max-width: 360px; font-size: 11px; line-height: 1.5; color: var(--settings-muted); }
+.app-updates button.app-updates-action { flex-shrink: 0; border: 0; border-radius: 99px; background: #1c1c1c; color: #fff; padding: 12px 19px; font: inherit; font-size: 13px; cursor: pointer; }
+body[data-theme="dark"] .settings-page .app-updates button.app-updates-switch { background: #46503e !important; }
+body[data-theme="dark"] .settings-page .app-updates button.app-updates-switch[aria-checked="true"] { background: #c8d5b9 !important; }
+body[data-theme="dark"] .settings-page .app-updates button.app-updates-action { background: #c8d5b9 !important; color: #1c1c1c !important; }
+body[data-theme="dark"] .app-updates-switch[aria-checked="false"] span { background: #f4f5f0; }
+@container (max-width: 540px) { .app-updates { padding: 20px; } .app-updates-toggle-row { padding: 16px; gap: 14px; } .app-updates-actions { align-items: flex-start; flex-direction: column; } }
+
 .settings-header h1 { margin: 0; font-size: clamp(34px, 3.8vw, 50px); font-weight: 400; letter-spacing: -.025em; line-height: 1.08; }
 .settings-header > p { margin: 14px 0 0; font-size: 15px; color: var(--settings-muted); }
 .settings-header-status { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 14px; color: var(--settings-muted); }

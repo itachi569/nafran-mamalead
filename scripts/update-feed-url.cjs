@@ -1,10 +1,13 @@
 function updateFeedUrl(environment = process.env) {
-  const value = String(environment.LEADSNAP_UPDATE_URL || '').trim()
+  let value = String(environment.LEADSNAP_UPDATE_URL || '').trim()
   if (!value) {
     if (environment.REQUIRE_UPDATE_FEED === '1') {
       throw new Error('REQUIRE_UPDATE_FEED=1 but LEADSNAP_UPDATE_URL is missing. Set it to the HTTPS directory that serves latest*.yml and installers.')
     }
-    return ''
+    // Windows builds use the same signed production feed as release CI. Development
+    // launches and Microsoft Store packages still disable the in-app updater at runtime.
+    if (process.platform !== 'win32' || environment.MAMALEAD_DISABLE_UPDATES === '1') return ''
+    value = 'https://mamalead.com/updates/windows/'
   }
 
   let url

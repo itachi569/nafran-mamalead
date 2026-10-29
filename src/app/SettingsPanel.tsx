@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppValues } from './useAppValues'
 import type { DesktopApi } from '../types/desktop'
 import './settings.css'
+import { AppUpdatesCard } from './AppUpdatesCard'
 
 type BillingStatus = Awaited<ReturnType<DesktopApi['billing']['status']>>
 type BillingInvoice = Awaited<ReturnType<DesktopApi['billing']['invoices']>>[number]
@@ -369,7 +370,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             <div style={row}><span>Data location</span><span style={{ marginLeft: 'auto', overflowWrap: 'anywhere' }}>{V.localDataPath}</span></div>
             <div style={row}><span>Session</span><span style={{ marginLeft: 'auto' }}>Local workspace on this device</span></div>
           </section>
-          <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>App updates</h2><p style={muted}>{V.updateMessage}</p>{V.updateVersion && <p style={muted}>Version {V.updateVersion}</p>}<button type="button" onClick={V.runUpdateAction} disabled={V.updateActionDisabled === '1'} style={button}>{V.updateActionLabel}</button></section>
+          <AppUpdatesCard V={V}/>
           <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Your data</h2><p style={muted}>Export your saved leads and lists from this device.</p><button type="button" onClick={V.openExpAll} style={button}>Export everything</button></section>
         </>}
       </div>

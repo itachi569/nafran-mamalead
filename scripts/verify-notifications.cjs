@@ -7,7 +7,8 @@ const { tmpdir } = require('node:os')
 
 const root = resolve(__dirname, '..')
 const directory = mkdtempSync(join(tmpdir(), 'nafran-notifications-'))
-const packaged = process.argv.includes('--packaged')
+const executable = process.argv.find(arg => arg.startsWith('--exe='))?.slice(6)
+const packaged = process.argv.includes('--packaged') || Boolean(executable)
 let desktop
 
 async function sendUpdate(state, message) {
@@ -22,7 +23,7 @@ async function main() {
   const env = { ...process.env, APPDATA: join(directory, 'appdata') }
   delete env.ELECTRON_RUN_AS_NODE
   desktop = await _electron.launch({
-    ...(packaged ? { executablePath: join(root, 'release', 'win-unpacked', 'MamaLead.exe') } : { cwd: root }),
+    ...(packaged ? { executablePath: executable || join(root, 'release', 'win-unpacked', 'MamaLead.exe') } : { cwd: root }),
     args: packaged ? [`--user-data-dir=${join(directory, 'profile')}`] : ['.', `--user-data-dir=${join(directory, 'profile')}`],
     env,
     timeout: 60_000,
@@ -70,20 +71,37 @@ async function main() {
   console.log('PASS  inside click stays open; outside click and Escape close the panel')
 
   await bell.click()
-  const errorRow = page.locator('[data-notification]').filter({ hasText: 'Update check failed' })
-  await errorRow.locator('[data-notification-read]').click()
-  assert.equal(await errorRow.getAttribute('data-unread'), '0')
+  const errorRow = page.locator('[data-note]').filter({ hasText: 'Update check failed' })
+  await errorRow.locator('.nt-note-content > p').click()
+  assert.equal(await errorRow.getAttribute('data-unread'), 'no')
   assert.equal(await badge.innerText(), '1')
   await page.reload()
   await page.locator('[data-view="dashboard"]').waitFor()
   assert.equal(await badge.innerText(), '1')
   await bell.click()
-  assert.equal(await page.locator('[data-notification]').count(), 2)
-  console.log('PASS  single-item read and notification history survive reload')
+  assert.equal(await page.locator('[data-note]').count(), 2)
+  console.log('PASS  clicking notification text marks read and survives reload')
+  const readRow = page.locator('[data-note]').filter({ hasText: 'Update check failed' })
+  await readRow.locator('[data-notification-read]').click()
+  assert.equal(await readRow.getAttribute('data-unread'), 'yes')
+  assert.equal(await badge.innerText(), '2')
+  await readRow.locator('.nt-kind').click()
+  assert.equal(await readRow.getAttribute('data-unread'), 'no')
+  await readRow.locator('[data-notification-read]').click()
+  await page.getByRole('tab', { name: 'Unread 2', exact: true }).click()
+  await readRow.locator('time').click()
+  assert.equal(await readRow.count(), 0)
+  assert.equal(await badge.innerText(), '1')
+  await page.getByRole('tab', { name: 'All 2', exact: true }).click()
+  await readRow.locator('[data-notification-read]').click()
+  await readRow.focus()
+  await page.keyboard.press('Enter')
+  assert.equal(await readRow.getAttribute('data-unread'), 'no')
+  console.log('PASS  card icon, time and keyboard mark read; Unread filter updates; explicit unread remains usable')
 
-  await page.locator('[data-notification]').filter({ hasText: 'Update ready' }).locator('[data-notification-delete]').click()
+  await page.locator('[data-note]').filter({ hasText: 'Update ready' }).locator('[data-notification-delete]').click()
   assert.equal(await badge.count(), 0)
-  assert.equal(await page.locator('[data-notification]').count(), 1)
+  assert.equal(await page.locator('[data-note]').count(), 1)
   await sendUpdate('ready', 'Another update ready')
   await badge.getByText('1').waitFor()
   await page.locator('[data-notifications-read="1"]').click()

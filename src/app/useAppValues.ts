@@ -14,6 +14,7 @@ import { useWebsiteLookup } from './useWebsiteLookup'
 import { importPreview, isProfileLine, pastedLines, websiteListFromCsv } from './website-import'
 import { isBusinessOwner, ownerEmail } from '../../electron/enrichment/owner-contact'
 import { usesRomanUrdu } from '../../electron/assist-language'
+import { assistDestinations, assistShortcuts, type AssistDestination } from '../../electron/assist-navigation'
 import type {
   CandidateRow,
   DashboardTotals,
@@ -55,7 +56,8 @@ type SimpleExportSelection = { title: string; summary: string; request: Paramete
 
 const DEFAULT_KEEP = [true, true, true, true, false, false, false, false, false, false]
 const VIEWS_WITH_REAL_DATA = ['leads', 'lists', 'runs', 'settings']
-const INITIAL_CHAT_MESSAGES: { who: string; text: string }[] = []
+type ChatMessage = { who: string; text: string; actions?: AssistDestination[] }
+const INITIAL_CHAT_MESSAGES: ChatMessage[] = []
 /** How many leads one page of the ledger draws before its own "Load 20 more" is offered. */
 const LEDGER_PAGE = 200
 const MAX_MAP_KEYWORDS = 8
@@ -517,11 +519,13 @@ export function useAppValues() {
     version: null,
     percent: null,
     message: 'Auto-updates are not configured for this build.',
+    enabled: false, autoDownload: false, lastCheckedAt: null,
   })
-  const [msgs, setMsgs] = useState<{ who: string; text: string }[]>(INITIAL_CHAT_MESSAGES)
+  const [updatePreferenceSaving,setUpdatePreferenceSaving]=useState(false)
+  const [msgs, setMsgs] = useState<ChatMessage[]>(INITIAL_CHAT_MESSAGES)
 
   const toastTimer = useRef<number | undefined>(undefined)
-  const chatMessagesRef = useRef<{ who: string; text: string }[]>(INITIAL_CHAT_MESSAGES)
+  const chatMessagesRef = useRef<ChatMessage[]>(INITIAL_CHAT_MESSAGES)
   const chatPendingRef = useRef(0)
   const assistantContextRef = useRef<Record<string, string | number | boolean | null>>({})
   const decisionAlertPeriods = useRef(new Set<string>())
@@ -647,14 +651,16 @@ export function useAppValues() {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.updates
     if (!bridge) return
     let cancelled = false
-    void bridge.status().then((status) => {
-      if (!cancelled) setUpdateStatus(status)
-    }).catch(() => undefined)
-    const unsubscribe = bridge.onStatus((status) => {
+    const receive=(status:UpdateStatus)=>{
+      if(cancelled)return
       setUpdateStatus(status)
-      if (status.state === 'ready') notify('Update ready', status.message, 'success')
-      if (status.state === 'error') notify('Update check failed', status.message, 'error')
-    })
+      const details={kind:'system' as const,action:{type:'view' as const,view:'settings' as const,tab:'acct' as const,focus:'updates' as const},actionLabel:'Open app updates'}
+      if(status.state==='available')notify('New MamaLead update',status.message,'info',undefined,{...details,eventKey:status.version?`update:${status.version}:available`:undefined})
+      if(status.state==='ready')notify('Update ready',status.message,'success',undefined,{...details,eventKey:status.version?`update:${status.version}:ready`:undefined})
+      if(status.state==='error')notify('Update check failed',status.message,'error',undefined,{...details,eventKey:`update:error:${new Date().toDateString()}:${status.message}`})
+    }
+    void bridge.status().then(receive).catch(() => undefined)
+    const unsubscribe = bridge.onStatus(receive)
     return () => {
       cancelled = true
       unsubscribe()
@@ -664,7 +670,7 @@ export function useAppValues() {
   const checkForUpdates = useCallback(async () => {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.updates
     if (!bridge) {
-      setUpdateStatus({ state: 'disabled', version: null, percent: null, message: 'Updates are only available in the desktop app.' })
+      setUpdateStatus({ state: 'disabled', version: null, percent: null, message: 'Updates are only available in the desktop app.',enabled:false,autoDownload:false,lastCheckedAt:null })
       return
     }
     setUpdateStatus(await bridge.check())
@@ -679,8 +685,18 @@ export function useAppValues() {
   const installUpdate = useCallback(async () => {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.updates
     if (!bridge) return
-    await bridge.install()
-  }, [])
+    const result=await bridge.install()
+    if(!result.started && result.message)flash(result.message)
+  }, [flash])
+
+  const toggleAutoUpdates=useCallback(async()=>{
+    const bridge=window.desktop?.updates
+    if(!bridge || updatePreferenceSaving)return
+    setUpdatePreferenceSaving(true)
+    try {setUpdateStatus(await bridge.setAutoDownload(!updateStatus.autoDownload))}
+    catch(error){flash(error instanceof Error?error.message:'Could not save the auto-update setting.')}
+    finally{setUpdatePreferenceSaving(false)}
+  },[updatePreferenceSaving,updateStatus.autoDownload,flash])
 
   // A finished Maps run is useful even when the window is minimised, so keep the same result in
   // the bell history and the host OS notification centre.
@@ -743,7 +759,7 @@ export function useAppValues() {
             ? romanUrdu ? `Aap ke ${quota.monthlyRemaining} of ${quota.monthlyLimit} Decision Maker searches baqi hain. Yeh count server se verify hua hai.` : `You have ${quota.monthlyRemaining} of ${quota.monthlyLimit} Decision Maker searches remaining in this period. This count is verified by the server.`
             : romanUrdu ? 'Is period mein 0 Decision Maker searches baqi hain. Settings → Usage mein Rs 1,000 ka naya period khareed kar dobara use karein.' : 'You have 0 Decision Maker searches remaining. Open Settings → Usage to buy the next Rs 1,000 period.'
         if (quota) updateDecisionAllowance(quota)
-        const withBot = [...chatMessagesRef.current, { who: 'bot', text: response }]
+        const withBot = [...chatMessagesRef.current, { who: 'bot', text: response, actions: assistShortcuts(trimmed,response,String(assistantContextRef.current.page ?? 'dashboard')) }]
         chatMessagesRef.current = withBot
         setMsgs(withBot)
         return
@@ -767,7 +783,7 @@ export function useAppValues() {
         context,
       })
       const response = result.text?.trim() || 'The AI provider returned an empty response.'
-      const withBot = [...chatMessagesRef.current, { who: 'bot', text: response }]
+      const withBot = [...chatMessagesRef.current, { who: 'bot', text: response, actions: assistShortcuts(trimmed,response,String(assistantContextRef.current.page ?? 'dashboard')) }]
       chatMessagesRef.current = withBot
       setMsgs(withBot)
     } catch (error) {
@@ -797,7 +813,10 @@ export function useAppValues() {
         await window.desktop.notifications.revealExport(action.path)
       } else if(action?.type==='view') {
         go(action.view)
-        if(action.view==='settings')setStab(action.tab || 'plan')
+        if(action.view==='settings'){
+          setStab(action.tab || 'plan')
+          if(action.focus==='updates')window.setTimeout(()=>document.getElementById('app-updates')?.scrollIntoView({behavior:'smooth',block:'center'}),180)
+        }
         if(action.view==='maps') {
           if(action.runId && snapshot.running)setSavedMapsOpen(true)
           else if(action.runId && action.runId!==mapsRunId){setMapsRunId(action.runId);setMapsHistoryLeads([]);setMapsResultsLoading(true)}
@@ -4436,6 +4455,16 @@ export function useAppValues() {
     mailToggleLabel: mailOpen ? 'Hide email option' : 'Rather email us instead?',
     maxResults,
     msgs,
+    assistDestinations,
+    openAssistDestination: (key:AssistDestination) => {
+      if(!Object.hasOwn(assistDestinations,key))return
+      const target=assistDestinations[key]
+      setChatOpen(false)
+      if(key==='reports'){setMapsPrompt(null);setReportsOpen(true);void refreshReports();return}
+      go(target.view)
+      if(target.view==='settings')setStab('tab' in target?target.tab:'plan')
+      if(key==='updates')window.setTimeout(()=>document.getElementById('app-updates')?.scrollIntoView({behavior:'smooth',block:'center'}),180)
+    },
     onChatKey: (event: React.KeyboardEvent<HTMLInputElement>) => {
       if (event.key !== 'Enter') return
       event.preventDefault()
@@ -4637,6 +4666,11 @@ export function useAppValues() {
     updateState: updateStatus.state,
     updateVersion: updateStatus.version ?? '',
     updateMessage: updateStatus.message,
+    autoUpdatesEnabled: updateStatus.autoDownload,
+    updateSupported: updateStatus.enabled,
+    updatePreferenceSaving,
+    toggleAutoUpdates,
+    updateLastChecked: updateStatus.lastCheckedAt ? new Date(updateStatus.lastCheckedAt).toLocaleString() : '',
     updatePercent: updateStatus.percent == null ? 0 : updateStatus.percent,
     updateActionLabel:
       updateStatus.state === 'ready'

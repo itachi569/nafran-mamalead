@@ -120,6 +120,12 @@ button{color:inherit}
 [data-assist]:hover{background:#EDEEEB}
 [data-msg="bot"]{align-self:flex-start;background:#EAEAE8;color:#1C1C1C;border-radius:16px 16px 16px 6px}
 [data-msg="me"]{align-self:flex-end;background:#1C1C1C;color:#F0F0F0;border-radius:16px 16px 6px 16px}
+.assist-shortcuts{display:flex;flex-wrap:wrap;gap:8px 18px;align-self:flex-start;max-width:100%;margin:-2px 0 9px;padding:0 14px}
+.assist-shortcuts a{display:inline-flex;align-items:center;gap:7px;padding:3px 0;color:#344a29;font:inherit;font-size:12.5px;font-weight:500;line-height:1.5;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+.assist-shortcuts a:hover{color:#1c1c1c}
+.assist-shortcuts a:focus-visible{outline:2px solid #718561;outline-offset:3px;border-radius:3px}
+.assist-shortcuts a span{flex:none;text-decoration:none}
+body[data-theme="dark"] .assist-shortcuts a{color:#c8d5bb!important}
 [data-kw]:hover{background:#DCDEDA}
 [data-kw]:hover [data-x]{color:#1C1C1C}
 [data-chip]{background:#EAEAE8;color:#3A3D3B}

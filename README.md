@@ -13,6 +13,8 @@ signed **1.4.17** release; newer source commits do not automatically replace tha
 - Public website, images, and screenshots: `website/`.
 - Billing and AI backend: `billing-server/`.
 - Production release evidence: [deploy/CURRENT-STATUS.md](deploy/CURRENT-STATUS.md).
+- Pending desktop auto-update, notification and Assist changes:
+  [deploy/desktop-updates.md](deploy/desktop-updates.md).
 - Current owner-email investigation and its remaining Namecheap limitation:
   [deploy/owner-discovery-investigation.md](deploy/owner-discovery-investigation.md).
 

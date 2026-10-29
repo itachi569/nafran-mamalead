@@ -1,9 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from 'electron'
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { chromium, type BrowserContext } from 'playwright'
 import { autoUpdater } from 'electron-updater'
+import { UpdateManager } from './updates'
 import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './scraper/browser'
 import { ScrapeRunner } from './scraper/runner'
 import { normaliseQuery, type StartRunRequest } from './scraper/types'
@@ -96,13 +97,6 @@ function setEmailValidityProgress(patch: Partial<EmailValidityProgress>): void {
   broadcast('emailValidity:progress', emailValidityProgress)
 }
 
-type UpdateState = {
-  state: 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'not-available' | 'error'
-  version: string | null
-  percent: number | null
-  message: string
-}
-
 function readUpdateFeedUrl(): string {
   const fromEnvironment = (process.env.LEADSNAP_UPDATE_URL ?? '').trim()
   let configured = fromEnvironment
@@ -133,58 +127,17 @@ const updateDisabledMessage = storeManagedUpdates
   : !updateFeedUrl
   ? 'Auto-updates are not configured for this build.'
   : 'Update checks are available in the installed app.'
-let updateState: UpdateState = {
-  state: app.isPackaged && updateFeedUrl && !storeManagedUpdates ? 'idle' : 'disabled',
-  version: null,
-  percent: null,
-  message: app.isPackaged && updateFeedUrl && !storeManagedUpdates ? 'Updates are ready to check.' : updateDisabledMessage,
-}
-
-function updateStatus(): UpdateState {
-  return { ...updateState }
-}
-
-function broadcastUpdateStatus(): void {
-  broadcast('updates:status', updateStatus())
-}
-
-function setUpdateState(patch: Partial<UpdateState>): UpdateState {
-  updateState = { ...updateState, ...patch }
-  broadcastUpdateStatus()
-  return updateStatus()
-}
-
-function configureAutoUpdater(): void {
-  if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return
-
-  autoUpdater.setFeedURL({ provider: 'generic', url: updateFeedUrl, useMultipleRangeRequest: false })
-  autoUpdater.autoDownload = false
-  autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.on('checking-for-update', () => setUpdateState({ state: 'checking', message: 'Checking for a newer version…', percent: null }))
-  autoUpdater.on('update-available', (info) => {
-    setUpdateState({ state: 'available', version: info.version, message: `Version ${info.version} is available to download.`, percent: null })
-  })
-  autoUpdater.on('download-progress', (progress) =>
-    setUpdateState({ state: 'downloading', percent: Math.round(progress.percent), message: `Downloading update — ${Math.round(progress.percent)}%.` }),
-  )
-  autoUpdater.on('update-downloaded', (info) => {
-    setUpdateState({ state: 'ready', version: info.version, percent: 100, message: `Version ${info.version} is ready. Restart to install it.` })
-  })
-  autoUpdater.on('update-not-available', () => setUpdateState({ state: 'not-available', percent: null, message: 'You are using the latest version.' }))
-  autoUpdater.on('error', (error) => setUpdateState({ state: 'error', percent: null, message: error.message || 'The update check failed.' }))
-}
-
-async function checkForUpdate(): Promise<UpdateState> {
-  if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return setUpdateState({ state: 'disabled', message: updateDisabledMessage })
-  if (updateState.state === 'checking' || updateState.state === 'downloading' || updateState.state === 'ready') return updateStatus()
-  setUpdateState({ state: 'checking', version: null, percent: null, message: 'Checking for a newer version…' })
-  try {
-    await autoUpdater.checkForUpdates()
-  } catch (error) {
-    return setUpdateState({ state: 'error', message: error instanceof Error ? error.message : 'The update check failed.' })
-  }
-  return updateStatus()
-}
+const updatePreferencesPath = () => join(app.getPath('userData'), 'app-updates.json')
+const updates = new UpdateManager({
+  updater:autoUpdater, enabled:Boolean(app.isPackaged && updateFeedUrl && !storeManagedUpdates), feedUrl:updateFeedUrl, disabledMessage:updateDisabledMessage,
+  readPreferences:()=>JSON.parse(readFileSync(updatePreferencesPath(),'utf8')),
+  savePreferences:preferences=>{
+    const file=updatePreferencesPath();mkdirSync(app.getPath('userData'),{recursive:true})
+    writeFileSync(file+'.tmp',JSON.stringify(preferences)+'\n','utf8');renameSync(file+'.tmp',file)
+  },
+  emit:status=>broadcast('updates:status',status),
+  busy:()=>runner.busy || Boolean(enricher?.busy) || emailValidityBusy || Boolean(gateBrowser),
+})
 
 /** Google's own sign-in page, pointed at Maps the way Maps' own "Sign in" button points at it. */
 const GOOGLE_SIGN_IN = 'https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fwww.google.com%2Fmaps&hl=en'
@@ -528,24 +481,11 @@ ipcMain.handle('billing:openInvoice', async (_event, raw: string) => {
   return { opened: true }
 })
 
-ipcMain.handle('updates:status', () => updateStatus())
-ipcMain.handle('updates:check', () => checkForUpdate())
-ipcMain.handle('updates:download', async () => {
-  if (!app.isPackaged || !updateFeedUrl || storeManagedUpdates) return setUpdateState({ state: 'disabled', message: updateDisabledMessage })
-  if (updateState.state !== 'available') return updateStatus()
-  try {
-    setUpdateState({ state: 'downloading', message: 'Downloading the update…', percent: 0 })
-    await autoUpdater.downloadUpdate()
-  } catch (error) {
-    return setUpdateState({ state: 'error', message: error instanceof Error ? error.message : 'The update download failed.' })
-  }
-  return updateStatus()
-})
-ipcMain.handle('updates:install', () => {
-  if (updateState.state !== 'ready') return { started: false }
-  autoUpdater.quitAndInstall()
-  return { started: true }
-})
+ipcMain.handle('updates:status', () => updates.status())
+ipcMain.handle('updates:check', () => updates.check())
+ipcMain.handle('updates:download', () => updates.download())
+ipcMain.handle('updates:set-auto-download', (_event, enabled:unknown) => updates.setAutoDownload(enabled))
+ipcMain.handle('updates:install', () => updates.install())
 
 /** Sends a short OS notification without exposing any renderer or filesystem access. */
 ipcMain.handle('notifications:show', (event, payload: { title?: string; body?: string; id?: string } = {}) => {
@@ -1270,12 +1210,8 @@ if (ownsInstance) app.whenReady().then(() => {
   // so a saved queue cannot make a domain import look frozen while the window is open.
   void enricher.drain()
 
-  configureAutoUpdater()
+  updates.start()
   createWindow()
-  if (app.isPackaged && updateFeedUrl) {
-    // Let the first window render before an update request starts and keep startup responsive.
-    setTimeout(() => void checkForUpdate(), 8000)
-  }
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().length) createWindow()
   })
@@ -1287,6 +1223,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  updates.dispose()
   enricher?.stop()
   // The app's own browser is a browser of its own, so it outlives the app unless it is closed here.
   // A window armed for a run counts: the run it was waiting for is not going to happen now.

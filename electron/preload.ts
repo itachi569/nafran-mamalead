@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { UpdateStatus } from './updates'
 import type { ProviderId, RunProgress, RunSummary, StartRunRequest } from './scraper/types'
 
 type Unsubscribe = () => void
@@ -301,31 +302,12 @@ const desktop = {
     onExportFailed: (listener:(result:{eventId:string;message:string})=>void):Unsubscribe=>subscribe('notifications:export-failed',listener),
   },
   updates: {
-    status: (): Promise<{
-      state: 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'not-available' | 'error'
-      version: string | null
-      percent: number | null
-      message: string
-    }> => ipcRenderer.invoke('updates:status'),
-    check: (): Promise<{
-      state: 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'not-available' | 'error'
-      version: string | null
-      percent: number | null
-      message: string
-    }> => ipcRenderer.invoke('updates:check'),
-    download: (): Promise<{
-      state: 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'not-available' | 'error'
-      version: string | null
-      percent: number | null
-      message: string
-    }> => ipcRenderer.invoke('updates:download'),
-    install: (): Promise<{ started: boolean }> => ipcRenderer.invoke('updates:install'),
-    onStatus: (listener: (status: {
-      state: 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'not-available' | 'error'
-      version: string | null
-      percent: number | null
-      message: string
-    }) => void): Unsubscribe => subscribe('updates:status', listener),
+    status: (): Promise<UpdateStatus> => ipcRenderer.invoke('updates:status'),
+    check: (): Promise<UpdateStatus> => ipcRenderer.invoke('updates:check'),
+    download: (): Promise<UpdateStatus> => ipcRenderer.invoke('updates:download'),
+    setAutoDownload: (enabled:boolean): Promise<UpdateStatus> => ipcRenderer.invoke('updates:set-auto-download',enabled),
+    install: (): Promise<{started:boolean;message?:string}> => ipcRenderer.invoke('updates:install'),
+    onStatus: (listener:(status:UpdateStatus)=>void):Unsubscribe => subscribe('updates:status',listener),
   },
   /**
    * The automated checks' own door into the app.
