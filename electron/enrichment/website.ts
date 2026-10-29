@@ -45,6 +45,7 @@ export interface FoundPerson {
   /** Both public pages when an explicit short owner signature is resolved by its own team list. */
   identityEvidence?: string[]
   email?: string
+  emailEvidence?: 'page' | 'search-index'
   phone?: string
 }
 
@@ -444,7 +445,8 @@ export function isUsablePerson(fullName: string, title: string): boolean {
   // names, and following them would spend a paid search on a slogan instead of the actual owner.
   if (/\b(?:engineering|consistency|compounds|approach|workspace|diagnostic|links|flow|journey|growth|solutions|mission|vision|values|systems|performance|ourselves|yourself)\b/i.test(name)) return false
   if (/^(?:stories|ecommerce|migration|inspiring|insights|resources|entrepreneurs)\b|\b(?:founder|founders|owner|owners)\b/i.test(name)) return false
-  if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company)\.?$/i.test(name)) return false
+  if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company|co)\.?$/i.test(name)) return false
+  if (/\b(?:introduction|pro|when|where|who|which|what|why|how|overview)\b/i.test(name)) return false
 
   const words = name.split(/\s+/)
   if (words.length > 4) return false
@@ -460,11 +462,11 @@ export function ownerNameOutsideTestimonials(html:string,fullName:string):boolea
     if('value' in node)return node.value
     if('tagName' in node && /^(?:script|style)$/.test(node.tagName))return ''
     const content=('childNodes' in node?node.childNodes.map(visit).join(' '):'').replace(/\s+/g,' ').trim()
-    if('tagName' in node && /^(?:h[1-6]|p|span|strong|a)$/.test(node.tagName) && content.length<180 && content.toLowerCase().includes(wanted)){
+    if('tagName' in node && /^(?:h[1-6]|p|span|strong|a|div)$/.test(node.tagName) && content.length<180 && content.toLowerCase().includes(wanted) && (node.tagName!=='div'||content.toLowerCase()===wanted)){
       named=true;let current:DefaultTreeAdapterMap['node']|null=node,review=false
       while(current && 'tagName' in current){
-        const labels=current.attrs.filter(attr=>attr.name==='class'||attr.name==='id').map(attr=>attr.value).join(' ')
-        if(/testimoni|customer[-_ ]?(?:story|stories|review|quote)|client[-_ ]?(?:story|stories|review)|(?:^|[-_ ])reviews?(?:[-_ ]|$)/i.test(labels)){review=true;break}
+        const labels=current.attrs.filter(attr=>['class','id','data-sentry-element','data-component','data-testid'].includes(attr.name)).map(attr=>attr.value).join(' ')
+        if(/testimoni|quotedperson|customer[-_ ]?(?:story|stories|review|quote)|client[-_ ]?(?:story|stories|review)|(?:^|[-_ ])(?:reviews?|quote)(?:[-_ ]|$)/i.test(labels)){review=true;break}
         current=current.parentNode
       }
       if(!review)ordinary=true
@@ -505,7 +507,7 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
       if(Array.isArray(value))return value.some(item=>schemaOwner(item,inherited))
       if(!value || typeof value!=='object')return false
       const item=value as Record<string,unknown>
-      if(typeof item.name==='string' && normal(item.name)===wanted && (inherited || typeof item.jobTitle==='string' && isBusinessOwner(item.jobTitle)))return true
+      if(normal(schemaPersonName(item))===wanted && (inherited || typeof item.jobTitle==='string' && isBusinessOwner(item.jobTitle)))return true
       return Object.entries(item).some(([key,next])=>schemaOwner(next,/^(?:founders?|owners?)$/i.test(key)))
     }
     return [...html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)].some(match=>{try{return schemaOwner(JSON.parse(match[1]))}catch{return false}})
@@ -522,15 +524,28 @@ export function ownerBelongsToBusiness(html:string,website:string,fullName:strin
     }
     const patterns=[
       /^(?:[\s,]+)(?:has\s+)?(?:co[- ]?founded|founded|started|established|owns)\s+([^.;!?]+)/i,
-      /^[\s,–—-]*(?:(?:is|was)\s+)?(?:the\s+)?(?:co[- ]?founder|founder|co[- ]?owner|owner|proprietor)(?:\s+and\s+[\w\s-]{1,65}?)?\s+(?:of|at)\s+([^.;!?]+)/i,
+      /^[\s,–—-]*(?:(?:is|was)\s+)?(?:the\s+)?(?:co[- ]?founder|founder|co[- ]?owner|owner|proprietor)(?:\s*(?:and|&(?:amp;)*)\s*[\w\s-]{1,65}?)?\s+(?:of|at)\s+([^.;!?]+)/i,
+      // Compact people cards often use "Name / Co-founder, Company".
+      /^[\s,–—-]*(?:co[- ]?founder|founder|co[- ]?owner|owner|proprietor)\s*[,|]\s*([^.;!?]+)/i,
     ]
     for(const pattern of patterns){
       const relation=context.match(pattern)?.[1]
       if(!relation)continue
+      // A second job title in "Co-founder, President" is not a company name.
+      if(/^(?:ceo|cfo|cto|coo|president|director|chief|partner|chairman|chairperson|engineer|developer|designer)(?:\b|$)/i.test(relation))continue
       const company=relation.replace(/^the\s+/i,'').split(/\s+(?:in|since|where|which|and has|and served|from|prior)\b/i)[0].replace(/[^a-z0-9]/g,'')
       if(!company || /^(?:ourcompany|ourbusiness|ourfirm|ourpractice|thiscompany|thisbusiness|thisfirm|thecompany|thebusiness|thefirm)$/.test(company))continue
       explicit=true
       if(matchesCompany(company))matched=true
+    }
+    // A guest bio can put the company before the role: "Webflow co-founder Vlad..."
+    // or "Vlad... / Webflow co-founder". Do not treat that guest as the site's owner.
+    const prefix=before.match(/(?:^|[,:;.!?–—])\s*([\p{L}\d][\p{L}\d &'’.-]{1,55}?)\s+(?:co[- ]?founder|co[- ]?owner|proprietor)\s*[,–—-]?\s*$/iu)?.[1]
+    const suffix=context.match(/^[\s,–—-]*([\p{L}\d][\p{L}\d &'’.-]{1,55}?)\s+(?:co[- ]?founder|co[- ]?owner|proprietor)\b/iu)?.[1]
+    for(const label of [prefix,suffix]){
+      if(!label || /^(?:the|our|a|an|is|is the|is a)$/i.test(label))continue
+      explicit=true
+      if(matchesCompany(label.replace(/[^a-z0-9]/g,'')))matched=true
     }
   }
   return !explicit || matched
@@ -687,6 +702,10 @@ interface PageHarvest {
  * as prose. Handles the three shapes sites actually publish: a Person node, an Organization whose
  * employee or founder points at one, and a graph of nodes referencing each other by id.
  */
+function schemaPersonName(node:Record<string,unknown>):string{
+  return typeof node.name==='string' ? node.name : typeof node.givenName==='string' && typeof node.familyName==='string' ? `${node.givenName} ${node.familyName}` : ''
+}
+
 function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; email: string; phone: string; linkedinUrl: string }[] {
   const found: { fullName: string; title: string; email: string; phone: string; linkedinUrl: string }[] = []
   const seen = new Set<string>()
@@ -696,13 +715,13 @@ function peopleFromJsonLd(blocks: string[]): { fullName: string; title: string; 
     if (Array.isArray(value)) { value.forEach(index); return }
     if (!value || typeof value !== 'object') return
     const node=value as Record<string,unknown>
-    if (typeof node['@id']==='string' && node.name) indexed.set(node['@id'],node)
+    if (typeof node['@id']==='string' && schemaPersonName(node)) indexed.set(node['@id'],node)
     Object.values(node).forEach(index)
   }
   for (const block of blocks) { try { const value=JSON.parse(block); documents.push(value); index(value) } catch { /* Optional malformed schema. */ } }
 
   const readPerson = (node: Record<string, unknown>, ownership = ''): void => {
-    const name = typeof node.name === 'string' ? node.name.replace(/\s+/g, ' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'') : ''
+    const name = schemaPersonName(node).replace(/\s+/g, ' ').trim().replace(/^(?:Dr\.?|Mr\.?|Mrs\.?|Ms\.?)\s+/i,'')
     const title = ownership || (typeof node.jobTitle === 'string' ? node.jobTitle.replace(/\s+/g, ' ').trim() : '')
     if (!name || !isUsablePerson(name, title)) return
     const key = name.toLowerCase()

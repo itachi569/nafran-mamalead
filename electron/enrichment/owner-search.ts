@@ -16,6 +16,7 @@ const decode=(text:string)=>text.replace(/&quot;/g,'"').replace(/&apos;|&#39;/g,
 const plain=(html:string)=>decode(html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,' ').replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ')
 const normal=(value:string)=>value.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
 const hostOf=(url:string)=>{try{return new URL(url).hostname.replace(/^www\./i,'').toLowerCase()}catch{return ''}}
+const mentionsWebsite=(html:string,host:string)=>new RegExp(`(?:^|[^a-z0-9_.-])(?:www\\.)?${host.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?=$|[^a-z0-9_.-])`,'i').test(html)
 // Leave room for source verification after a slower completed provider response. Successful
 // lookups still return immediately; this is a ceiling, never a delay before showing results.
 const budget=(signal?:AbortSignal)=>AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30_000)])
@@ -42,7 +43,7 @@ function aboutCompany(lead:Lead,value:string,requirePlace=true):boolean{
   return company.length>=4 && context.includes(' '+company+' ') && (!requirePlace || !place || context.includes(' '+place+' '))
  }
  const brand=normal(lead.name.includes('.')?host.split('.')[0]:lead.name).replace(/\s+/g,' ').trim()
- return brand.length>=4 && text.includes(brand)
+ return brand.length>=4 && (' '+phrase(plain(value))+' ').includes(' '+phrase(brand)+' ')
 }
 async function readPage(url:string,signal:AbortSignal,ownHost=''){
  try{
@@ -142,6 +143,20 @@ function publishedMail(page:PublicPage,lead:Lead,owner:{fullName:string},ownerPr
  return matching.length===1?matching[0].toLowerCase():''
 }
 
+/** An explicit indexed contact is a weaker source than a readable live page. Never infer
+ * addresses from patterns, masked mailboxes, or a namesake at a different business. */
+function indexedOwnerMail(hit:PublicSearchHit,lead:Lead,owner:{fullName:string},proof?:PublicPage):string{
+ const host=hostOf(lead.website),name=ownerIdentityKey(owner.fullName)
+ if(!host || !proof || !isPublicSourceUrl(hit.url))return ''
+ const established=contactFindingsFromHtml(proof.html,proof.url).people.some(person=>ownerIdentityKey(person.fullName)===name && isBusinessOwner(person.title))
+ if(!established || !ownerBelongsToBusiness(proof.html,lead.website,owner.fullName,proof.url))return ''
+ const description=decode(hit.description),context=normal(description)
+ if(!normal(hit.title).includes(normal(owner.fullName)) || !context.includes(normal(owner.fullName)))return ''
+ if(!/\b(?:contact|email|e-mail|reach)\b/i.test(description) || /\b(?:example|sample|format|pattern|guess|former|previous|no longer)\b/i.test(description))return ''
+ const emails=[...new Set(extractPublishedEmails(description).map(value=>ownerEmail(owner.fullName,value)).filter(value=>value && value.split('@')[1]===host))]
+ return emails.length===1?emails[0]:''
+}
+
 /** Identify the owner on a verified public page when the business website names nobody. */
 export async function findBusinessOwners(lead:Lead,options:Options={}):Promise<{people:FoundPerson[];error:string|null}>{
  const signal=budget(options.signal),host=hostOf(lead.website),identity=searchIdentity(lead),query=`${identity} founder owner`,read=pageReader(signal,host)
@@ -152,6 +167,9 @@ export async function findBusinessOwners(lead:Lead,options:Options={}):Promise<{
    for(let index=0;index<candidates.length && !signal.aborted;index+=3){
    const results=await Promise.all(candidates.slice(index,index+3).map(async hit=>{
    const page=await read(hit.url);if(!page || (hostOf(page.url)!==host && !aboutCompany(lead,page.html)))return []
+   // A shared brand is insufficient: Tally forms and Tally accounting are different
+   // businesses. External biographies must tie the person to this website explicitly.
+   if(host && hostOf(page.url)!==host && !mentionsWebsite(page.html,host))return []
    const prose=extractPeople(page.text).filter(person=>isBusinessOwner(person.title) && isUsablePerson(person.fullName,person.title))
    const cards=contactFindingsFromHtml(page.html,page.url).people.filter(person=>isBusinessOwner(person.title) && isUsablePerson(person.fullName,person.title))
    return [...new Map([...cards,...prose.map(person=>({...person,evidence:page.url,linkedinUrl:''}))].map(person=>[normal(person.fullName),person])).values()].filter(person=>{
@@ -178,8 +196,9 @@ export async function findBusinessOwners(lead:Lead,options:Options={}):Promise<{
 }
 
 /** Snippets guide discovery; only the linked public page can establish a mailbox. */
-export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:string},options:Options={}):Promise<{email:string;source:string;error:string|null}>{
+export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:string},options:Options={}):Promise<{email:string;source:string;error:string|null;emailEvidence?:'page'|'search-index'}>{
  const empty={email:'',source:'',error:null as string|null},signal=budget(options.signal),host=hostOf(lead.website),read=pageReader(signal,host,options.pageCache)
+ const searchController=new AbortController(),searchSignal=AbortSignal.any([signal,searchController.signal])
  if(!searchIdentity(lead))return empty
  try{
   let ownerProof:PublicPage|undefined
@@ -192,22 +211,30 @@ export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:
    const unique=new Map(matches.filter((match):match is NonNullable<typeof match>=>Boolean(match)).map(match=>[match.email,match]));if(unique.size===1)return [...unique.values()][0]
   }
   const query=`"${owner.fullName}" ${searchIdentity(lead)} email address`
-  const verify=async(hits:PublicSearchHit[])=>{
+  let indexedMatch:{email:string;source:string;error:null;emailEvidence:'search-index'}|null=null
+  const verify=async(hits:PublicSearchHit[],allowIndexed=false)=>{
    const candidates=preferredHits([...new Map(hits.filter(hit=>isPublicSourceUrl(hit.url) && (hostOf(hit.url)===host || normal(`${hit.title} ${hit.description}`).includes(normal(owner.fullName)))).map(hit=>[hit.url,hit])).values()],host).slice(0,6)
    // A public register may follow three official pages which contain no mailbox. Try the
    // second bounded batch only when the preferred sources have not produced a verified email.
    for(let index=0;index<candidates.length && !signal.aborted;index+=3){
-    const matches=await Promise.all(candidates.slice(index,index+3).map(async hit=>{const page=await read(hit.url);if(!page)return null;const email=publishedMail(page,lead,owner,ownerProof);return email?{email,source:page.url,error:null}:null}))
+    const matches=await Promise.all(candidates.slice(index,index+3).map(async hit=>{
+     const page=await read(hit.url)
+     if(!page){
+      const email=allowIndexed?indexedOwnerMail(hit,lead,owner,ownerProof):''
+      if(email && !indexedMatch)indexedMatch={email,source:hit.url,error:null,emailEvidence:'search-index'}
+      return null
+     }
+     const email=publishedMail(page,lead,owner,ownerProof);return email?{email,source:page.url,error:null}:null
+    }))
     const match=matches.find(Boolean);if(match)return match
    }
    return null
   }
-  // Once the owner is known, an official FAQ may publish only their first name beside the
-  // mailbox. Run the two free index queries together, then rank their combined sources before
-  // reading pages. This does not add a second serial search delay or a paid site: query.
+  // Process independent sources as they finish. A slow sitemap or blocked free index must
+  // not hold a completed provider result (or a published official email) behind it.
   const firstName=ownerIdentityKey(owner.fullName).split(' ')[0]
-  const searches=[publicHits(query,options,signal)]
-  if(host && firstName?.length>=3)searches.push(searchPublicSources(`site:${host} "${firstName}" email`,signal))
+  const searches=[publicHits(query,options,searchSignal)]
+  if(host && firstName?.length>=3)searches.push(searchPublicSources(`site:${host} "${firstName}" email`,searchSignal))
   const searchCount=searches.length
   if(host){
    const pageKey=(value:string)=>{try{const url=new URL(value);return hostOf(value)+url.pathname.replace(/\/$/,'')+url.search}catch{return value}}
@@ -215,20 +242,33 @@ export async function findOwnerEmail(lead:Lead,owner:{fullName:string;evidence?:
    // URL normalization may have removed www even when the apex serves a different product.
    // Use the same-business origin actually reached by the verified owner biography.
    const website=ownerProof && hostOf(ownerProof.url)===host?new URL('/',ownerProof.url).href:lead.website
-   searches.push(discoverOwnerContactPages(website,owner.fullName,signal).then(urls=>urls.filter(url=>!scanned.has(pageKey(url))).map(url=>({url,title:'Official website page',description:''}))))
-   searches.push(discoverOwnerStoryPages(website,owner,signal,ownerProof?[ownerProof]:[]).then(urls=>urls.filter(url=>!scanned.has(pageKey(url))).map(url=>({url,title:'Official founder story',description:''}))))
+   searches.push(discoverOwnerContactPages(website,owner.fullName,searchSignal).then(urls=>urls.filter(url=>!scanned.has(pageKey(url))).map(url=>({url,title:'Official website page',description:''}))))
+   searches.push(discoverOwnerStoryPages(website,owner,searchSignal,ownerProof?[ownerProof]:[]).then(urls=>urls.filter(url=>!scanned.has(pageKey(url))).map(url=>({url,title:'Official founder story',description:''}))))
   }
-  const indexes=await Promise.allSettled(searches)
-  signal.throwIfAborted()
-  let match=await verify(indexes.flatMap(result=>result.status==='fulfilled'?result.value:[]))
-  if(!match && options.key && !signal.aborted){
-   const paid=await searchOrganicLive(options.key,query,locationForLead(lead),signal)
-   match=await verify(paid.hits)
-   if(paid.error && !match)return {...empty,error:paid.error}
+  let providerError:string|null=null
+  if(options.key){
+   // The owner is already identified. Do not require a company keyword in the index:
+   // profile titles often contain only the person's name. A namesake at another company
+   // still fails the affiliation check on the fetched source page in publishedMail.
+   const paidQuery=`"${owner.fullName}" email`
+   searches.push(searchOrganicLive(options.key,paidQuery,locationForLead(lead),searchSignal).then(paid=>{providerError=paid.error;return paid.hits}))
   }
+  type Outcome={index:number;match:Awaited<ReturnType<typeof verify>>;error?:unknown}
+  const pending=new Map<number,Promise<Outcome>>()
+  searches.forEach((search,index)=>pending.set(index,search.then(hits=>verify(hits,Boolean(options.key) && index===searches.length-1)).then(match=>({index,match}),error=>({index,match:null,error}))))
+  const failures=new Map<number,unknown>()
+  while(pending.size){
+   const result=await Promise.race(pending.values());pending.delete(result.index)
+   signal.throwIfAborted()
+   if(result.match)return result.match
+   if(result.error)failures.set(result.index,result.error)
+  }
+  if(indexedMatch)return indexedMatch
+  if(providerError)return {...empty,error:providerError}
   // Empty sitemap/story results are not successful search responses. Surface an index
   // outage only after trying the official sources, rather than calling it "not found".
-  if(!match && !options.key && indexes.slice(0,searchCount).every(result=>result.status==='rejected'))throw (indexes[0] as PromiseRejectedResult).reason
-  return match ?? {...empty,error:signal.aborted?'Public email search reached its time limit. Retry this website.':null}
+  if(!options.key && Array.from({length:searchCount},(_,index)=>index).every(index=>failures.has(index)))throw failures.get(0)
+  return empty
  }catch(error){if(options.signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError');return {...empty,error:signal.aborted?'Public email search reached its time limit. Retry this website.':error instanceof Error?error.message:'Public email search could not finish.'}}
+ finally{searchController.abort()}
 }

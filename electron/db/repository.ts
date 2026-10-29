@@ -133,6 +133,7 @@ export interface ImportedLead {
 
 export interface DecisionMakerRow {  id: string
   source: string
+  email_evidence: 'page' | 'search-index'
   lead_id: string
   full_name: string
   title: string
@@ -970,7 +971,7 @@ export class Repository {
    */
   decisionMakerLedger(workspaceId: string): DecisionMakerRow[] {
     return this.db.query<DecisionMakerRow>(
-        `select d.id, d.lead_id, d.full_name, d.title, d.email, d.phone, d.linkedin_url, d.source, d.created_at,
+        `select d.id, d.lead_id, d.full_name, d.title, d.email, d.email_evidence, d.phone, d.linkedin_url, d.source, d.created_at,
               l.name as lead_name, l.website as lead_website, l.area as lead_area, l.last_scanned_at,
               l.address as lead_address, l.phone as lead_phone,
               coalesce((select group_concat(c.value, char(10)) from lead_contacts c where c.lead_id=l.id and c.kind='email'), '') as business_emails,
@@ -1323,6 +1324,7 @@ export class Repository {
     linkedinUrl?: string
     source?: string
     replaceEmail?: boolean
+    emailEvidence?: 'page' | 'search-index'
   }): { id: string } {
     const lead = this.db.one<{ workspace_id: string }>('select workspace_id from leads where id = ?', [input.leadId])
     const workspaceId = lead?.workspace_id ?? input.workspaceId
@@ -1336,16 +1338,17 @@ export class Repository {
       this.db.run(
         `update decision_makers set full_name = ?, title = coalesce(nullif(?, ''), title),
          email = case when ? then ? else coalesce(nullif(?, ''), email) end, phone = coalesce(nullif(?, ''), phone),
-         linkedin_url = coalesce(nullif(?, ''), linkedin_url), source = coalesce(nullif(?, ''), source)
+         linkedin_url = coalesce(nullif(?, ''), linkedin_url), source = coalesce(nullif(?, ''), source),
+         email_evidence = case when ? then ? else email_evidence end
          where id = ?`,
-        [fullName, input.title ?? '', input.replaceEmail ? 1 : 0, input.email ?? '', input.email ?? '', input.phone ?? '', input.linkedinUrl ?? '', input.source ?? '', existing.id],
+        [fullName, input.title ?? '', input.replaceEmail ? 1 : 0, input.email ?? '', input.email ?? '', input.phone ?? '', input.linkedinUrl ?? '', input.source ?? '', input.replaceEmail || input.email ? 1 : 0, input.emailEvidence ?? 'page', existing.id],
       )
       return { id: existing.id }
     }
     const id = randomUUID()
     this.db.run(
-      `insert into decision_makers (id, lead_id, workspace_id, full_name, title, email, phone, linkedin_url, source, created_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `insert into decision_makers (id, lead_id, workspace_id, full_name, title, email, phone, linkedin_url, source, created_at, email_evidence)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.leadId,
@@ -1357,6 +1360,7 @@ export class Repository {
         input.linkedinUrl ?? '',
         input.source ?? 'website',
         nowIso(),
+        input.emailEvidence ?? 'page',
       ],
     )
     return { id }

@@ -195,6 +195,7 @@ function rowsFor(
       'Business name': (row) => text(row.name), Domain: LEAD_COLUMNS.Domain,
       Owner: (row) => text(row.full_name),
       'Owner email': (row) => ownerEmail(text(row.full_name),text(row.email)),
+      'Email evidence': (row) => row.email ? row.email_evidence==='search-index' ? 'Search index; live page unavailable' : 'Published page' : '',
       Source: (row) => text(row.source),
     }, rows }
   }

@@ -366,7 +366,7 @@ export class EnrichmentRunner {
           this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Searching public sources for ${owner.fullName}'s email…`})
           const knownSources=this.db.query<OwnerEmailSource & {title:string}>(`select d.full_name as fullName,d.title,d.email,d.source,l.website from decision_makers d join leads l on l.id=d.lead_id where d.workspace_id=? and d.lead_id<>? and d.email<>''`,[job.workspace_id,leadId]).filter(person=>isBusinessOwner(person.title) && ownerIdentityKey(person.fullName)===ownerIdentityKey(owner.fullName) && ownerEmail(person.fullName,person.email))
           const match=await waitForAbort(findOwnerEmail(lead,owner,{key:this.options.deepKey?.(),signal,knownSources,scannedPages:findings.pagesRead,pageCache,searchWeb:(query,abort)=>this.enricher.searchPublicWeb(query,abort)}),signal)
-          if (match.email) { owner.email=match.email;owner.evidence=match.source }
+          if (match.email) { owner.email=match.email;owner.evidence=match.source;owner.emailEvidence=match.emailEvidence ?? 'page' }
           else if (match.error) siteFailure=`Public email search for ${owner.fullName} could not finish: ${match.error}`
         }))
       }
@@ -419,6 +419,7 @@ export class EnrichmentRunner {
             fullName: person.fullName,
             title: person.title,
             email: person.email,
+            emailEvidence: person.emailEvidence,
             replaceEmail: !siteFailure,
             phone: person.phone,
             linkedinUrl: person.linkedinUrl,

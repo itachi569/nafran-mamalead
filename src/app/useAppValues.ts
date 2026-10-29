@@ -3122,7 +3122,7 @@ export function useAppValues() {
     try {
       const result = await db.exports.write({ kind: 'people', format, limit: dmVisiblePeople.length,
         delimiter: 'csv', fileName: `decision-makers.${format}`, leadIds: session.leadIds,
-        columns: ['Business name', 'Domain', 'Owner', 'Owner email', 'Source'],
+        columns: ['Business name', 'Domain', 'Owner', 'Owner email', 'Email evidence', 'Source'],
       })
       if (!result || result.rows === 0) return
       if (session.generation === dmSession.current.generation) {
@@ -4224,7 +4224,7 @@ export function useAppValues() {
     // A person can only be named once their company page was read, so the leads with a LinkedIn
     // profile are the population the match works from.
     dmPeopleListed: dmPeople.funnel?.withLinkedin ?? 0,
-    dmRows: dmVisiblePeople.slice(0, dmContactLimit).map(person=>({id:person.id,leadId:person.lead_id,name:person.full_name,lead:person.lead_name,domain:hostOf(person.lead_website),email:person.email,source:person.source})),
+    dmRows: dmVisiblePeople.slice(0, dmContactLimit).map(person=>({id:person.id,leadId:person.lead_id,name:person.full_name,lead:person.lead_name,domain:hostOf(person.lead_website),email:person.email,emailEvidence:person.email_evidence,source:person.source})),
     dmTotal: dmPeople.funnel?.total ?? 0,
     dmWithLinkedin: dmPeople.funnel?.withLinkedin ?? 0,
     dmWithWebsite: dmPeople.funnel?.withWebsite ?? 0,

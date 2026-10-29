@@ -137,6 +137,7 @@ export class LocalDatabase {
   private addMissingColumns(): void {
     const additions: [table: string, column: string, definition: string][] = [
       ['enrichment_jobs', 'options', "text not null default '{}'"],
+      ['decision_makers', 'email_evidence', "text not null default 'page'"],
       ['leads', 'last_scanned_at', 'text'],
       ['lead_contacts', 'validation_status', "text check (validation_status is null or validation_status in ('valid', 'invalid', 'risky', 'unknown'))"],
       ['lead_contacts', 'validation_provider', 'text'],

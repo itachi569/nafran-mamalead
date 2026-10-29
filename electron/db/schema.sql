@@ -167,6 +167,7 @@ create table if not exists decision_makers (
   full_name text not null,
   title text not null default '',
   email text not null default '',
+  email_evidence text not null default 'page',
   phone text not null default '',
   linkedin_url text not null default '',
   source text not null default 'website',
