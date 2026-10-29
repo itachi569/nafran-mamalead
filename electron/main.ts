@@ -11,6 +11,7 @@ import { normaliseQuery, type StartRunRequest } from './scraper/types'
 import { closeDatabase, openDatabase } from './db'
 import { registerLocalDatabase } from './db/ipc'
 import { EnrichmentRunner } from './enrichment/runner'
+import { GoogleOwnerBrowser } from './enrichment/google-browser'
 import { checkKey } from './enrichment/dataforseo'
 import { isUsableEmail, isUsablePerson } from './enrichment/website'
 import { readApifyCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
@@ -55,6 +56,9 @@ if (ownsInstance) {
 }
 const runner = new ScrapeRunner()
 let enricher: EnrichmentRunner | null = null
+const ownerBrowser = new GoogleOwnerBrowser(join(app.getPath('userData'),'owner-google-chrome'),status=>broadcast('owner-browser:status',status))
+ipcMain.handle('owner-browser:status',()=>ownerBrowser.status())
+ipcMain.handle('owner-browser:open',()=>ownerBrowser.open())
 
 /**
  * The DataForSEO credential, held in memory for as long as the app is open.
@@ -1094,16 +1098,12 @@ ipcMain.handle('deep:check', async (_event, payload: { key?: string } = {}) => {
 /**
  * Queues the two-step owner/email pass over the leads supplied by the Decision Makers page.
  *
- * The worker first asks for a founder/owner and then runs a depth-10 email search for that person.
- * It goes through the same queue as the free passes, so one progress bar and one Stop cover it, and
- * a key that is missing is refused here rather than paid for later.
+ * The worker uses MamaLead Chrome for an owner/email query and, only when needed, a named query.
+ * The existing license and company credit checks still apply; no search API key is required.
  */
 ipcMain.handle('deep:run', async (_event, payload: { leadIds?: string[] } = {}) => {
   try { await requireActiveLicense('decisionMaker') }
   catch (error) { return { queued: 0, error: error instanceof Error ? error.message : 'A license is required.' } }
-  if (!deepApiKey) {
-    return { queued: 0, error: 'Add a DataForSEO key in Settings → Account before running a deep pass.' }
-  }
   try {
     const { db, repository } = openDatabase()
     const workspace = db.ensureWorkspace()
@@ -1205,6 +1205,8 @@ if (ownsInstance) app.whenReady().then(() => {
     // The window owns the DataForSEO credential: it is entered in Settings, it is read back from
     // there, and it is handed over for as long as the app is open. Nothing here writes it down.
     deepKey: () => deepApiKey,
+    prepareOwnerSearch: (signal,progress)=>ownerBrowser.prepare(signal,progress),
+    ownerSearch: (query,signal,progress)=>ownerBrowser.search(query,signal,progress),
   })
   // Resume durable enrichment work after a restart. The runner prioritises fresh one-site scans,
   // so a saved queue cannot make a domain import look frozen while the window is open.
@@ -1222,9 +1224,17 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+let closingOwnerBrowser=false
+app.on('before-quit',event=>{
+  if(closingOwnerBrowser || !ownerBrowser.status().open)return
+  event.preventDefault();closingOwnerBrowser=true;enricher?.stop()
+  void ownerBrowser.close().finally(()=>app.quit())
+})
+
 app.on('will-quit', () => {
   updates.dispose()
   enricher?.stop()
+  void ownerBrowser.close()
   // The app's own browser is a browser of its own, so it outlives the app unless it is closed here.
   // A window armed for a run counts: the run it was waiting for is not going to happen now.
   void armedBrowser?.close().catch(() => undefined)

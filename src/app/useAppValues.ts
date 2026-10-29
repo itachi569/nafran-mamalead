@@ -4082,9 +4082,7 @@ export function useAppValues() {
     queuePhone: () => void queueEnrichment('phone'),
     queueSocial: () => void queueEnrichment('social'),
     queueDecisionMakers: () => dmFinder.scanImported(dmSession.current.leadIds),
-    // The deep pass, which the design prices at one credit per lead: one paid search each, for the
-    // people a site does not name. It needs the user's own DataForSEO key, so the button says what
-    // is missing rather than quietly doing nothing.
+    // Retain saved API settings for compatibility. Owner scans now use MamaLead Chrome.
     deepKeySet: deepKey || deepKeyFromEnvironment ? '1' : '0',
     deepKeyLabel: deepKey ? describeDeepKey(deepKey) : deepKeyFromEnvironment ? 'Set by this machine' : 'Not set',
     deepKeyDraft,
@@ -4094,7 +4092,7 @@ export function useAppValues() {
         ? 'Set by this machine’s environment. Saving one here takes over from it.'
         : deepKey
           ? 'Press Test to check it against the account.'
-          : 'A DataForSEO key is needed. Add one here to search for decision makers.',
+          : 'Optional API credential. Decision Makers uses MamaLead Chrome and does not need this key.',
     onDeepKeyInput: (event: React.InputEvent<HTMLInputElement>) => setDeepKeyDraft(event.currentTarget.value),
     saveDeepKey: () => {
       const saved = storeDeepKey(deepKeyDraft)
@@ -4149,10 +4147,6 @@ export function useAppValues() {
       const bridge = typeof window === 'undefined' ? undefined : window.desktop?.deep
       if (!bridge?.run) {
         flash('The deep pass is only available in the desktop app.')
-        return
-      }
-      if (!deepKey && !deepKeyFromEnvironment) {
-        flash('Add a DataForSEO key in Settings → Account before running a deep pass.')
         return
       }
       const selectedLeadIds = dmSessionLeads.slice(0, Math.max(1, Math.min(deepLeadLimit, dmSessionLeads.length))).map((lead) => lead.id)

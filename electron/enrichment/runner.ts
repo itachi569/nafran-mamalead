@@ -44,6 +44,8 @@ export interface EnrichmentOptions {
    * writes it: the main process holds it in memory only, so there is no file of it to leak.
    */
   deepKey?: () => string
+  ownerSearch?: (query:string,signal:AbortSignal,progress:(message:string)=>void) => Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null}>
+  prepareOwnerSearch?: (signal:AbortSignal,progress:(message:string)=>void) => Promise<void>
 }
 
 // Keep a small gap between sites so a multi-lead pass stays polite without adding a visible pause
@@ -380,6 +382,8 @@ export class EnrichmentRunner {
     let processed=0,found=0,failed=0
     const outcomes:NonNullable<EnrichmentProgress['outcomes']>={}
     const progress=(leadName:string,message:string,status:EnrichmentProgress['status']='running')=>this.emit({jobId:job.id,kind,status,processed,total:leadIds.length,found,failed,leadName,message,outcomes:{...outcomes}})
+    // Browser setup and user sign-in happen before any company credit is consumed.
+    await waitForAbort(Promise.resolve(this.options.prepareOwnerSearch?.(signal,message=>progress('',message))),signal)
     for(const leadId of leadIds){
       signal.throwIfAborted()
       await waitForAbort(Promise.resolve(this.options.authorize?.(kind,false)),signal)
@@ -387,7 +391,11 @@ export class EnrichmentRunner {
       if(!lead){processed++;failed++;outcomes[leadId]={status:'error',searches:0,error:'Saved business no longer exists.'};progress('','Skipped a missing business.');continue}
       try{
         await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
-        const result=await waitForAbort(findOwnerContact(lead,{key:this.options.deepKey?.(),signal,onStep:(step,_query,retrying)=>progress(lead.name,retrying?`Search ${step} of 2 · reconnecting to Google after a temporary error. Retrying this query once…`:step===1?`Search 1 of 2 · finding ${lead.name}'s founder and email…`:`Search 2 of 2 · checking the named owner's email…`)}),signal)
+        const result=await waitForAbort(findOwnerContact(lead,{key:this.options.deepKey?.(),signal,
+          // Interactive Google checks have their own deadline. Normal pages still return immediately.
+          timeoutMs:this.options.ownerSearch?12*60*1000:undefined,
+          search:this.options.ownerSearch?(query,abort)=>this.options.ownerSearch!(query,abort,message=>progress(lead.name,message)):undefined,
+          onStep:(step,_query,retrying)=>progress(lead.name,retrying?`Search ${step} of 2 · reconnecting to Google after a temporary error. Retrying this query once…`:step===1?`Search 1 of 2 · finding ${lead.name}'s founder and email…`:`Search 2 of 2 · checking the named owner's email…`)}),signal)
         signal.throwIfAborted()
         if(result.error){failed++;outcomes[leadId]={status:'error',searches:result.searches,error:result.error}}
         else {
@@ -403,6 +411,9 @@ export class EnrichmentRunner {
         }
         processed++
         progress(lead.name,result.error?`${lead.name} · ${result.error}`:`${lead.name} · ${outcomes[leadId].status==='found'?'Owner email found':'Not published'} · ${result.searches} search${result.searches===1?'':'es'}`)
+        // A closed/blocked browser affects the whole batch. Leave remaining rows unscanned and
+        // uncharged rather than repeating the same failure for every business.
+        if(this.options.ownerSearch && result.error && /MamaLead Chrome|Google (?:verification|results|sign-in)/i.test(result.error))break
       }catch(error){
         if(signal.aborted)throw new DOMException('Enrichment cancelled','AbortError')
         if(error instanceof LicenseAccessError)throw error

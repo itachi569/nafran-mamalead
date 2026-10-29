@@ -146,6 +146,7 @@ function publishedMail(page:PublicPage,lead:Lead,owner:{fullName:string},ownerPr
 export type OwnerContactResult = {people:FoundPerson[];searches:number;retries:number;error:string|null}
 type TwoSearchOptions = {
  key?:string;signal?:AbortSignal;
+ timeoutMs?:number;
  onStep?:(step:1|2,query:string,retrying?:boolean)=>void;
  search?:(query:string,signal:AbortSignal)=>Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null}>;
 }
@@ -161,7 +162,7 @@ export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Pr
  const result:OwnerContactResult={people:[],searches:0,retries:0,error:null}
  if(!lead.name.trim() && !hostOf(lead.website))return {...result,error:'This business has no usable name or website.'}
  if(!options.key?.trim() && !options.search)return {...result,error:'Owner search is not configured. Add the DataForSEO credential in Settings → Account.'}
- const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),AbortSignal.timeout(60_000)])
+ const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),AbortSignal.timeout(options.timeoutMs ?? 60_000)])
  const host=hostOf(lead.website),cache:OwnerPageCache=new Map(),pages:PublicPage[]=[],unreadable=new Set<string>()
  const read=(url:string)=>{
   let value=cache.get(url)

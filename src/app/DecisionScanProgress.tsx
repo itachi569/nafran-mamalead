@@ -6,7 +6,7 @@ export function DecisionScanProgress({scan}:{scan:FinderScan<{leadId:string}>}) 
   const title=scan.stopping?'Stopping scan…':scan.stopped?'Scan stopped':scan.scanning?(p.current?'Scanning leads':'Preparing scan…'):p.failed?'Finished with issues':p.remaining?'Scan incomplete':'Scan complete'
   const secondSearch=/Search 2 of 2/.test(p.message)
   const failedIds=[...new Set(scan.rows.filter(row=>row.lookupOutcome?.status==='error').map(row=>row.leadId))]
-  const phase=scan.stopping?'Saving your progress…':!p.current?'Getting things ready…':/reconnecting to Google/i.test(p.message)?'Reconnecting to search…':secondSearch?"Checking the owner's email…":'Finding the owner & email…'
+  const phase=scan.stopping?'Saving your progress…':/Sign in to Google|Google needs your attention/i.test(p.message)?'Continue in MamaLead Chrome…':!p.current?'Getting things ready…':/reconnecting to Google/i.test(p.message)?'Reconnecting to search…':secondSearch?"Checking the owner's email…":'Finding the owner & email…'
   return <section data-card="1" data-decision-progress="1" className="dm-progress-card">
     <div className="dm-progress-heading">
       <div><h2 data-fcov="dm">Contact Coverage</h2><p>{scan.scanOn?'Owner email checks for every selected business.':'Coverage of your saved owner results.'}</p></div>

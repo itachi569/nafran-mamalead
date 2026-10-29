@@ -18,6 +18,7 @@ import { ImportWebsitesDialog } from './ImportWebsitesDialog'
 import { SocialProfileLinks } from './SocialProfileLinks'
 import { EmailValidityChoice } from './EmailValidityChoice'
 import { DecisionScanProgress } from './DecisionScanProgress'
+import { OwnerBrowserControl } from './OwnerBrowserControl'
 import mamaLeadIcon from '../../build/mamalead-icon.png'
 
 /**
@@ -2219,6 +2220,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               <>
               <div data-saved-search-page="dm" data-searching={Boolean(V.fDm.q.trim())} style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
                 <div><h1 style={{margin:0,fontSize:'clamp(26px,2.6vw,36px)',lineHeight:1.1,fontWeight:400,letterSpacing:'-.03em'}}>Decision Makers</h1><p style={{margin:'10px 0 0',maxWidth:'76ch',fontSize:14,lineHeight:1.6,color:'#5A5F5C'}}>Find the business owner's published email. Import websites to check owner/founder evidence and a matching direct email.</p></div>
+                <OwnerBrowserControl/>
                 <div data-socbar="1" style={{position: "sticky", top: "12px", zIndex: "30", padding: "14px 16px", borderRadius: "22px", background: "#F5F5F4", boxShadow: "0 18px 36px -26px rgba(28,28,28,.55)"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
                     <div style={{display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "220px", height: "44px", padding: "0 16px", borderRadius: "999px", background: "#EAEAE8"}}>
