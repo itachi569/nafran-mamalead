@@ -395,6 +395,7 @@ export class EnrichmentRunner {
           // Interactive Google checks have their own deadline. Normal pages still return immediately.
           timeoutMs:this.options.ownerSearch?12*60*1000:undefined,
           search:this.options.ownerSearch?(query,abort)=>this.options.ownerSearch!(query,abort,message=>progress(lead.name,message)):undefined,
+          onSources:(step,checked,total)=>progress(lead.name,`Search ${step} of 2 · checking published sources · ${checked} of ${total} pages checked…`),
           onStep:(step,_query,retrying)=>progress(lead.name,retrying?`Search ${step} of 2 · reconnecting to Google after a temporary error. Retrying this query once…`:step===1?`Search 1 of 2 · finding ${lead.name}'s founder and email…`:`Search 2 of 2 · checking the named owner's email…`)}),signal)
         signal.throwIfAborted()
         if(result.error){failed++;outcomes[leadId]={status:'error',searches:result.searches,error:result.error}}

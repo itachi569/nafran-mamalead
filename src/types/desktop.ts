@@ -514,7 +514,7 @@ export interface EmailValidityProgress {
   batchSize: number
 }
 
-export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean}
+export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean;savedSession?:boolean}
 
 export interface DesktopApi {
   ownerBrowser: {

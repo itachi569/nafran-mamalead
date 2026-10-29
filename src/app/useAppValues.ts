@@ -3106,6 +3106,7 @@ export function useAppValues() {
     onExport: () => void runDecisionExport('xlsx'),
     // Bring this import's people and direct export buttons into view after the pass settles.
     resultSelector: '[data-fres="dm"]',
+    progressSelector: '[data-decision-progress]',
     filterItemsOnSearch: true,
   })
 

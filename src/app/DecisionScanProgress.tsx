@@ -3,16 +3,17 @@ import './decision-scan-progress.css'
 
 export function DecisionScanProgress({scan}:{scan:FinderScan<{leadId:string}>}) {
   const p=scan.progress
-  const title=scan.stopping?'Stopping scan…':scan.stopped?'Scan stopped':scan.scanning?(p.current?'Scanning leads':'Preparing scan…'):p.failed?'Finished with issues':p.remaining?'Scan incomplete':'Scan complete'
+  const waitingForGoogle=scan.scanning && /Sign in to Google|Google needs your attention/i.test(p.message)
+  const title=scan.stopping?'Stopping scan…':scan.stopped?'Scan stopped':waitingForGoogle?'Waiting for Google':scan.scanning?(p.current?'Scanning leads':'Preparing scan…'):p.failed?'Finished with issues':p.remaining?'Scan incomplete':'Scan complete'
   const secondSearch=/Search 2 of 2/.test(p.message)
   const failedIds=[...new Set(scan.rows.filter(row=>row.lookupOutcome?.status==='error').map(row=>row.leadId))]
-  const phase=scan.stopping?'Saving your progress…':/Sign in to Google|Google needs your attention/i.test(p.message)?'Continue in MamaLead Chrome…':!p.current?'Getting things ready…':/reconnecting to Google/i.test(p.message)?'Reconnecting to search…':secondSearch?"Checking the owner's email…":'Finding the owner & email…'
+  const phase=scan.stopping?'Saving your progress…':waitingForGoogle?'Your Google connection needs attention':!p.current?'Getting things ready…':/checking published sources/i.test(p.message)?'Checking published sources…':/reconnecting to Google/i.test(p.message)?'Reconnecting to search…':secondSearch?"Checking the owner's email…":'Finding the owner & email…'
   return <section data-card="1" data-decision-progress="1" className="dm-progress-card">
     <div className="dm-progress-heading">
       <div><h2 data-fcov="dm">Contact Coverage</h2><p>{scan.scanOn?'Owner email checks for every selected business.':'Coverage of your saved owner results.'}</p></div>
       {scan.scanning?<button type="button" className="dm-stop" onClick={scan.stop} disabled={scan.stopping}><span aria-hidden="true">■</span>{scan.stopping?'Stopping…':'Stop scan'}</button>:<div className="dm-progress-actions">{failedIds.length>0 && <button type="button" className="dm-stop" onClick={()=>scan.scanImported(failedIds)}>Retry {failedIds.length} failed {failedIds.length===1?'business':'businesses'}</button>}<button type="button" className="dm-refresh" onClick={scan.refresh}>Refresh results</button></div>}
     </div>
-    {scan.scanOn && <div className={`dm-progress-panel${scan.scanning?' dm-search-live':''}`} data-stopping={scan.stopping || undefined}>
+    {scan.scanOn && <div className={`dm-progress-panel${scan.scanning?' dm-search-live':''}`} data-stopping={scan.stopping || waitingForGoogle || undefined}>
       {scan.scanning && <>
         <div className="dm-search-hero">
           <div className="dm-search-orbit" aria-hidden="true">
@@ -21,10 +22,11 @@ export function DecisionScanProgress({scan}:{scan:FinderScan<{leadId:string}>}) 
             <span className="dm-orbit-mail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg></span>
           </div>
           <div className="dm-search-copy" role="status" aria-live="polite">
-            <span className="dm-live-label"><i aria-hidden="true"/>{scan.stopping?'FINISHING UP':'OWNER LOOKUP IN PROGRESS'}</span>
+            <span className="dm-live-label"><i aria-hidden="true"/>{scan.stopping?'FINISHING UP':waitingForGoogle?'ACTION NEEDED':'OWNER LOOKUP IN PROGRESS'}</span>
             <h3>{phase}</h3>
             <p>{p.current || 'Preparing your selected businesses'}<span aria-hidden="true" className="dm-wait-dots"><i/><i/><i/></span></p>
-            <small>{scan.stopping?'Completed results will stay saved.':"Please wait while we check public sources. Results appear below as they're ready."}</small>
+            <small>{scan.stopping?'Completed results will stay saved.':waitingForGoogle?'The scan is waiting for you. Complete the Google step to continue.':"Please wait while we check public sources. Results appear below as they're ready."}</small>
+            {waitingForGoogle && <button type="button" className="dm-browser-help" onClick={()=>document.querySelector('[data-owner-browser]')?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'})}>Open Google connection ↑</button>}
           </div>
         </div>
         <div className="dm-search-steps" aria-label="Current business search steps">

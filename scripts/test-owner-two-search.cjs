@@ -17,6 +17,13 @@ const response=(...hits)=>({hits,error:null})
 async function main(){
  assert.equal(ownerContactQuery(lead),'name of northstar.test founder and his email must be present')
  assert.equal(ownerContactQuery(lead,'Janet Cole'),'Janet Cole owner of northstar.test email address')
+ // The best source already proves both fields. Slow peers must not delay it.
+ let peerAborts=0,sourceSearches=0;const sourceProgress=[],started=Date.now()
+ global.fetch=async(raw,{signal})=>String(raw).endsWith('/about')?new Response(about+email):new Promise((_,reject)=>{
+  const stop=()=>{peerAborts++;reject(new DOMException('Aborted','AbortError'))};if(signal.aborted)stop();else signal.addEventListener('abort',stop,{once:true})
+ })
+ const fast=await findOwnerContact(lead,{search:async()=>{sourceSearches++;return response(hit('about'),hit('slow-a'),hit('slow-b'))},onSources:(...p)=>sourceProgress.push(p)})
+ assert.equal(fast.people[0].email,'janet@northstar.test');assert.equal(sourceSearches,1);assert.ok(Date.now()-started<1500,'Complete first source waited for slower peers');assert.equal(peerAborts,2);assert.deepEqual(sourceProgress,[[1,0,3],[1,1,3]]);checks.push('verified first source returns immediately and cancels slow peer reads')
  await scenario('combined result returns after exactly one search',{'https://northstar.test/about':about+email},[response(hit('about'))],(r,q)=>{assert.equal(q.length,1);assert.equal(r.people[0].email,'janet@northstar.test')})
  await scenario('owner-only first result triggers exactly one named email search',{'https://northstar.test/about':about,'https://northstar.test/contact':email},[response(hit('about')),response(hit('contact'))],(r,q)=>{assert.equal(q.length,2);assert.equal(q[1],ownerContactQuery(lead,'Janet Cole'));assert.equal(r.people[0].email,'janet@northstar.test');assert.equal(r.error,null)})
  await scenario('email absent after two searches keeps owner with blank email',{'https://northstar.test/about':about},[response(hit('about')),response(hit('about'))],(r,q,reads)=>{assert.equal(q.length,2);assert.equal(r.people[0].email,'');assert.equal(r.error,null);assert.equal(reads.length,1)})

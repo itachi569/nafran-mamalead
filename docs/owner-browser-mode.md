@@ -14,6 +14,14 @@ flags. Sign in directly on Google's page, close that Chrome window, then click
 the search controller. A saved-session hint allows future runs to reuse the
 profile, but it never replaces checking the actual Google session.
 
+Once connected, consecutive imports reuse the same Chrome process without
+focusing or restoring its window. After restarting MamaLead or closing the search
+window, the next scan reconnects the saved profile automatically and minimizes
+the newly opened window. **Show Chrome** remains an explicit foreground action.
+The card displays **Google sign-in saved** instead of repeating setup instructions.
+If MamaLead was restarted during the first manual login, **Connect saved sign-in**
+can resume setup after that login window is closed.
+
 Import websites and start the scan; **Show Chrome** restores the search window,
 including after it was minimized. To renew an expired login, stop the scan and
 choose **Sign in to Google** to reopen the normal manual window. Sign-in is never
@@ -30,6 +38,18 @@ Organic result links and AI Overview citations feed the existing public-source
 verification. AI answer text is not accepted as proof of an email. A direct owner
 email must match the established person; generic company inboxes and guessed
 addresses remain excluded. No established owner means no speculative second query.
+
+Starting a scan scrolls once to Contact Coverage, with Stop in view. Progress ticks
+do not override the user's subsequent scrolling; completion reveals the results.
+The panel distinguishes Google steps that need user action from active searching
+and displays how many linked source pages have been checked.
+
+Search reads begin at document commit instead of waiting for DOMContentLoaded,
+so a deferred third-party script cannot delay visible results. Normal navigation
+and DOM reading share a 15-second deadline (user verification has a separate wait).
+Up to three linked sources are prefetched, then inspected in priority order.
+A complete verified result returns immediately and aborts unnecessary peer reads;
+the two-query ceiling and source-validation rules remain unchanged.
 
 Sign-in happens before consuming a company credit. Google consent/verification
 pauses the scan for up to five minutes for the user. Stop cancels the wait. A closed

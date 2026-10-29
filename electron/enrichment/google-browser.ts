@@ -4,7 +4,7 @@ import {join} from 'node:path'
 import {chromium, type Browser, type Page} from 'playwright'
 import type {OrganicSearchHit} from './dataforseo'
 
-export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean}
+export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean;savedSession?:boolean}
 const SESSION_NAMES = new Set(['SID','__Secure-1PSID','__Secure-3PSID'])
 const pause = (ms:number,signal?:AbortSignal) => new Promise<void>((resolve,reject)=>{
   if(signal?.aborted){reject(new DOMException('Scan stopped','AbortError'));return}
@@ -54,7 +54,7 @@ export class GoogleOwnerBrowser {
   private closing=false
   private state:OwnerBrowserStatus={phase:'closed',message:'Sign in once in MamaLead Chrome. Internet required; no search API key.',open:false}
   constructor(private profile:string,private changed:(status:OwnerBrowserStatus)=>void=()=>{}){}
-  status(){return {...this.state}}
+  status(){return {...this.state,savedSession:existsSync(this.readyFile)}}
   private emit(phase:OwnerBrowserStatus['phase'],message:string){this.state={phase,message,open:Boolean(this.browser?.isConnected() || this.manual)};this.changed(this.status())}
   private get readyFile(){return join(this.profile,'mamalead-session-ready')}
   /** Sign-in runs in ordinary Chrome with no automation connection or debugging switches.
@@ -120,7 +120,7 @@ export class GoogleOwnerBrowser {
     if(!this.browser?.isConnected() && !existsSync(this.readyFile))return this.signIn()
     return this.connect()
   }
-  async connect(){
+  async connect(showWindow=true){
     if(this.manual)throw new Error('Finish signing in and close the MamaLead Chrome window first, then click Connect saved sign-in.')
     this.closing=false
     const alreadyConnected=Boolean(this.browser?.isConnected())
@@ -129,16 +129,18 @@ export class GoogleOwnerBrowser {
       await this.launching
     }
     if(!this.page || this.page.isClosed())this.page=await this.browser!.contexts()[0].newPage()
-    if(!alreadyConnected && !await this.signedIn()){
+    if(!await this.signedIn()){
       await this.close();rmSync(this.readyFile,{force:true})
       this.emit('error','No saved Google sign-in was found. Click Sign in to Google, finish signing in and close that Chrome window, then connect again.')
       throw new Error(this.state.message)
     }
     if(!alreadyConnected){writeFileSync(this.readyFile,'1\n','utf8');this.emit('ready','Google sign-in connected. Owner searches will use this saved account.')}
-    await this.page.bringToFront()
+    if(showWindow)await this.page.bringToFront()
     // BringToFront alone does not restore a minimized native Chrome window.
-    const session=await this.page.context().newCDPSession(this.page)
-    try{const {windowId}=await session.send('Browser.getWindowForTarget');await session.send('Browser.setWindowBounds',{windowId,bounds:{windowState:'normal'}})}catch{/* Some window managers have no native window bounds. */}finally{await session.detach()}
+    if(showWindow || !alreadyConnected){
+      const session=await this.page.context().newCDPSession(this.page)
+      try{const {windowId}=await session.send('Browser.getWindowForTarget');await session.send('Browser.setWindowBounds',{windowId,bounds:{windowState:showWindow?'normal':'minimized'}})}catch{/* Some window managers have no native window bounds. */}finally{await session.detach()}
+    }
     return this.status()
   }
   async signedIn(){
@@ -147,7 +149,13 @@ export class GoogleOwnerBrowser {
   }
   async prepare(signal:AbortSignal,progress:(message:string)=>void){
     while(this.searching)await pause(50,signal)
-    signal.throwIfAborted();await this.open();signal.throwIfAborted()
+    signal.throwIfAborted()
+    // Consecutive imports reuse the live session without restoring/focusing Chrome.
+    if(this.browser?.isConnected() && this.page && !this.page.isClosed() && await this.signedIn())return
+    // Reopen a saved session in the background after an app/browser restart.
+    if(existsSync(this.readyFile))await this.connect(false)
+    else await this.open()
+    signal.throwIfAborted()
     if(await this.signedIn())return
     const message='Sign in to Google in the normal Chrome window. Close that window, then click Connect saved sign-in in MamaLead to continue the scan.'
     progress(message)
@@ -172,8 +180,10 @@ export class GoogleOwnerBrowser {
     signal.addEventListener('abort',stop,{once:true})
     try{
       signal.throwIfAborted();this.emit('searching',`Searching Google: ${query}`)
-      await page.goto('https://www.google.com/search?'+new URLSearchParams({q:query,hl:'en',num:'10'}),{waitUntil:'domcontentloaded',timeout:20000}).catch(error=>{if(!/Timeout/.test(String(error)))throw error})
-      let deadline=Date.now()+12000,waiting=false
+      // Start reading once the document arrives. Slow scripts/ads must not hold up
+      // results already displayed; navigation and reading share one bounded window.
+      let deadline=Date.now()+15000,waiting=false
+      await page.goto('https://www.google.com/search?'+new URLSearchParams({q:query,hl:'en',num:'10'}),{waitUntil:'commit',timeout:12000})
       for(;;){
         signal.throwIfAborted()
         if(page.isClosed())throw new Error('MamaLead Chrome was closed. Open it and retry the scan.')
@@ -181,7 +191,11 @@ export class GoogleOwnerBrowser {
           rmSync(this.readyFile,{force:true})
           throw new Error('Google sign-in needs to be renewed. Stop this scan and use Sign in to Google to open the normal sign-in window.')
         }
-        const result=await readGoogleResults(page)
+        const result=await readGoogleResults(page).catch(error=>{
+          if(/Execution context was destroyed|Cannot find context|most likely because of a navigation/i.test(String(error)))return null
+          throw error
+        })
+        if(!result){if(Date.now()>deadline)throw new Error('Google results could not be read. Retry this search.');await pause(250,signal);continue}
         if(result.challenge){
           if(!waiting){waiting=true;deadline=Date.now()+5*60*1000;const message='Google needs your attention. Complete the sign-in, consent or verification in MamaLead Chrome; the scan will resume.';this.emit('verification',message);progress(message);await page.bringToFront()}
         }else{
@@ -192,7 +206,7 @@ export class GoogleOwnerBrowser {
           }
         }
         if(Date.now()>deadline)throw new Error(waiting?'Google verification was not completed. Finish the check and retry.':'Google results could not be read. Open MamaLead Chrome, check the search page, then retry.')
-        await pause(500,signal)
+        await pause(250,signal)
       }
     }catch(error){
       if(signal.aborted){this.emit('ready','Scan stopped. Your Chrome profile stays saved.');throw new DOMException('Scan stopped','AbortError')}

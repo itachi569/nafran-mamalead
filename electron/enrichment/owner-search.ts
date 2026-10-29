@@ -148,6 +148,7 @@ type TwoSearchOptions = {
  key?:string;signal?:AbortSignal;
  timeoutMs?:number;
  onStep?:(step:1|2,query:string,retrying?:boolean)=>void;
+ onSources?:(step:1|2,checked:number,total:number)=>void;
  search?:(query:string,signal:AbortSignal)=>Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null}>;
 }
 
@@ -162,7 +163,8 @@ export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Pr
  const result:OwnerContactResult={people:[],searches:0,retries:0,error:null}
  if(!lead.name.trim() && !hostOf(lead.website))return {...result,error:'This business has no usable name or website.'}
  if(!options.key?.trim() && !options.search)return {...result,error:'Owner search is not configured. Add the DataForSEO credential in Settings → Account.'}
- const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),AbortSignal.timeout(options.timeoutMs ?? 60_000)])
+ const sources=new AbortController()
+ const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),sources.signal,AbortSignal.timeout(options.timeoutMs ?? 60_000)])
  const host=hostOf(lead.website),cache:OwnerPageCache=new Map(),pages:PublicPage[]=[],unreadable=new Set<string>()
  const read=(url:string)=>{
   let value=cache.get(url)
@@ -207,32 +209,40 @@ export async function findOwnerContact(lead:Lead,options:TwoSearchOptions={}):Pr
   }
   return null
  }
- const inspect=async(hits:import('./dataforseo').OrganicSearchHit[],only?:{person:FoundPerson;proof:PublicPage})=>{
+ const inspect=async(hits:import('./dataforseo').OrganicSearchHit[],step:1|2,only?:{person:FoundPerson;proof:PublicPage})=>{
   const urls=candidates(hits)
+  options.onSources?.(step,0,urls.length)
   for(let i=0;i<urls.length;i+=3){
    signal.throwIfAborted()
-   const batch=await Promise.all(urls.slice(i,i+3).map(hit=>read(hit.url)))
-   for(const page of batch)if(page && !pages.some(prior=>prior.url===page.url)){pages.push(page);if(!only)learn(page)}
-   const found=match(hits,only);if(found)return found
+   // Prefetch three sources, but inspect each in priority order as it arrives.
+   // A complete first source can return without waiting for the two slower peers.
+   const batch=urls.slice(i,i+3).map(hit=>read(hit.url))
+   for(let j=0;j<batch.length;j++){
+    const page=await batch[j]
+    signal.throwIfAborted()
+    if(page && !pages.some(prior=>prior.url===page.url)){pages.push(page);if(!only)learn(page)}
+    options.onSources?.(step,i+j+1,urls.length)
+    const found=match(hits,only);if(found)return found
+   }
   }
   return null
  }
  try{
-  const first=await search(1),complete=await inspect(first)
+  const first=await search(1),complete=await inspect(first,1)
   signal.throwIfAborted()
   if(complete)return {...result,people:[complete]}
   if(candidates(first).length && !pages.length)throw new Error('Search results were found, but their source pages could not be read. Retry this business.')
   const owner=owners.values().next().value
   if(!owner)return result // No established owner: do not invent a name for search two.
   result.people=[owner.person]
-  const second=await search(2,owner.person.fullName),found=await inspect(second,owner)
+  const second=await search(2,owner.person.fullName),found=await inspect(second,2,owner)
   signal.throwIfAborted()
   if(found)result.people=[found]
   return result
  }catch(error){
   if(options.signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
   return {...result,error:signal.aborted?'Owner search timed out. Retry this company.':error instanceof Error?error.message:'Owner search could not finish.'}
- }
+ }finally{sources.abort()}
 }
 
 /** An explicit indexed contact is a weaker source than a readable live page. Never infer

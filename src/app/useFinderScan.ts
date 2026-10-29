@@ -149,6 +149,8 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
   onExport: () => void
   /** Results card to bring into view after the pass finishes. */
   resultSelector?: string
+  /** Live scan card to reveal once, as soon as a new scan starts. */
+  progressSelector?: string
   /** People results can narrow individual contacts as well as their website row. */
   filterItemsOnSearch?: boolean
 }
@@ -523,18 +525,18 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     setFilter(value)
   }, [exit])
 
-  // A finished finder action has the same result promise as the website scan: show the rows it
-  // just processed without making the user hunt for the card below the toolbar.
+  // Reveal live progress once at start, then the result rows once at completion.
+  // Progress ticks must not pull the user back if they choose to scroll elsewhere.
   useEffect(() => {
-    if (!scanOn || running) return
-    const selector = sourceRef.current.resultSelector
+    if (!scanOn) return
+    const selector = running ? sourceRef.current.progressSelector : sourceRef.current.resultSelector
     if (!selector) return
     const frame = window.requestAnimationFrame(() => {
       const target = document.querySelector<HTMLElement>(selector)
       if (!target) return
       const toolbarHeight = Math.max(0, ...Array.from(document.querySelectorAll<HTMLElement>('[data-socbar]'), (bar) => bar.getBoundingClientRect().height))
       target.style.scrollMarginTop = `${toolbarHeight + 32}px`
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      target.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [running, scanOn])

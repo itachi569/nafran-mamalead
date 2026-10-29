@@ -16,12 +16,13 @@ async function main(){
  await browser.launch();await browser.page.context().addCookies([{name:'SID',value:'fixture-only',domain:'.google.com',path:'/',secure:true,expires:Math.floor(Date.now()/1000)+3600}]);await browser.close()
  await browser.connect();const page=browser.page,context=page.context();assert.ok(browser.status().open)
  assert.ok(!browser.child.spawnargs.some(a=>/enable-automation|AutomationControlled/.test(a)))
- const searches=[];let mode='normal'
+ const searches=[];let mode='normal',releaseAsset
+ await context.route('https://assets.owner.test/slow.js',async route=>{await new Promise(resolve=>{releaseAsset=resolve});await route.fulfill({contentType:'application/javascript',body:''}).catch(()=>{})})
  const result=(url,title='Northstar founder')=>`<div class="result"><a href="${url}"><h3>${title}</h3></a><p>Published company contact details.</p></div>`
  await context.route('https://www.google.com/**',async route=>{
   const u=new URL(route.request().url());const q=u.searchParams.get('q');if(q)searches.push(q)
   const html=mode==='blocked'?'<form id="captcha-form">Verify you are human</form>':mode==='empty'?'<p>Your search did not match any documents</p>':mode==='unknown'?'<p>Unexpected result page</p>':result('https://northstar.test/'+(q?.startsWith('Janet')?'contact':'about'))+result('https://www.google.com/ignore','Ignored')+`<section data-text-ad>${result('https://ads.test','Sponsored')}</section><section><h2>AI Overview</h2><p>Invented email wrong@northstar.test</p><a href="https://northstar.test/ai">Source</a></section>`
-  await route.fulfill({contentType:'text/html',body:html})
+  await route.fulfill({contentType:'text/html',body:html+(mode==='slow-assets'?'<script defer src="https://assets.owner.test/slow.js"></script>':'')})
  })
  const signal=new AbortController().signal
  await page.goto('https://www.google.com/search?q=fixture')
@@ -33,6 +34,8 @@ async function main(){
  searches.length=0
  const owner=await findOwnerContact({name:'Northstar',website:'https://northstar.test'},{search:(q,s)=>browser.search(q,s)})
  assert.equal(owner.error,null);assert.equal(owner.people[0].email,'janet@northstar.test');assert.equal(searches.length,2);assert.match(searches[1],/^Janet Cole owner of/);checks.push('Real Chrome DOM → two queries → publicly sourced owner email, with no API key')
+ mode='slow-assets';const readStarted=Date.now()
+ try{const fast=await browser.search('slow-assets',signal);assert.ok(fast.hits.length);assert.ok(Date.now()-readStarted<2500,'Visible results waited for deferred scripts');checks.push('visible Google results return while deferred scripts are still loading')}finally{releaseAsset?.()}
  mode='blocked';const blocked=new AbortController(),start=Date.now();const pending=browser.search('blocked',blocked.signal)
  while(browser.status().phase!=='verification')await new Promise(r=>setTimeout(r,25))
  blocked.abort();await assert.rejects(pending,{name:'AbortError'});assert.ok(Date.now()-start<4000);checks.push('CAPTCHA pauses for user; Stop cancels promptly without bypass or Not published')
@@ -42,7 +45,14 @@ async function main(){
  mode='empty';assert.deepEqual((await browser.search('empty',signal)).hits,[]);checks.push('Genuine empty results distinguished from blocked or unreadable pages')
  // Fake test session exists only in this disposable profile, never the user's profile.
  await context.addCookies([{name:'SID',value:'fixture-only',domain:'.google.com',path:'/',secure:true,expires:Math.floor(Date.now()/1000)+3600}])
- await browser.prepare(signal,()=>{});assert.ok(await browser.signedIn());await browser.close();await browser.open();assert.ok(await browser.signedIn());checks.push('Dedicated profile survives browser restart and reuses the explicit connection')
+ const oldFocus=page.bringToFront;page.bringToFront=async()=>{throw Error('A repeated scan must not focus Chrome')}
+ const launchChild=browser.child;await browser.prepare(signal,()=>{});await browser.prepare(signal,()=>{});assert.equal(browser.child,launchChild);assert.ok(await browser.signedIn());page.bringToFront=oldFocus
+ checks.push('consecutive scans reuse the same signed-in process without focusing Chrome')
+ await browser.close();assert.equal(browser.status().savedSession,true)
+ const restarted=new GoogleOwnerBrowser(path.join(temp,'chrome'));assert.equal(restarted.status().savedSession,true)
+ await restarted.prepare(signal,()=>{});assert.ok(await restarted.signedIn());assert.equal(restarted.manual,null)
+ const windowSession=await restarted.page.context().newCDPSession(restarted.page);const bounds=await windowSession.send('Browser.getWindowForTarget');assert.equal(bounds.bounds.windowState,'minimized');await windowSession.detach();await restarted.close()
+ await browser.open();assert.ok(await browser.signedIn());checks.push('saved account reconnects after app restart in a minimized window without another sign-in')
  await browser.page.context().clearCookies();await browser.close();await assert.rejects(browser.connect(),/No saved Google sign-in/);assert.ok(!fs.existsSync(path.join(temp,'chrome','mamalead-session-ready')));checks.push('Expired or absent login reports recovery instead of automating Google authentication')
  await browser.close()
  const db=new LocalDatabase(path.join(temp,'leads.db')),repo=new Repository(db),ws=db.ensureWorkspace().id,credits=[],queries=[]
