@@ -32,7 +32,7 @@ async function main(){
   return new Response(String(url).endsWith('/contact')?'<p>Janet Cole</p><a href="mailto:janet@northstar.test">Email Janet</a>':'<article><h2>Janet Cole</h2><p>Founder of Northstar.</p></article>')
  }
  searches.length=0
- const owner=await findOwnerContact({name:'Northstar',website:'https://northstar.test'},{search:(q,s,remaining)=>browser.search(q,s,undefined,remaining)})
+ const owner=await findOwnerContact({name:'Northstar',website:'https://northstar.test'},{websiteFirst:false,search:(q,s,remaining)=>browser.search(q,s,undefined,remaining)})
  assert.equal(owner.error,null);assert.equal(owner.people[0].email,'janet@northstar.test');assert.equal(searches.length,2);assert.match(searches[1],/^"Janet Cole"/);checks.push('Real Chrome DOM → targeted queries → publicly sourced owner email, with no API key')
  mode='slow-assets';const readStarted=Date.now()
  try{const fast=await browser.search('slow-assets',signal);assert.ok(fast.hits.length);assert.ok(Date.now()-readStarted<2500,'Visible results waited for deferred scripts');checks.push('visible Google results return while deferred scripts are still loading')}finally{releaseAsset?.()}

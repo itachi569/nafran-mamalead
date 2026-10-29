@@ -47,7 +47,7 @@ function aboutCompany(lead:Lead,value:string,requirePlace=true):boolean{
  const brand=normal(lead.name.includes('.')?host.split('.')[0]:lead.name).replace(/\s+/g,' ').trim()
  return brand.length>=4 && (' '+phrase(plain(value))+' ').includes(' '+phrase(brand)+' ')
 }
-async function readPage(url:string,signal:AbortSignal,ownHost=''){
+async function readPage(url:string,signal:AbortSignal,ownHost='',failed?:(error:unknown)=>void){
  try{
   const response=await fetch(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(ownHost && hostOf(url)===ownHost?8500:4500)]),headers:{accept:'text/html,application/xhtml+xml'}})
   if(!response.ok || /^(?:image|audio|video)\/|application\/(?:pdf|octet-stream|zip)/i.test(response.headers.get('content-type') ?? ''))return null
@@ -56,7 +56,7 @@ async function readPage(url:string,signal:AbortSignal,ownHost=''){
   const source=(await response.text()).slice(0,2_000_000).replace(/<(script|style)\b([^>]*)>[\s\S]*?<\/\1>/gi,(block,tag,attrs)=>tag.toLowerCase()==='script' && /type\s*=\s*["']application\/ld\+json["']/i.test(attrs)?block:'')
   const html=stripContactCodeExamples(decodePublishedEmailHtml(source)),result={url:response.url || url,html,text:plain(html),at:Date.now()}
   return result
- }catch{return null}
+ }catch(error){failed?.(error);return null}
 }
 /** A source is revalidated once per lookup, even when both indexes return the same URL. */
 function pageReader(signal:AbortSignal,ownHost='',pages:OwnerPageCache=new Map()){
@@ -72,7 +72,7 @@ function pageReader(signal:AbortSignal,ownHost='',pages:OwnerPageCache=new Map()
 function preferredHits(hits:PublicSearchHit[],host:string):PublicSearchHit[]{
  const score=(hit:PublicSearchHit)=>{
   const own=Boolean(host) && hostOf(hit.url)===host
-  const contact=/contact|faq|team|leadership|founder|about|biograph|consulting|help-us|your-input|thank-you/i.test(hit.url+' '+hit.title)
+  const contact=/contact|faq|team|company|who-we-are|leadership|founder|about|biograph|consulting|help-us|your-input|thank-you/i.test(hit.url+' '+hit.title)
   const mailbox=/[\w.+-]+@[\w.-]+\.[a-z]{2,}|\b(?:at|dot)\b/i.test(hit.description) && /email|contact|@/i.test(hit.description)
   return (own?100:0)+(contact?12:0)+(mailbox?8:0)
  }
@@ -129,6 +129,12 @@ function sameOwnerProof(page:PublicPage,lead:Lead,owner:{fullName:string}):boole
 }
 function referencesOtherBusiness(proof:PublicPage,sourceUrl:string):boolean{
  const host=hostOf(sourceUrl),brand=host.split('.')[0].replace(/[^a-z0-9]/g,'')
+ // A link to one LinkedIn profile does not establish every person on LinkedIn.
+ if(/(?:^|\.)(?:linkedin\.com|facebook\.com|instagram\.com|twitter\.com|x\.com|youtube\.com|medium\.com|substack\.com)$/.test(host)){
+  const canonical=(value:string)=>{try{const url=new URL(decode(value),proof.url);return hostOf(url.href)+url.pathname.replace(/\/+$/,'')}catch{return ''}}
+  const target=canonical(sourceUrl)
+  return Boolean(new URL(sourceUrl).pathname.replace(/\//g,'')) && [...proof.html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].some(match=>canonical(match[1])===target)
+ }
  return Boolean(host && (proof.html.includes('://'+host) || proof.html.includes('://www.'+host) || brand.length>=6 && normal(proof.text).replace(/[^a-z0-9]/g,'').includes(brand)))
 }
 function publishedMail(page:PublicPage,lead:Lead,owner:{fullName:string},ownerProof?:PublicPage,preferFirst=false):string{
@@ -157,6 +163,8 @@ type OwnerContactOptions = {
  key?:string;signal?:AbortSignal;
  timeoutMs?:number;
  activeBudgetMs?:number;
+ /** Inspect the supplied site before querying a search engine. */
+ websiteFirst?:boolean;
  onStep?:(step:number,query:string,retrying?:boolean,phase?:'owner'|'email')=>void;
  onSources?:(step:number,checked:number,total:number)=>void;
  search?:(query:string,signal:AbortSignal,remainingMs?:number)=>Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null;waitingMs?:number}>;
@@ -180,9 +188,13 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
  const remainingMs=()=>Math.max(0,activeBudgetMs-(Date.now()-started-waitingMs))
  const checkBudget=()=>{signal.throwIfAborted();if(remainingMs()<=0)throw new Error('Owner lookup reached its time limit. Saved findings are kept; retry this business to finish.')}
  const host=hostOf(lead.website),cache:OwnerPageCache=new Map(),pages:PublicPage[]=[],unreadable=new Set<string>()
- const read=(url:string)=>{
+ let websiteMissing=false
+ const read=(url:string,checkWebsite=false)=>{
   let value=cache.get(url)
-  if(!value){checkBudget();value=readPage(url,AbortSignal.any([signal,AbortSignal.timeout(Math.max(1,Math.floor(Math.min(3500,remainingMs()))))]),host).then(page=>{if(!page)unreadable.add(url);return page});cache.set(url,value)}
+  if(!value){checkBudget();value=readPage(url,AbortSignal.any([signal,AbortSignal.timeout(Math.max(1,Math.floor(Math.min(3500,remainingMs()))))]),host,error=>{
+   const failure=error as {code?:string;cause?:{code?:string}}
+   if(checkWebsite && /^(?:ENOTFOUND|EAI_NONAME)$/.test(failure.cause?.code || failure.code || ''))websiteMissing=true
+  }).then(page=>{if(!page)unreadable.add(url);return page});cache.set(url,value)}
   return value
  }
  const searched=new Set<string>()
@@ -202,7 +214,7 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
   const bonus=(hit:PublicSearchHit)=>{
    const owner=owners.values().next().value?.person
    const namedEmail=extractPublishedEmails(hit.description).some(email=>owner?Boolean(ownerEmail(owner.fullName,email)):email.split('@')[1]===host && !/^(?:info|hello|contact|support|sales|office|admin|team|help|notice|privacy|legal|billing|no.?reply)(?:[._-]|@)/i.test(email))
-   const identity=hostOf(hit.url)===host && /\/(?:about(?:-us)?|our-team|team|leadership|founders?)(?:\/|$|\?)/i.test(new URL(hit.url).pathname)
+   const identity=hostOf(hit.url)===host && /\/(?:about(?:-us)?|our-team|team|company|who-we-are|leadership|founders?)(?:\/|$|\?)/i.test(new URL(hit.url).pathname)
    return (namedEmail?400:0)+(!owner && identity?500:0)
   }
   return ranked.sort((a,b)=>bonus(b)-bonus(a)).slice(0,6)
@@ -210,6 +222,9 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
  const owners=new Map<string,{person:FoundPerson;proof:PublicPage}>()
  const checkedMail=new Map<string,string>(),linkedPages=new Set<string>()
  const learn=(page:PublicPage)=>{
+  // Menu labels beside marketing copy cannot establish an owner identity.
+  const html=page.html.replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/gi,'')
+  page={...page,html,text:plain(html)}
   const own=Boolean(host) && hostOf(page.url)===host
   if(!own && (!aboutCompany(lead,page.html) || host && !mentionsWebsite(page.html,host)))return
   const extracted=[...contactFindingsFromHtml(page.html,page.url).people,...extractPeople(page.text).map(person=>({...person,evidence:page.url,linkedinUrl:''}))]
@@ -268,7 +283,7 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
      if(href)try{
       const url=new URL(decode(href),page.url);url.hash=''
       const title=plain(serialize(node))
-      if(hostOf(url.href)===host && isPublicSourceUrl(url.href) && !cache.has(url.href) && /contact|about|team|founder|leadership|biograph/i.test(url.pathname+' '+title))links.set(url.href,{url:url.href,title,description:''})
+      if(hostOf(url.href)===host && isPublicSourceUrl(url.href) && !cache.has(url.href) && /contact|about|team|company|who-we-are|founder|leadership|biograph/i.test(url.pathname+' '+title))links.set(url.href,{url:url.href,title,description:''})
      }catch{/* Ignore malformed/non-web links. */}
     }
     if('childNodes' in node)node.childNodes.forEach(visit)
@@ -279,6 +294,16 @@ export async function findOwnerContact(lead:Lead,options:OwnerContactOptions={})
   return next.length?inspect(next,result.searches):null
  }
  try{
+  if(options.websiteFirst!==false && host && isPublicSourceUrl(lead.website)){
+   options.onSources?.(0,0,1)
+   const home=await read(lead.website,true)
+   checkBudget()
+   if(websiteMissing)return {...result,error:'The website '+host+' could not be found. Check the website address and spelling, then import the corrected URL.'}
+   if(home){pages.push(home);learn(home)}
+   options.onSources?.(0,1,1)
+   const direct=match([]) || await followContacts()
+   if(direct)return {...result,people:[direct]}
+  }
   const company=host || [lead.name,locality(lead)].filter(Boolean).join(' ').replace(/["\r\n]/g,' ').trim()
   const identityQueries=[ownerContactQuery(lead),...(host?[`site:${host} (founder OR owner OR "co-founder")`]:[]),`"${company}" founder owner`,`"${company}" about leadership founder`]
   while(result.searches<6){

@@ -20,7 +20,7 @@ async function main(){
      const domain=(fixtureDomain=query.match(/([\w.-]+\.test)/)?.[1] || (query.match(/(named-owner|missing-owner|error-owner)/)?.[1]?query.match(/(named-owner|missing-owner|error-owner)/)[1]+'.test':fixtureDomain)),page=query.includes('Janet Cole')?'/contact':'/about'
      return Response.json({tasks:[{status_code:20000,result:[{items:[{type:'organic',title:'Owner',url:'https://'+domain+page,description:'Published source'}]}]}]})
     }
-    if(u.hostname.endsWith('.test'))return new Response(u.pathname==='/about'?'<article><h2>Janet Cole</h2><p>Founder</p></article>':u.hostname==='named-owner.test'?'<p>Janet Cole</p><a href="mailto:janet@named-owner.test">Email Janet</a>':'<p>No email published</p>')
+    if(u.hostname.endsWith('.test'))return new Response(u.pathname==='/'?'<p>Company homepage</p>':u.pathname==='/about'?'<article><h2>Janet Cole</h2><p>Founder</p></article>':u.hostname==='named-owner.test'?'<p>Janet Cole</p><a href="mailto:janet@named-owner.test">Email Janet</a>':'<p>No email published</p>')
     return original(raw,options)
    }
    const runner=new EnrichmentRunner(db,repo,{authorize:async()=>{},deepKey:()=> 'fixture',onProgress:progress=>{for(const win of BrowserWindow.getAllWindows())win.webContents.send('enrichment:progress',progress)}})

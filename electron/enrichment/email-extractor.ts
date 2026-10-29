@@ -372,6 +372,7 @@ const NOT_A_NAME_START = /^(?:i|i['’]?m|im|we|we['’]?re|my|our|me|us|he|she|
 function isPersonName(value: string): boolean {
   const words = value.split(/\s+/)
   if (words.length < 2 || words.length > 4) return false
+  if (TITLE_WORD.test(words[0])) return false
   if (!words.every((word,index) => /^\p{Lu}[\p{L}'’.-]*$/u.test(word) && (!/[.,;:!?]$/.test(word) || /^\p{Lu}\.$/u.test(word)) || index>0 && /^(?:van|von|de|der|den|la|le|al|bin|ibn|da|di)$/.test(word))) return false
   if (/^(?:stories|ecommerce|migration|inspiring|insights|resources|business|entrepreneurs)\b|\b(?:founder|founders|owner|owners)\b/i.test(value)) return false
   if (/\b(?:llc|ltd|limited|inc|incorporated|corporation|company)\.?$/i.test(value)) return false

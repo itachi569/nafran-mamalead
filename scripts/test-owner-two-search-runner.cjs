@@ -23,6 +23,7 @@ async function main(){
    return Response.json({tasks:[{status_code:20000,result:[{items:domain.startsWith('empty-')?[]:[{type:'organic',title:'Owner',url:'https://'+domain+path,description:'Published source'}]}]}]})
   }
   assert.ok(url.hostname.endsWith('.test'))
+  if(url.pathname==='/')return new Response('<p>Company homepage</p>')
   assert.ok(['/about','/contact'].includes(url.pathname),'Extra crawl')
   return new Response(url.pathname==='/about'?'<article><h2>Janet Cole</h2><p>Founder</p></article>':url.hostname==='named-owner.test'?'<p>Janet Cole</p><a href="mailto:janet@named-owner.test">Email Janet</a>':'<p>No owner email here</p>')
  }

@@ -438,6 +438,8 @@ export function isUsablePerson(fullName: string, title: string): boolean {
   if (!name || name.length > 40) return false
   if (/^(?:a|an|the|our|your|this|that|latest|featured|company|business|meet|read|learn|how|why|what|for|start|quick)\b/i.test(name)) return false
   if (/[\n\r]/.test(name)) return false
+  if (/\b(?:pricing|login|signup|sign|menu|subscribe|download|started)\b/i.test(name)) return false
+  if (/^(?:ceo|cto|cfo|coo|cmo|chief|director|manager|officer)\b/i.test(name)) return false
   if (/^(?:e-?mail|call|telephone|phone|contact|meet|message|connect with)\b/i.test(name)) return false
   if (PERSON_NOISE.test(name) || PERSON_NOISE.test(title.trim())) return false
   if (SERVICE_WORDS.test(name)) return false

@@ -10,7 +10,7 @@ const checks=[]
 async function scenario(label,pages,results,verify){
  const queries=[],reads=[]
  global.fetch=async(raw)=>{const url=String(raw);reads.push(url);assert.ok(url in pages,'Unexpected source read: '+url);return pages[url]===null?new Response('',{status:503}):new Response(pages[url],{headers:{'content-type':'text/html'}})}
- const result=await findOwnerContact(lead,{search:async query=>{queries.push(query);assert.ok(queries.length<=6,'Unbounded search');return results[queries.length-1] ?? response()}})
+ const result=await findOwnerContact(lead,{websiteFirst:false,search:async query=>{queries.push(query);assert.ok(queries.length<=6,'Unbounded search');return results[queries.length-1] ?? response()}})
  assert.equal(result.searches,queries.length);await verify(result,queries,reads);checks.push(label)
 }
 const response=(...hits)=>({hits,error:null})
@@ -22,7 +22,7 @@ async function main(){
  global.fetch=async(raw,{signal})=>String(raw).endsWith('/about')?new Response(about+email):new Promise((_,reject)=>{
   const stop=()=>{peerAborts++;reject(new DOMException('Aborted','AbortError'))};if(signal.aborted)stop();else signal.addEventListener('abort',stop,{once:true})
  })
- const fast=await findOwnerContact(lead,{search:async()=>{sourceSearches++;return response(hit('about'),hit('slow-a'),hit('slow-b'))},onSources:(...p)=>sourceProgress.push(p)})
+ const fast=await findOwnerContact(lead,{websiteFirst:false,search:async()=>{sourceSearches++;return response(hit('about'),hit('slow-a'),hit('slow-b'))},onSources:(...p)=>sourceProgress.push(p)})
  assert.equal(fast.people[0].email,'janet@northstar.test');assert.equal(sourceSearches,1);assert.ok(Date.now()-started<1500,'Complete first source waited for slower peers');assert.equal(peerAborts,2);assert.deepEqual(sourceProgress,[[1,0,3],[1,1,3]]);checks.push('verified first source returns immediately and cancels slow peer reads')
  await scenario('combined result returns after exactly one search',{'https://northstar.test/about':about+email},[response(hit('about'))],(r,q)=>{assert.equal(q.length,1);assert.equal(r.people[0].email,'janet@northstar.test')})
  await scenario('owner-only first result triggers exactly one named email search',{'https://northstar.test/about':about,'https://northstar.test/contact':email},[response(hit('about')),response(hit('contact'))],(r,q)=>{assert.equal(q.length,2);assert.equal(q[1],ownerContactQuery(lead,'Janet Cole'));assert.equal(r.people[0].email,'janet@northstar.test');assert.equal(r.error,null)})
@@ -46,16 +46,16 @@ async function main(){
  await scenario('linked contact page supplies email without another Google query',{'https://northstar.test/about':about+'<a href="/contact#email">Contact us</a>','https://northstar.test/contact':email},[response(hit('about'))],(r,q,reads)=>{assert.equal(q.length,1);assert.equal(reads.length,2);assert.equal(r.people[0].email,'janet@northstar.test')})
  let budgetQueries=0
  global.fetch=async()=>new Response(about)
- const timed=await findOwnerContact(lead,{activeBudgetMs:80,search:async()=>{budgetQueries++;if(budgetQueries===1)return response(hit('about'));await new Promise(resolve=>setTimeout(resolve,100));return response()}})
+ const timed=await findOwnerContact(lead,{websiteFirst:false,activeBudgetMs:80,search:async()=>{budgetQueries++;if(budgetQueries===1)return response(hit('about'));await new Promise(resolve=>setTimeout(resolve,100));return response()}})
  assert.equal(budgetQueries,2);assert.match(timed.error,/time limit/);assert.equal(timed.people[0].fullName,'Janet Cole');checks.push('active-work deadline stops follow-up searches and preserves discovered owner')
  let waitingQueries=0
  global.fetch=async()=>new Response(about+email)
- const waited=await findOwnerContact(lead,{activeBudgetMs:150,search:async()=>{waitingQueries++;const before=Date.now();await new Promise(resolve=>setTimeout(resolve,200));return {...response(hit('about')),waitingMs:Date.now()-before}}})
+ const waited=await findOwnerContact(lead,{websiteFirst:false,activeBudgetMs:150,search:async()=>{waitingQueries++;const before=Date.now();await new Promise(resolve=>setTimeout(resolve,200));return {...response(hit('about')),waitingMs:Date.now()-before}}})
  assert.equal(waited.error,null);assert.equal(waitingQueries,1);assert.equal(waited.people[0].email,'janet@northstar.test');checks.push('human Google verification wait does not consume the active search budget')
  await scenario('first provider error is not Not published',{},[{hits:[],error:'Provider unavailable'}],r=>{assert.equal(r.error,'Provider unavailable');assert.equal(r.searches,1)})
  await scenario('second provider error retains known owner without claiming completion',{'https://northstar.test/about':about},[response(hit('about')),{hits:[],error:'Provider unavailable'}],r=>{assert.equal(r.error,'Provider unavailable');assert.equal(r.people[0].fullName,'Janet Cole');assert.equal(r.searches,2)})
  const stop=new AbortController();let searches=0
- const pending=findOwnerContact(lead,{signal:stop.signal,search:async(_,signal)=>{searches++;await new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('Aborted')),{once:true}));return response()}})
+ const pending=findOwnerContact(lead,{websiteFirst:false,signal:stop.signal,search:async(_,signal)=>{searches++;await new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(new Error('Aborted')),{once:true}));return response()}})
  stop.abort();await assert.rejects(pending,{name:'AbortError'});assert.equal(searches,1);checks.push('Stop interrupts search and never starts another')
  let calls=0
  global.fetch=async(_,options)=>{calls++;assert.equal(JSON.parse(options.body)[0].load_async_ai_overview,false);return Response.json({tasks:[{status_code:20000,result:[{items:[{type:'ai_overview',text:'Invented mail: wrong@northstar.test',references:[{title:'Our founder',url:'https://northstar.test/about',text:'Company source'}]},{type:'organic',title:'Contact',url:'https://northstar.test/contact',description:'Published contact'}]}]}]})}
@@ -75,25 +75,25 @@ async function main(){
   requests.push({url:String(raw),query:JSON.parse(options.body)[0].keyword})
   return requests.length===1?Response.json({tasks:[{status_code:40101}]}):Response.json({tasks:[{status_code:20000,result:[{items:[{type:'organic',title:'Founder',url:recoveryLead.website+'/about',description:'Owner contact'}]}]}]})
  }
- const recovered=await findOwnerContact(recoveryLead,{key:'fixture',onStep:(...step)=>steps.push(step)})
+ const recovered=await findOwnerContact(recoveryLead,{websiteFirst:false,key:'fixture',onStep:(...step)=>steps.push(step)})
  assert.equal(recovered.error,null);assert.equal(recovered.people[0].email,'janet@recovery.test');assert.equal(recovered.searches,1);assert.equal(recovered.retries,1);assert.equal(requests.length,2);assert.equal(requests[0].query,requests[1].query);assert.ok(requests[1].url.endsWith('/regular'));assert.ok(steps.some(s=>s[2]===true));checks.push('40101 recovery repeats the same keyword once and reports progress')
  let exhaustedCalls=0
  global.fetch=async()=>{exhaustedCalls++;return Response.json({tasks:[{status_code:40101}]})}
- const exhausted=await findOwnerContact({name:'Exhausted',website:'https://exhausted-owner.test'},{key:'fixture'})
+ const exhausted=await findOwnerContact({name:'Exhausted',website:'https://exhausted-owner.test'},{websiteFirst:false,key:'fixture'})
  assert.equal(exhaustedCalls,2);assert.equal(exhausted.retries,1);assert.match(exhausted.error,/40101/);checks.push('persistent service failure stops after one recovery attempt')
  let sharedCalls=0
  global.fetch=async(raw)=>{
   if(!String(raw).includes('api.dataforseo.com'))return new Response('<article><h2>Janet Cole</h2><p>Founder of Shared.</p></article>')
   sharedCalls++;return sharedCalls===2?Response.json({tasks:[{status_code:20000,result:[{items:[{type:'organic',title:'Founder',url:'https://shared.test/about',description:'Owner'}]}]}]}):Response.json({tasks:[{status_code:40101}]})
  }
- const shared=await findOwnerContact({name:'Shared',website:'https://shared.test'},{key:'fixture'})
+ const shared=await findOwnerContact({name:'Shared',website:'https://shared.test'},{websiteFirst:false,key:'fixture'})
  assert.equal(shared.searches,2);assert.equal(shared.retries,1);assert.equal(sharedCalls,3);assert.match(shared.error,/40101/);checks.push('one recovery allowance is shared across both keywords, at most three provider requests')
  let deniedCalls=0
  global.fetch=async()=>{deniedCalls++;return Response.json({tasks:[{status_code:40100,status_message:'Unauthorized'}]})}
- assert.equal((await findOwnerContact({name:'Denied',website:'https://denied-owner.test'},{key:'fixture'})).retries,0);assert.equal(deniedCalls,1);checks.push('rejected credentials are never automatically retried')
+ assert.equal((await findOwnerContact({name:'Denied',website:'https://denied-owner.test'},{websiteFirst:false,key:'fixture'})).retries,0);assert.equal(deniedCalls,1);checks.push('rejected credentials are never automatically retried')
  const recoveryStop=new AbortController();let stopCalls=0
  global.fetch=async()=>{stopCalls++;recoveryStop.abort();return Response.json({tasks:[{status_code:40101}]})}
- await assert.rejects(findOwnerContact({name:'Stop',website:'https://recovery-stop.test'},{key:'fixture',signal:recoveryStop.signal}),{name:'AbortError'});assert.equal(stopCalls,1);checks.push('Stop prevents the recovery request')
+ await assert.rejects(findOwnerContact({name:'Stop',website:'https://recovery-stop.test'},{websiteFirst:false,key:'fixture',signal:recoveryStop.signal}),{name:'AbortError'});assert.equal(stopCalls,1);checks.push('Stop prevents the recovery request')
  console.log(JSON.stringify({passed:true,checks},null,2))
 }
 main().catch(e=>{console.error(e);process.exitCode=1}).finally(()=>{global.fetch=originalFetch})
