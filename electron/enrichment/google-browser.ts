@@ -1,10 +1,10 @@
 import {spawn, type ChildProcess} from 'node:child_process'
-import {existsSync, mkdirSync, readFileSync, rmSync} from 'node:fs'
+import {existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {chromium, type Browser, type Page} from 'playwright'
 import type {OrganicSearchHit} from './dataforseo'
 
-export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'searching'|'verification'|'error';message:string;open:boolean}
+export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean}
 const SESSION_NAMES = new Set(['SID','__Secure-1PSID','__Secure-3PSID'])
 const pause = (ms:number,signal?:AbortSignal) => new Promise<void>((resolve,reject)=>{
   if(signal?.aborted){reject(new DOMException('Scan stopped','AbortError'));return}
@@ -50,10 +50,29 @@ export class GoogleOwnerBrowser {
   private child:ChildProcess|null=null
   private launching:Promise<void>|null=null
   private searching=false
+  private manual:ChildProcess|null=null
+  private closing=false
   private state:OwnerBrowserStatus={phase:'closed',message:'Sign in once in MamaLead Chrome. Internet required; no search API key.',open:false}
   constructor(private profile:string,private changed:(status:OwnerBrowserStatus)=>void=()=>{}){}
   status(){return {...this.state}}
-  private emit(phase:OwnerBrowserStatus['phase'],message:string){this.state={phase,message,open:Boolean(this.browser?.isConnected())};this.changed(this.status())}
+  private emit(phase:OwnerBrowserStatus['phase'],message:string){this.state={phase,message,open:Boolean(this.browser?.isConnected() || this.manual)};this.changed(this.status())}
+  private get readyFile(){return join(this.profile,'mamalead-session-ready')}
+  /** Sign-in runs in ordinary Chrome with no automation connection or debugging switches.
+   * The user closes that window to save the profile, then explicitly chooses Connect. */
+  async signIn(){
+    if(this.searching)throw new Error('Stop the owner scan before changing the Google sign-in.')
+    if(this.manual)return this.status()
+    await this.close();this.closing=false
+    rmSync(this.readyFile,{force:true});mkdirSync(this.profile,{recursive:true})
+    const executable=this.chromePath()
+    const openedAt=Date.now()
+    const child=spawn(executable,[`--user-data-dir=${this.profile}`,'--no-first-run','--no-default-browser-check','--new-window','https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fwww.google.com%2F&hl=en'],{stdio:'ignore',windowsHide:true})
+    this.manual=child
+    this.emit('sign-in','Sign in directly in Chrome, then close that Chrome window and click Connect saved sign-in. MamaLead is not controlling the sign-in window.')
+    child.once('error',error=>{if(this.manual===child){this.manual=null;this.emit('error','Chrome could not open: '+error.message)}})
+    child.once('exit',()=>{if(this.manual===child){this.manual=null;if(!this.closing)this.emit(Date.now()-openedAt<1500?'error':'connect',Date.now()-openedAt<1500?'Chrome closed before sign-in started, or another MamaLead Chrome window already has this profile. Close the other MamaLead Chrome windows, then choose Sign in to Google again.':'Chrome is closed. Click Connect saved sign-in to use the Google account you signed in with.')}})
+    return this.status()
+  }
   private chromePath():string {
     const paths=process.platform==='win32'
       ? [process.env.PROGRAMFILES,process.env['PROGRAMFILES(X86)'],process.env.LOCALAPPDATA].filter(Boolean).map(base=>join(base!,'Google','Chrome','Application','chrome.exe'))
@@ -75,16 +94,18 @@ export class GoogleOwnerBrowser {
     try{
       const deadline=Date.now()+20000
       while(Date.now()<deadline){
+        if(this.closing)throw new Error('MamaLead Chrome connection was cancelled.')
         if(launchError)throw launchError
         if(child.exitCode!==null)throw new Error('MamaLead Chrome closed before connecting. Close any older MamaLead search window, then try again.')
         if(existsSync(portFile)){
           const [port,path]=readFileSync(portFile,'utf8').trim().split(/\r?\n/)
           if(/^\d+$/.test(port) && path?.startsWith('/devtools/browser/')){
             this.browser=await chromium.connectOverCDP(`http://127.0.0.1:${port}`,{timeout:5000})
+            if(this.closing){await this.close();throw new Error('MamaLead Chrome connection was cancelled.')}
             const browser=this.browser
             this.page=browser.contexts()[0]?.pages()[0] || await browser.contexts()[0].newPage()
             browser.on('disconnected',()=>{if(this.browser===browser){this.browser=null;this.page=null;this.emit('closed','MamaLead Chrome is closed. Open it to continue.')}})
-            this.emit('ready','MamaLead Chrome is open. Sign in to Google once before scanning.')
+            this.emit('opening','Checking the saved Google sign-in…')
             return
           }
         }
@@ -94,11 +115,26 @@ export class GoogleOwnerBrowser {
     }catch(error){child.kill();this.child=null;this.emit('error',error instanceof Error?error.message:String(error));throw error}
   }
   async open(){
+    this.closing=false
+    if(this.manual)return this.status()
+    if(!this.browser?.isConnected() && !existsSync(this.readyFile))return this.signIn()
+    return this.connect()
+  }
+  async connect(){
+    if(this.manual)throw new Error('Finish signing in and close the MamaLead Chrome window first, then click Connect saved sign-in.')
+    this.closing=false
+    const alreadyConnected=Boolean(this.browser?.isConnected())
     if(!this.browser?.isConnected()){
       this.launching ??= this.launch().finally(()=>{this.launching=null})
       await this.launching
     }
     if(!this.page || this.page.isClosed())this.page=await this.browser!.contexts()[0].newPage()
+    if(!alreadyConnected && !await this.signedIn()){
+      await this.close();rmSync(this.readyFile,{force:true})
+      this.emit('error','No saved Google sign-in was found. Click Sign in to Google, finish signing in and close that Chrome window, then connect again.')
+      throw new Error(this.state.message)
+    }
+    if(!alreadyConnected){writeFileSync(this.readyFile,'1\n','utf8');this.emit('ready','Google sign-in connected. Owner searches will use this saved account.')}
     await this.page.bringToFront()
     // BringToFront alone does not restore a minimized native Chrome window.
     const session=await this.page.context().newCDPSession(this.page)
@@ -113,19 +149,18 @@ export class GoogleOwnerBrowser {
     while(this.searching)await pause(50,signal)
     signal.throwIfAborted();await this.open();signal.throwIfAborted()
     if(await this.signedIn())return
-    const message='Sign in to Google in MamaLead Chrome. The scan will continue automatically; Stop cancels it.'
-    this.emit('sign-in',message);progress(message)
-    await this.page!.goto('https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fwww.google.com%2F&hl=en',{waitUntil:'domcontentloaded',timeout:15000}).catch(()=>undefined)
+    const message='Sign in to Google in the normal Chrome window. Close that window, then click Connect saved sign-in in MamaLead to continue the scan.'
+    progress(message)
     try{
       const deadline=Date.now()+5*60*1000
       while(Date.now()<deadline){
         signal.throwIfAborted()
-        if(!this.browser?.isConnected() || this.page?.isClosed())throw new Error('MamaLead Chrome was closed. Open it and retry the scan.')
-        if(await this.signedIn()){this.emit('ready','Signed in. Google searches will use this saved profile.');return}
+        if(this.state.phase==='error')throw new Error(this.state.message)
+        if(this.state.phase==='ready' && await this.signedIn())return
         await pause(750,signal)
       }
-      throw new Error('Google sign-in is still needed. Finish signing in, then retry the scan.')
-    }catch(error){this.emit(signal.aborted?'ready':'error',signal.aborted?'Scan stopped. Your Chrome profile stays saved.':error instanceof Error?error.message:String(error));throw error}
+      throw new Error('Google sign-in is still needed. Finish signing in, close Chrome and connect, then retry the scan.')
+    }catch(error){this.emit(signal.aborted?this.state.phase:'error',signal.aborted?'Scan stopped. You can finish signing in and connect before the next scan.':error instanceof Error?error.message:String(error));throw error}
   }
   async search(query:string,signal:AbortSignal,progress:(message:string)=>void=()=>{}):Promise<{hits:OrganicSearchHit[];error:string|null}>{
     if(this.searching)throw new Error('MamaLead Chrome is already checking another business. Wait for that scan or stop it first.')
@@ -142,6 +177,10 @@ export class GoogleOwnerBrowser {
       for(;;){
         signal.throwIfAborted()
         if(page.isClosed())throw new Error('MamaLead Chrome was closed. Open it and retry the scan.')
+        if(new URL(page.url()).hostname==='accounts.google.com'){
+          rmSync(this.readyFile,{force:true})
+          throw new Error('Google sign-in needs to be renewed. Stop this scan and use Sign in to Google to open the normal sign-in window.')
+        }
         const result=await readGoogleResults(page)
         if(result.challenge){
           if(!waiting){waiting=true;deadline=Date.now()+5*60*1000;const message='Google needs your attention. Complete the sign-in, consent or verification in MamaLead Chrome; the scan will resume.';this.emit('verification',message);progress(message);await page.bringToFront()}
@@ -161,10 +200,14 @@ export class GoogleOwnerBrowser {
     }finally{signal.removeEventListener('abort',stop);await stopping;this.searching=false}
   }
   async close(){
+    this.closing=true
     const browser=this.browser;this.browser=null;this.page=null
     if(browser?.isConnected()){
       try{const session=await browser.newBrowserCDPSession();await session.send('Browser.close')}catch{/* Chrome may already be closed. */}
     }
-    this.child=null;this.emit('closed','MamaLead Chrome is closed. Your sign-in stays in its saved profile.')
+    if(!browser)this.child?.kill()
+    this.child=null
+    // A manual authentication window belongs to the user; quitting MamaLead leaves it alone.
+    this.emit('closed','MamaLead Chrome is closed. Your sign-in stays in its saved profile.')
   }
 }

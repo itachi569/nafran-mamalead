@@ -223,6 +223,8 @@ const desktop = {
   ownerBrowser: {
     status: () => ipcRenderer.invoke('owner-browser:status'),
     open: () => ipcRenderer.invoke('owner-browser:open'),
+    connect: () => ipcRenderer.invoke('owner-browser:connect'),
+    signIn: () => ipcRenderer.invoke('owner-browser:sign-in'),
     onStatus: (listener: (status: import('./enrichment/google-browser').OwnerBrowserStatus) => void): Unsubscribe => subscribe('owner-browser:status',listener),
   },
   chooseWebsiteCsv: () => call<{ name: string; content: string; bytes: number } | null>('imports:chooseWebsiteCsv'),

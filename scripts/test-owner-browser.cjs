@@ -5,7 +5,16 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-browser-test-')),event
 const {findOwnerContact}=require('../dist-electron/enrichment/owner-search.js')
 const originalFetch=global.fetch,checks=[]
 async function main(){
- await browser.open();const page=browser.page,context=page.context();assert.ok(browser.status().open)
+ await browser.open()
+ assert.equal(browser.status().phase,'sign-in');assert.equal(browser.browser,null);assert.equal(browser.page,null)
+ assert.ok(!browser.manual.spawnargs.some(a=>/remote-debugging|AutomationControlled|enable-automation/.test(a)))
+ await assert.rejects(browser.connect(),/close the MamaLead Chrome window first/)
+ await new Promise(resolve=>setTimeout(resolve,1700))
+ const manual=browser.manual;const exited=new Promise(resolve=>manual.once('exit',resolve));manual.kill();await exited
+ assert.equal(browser.status().phase,'connect');checks.push('Manual sign-in has no automation connection or debugging flags; Connect waits until Chrome is closed')
+ // Seed a disposable test profile after the manual stage; no user account is involved.
+ await browser.launch();await browser.page.context().addCookies([{name:'SID',value:'fixture-only',domain:'.google.com',path:'/',secure:true,expires:Math.floor(Date.now()/1000)+3600}]);await browser.close()
+ await browser.connect();const page=browser.page,context=page.context();assert.ok(browser.status().open)
  assert.ok(!browser.child.spawnargs.some(a=>/enable-automation|AutomationControlled/.test(a)))
  const searches=[];let mode='normal'
  const result=(url,title='Northstar founder')=>`<div class="result"><a href="${url}"><h3>${title}</h3></a><p>Published company contact details.</p></div>`
@@ -33,7 +42,8 @@ async function main(){
  mode='empty';assert.deepEqual((await browser.search('empty',signal)).hits,[]);checks.push('Genuine empty results distinguished from blocked or unreadable pages')
  // Fake test session exists only in this disposable profile, never the user's profile.
  await context.addCookies([{name:'SID',value:'fixture-only',domain:'.google.com',path:'/',secure:true,expires:Math.floor(Date.now()/1000)+3600}])
- await browser.prepare(signal,()=>{});assert.ok(await browser.signedIn());await browser.close();await browser.open();assert.ok(await browser.signedIn());checks.push('Dedicated profile survives browser restart')
+ await browser.prepare(signal,()=>{});assert.ok(await browser.signedIn());await browser.close();await browser.open();assert.ok(await browser.signedIn());checks.push('Dedicated profile survives browser restart and reuses the explicit connection')
+ await browser.page.context().clearCookies();await browser.close();await assert.rejects(browser.connect(),/No saved Google sign-in/);assert.ok(!fs.existsSync(path.join(temp,'chrome','mamalead-session-ready')));checks.push('Expired or absent login reports recovery instead of automating Google authentication')
  await browser.close()
  const db=new LocalDatabase(path.join(temp,'leads.db')),repo=new Repository(db),ws=db.ensureWorkspace().id,credits=[],queries=[]
  const runner=new EnrichmentRunner(db,repo,{authorize:async()=>{},prepareOwnerSearch:async()=>{},ownerSearch:async q=>{queries.push(q);return {hits:[],error:'MamaLead Chrome was closed. Open it and retry.'}},consumeDecisionLead:async id=>credits.push(id)})

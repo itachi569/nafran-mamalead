@@ -3,7 +3,8 @@ const {GoogleOwnerBrowser}=require('../dist-electron/enrichment/google-browser.j
 const {findOwnerContact}=require('../dist-electron/enrichment/owner-search.js')
 const browser=new GoogleOwnerBrowser(fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-google-live-')))
 async function main(){
- await browser.open()
+ // Anonymous search smoke check; the sign-in workflow is exercised separately.
+ await browser.launch()
  const report=[]
  for(const domain of ['onesmartsheep.com','namecheap.com']){
   const controller=new AbortController(),queries=[],start=Date.now();let attention=''

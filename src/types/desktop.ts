@@ -514,12 +514,14 @@ export interface EmailValidityProgress {
   batchSize: number
 }
 
-export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'searching'|'verification'|'error';message:string;open:boolean}
+export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean}
 
 export interface DesktopApi {
   ownerBrowser: {
     status: () => Promise<OwnerBrowserStatus>
     open: () => Promise<OwnerBrowserStatus>
+    connect: () => Promise<OwnerBrowserStatus>
+    signIn: () => Promise<OwnerBrowserStatus>
     onStatus: (listener:(status:OwnerBrowserStatus)=>void) => () => void
   }
   chooseWebsiteCsv: () => Promise<{ name: string; content: string; bytes: number } | null>

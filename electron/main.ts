@@ -59,6 +59,8 @@ let enricher: EnrichmentRunner | null = null
 const ownerBrowser = new GoogleOwnerBrowser(join(app.getPath('userData'),'owner-google-chrome'),status=>broadcast('owner-browser:status',status))
 ipcMain.handle('owner-browser:status',()=>ownerBrowser.status())
 ipcMain.handle('owner-browser:open',()=>ownerBrowser.open())
+ipcMain.handle('owner-browser:connect',()=>ownerBrowser.connect())
+ipcMain.handle('owner-browser:sign-in',()=>ownerBrowser.signIn())
 
 /**
  * The DataForSEO credential, held in memory for as long as the app is open.
@@ -1226,7 +1228,7 @@ app.on('window-all-closed', () => {
 
 let closingOwnerBrowser=false
 app.on('before-quit',event=>{
-  if(closingOwnerBrowser || !ownerBrowser.status().open)return
+  if(closingOwnerBrowser || (!ownerBrowser.status().open && ownerBrowser.status().phase!=='opening'))return
   event.preventDefault();closingOwnerBrowser=true;enricher?.stop()
   void ownerBrowser.close().finally(()=>app.quit())
 })

@@ -7,11 +7,18 @@ This is local browser mode, not offline search: Google and linked sources still
 need internet. No DataForSEO request is made by the app's Decision Makers or deep
 owner queue. Existing license and per-company credit checks remain active.
 
-Open **Decision Makers → Open Chrome & sign in**. Sign in directly on Google's
-page. Import websites and start the scan; **Show Chrome** restores the search
-window, including after it was minimized. Google session expiration may require
-sign-in again. The app does not handle passwords, rewrite session-cookie expiry,
-solve CAPTCHAs, or suppress browser security checks.
+Open **Decision Makers → Open Chrome & sign in**. This first window is ordinary
+installed Chrome, without remote debugging, Playwright or any automation-hiding
+flags. Sign in directly on Google's page, close that Chrome window, then click
+**Connect saved sign-in** in MamaLead. Only this explicit second action attaches
+the search controller. A saved-session hint allows future runs to reuse the
+profile, but it never replaces checking the actual Google session.
+
+Import websites and start the scan; **Show Chrome** restores the search window,
+including after it was minimized. To renew an expired login, stop the scan and
+choose **Sign in to Google** to reopen the normal manual window. Sign-in is never
+attempted inside the controlled search window. The app does not handle passwords,
+rewrite session-cookie expiry, solve CAPTCHAs, or suppress browser security checks.
 
 Each business uses at most two distinct searches:
 
@@ -49,6 +56,11 @@ Validation:
   two-query limits, durable outcomes, 50-company scope and cancellation.
 - `node scripts/verify-owner-browser-live.cjs`: anonymous live smoke check;
   stops and reports if Google asks for human verification.
+
+The sign-in regression checks assert that the manual window has no debugging
+switches or automation connection, connection cannot start while it is open,
+and a missing/expired session returns a recovery instruction. They do not prove
+that Google will accept a particular real account; the user completes that step.
 
 The QA scripts use fixture cookies only in disposable test profiles. They never
 seed or modify authentication in the user's real Chrome or MamaLead profiles.
