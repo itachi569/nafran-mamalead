@@ -260,9 +260,10 @@ export async function fetchEmailRows(
   if (!leadRows.length) return { rows: [], total }
 
   const leadIds = leadRows.map((lead) => lead.id)
-  const [contacts, queued] = await Promise.all([
+  const [contacts, queued, outcomes] = await Promise.all([
     db.contacts.list('email', leadIds),
     db.jobs.covered('email', ['queued', 'running']),
+    db.jobs.outcomes?.('email') ?? Promise.resolve({}),
   ])
 
   const pending = new Set(queued)
@@ -278,6 +279,7 @@ export async function fetchEmailRows(
     const addresses = (byLead.get(lead.id) ?? []).sort(compareEmailContacts).slice(0,1)
     const best = bestOf(addresses)
     const domain = domainOf(lead.website)
+    const outcome = (outcomes as Record<string,{status:string;error?:string}>)[lead.id]
 
     let tone: EmailTone
     let statusLabel: string
@@ -292,7 +294,7 @@ export async function fetchEmailRows(
       statusLabel = 'Pending'
     } else {
       tone = 'unverified'
-      statusLabel = 'No email'
+      statusLabel = outcome?.status==='error'?'Failed — retry':outcome?.status==='not-published'?'No email published':'Not scanned yet'
     }
 
     const extras = Math.max(0, addresses.length - 1)
@@ -301,7 +303,7 @@ export async function fetchEmailRows(
       index: String(offset + position + 1).padStart(3, '0'),
       name: lead.name,
       domain: domain || '—',
-      primary: best?.value ?? 'No email found',
+      primary: best?.value ?? (outcome?.status==='error'?outcome.error || 'Scan failed — retry':statusLabel),
       hasExtras: extras > 0,
       extrasLabel: `+${extras}`,
       tone,

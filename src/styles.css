@@ -277,3 +277,7 @@ html,body,#root{width:100%;min-width:0;min-height:100%;}#root{overflow-x:clip}
 [data-maps-plan]{cursor:default}.wl-row-error{color:#933b31}button:disabled{cursor:not-allowed;opacity:.5}
 
 .finder-scan-action{height:44px;border:0;border-radius:999px;padding:0 20px;background:#1c1c1c;color:#f5f5f4;font:inherit;font-size:13.5px;cursor:pointer}
+
+/* Labels grow rightward from their clamped map anchor, never outside the left edge. */
+[data-pin][data-on="y"]{transform:translate(0,-100%) scale(1)}
+[data-coverage-activity][data-stale="y"] [data-pin]{opacity:.85;box-shadow:none!important}

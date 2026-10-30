@@ -2,6 +2,19 @@ import ExcelJS from 'exceljs'
 
 export const WEBSITE_FILE_LIMIT = 20 * 1024 * 1024
 
+export function websiteCellText(cell: ExcelJS.Cell): string {
+  // ExcelJS's .text getter throws on a hyperlink cell whose display value is null.
+  const value = cell.value
+  if (value == null || cell.isMerged && cell.master.address !== cell.address) return ''
+  if (typeof value !== 'object') return String(value)
+  if (value instanceof Date) return value.toISOString()
+  if ('richText' in value) return value.richText.map(part => part.text ?? '').join('')
+  if ('hyperlink' in value) return String(value.text || value.hyperlink || '')
+  if ('result' in value) return value.result == null ? '' : String(value.result)
+  if ('text' in value) return String(value.text ?? '')
+  return ''
+}
+
 /** Both the native picker and dropped files use the same byte-level validation. */
 export async function readWebsiteFile(name: string, bytes: Uint8Array): Promise<{name:string;content:string;bytes:number}> {
   if (!/\.(csv|tsv|xlsx)$/i.test(name)) throw new Error('Choose a CSV, TSV or Excel (.xlsx) website list.')
@@ -19,7 +32,7 @@ export async function readWebsiteFile(name: string, bytes: Uint8Array): Promise<
     const rows: string[] = []
     sheet.eachRow(row => {
       const cells: string[] = []
-      row.eachCell({includeEmpty:true}, cell => cells.push('"' + cell.text.replace(/"/g, '""') + '"'))
+      row.eachCell({includeEmpty:true}, cell => cells.push('"' + websiteCellText(cell).replace(/"/g, '""') + '"'))
       rows.push(cells.join(','))
     })
     content = rows.join('\n')

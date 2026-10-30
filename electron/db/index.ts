@@ -24,6 +24,7 @@ export function openDatabase(): { db: LocalDatabase; repository: Repository } {
   repository.recoverInterruptedRuns()
   repository.repairSocialProfiles()
   repository.collapseBusinessEmails()
+  repository.recomputeLeadScore()
   return { db: database, repository }
 }
 

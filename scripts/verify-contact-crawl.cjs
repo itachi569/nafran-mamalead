@@ -31,7 +31,7 @@ async function main() {
     assert.ok(!seen.some(url=>url.includes('who=template')))
     assert.deepEqual(addressesFromHtml('<p>The High Courts operate under Article 199 and this chambers appears before them.</p>'),[])
     const controller=new AbortController();controller.abort()
-    await assert.rejects(()=>enricher.inspectContactFast(base,controller.signal),/cancel/i)
+    await assert.rejects(()=>enricher.inspectContactFast(base,controller.signal),/cancel|abort/i)
     console.log('PASS robots → sitemap index → page sitemap → contact, published emails, multiple office addresses, person email, no paragraph address, cancellation')
     if(process.argv.includes('--live')) {
       for(const url of ['https://www.mandviwallaandzafar.com/','https://gssla.com.pk/']) {

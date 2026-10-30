@@ -318,7 +318,10 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   }
 
   sheet.addRow(table.columns)
-  for (const row of table.values) sheet.addRow(row)
+  for (const row of table.values) sheet.addRow(row.map((value,index)=>{
+    const numeric=['Rating','Review count','Score','Found','Max results'].includes(table.columns[index])
+    return numeric && String(value).trim()!=='' && Number.isFinite(Number(value)) ? Number(value) : value
+  }))
   const headerRow = sheet.getRow(4)
   headerRow.height = 30
   headerRow.font = { name: 'Aptos', size: 11, bold: true, color: { argb: 'FFFFFFFF' } }

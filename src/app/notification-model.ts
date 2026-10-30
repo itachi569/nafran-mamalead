@@ -1,3 +1,4 @@
+import { userError } from '../../electron/user-errors'
 export const NOTIFICATIONS_STORAGE_KEY = 'nafran.notifications'
 export const MAX_NOTIFICATIONS = 200
 export type NotificationKind = 'scrape' | 'import' | 'warn' | 'export' | 'billing' | 'system'
@@ -6,6 +7,7 @@ export type NotificationAction = { type: 'view'; view: NotificationView; runId?:
 export interface AppNotification {
   id: string; title: string; body: string; at: string; level: 'info' | 'success' | 'error'; unread: boolean
   runId?: string; kind?: NotificationKind; chips?: string[]; action?: NotificationAction; actionLabel?: string; eventKey?: string
+  updates?: {key:string;title:string;body:string;level:AppNotification['level']}[]
 }
 export type NotificationDetails = Pick<AppNotification, 'kind' | 'chips' | 'action' | 'actionLabel' | 'eventKey'>
 
@@ -57,10 +59,11 @@ export function readStoredNotifications(): AppNotification[] {
       const item=value as Partial<AppNotification>
       if(typeof item.id!=='string'||seen.has(item.id)||typeof item.title!=='string'||typeof item.body!=='string'||typeof item.at!=='string'||!Number.isFinite(Date.parse(item.at))||!['info','success','error'].includes(String(item.level))||typeof item.unread!=='boolean')return []
       seen.add(item.id)
-      return [{id:item.id,title:item.title,body:item.body,at:item.at,level:item.level!,unread:item.unread,runId:typeof item.runId==='string'?item.runId:undefined,
+      return [{id:item.id,title:item.title,body:item.level==='error'?userError(item.body):item.body,at:item.at,level:item.level!,unread:item.unread,runId:typeof item.runId==='string'?item.runId:undefined,
         kind:['scrape','import','warn','export','billing','system'].includes(String(item.kind))?item.kind:undefined,
         chips:Array.isArray(item.chips)?item.chips.filter((chip):chip is string=>typeof chip==='string').slice(0,4):[],
-        action:safeAction(item.action),actionLabel:typeof item.actionLabel==='string'?item.actionLabel:undefined,eventKey:typeof item.eventKey==='string'?item.eventKey:undefined}]
+        action:safeAction(item.action),actionLabel:typeof item.actionLabel==='string'?item.actionLabel:undefined,eventKey:typeof item.eventKey==='string'?item.eventKey:undefined,
+        updates:Array.isArray(item.updates)?item.updates.filter(update=>update&&typeof update.key==='string'&&typeof update.title==='string'&&typeof update.body==='string'&&['info','success','error'].includes(update.level)).slice(-8):undefined}]
     }).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,MAX_NOTIFICATIONS)
   } catch {return []}
 }

@@ -32,7 +32,7 @@ export interface EnrichmentProgress {
   leadName: string
   message: string
   at: string
-  outcomes?: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}>
+  outcomes?: Record<string,{status:'found'|'not-published'|'error'|'pending'|'skipped';searches:number;error?:string}>
   activeLeadIds?: string[]
 }
 
@@ -231,9 +231,7 @@ export class EnrichmentRunner {
       const lead = this.repository.getLead(job.workspace_id, leadId)
       if (!lead || !lead.website) {
         processed += 1
-        failed += 1
-        searchFailure = 'Some saved businesses have no website to scan.'
-        this.outcomes[leadId] = {status:'error',searches:0,error:'No website is saved for this business.'}
+        this.outcomes[leadId] = {status:'skipped',searches:0,error:'No business website is saved. Add one to scan this business.'}
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead?.name || '',message:'Skipped a business without a website.'})
         return
       }
@@ -265,7 +263,7 @@ export class EnrichmentRunner {
           ? this.enricher.inspectContactFast(lead.website, signal,true)
           : this.enricher.inspectContactFast(lead.website, signal)
       const findings = await waitForAbort(inspect, signal)
-      if ((kind === 'email' || (isLookup && fields.email)) && !findings.emails.length && !signal.aborted) {
+      if ((kind === 'email' || (isLookup && fields.email)) && !findings.error && !findings.emails.length && !signal.aborted) {
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Checking the website's displayed contact pages for ${lead.name}…`})
         const renderedSignal=AbortSignal.any([signal,AbortSignal.timeout(35_000)])
         const closeRendered=()=>{void this.enricher.close()}
@@ -288,6 +286,8 @@ export class EnrichmentRunner {
       // 403/timeout brings back the long modal that this foreground pass is meant to avoid; the
       // result is still durable and the user can retry a site that does not expose server HTML.
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
+      if (findings.canonicalWebsite) this.repository.saveCanonicalWebsite(leadId, findings.canonicalWebsite)
+      findings.socials = findings.socials.filter((profile,index,all)=>all.findIndex(item=>item.platform===profile.platform)===index)
       findings.emails.sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
       findings.emails=findings.emails.slice(0,1)
       if (siteFailure) findings.error = siteFailure
@@ -389,11 +389,11 @@ export class EnrichmentRunner {
     if (fatal) throw fatal
 
     if (signal.aborted) throw new DOMException('Enrichment cancelled','AbortError')
-    this.repository.markJob(job.id, searchFailure ? 'failed' : 'done', found, searchFailure)
+    this.repository.markJob(job.id, searchFailure && failed === leadIds.length ? 'failed' : 'done', found, searchFailure)
     this.emit({
       jobId: job.id,
       kind,
-      status: searchFailure ? 'failed' : 'done',
+      status: searchFailure && failed === leadIds.length ? 'failed' : 'done',
       processed,
       total: leadIds.length,
       found,

@@ -156,7 +156,7 @@ export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow>
 }
 
 const CIRCUMFERENCE = 276.5
-const EMPTY_PROGRESS = { total: 0, processed: 0, failed: 0, found: 0, leadName: '', message: '', outcomes:{} as NonNullable<EnrichmentJobStatus['outcomes']> }
+const EMPTY_PROGRESS = { total: 0, processed: 0, failed: 0, found: 0, leadName: '', message: '', activeLeadIds:[] as string[], outcomes:{} as NonNullable<EnrichmentJobStatus['outcomes']> }
 
 /** Search normalization so "Northern  Spine" finds "Northern Spine & Sports Clinic". */
 export function matchesFinderSearch(haystack: string, needle: string): boolean {
@@ -384,7 +384,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         const status = await statusForJob(jobId)
         if (cancelled) return
         if (status) {
-          setProgress({ total: status.total, processed: status.processed, failed: status.failed, found: status.found, leadName: status.leadName, message: status.message, outcomes:status.outcomes ?? {} })
+          setProgress({ total: status.total, processed: status.processed, failed: status.failed, found: status.found, leadName: status.leadName, message: status.message, activeLeadIds:status.activeLeadIds ?? [], outcomes:status.outcomes ?? {} })
           if (status.processed !== lastProcessed) {
             lastProcessed = status.processed
             await sourceRef.current.refresh()
@@ -399,7 +399,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         }
         await sourceRef.current.refresh()
         if (cancelled) return
-        if (status.status === 'failed') setFailure(status.message || 'Some websites could not be checked. Saved results are shown below; retry the unsuccessful websites.')
+        if (status.status === 'failed' || status.failed > 0) setFailure(status.message || 'Some websites could not be checked. Saved results are shown below; retry the unsuccessful websites.')
         setStopped(status.status === 'cancelled')
         setRunning(false)
         active.current = false
@@ -458,25 +458,27 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
       revealed.map((row) => {
         const position = scopeIds?.indexOf(row.leadId) ?? -1
         const tracked = scanOn && position >= 0
-        const outcome = (tracked ? progress.outcomes[row.leadId] : undefined) ?? savedOutcomes[row.leadId]
-        const attempted = tracked ? position < progress.processed : Boolean(outcome) || row.scanned
-        const checking = running && (tracked ? position === progress.processed : !row.scanned)
+        const noWebsite=!row.domain || ['—','No website','No website found'].includes(row.domain)
+        const outcome = noWebsite ? {status:'skipped' as const,searches:0} : tracked && running ? progress.outcomes[row.leadId] ?? {status:'pending' as const,searches:0} : (tracked ? progress.outcomes[row.leadId] : undefined) ?? savedOutcomes[row.leadId]
+        const attempted = outcome ? !['pending','skipped'].includes(outcome.status) : tracked ? position < progress.processed : row.items.length>0
+        const checking = running && tracked && outcome?.status==='pending' && (progress.activeLeadIds.includes(row.leadId) || !progress.activeLeadIds.length && position===progress.processed)
         const failed = !checking && outcome?.status === 'error'
         return ({
         ...row,
         lookupOutcome: checking ? undefined : outcome,
         domain: row.domain || 'No website',
+        primary: row.items.length ? (row as Row & {primary?:string}).primary : outcome?.status === 'error' ? outcome.error || 'Scan failed — retry' : outcome?.status === 'skipped' || !row.domain || row.domain==='—' ? 'No website to scan' : outcome?.status==='not-published' ? 'No email published' : 'Not scanned yet',
         scanning: checking,
-        scanLabel: failed ? outcome?.error || 'Scan failed. Retry this website.' : checking ? 'Scanning…' : tracked && !attempted ? 'Not scanned yet' : '',
+        scanLabel: checking ? 'Scanning…' : outcome?.status === 'skipped' ? outcome.error || 'No website to scan' : outcome?.status === 'pending' ? 'Waiting to scan…' : failed ? outcome?.error || 'Scan failed. Retry this website.' : tracked && !attempted ? 'Not scanned yet' : '',
         items: source.filterItemsOnSearch && term
           ? row.items.filter((item) => matchesFinderSearch(`${row.searchText ?? ''} ${row.domain} ${item.t} ${item.k}`, term))
           : row.items,
-        none: !running && !failed && row.items.length === 0,
+        none: !running && !failed && outcome?.status === 'not-published' && row.items.length === 0,
         pill: checking ? 'scanning' : failed ? 'failed' : attempted ? 'done' : 'pending',
-        status: checking ? 'Scanning' : failed ? 'Failed — retry scan' : attempted ? 'Done' : tracked ? 'Not scanned yet' : row.statusLabel || 'Pending',
+        status: checking ? 'Scanning' : outcome?.status === 'skipped' ? 'No website' : outcome?.status === 'pending' ? 'Pending scan' : failed ? 'Failed — retry scan' : attempted ? 'Done' : tracked ? 'Not scanned yet' : row.statusLabel || 'Pending',
         onThisSite: row.items.length > 0,
       })}),
-    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed,progress.outcomes,savedOutcomes],
+    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed,progress.outcomes,progress.activeLeadIds,savedOutcomes],
   )
 
   const scanned = useMemo(

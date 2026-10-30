@@ -30,11 +30,11 @@ export function createAssistService({ env, store, ErrorType, providerFetch = fet
     })
     if (messages.at(-1).role !== 'user') fail(400, 'The last chat message must be from the user.')
     const context = {}
-    const allowed = ['page', 'totalLeads', 'leadsWithEmail', 'leadsWithPhone', 'leadsWithSocialProfiles', 'namedDecisionMakers', 'missingDecisionMakers', 'leadsReadyToExport', 'mapsRuns', 'placesCaptured']
+    const allowed = ['page', 'totalLeads', 'leadsWithEmail', 'leadsWithPhone', 'leadsWithSocialProfiles', 'namedDecisionMakers', 'missingDecisionMakers', 'leadsReadyToExport', 'mapsRuns', 'placesCaptured', 'recentScanErrors', 'mapsError', 'troubleshootingRule']
     for (const name of allowed) {
       const value = payload.context?.[name]
       if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) || value === null) context[name] = value
-      else if (typeof value === 'string') context[name] = value.slice(0, 100)
+      else if (typeof value === 'string') context[name] = value.slice(0, name==='recentScanErrors'?4000:500)
     }
     const paid = Boolean(status.coreLicenseActive && status.lifetime?.active || status.decisionMaker?.active && status.decisionMaker.status.startsWith('paid'))
     const trial = Boolean(status.trial?.active)
@@ -56,7 +56,7 @@ export function createAssistService({ env, store, ErrorType, providerFetch = fet
       const model = env.CEREBRAS_MODEL || 'gpt-oss-120b'
       const response = await providerFetch('https://api.cerebras.ai/v1/chat/completions', {
         method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.2, max_tokens: 400, messages: [
+        body: JSON.stringify({ model, temperature: 0.2, max_tokens: 1600, messages: [
           { role: 'system', content: systemPrompt+'\n\nCURRENT IMPORT WORKFLOW: In Email Finder, Phone Finder or Social Profiles, click "Import websites", select "Paste links" (one website per line), "Upload a file" (CSV/TSV), or "From a Maps run", then click "Scan N sites" (N is the selected count). Scanning starts automatically and results appear in the app. There is no additional "Import", "Find Emails", "Run" or "Search" button to press after that scan. "History" is a button for previous saved searches, not a tab. Never invent a control name.\n\n'+assistLanguagePolicy },
           { role: 'system', content: JSON.stringify({ workspace: context, serverBilling: { licenseKind: status.license?.active ? status.license.kind : 'inactive', decisionMakerSearchesRemaining: status.decisionMaker?.monthlyRemaining ?? null, decisionMakerPeriodEndsAt: status.decisionMaker?.renewsAt ?? null } }) },
           ...messages,
@@ -67,6 +67,7 @@ export function createAssistService({ env, store, ErrorType, providerFetch = fet
         fail(response.status === 429 ? 429 : 503, 'MamaLead Assist is temporarily busy. Please try again shortly.')
       }
       const data = await response.json()
+      if (data?.choices?.[0]?.finish_reason === 'length') fail(502, 'The answer was interrupted. Please retry with a shorter question.')
       const text = data?.choices?.[0]?.message?.content
       if (typeof text !== 'string' || !text.trim()) fail(502, 'MamaLead Assist returned an empty answer. Please try again.')
       return { text: text.trim().slice(0, 12000), model, remaining: result[1], limit }

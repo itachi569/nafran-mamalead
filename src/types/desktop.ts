@@ -411,7 +411,7 @@ export interface LocalApi {
 /** Progress the enrichment worker reports while it reads lead websites. */
 export interface EnrichmentJobStatus {
   activeLeadIds?: string[]
-  outcomes?: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}>
+  outcomes?: Record<string,{status:'found'|'not-published'|'error'|'pending'|'skipped';searches:number;error?:string}>
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
   processed: number
   total: number

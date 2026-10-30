@@ -1,0 +1,173 @@
+// Isolated UI regression checks for the combined 1.4.20 QA report.
+const assert=require('node:assert/strict')
+const {mkdtempSync,mkdirSync}=require('node:fs')
+const {tmpdir}=require('node:os')
+const {join,resolve}=require('node:path')
+const {_electron}=require('playwright')
+async function main(){
+ const out=resolve('screenshots/qa-1.4.21/ui');mkdirSync(out,{recursive:true})
+ const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
+ const app=await _electron.launch({...(process.argv.includes('--packaged')?{executablePath:resolve('release/win-unpacked/MamaLead.exe')}:{args:['.'],cwd:process.cwd()}),args:[...(process.argv.includes('--packaged')?[]:['.']),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-qa-ui-'))],env,timeout:60000})
+ try{
+  const initial=await app.firstWindow();await initial.locator('[data-view="dashboard"]').waitFor()
+  await app.evaluate(({app,ipcMain})=>{
+   const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'))
+   const {db,repository}=req('./dist-electron/db/index.js').openDatabase(),ws=db.ensureWorkspace().id
+   globalThis.__qa={active:false,activations:0,trials:0,db,repository,ws}
+   const override=(name,fn)=>{ipcMain.removeHandler(name);ipcMain.handle(name,fn)}
+   override('billing:status',()=>({configured:true,connected:true,mode:'test',coreLicenseActive:__qa.active,license:{active:__qa.active,kind:__qa.active?'lifetime':null,last4:__qa.active?'ABCD':null,email:'qa@fixture.test'},lifetime:{active:__qa.active,amount:1000000,currency:'pkr'},mapsLeads:{used:0,remaining:300,limit:300},trial:{active:false}}))
+   override('billing:request-trial',()=>{__qa.trials++;return {sent:true,email:'qa@fixture.test'}})
+   override('billing:activate',()=>{__qa.activations++;__qa.active=true;return {active:true,kind:'lifetime'}})
+   override('billing:invoices',()=>[])
+  })
+  const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message))
+  await page.reload();await page.locator('[data-view="maps"]').waitFor()
+  await page.click('[data-view="maps"]')
+  assert.equal(await page.locator('[data-location="1"]').isDisabled(),true)
+  await page.getByRole('button',{name:'Activate / Start trial',exact:true}).click()
+  await page.getByRole('button',{name:'Get my 1-day trial',exact:true}).waitFor()
+  await page.getByRole('button',{name:'Get my 1-day trial',exact:true}).click()
+  await page.locator('#desktop-trial-email').waitFor()
+  assert.ok(await page.locator('#desktop-trial-email').isVisible())
+  await page.locator('#desktop-trial-email').fill('qa@fixture.test')
+  await page.getByRole('button',{name:'Send trial key',exact:true}).click()
+  await page.waitForTimeout(350)
+  assert.equal(await app.evaluate(()=>__qa.trials),1)
+  await page.screenshot({path:join(out,'trial.png')})
+  console.log('PASS locked Maps field opens gate; trial CTA reveals form and submits once')
+  await page.click('[data-stab="acct"]')
+  const key=page.locator('#nafran-license-key')
+  await key.fill(' nf-abcd ')
+  assert.equal(await key.inputValue(),'NF-ABCD')
+  await page.getByRole('button',{name:'Show key',exact:true}).click()
+  assert.equal(await key.getAttribute('type'),'text')
+  await page.getByRole('button',{name:'Activate',exact:true}).click()
+  assert.equal(await app.evaluate(()=>__qa.activations),0,'malformed key must be stopped before IPC')
+  await page.locator('[data-license-notice]').filter({hasText:/NF|key/i}).waitFor()
+  await key.fill('NF'+('-ABCD'.repeat(10)))
+  await page.getByRole('button',{name:'Activate',exact:true}).click()
+  await page.getByRole('button',{name:'Use a different key',exact:true}).waitFor()
+  assert.equal(await key.count(),0)
+  assert.match(await page.locator('#license-section').innerText(),/ending ABCD/)
+  await page.screenshot({path:join(out,'active-license.png')})
+  await page.click('[data-stab="plan"]')
+  assert.equal(await page.locator('#trial-section').count(),0)
+  assert.equal(await page.locator('[data-lifetime-buy]').count(),0)
+  console.log('PASS key normalization/show/validation; active card replaces input; Lifetime upsells hidden')
+  await app.evaluate(()=>{
+   const {repository,ws}=__qa
+   const imported=repository.importWebsites(ws,['qa-clinic.test'])
+   const id=imported.leadIds[0];__qa.leadId=id
+   __qa.db.run('update leads set name=?,phone=?,address=?,rating=?,review_count=? where id=?',['QA Clinic — Lahore','03001234567','Lahore, Pakistan',4.5,30,id])
+   repository.upsertContact({leadId:id,kind:'email',value:'hello@qa-clinic.test',source:'https://qa-clinic.test'})
+   for(const kind of ['email','phone','social']){
+    const job=repository.queueJob(ws,kind,[id])
+    repository.markJob(job.jobId,'failed',0,'Website returned HTTP 503.')
+    repository.saveJobProgress(job.jobId,{status:'failed',processed:1,total:1,found:0,failed:1,outcomes:{[id]:{status:'error',error:'Website returned HTTP 503.',searches:0}}})
+   }
+  })
+  await page.reload();await page.locator('[data-view="leads"]').click()
+  await page.getByRole('button',{name:'QA Clinic — Lahore',exact:true}).first().click()
+  await page.getByRole('dialog',{name:'Lead details'}).waitFor()
+  const detail=await page.getByRole('dialog',{name:'Lead details'}).innerText()
+  assert.match(detail,/hello@qa-clinic.test/);assert.match(detail,/Lahore, Pakistan/);assert.match(detail,/4.5 \/ 5/)
+  await page.screenshot({path:join(out,'lead-details.png')})
+  await page.getByRole('button',{name:'Close lead details'}).click()
+  for(const view of ['email','phone','social']){
+   await page.click('[data-view="'+view+'"]')
+   await page.getByText(/Scan failed|Failed — retry scan/).first().waitFor({timeout:10000})
+   await page.getByText('Website returned HTTP 503.',{exact:false}).first().waitFor()
+   await page.screenshot({path:join(out,view+'-failure.png')})
+  }
+  await page.getByRole('button',{name:'Scan visible websites',exact:true}).waitFor()
+  console.log('PASS lead details; email/phone/social persist failure reason on route entry; social scan action')
+
+  // New QA report: recovery, navigation, identity and notification polish.
+  await page.click('[data-view="settings"]');await page.click('[data-stab="acct"]')
+  await page.getByRole('button',{name:'Use a different key',exact:true}).click()
+  await page.getByRole('button',{name:'Cancel key change',exact:true}).click()
+  assert.equal(await page.locator('#nafran-license-key').count(),0)
+  await page.getByRole('button',{name:'Use a different key',exact:true}).click()
+  await page.locator('#nafran-license-key').fill('NF'+('-DCBA'.repeat(10)))
+  const rejected=page.waitForEvent('dialog').then(async dialog=>{assert.match(dialog.message(),/Replace the active license/);await dialog.dismiss()})
+  await page.getByRole('button',{name:'Activate',exact:true}).click();await rejected
+  assert.equal(await app.evaluate(()=>__qa.activations),1)
+  await page.getByRole('button',{name:'Cancel key change',exact:true}).click()
+  await app.evaluate(()=>{
+    const {repository:repo,ws,db}=__qa,at=new Date().toISOString()
+    repo.saveRun(ws,{provider:'chromium-maps',runId:'qa-maps',status:'done',keywords:['dentist'],location:'Lahore',maxResultsPerKeyword:25,detail:true,durationMs:1000,startedAt:at,finishedAt:at,error:null,leads:Array.from({length:25},(_,i)=>({placeRef:'p'+i,name:'Clinic — Branch '+i,website:'https://clinic'+i+'.test',latitude:31.5+i*.001,longitude:74.3+i*.001}))})
+    const list=repo.createList(ws,'QA three members');repo.addLeadsToList(list.id,repo.listLeads(ws,{limit:3}).rows.map(x=>x.id))
+  })
+  await page.evaluate(()=>localStorage.removeItem('mamalead.maps.draft'))
+  await page.reload();await page.click('[data-view="maps"]')
+  await page.waitForFunction(()=>document.querySelector('[data-location]')?.value==='Lahore')
+  assert.match(await page.title(),/Google Maps/)
+  await page.locator('[data-location]').fill('Karachi')
+  await page.getByText(/Next run: Karachi/).waitFor()
+  assert.match(await page.locator('[data-coverage-activity]').innerText(),/Showing 8 pins of 25/)
+  const pins=await page.locator('[data-coverage-activity] [data-pin]').evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect(),p=node.parentElement.getBoundingClientRect();return {x:r.x,right:r.right,left:p.left,edge:p.right,name:node.title}}))
+  assert.ok(pins.every(p=>p.x>=p.left&&p.right<=p.edge+1&&p.name.startsWith('Clinic')),JSON.stringify(pins))
+  await page.locator('[data-coverage-activity]').scrollIntoViewIfNeeded()
+  await page.screenshot({path:join(out,'coverage-qa21.png')})
+  await page.click('[data-view="lists"]')
+  await page.getByText('QA three members',{exact:true}).waitFor()
+  const card=page.locator('section').filter({has:page.getByText('QA three members',{exact:true})}).last()
+  assert.doesNotMatch(await card.innerText(),/\bNS\b|\bAT\b/)
+  assert.ok(await page.getByText('Recent saved captures',{exact:true}).count())
+  await page.click('[data-view="leads"]')
+  const leadButton=page.getByRole('button',{name:'QA Clinic — Lahore',exact:true}).first()
+  await leadButton.click();await page.getByRole('dialog',{name:'Lead details'}).waitFor()
+  await page.keyboard.press('Escape');await page.getByRole('dialog',{name:'Lead details'}).waitFor({state:'hidden'});assert.equal(await page.getByRole('dialog',{name:'Lead details'}).count(),0)
+  assert.equal(await leadButton.evaluate(el=>document.activeElement===el),true)
+  for(const view of ['email','phone','social','runs']){await page.click('[data-view="'+view+'"]');assert.doesNotMatch(await page.title(),/Dashboard/)}
+  await app.evaluate(({BrowserWindow})=>{
+    const win=BrowserWindow.getAllWindows()[0]
+    win.webContents.send('enrichment:progress',{jobId:'qa-phone',runId:'qa-shared',kind:'phone',status:'done',processed:3,total:3,found:2,failed:1,message:'2 websites checked; 1 needs a retry',at:new Date().toISOString()})
+    win.webContents.send('enrichment:progress',{jobId:'qa-email',runId:'qa-shared',kind:'email',status:'done',processed:3,total:3,found:2,failed:0,message:'2 emails found',at:new Date().toISOString()})
+    win.webContents.send('notifications:export-saved',{eventId:'qa-export',fileName:'qa.xlsx',path:'C:/qa.xlsx',rows:3,bytes:1024,kind:'leads'})
+  })
+  await page.waitForTimeout(300)
+  const notes=await page.evaluate(()=>JSON.parse(localStorage.getItem('nafran.notifications')||'[]'))
+  const grouped=notes.filter(n=>n.eventKey==='run:qa-shared'); assert.equal(grouped.length,1)
+  assert.equal(grouped[0].level,'error');assert.equal(grouped[0].unread,true)
+  assert.match(grouped[0].body,/1 needs a retry/);assert.match(grouped[0].body,/2 emails found/)
+  assert.equal(notes.find(n=>n.eventKey==='export:qa-export').unread,false)
+  await page.reload();await page.locator('[data-view="dashboard"]').waitFor()
+  const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('nafran.notifications')||'[]'))
+  assert.equal(after.find(n=>n.eventKey==='run:qa-shared').updates.length,2)
+  console.log('PASS grouped notification retains partial failures and successful phases after reload; export adds no unread badge')
+  console.log('PASS QA21 key cancel/confirmation, location recovery, map labels/count, true avatars, page titles and Escape/focus')
+
+  await app.evaluate(()=>{
+    const {repository:repo,ws,db}=__qa
+    const [pending,empty,nosite]=repo.importWebsites(ws,['pending-qa.test','empty-qa.test','nosite-qa.test'],false).leadIds
+    db.run("update leads set website='' where id=?",[nosite])
+    for(const kind of ['email','phone','social']){
+      repo.queueJob(ws,kind,[pending])
+      const done=repo.queueJob(ws,kind,[empty]);repo.markJob(done.jobId,'done',0,null)
+      repo.saveJobProgress(done.jobId,{status:'done',processed:1,total:1,found:0,failed:0,outcomes:{[empty]:{status:'not-published',searches:0}}})
+    }
+  })
+  await page.reload();await page.locator('[data-view="dashboard"]').waitFor()
+  for(const view of ['email','phone','social']){
+    await page.click('[data-view="'+view+'"]')
+    const waiting=page.locator('[data-row]').filter({hasText:'pending-qa.test'}).first()
+    const missing=page.locator('[data-row]').filter({hasText:'nosite-qa.test'}).first()
+    await waiting.waitFor();await missing.waitFor()
+    assert.doesNotMatch(await waiting.innerText(),/No (?:email|profiles|number) found/)
+    assert.match(await waiting.innerText(),/Pending|Waiting|Not scanned/)
+    assert.match(await missing.innerText(),/No website/)
+    assert.doesNotMatch(await missing.innerText(),/Pending|No (?:email|profiles) found/)
+  }
+  console.log('PASS unscanned, no-website and empty successful results remain distinct in all finders')
+
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].maximize())
+  await page.waitForTimeout(400)
+  const sizes=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,root:document.querySelector('#root').getBoundingClientRect().width,scroll:document.documentElement.scrollWidth}))
+  assert.ok(Math.abs(sizes.viewport-sizes.root)<2 && sizes.scroll<=sizes.viewport+1,JSON.stringify(sizes))
+  await page.screenshot({path:join(out,'maximized.png')})
+  assert.deepEqual(errors,[])
+  console.log('PASS maximized root fills window without horizontal strip; no renderer errors')
+ }finally{await app.close()}
+}
+main().catch(e=>{console.error(e);process.exitCode=1})

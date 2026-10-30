@@ -1,3 +1,4 @@
+import {userError} from '../../electron/user-errors'
 import { contactQuality } from '../../electron/lead-quality'
 import {parseBulkKeywords, keywordMergePreview, readMapsDraft, MAX_MAP_KEYWORDS} from './map-keywords'
 // The reference app keeps everything in one component: a state object plus renderVals(), which
@@ -55,7 +56,7 @@ type SimpleExportSelection = { title: string; summary: string; request: Paramete
 
 const DEFAULT_KEEP = [true, true, true, true, false, false, false, false, false, false]
 const VIEWS_WITH_REAL_DATA = ['leads', 'lists', 'runs', 'settings']
-type ChatMessage = { who: string; text: string; actions?: AssistDestination[] }
+type ChatMessage = { who: string; text: string; actions?: AssistDestination[]; retry?:string }
 const INITIAL_CHAT_MESSAGES: ChatMessage[] = []
 /** How many leads one page of the ledger draws before its own "Load 20 more" is offered. */
 const LEDGER_PAGE = 200
@@ -107,8 +108,7 @@ function formatDuration(ms: number): string {
 
 function initialsOf(name: string): string {
   return (
-    name
-      .split(/\s+/)
+    (name.match(/[\p{L}\p{N}]+/gu) || [])
       .slice(0, 2)
       .map((word) => word.charAt(0).toUpperCase())
       .join('') || '—'
@@ -331,6 +331,8 @@ export function useAppValues() {
   const db = useMemo(() => localDb(), [])
 
   const [view, setView] = useState('dashboard')
+  useEffect(()=>{document.title='MamaLead — '+(VIEW_NAMES[view] || 'Dashboard')},[view])
+  const restoreMapsDraft = useRef(!localStorage.getItem('mamalead.maps.draft'))
   const [range, setRange] = useState<'7 Days' | '30 Days' | 'All Time'>('30 Days')
   const [maxResults, setMaxResults] = useState(() => readMapsDraft().max)
   const [mapsLocation, setMapsLocation] = useState(() => readMapsDraft().location)
@@ -635,7 +637,7 @@ export function useAppValues() {
     previousScrapeRunning.current = snapshot.running
     if (!wasRunning || snapshot.running) return
     if (snapshot.error) {
-      notify('Maps scrape failed',snapshot.error,'error',undefined,{kind:'warn',action:{type:'view',view:'maps',focus:'search'},actionLabel:'Edit search',eventKey:'maps:'+(snapshot.runId || snapshot.activityAt)+':failed'})
+      notify('Maps scrape failed',userError(snapshot.error),'error',snapshot.runId,{kind:'warn',action:{type:'view',view:'maps',focus:'search'},actionLabel:'Edit search',eventKey:'maps:'+(snapshot.runId || snapshot.activityAt)})
       return
     }
     notify(
@@ -654,12 +656,12 @@ export function useAppValues() {
     if (!bridge?.onProgress) return
     return bridge.onProgress((progress) => {
       setEnrichmentActivity((current) => [progress, ...current.filter((item) => item.jobId !== progress.jobId)].slice(0, 8))
-      if(progress.status==='failed')recentErrors.current=[progress.kind+': '+progress.message,...recentErrors.current].slice(0,3)
+      if(progress.status==='failed' || progress.failed)recentErrors.current=[progress.kind+': '+progress.message,...recentErrors.current].slice(0,20)
       if(progress.status!=='failed' && progress.status!=='done')return
       if(progress.kind==='website' && progress.status==='done')return
       const view=progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
       const label=view==='email'?'Email scan':view==='phone'?'Phone scan':view==='social'?'Social profile scan':'Website scan'
-      notify(label+(progress.status==='failed'?' failed':' finished'),progress.message || 'Review the scan results in the app.',progress.status==='failed'?'error':'success',undefined,{kind:progress.status==='failed'?'warn':'import',chips:[progress.processed+' sites',progress.found+' details found'],action:{type:'view',view},actionLabel:'Open '+(view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:'enrichment:'+(progress.jobId || progress.at)+':'+progress.status})
+      notify(label+(progress.status==='failed'?' failed':progress.failed?' finished with '+progress.failed+' issues':' finished'),progress.message ? userError(progress.message) : 'Review the scan results in the app.',progress.failed||progress.status==='failed'?'error':'success',progress.runId,{kind:progress.failed||progress.status==='failed'?'warn':'import',chips:[progress.processed+' sites',progress.found+' details found'],action:{type:'view',view},actionLabel:'Open '+(view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:progress.runId?'enrichment:'+progress.kind:'enrichment:'+(progress.jobId || progress.at)})
     })
   }, [notify])
 
@@ -692,7 +694,7 @@ export function useAppValues() {
     } catch (error) {
       const message = (error instanceof Error ? error.message : 'MamaLead Assist could not reach the AI provider.')
         .replace(/^Error invoking remote method '[^']+': Error:\s*/i, '')
-      const withError = [...chatMessagesRef.current, { who: 'bot', text: message }]
+      const withError = [...chatMessagesRef.current, { who: 'bot', text: userError(message), retry:trimmed }]
       chatMessagesRef.current = withError
       setMsgs(withError)
     } finally {
@@ -1273,6 +1275,7 @@ export function useAppValues() {
     void window.desktop?.getInfo().then((info) => setAppVersion(`v${info.version}`)).catch(() => undefined)
   }, [])
   const [runs, setRuns] = useState<StoredRun[]>([])
+  useEffect(()=>{if(restoreMapsDraft.current && runs.length){restoreMapsDraft.current=false;setMapsLocation(runs[0].location || '')}},[runs])
   const runsRequest = useRef(0)
   const [runStats, setRunStats] = useState({ runs: 0, clean: 0, places: 0, medianMs: 0 })
   const [dashboard, setDashboard] = useState<DashboardTotals | null>(null)
@@ -2276,15 +2279,15 @@ export function useAppValues() {
       detail: `${snapshot.found} of ${snapshot.target || '—'} places captured`,
     }] : []),
     ...enrichmentActivity.filter(item=>item.runId && item.runId===(snapshot.running?snapshot.runId:mapsRunId==='latest'?runs[0]?.id:mapsRunId)).map((item) => ({
-      key: `enrichment-${item.jobId}`, at: item.at, level: item.status === 'failed' ? 'WARN' : item.status === 'running' ? 'LIVE' : 'OK',
-      title: `${item.kind} lookup ${item.status}${item.leadName ? ` · ${item.leadName}` : ''}`,
-      detail: `${item.processed} of ${item.total} processed · ${item.found} found${item.status === 'failed' && item.message ? ` · ${item.message}` : ''}`,
+      key: `enrichment-${item.jobId}`, at: item.at, level: item.status === 'failed' || item.failed ? 'WARN' : item.status === 'running' ? 'LIVE' : 'OK',
+      title: `${item.kind} lookup ${item.status==='done'&&item.failed?'finished with issues':item.status}${item.leadName ? ` · ${item.leadName}` : ''}`,
+      detail: `${item.processed} of ${item.total} processed · ${item.found} found${(item.status === 'failed' || item.failed) && item.message ? ` · ${userError(item.message)}` : ''}`,
     })),
     ...runs.filter((run) => run.provider === 'chromium-maps' && run.id===(mapsRunId==='latest'?runs[0]?.id:mapsRunId)).slice(0, 1).map((run) => ({
       key: `run-${run.id}`, at: run.finished_at || run.started_at,
       level: run.status === 'failed' ? 'WARN' : run.status === 'done' ? 'OK' : 'INFO',
       title: `Maps scrape ${run.status}${run.location ? ` · ${run.location}` : ''}`,
-      detail: `${run.found} place${run.found === 1 ? '' : 's'} captured${run.error ? ` · ${run.error}` : ''}`,
+      detail: `${run.found} place${run.found === 1 ? '' : 's'} captured${run.error ? ` · ${userError(run.error)}` : ''}`,
     })),
   ].sort((left, right) => right.at.localeCompare(left.at)).slice(0, 6).map((item) => ({
     ...item,
@@ -2654,7 +2657,7 @@ export function useAppValues() {
     })
     : emailFinder.rows
   const emailTableRows=emailValidityRows.map(row=>{
-    if(row.lookupOutcome?.status==='error')return {...row,primary:row.emailDetails.length?row.primary:'Not checked',statusLabel:'Scan failed',isFound:false,isMuted:true}
+    if(row.lookupOutcome?.status==='error')return {...row,primary:row.emailDetails.length?row.primary:row.lookupOutcome.error || 'Website scan failed — retry',statusLabel:'Scan failed',isFound:false,isMuted:true}
     if(!emailFinder.q.trim())return row
     const details=row.emailDetails.filter(address=>savedSearchScore([address.value],emailFinder.q)>0)
     if(!details.length)return row
@@ -2718,6 +2721,7 @@ export function useAppValues() {
     if(['leads','email','phone','social','dashboard'].includes(view))void refreshLists()
   },[view])
   const phoneTableRows=phoneFinder.rows.map(row=>{
+    if(!row.hasNumber && !row.items.length)return {...row,phone:row.scanning?'Scanning…':row.lookupOutcome?.status==='pending'?'Waiting to scan…':row.lookupOutcome?.status==='error'?'Not checked':row.lookupOutcome?.status==='skipped'?'No website to scan':row.lookupOutcome?.status==='not-published'?'No phone published':'Not scanned yet'}
     if(!isPhoneSearch(phoneFinder.q))return row
     const matched=searchSavedRows(row.items,phoneFinder.q,item=>[item.t])
     if(!matched.length)return row
@@ -2969,14 +2973,14 @@ export function useAppValues() {
     replaceBulkKeywords: () => applyBulkKeywords('replace'),
     addBulkKeywords: () => applyBulkKeywords('add'),
     bulkKeywordHasTerms: bulkKeywordPreview.terms.length > 0,
-    bulkKeywordCountLabel: `${bulkKeywordPreview.terms.length} unique keyword${bulkKeywordPreview.terms.length === 1 ? '' : 's'} ready`,
-    bulkKeywordLongLabel: bulkKeywordPreview.tooLong.length ? `${bulkKeywordPreview.tooLong.length} keywords exceed 80 characters and will not be added.` : '',
-    bulkKeywordAddLabel: `${keywords.length} current + ${bulkMerge.added} new = ${bulkMerge.total}; ${bulkMerge.skipped} over the limit will not be added.`,
+    bulkKeywordCountLabel: `${bulkKeywordPreview.terms.length} unique keyword${bulkKeywordPreview.terms.length === 1 ? '' : 's'} found · ${MAX_MAP_KEYWORDS} per run`,
+    bulkKeywordLongLabel: bulkKeywordPreview.tooLong.length ? `${bulkKeywordPreview.tooLong.length} keyword${bulkKeywordPreview.tooLong.length===1?' exceeds':'s exceed'} 80 characters and will not be added.` : '',
+    bulkKeywordAddLabel: `Add to current: ${keywords.length} current + ${bulkMerge.added} new = ${bulkMerge.total}; ${bulkMerge.skipped} over the limit will not be added.`,
     bulkKeywordDuplicateLabel: bulkKeywordPreview.duplicates
       ? `${bulkKeywordPreview.duplicates} duplicate${bulkKeywordPreview.duplicates === 1 ? '' : 's'} will be removed`
       : 'Duplicates are removed automatically',
     bulkKeywordLimitLabel: bulkKeywordPreview.terms.length > MAX_MAP_KEYWORDS
-      ? `Only the first ${MAX_MAP_KEYWORDS} will be used — ${bulkKeywordPreview.terms.length - MAX_MAP_KEYWORDS} over the run limit`
+      ? `Replace current: the first ${MAX_MAP_KEYWORDS} will be used — ${bulkKeywordPreview.terms.length - MAX_MAP_KEYWORDS} over the run limit`
       : `Up to ${MAX_MAP_KEYWORDS} keywords per run`,
     bulkKeywordRows: bulkKeywordPreview.terms.slice(0, MAX_MAP_KEYWORDS).map((label, index) => ({ label, index: index + 1 })),
     impLabel: `${impCount}${impCount === 1 ? ' site ready' : ' sites ready'}`,
@@ -3300,9 +3304,9 @@ export function useAppValues() {
           scanLabel: row.scanError || '',
           profiles: row.profiles.map((profile) => ({ tag: profile.short, url: profile.url })),
           chips: row.profiles.map((profile) => ({ t: profile.short, k: profile.label, url: profile.url })),
-          none: !row.scanError && row.noProfiles ? '1' : '',
+          none: !row.scanError && row.isDone && row.noProfiles ? '1' : '',
           pill: row.scanError ? 'failed' : row.isDone ? 'done' : 'pending',
-          status: row.scanError ? 'Failed — retry scan' : row.isDone ? 'Done' : 'Pending',
+          status: row.scanError ? 'Failed — retry scan' : row.domain==='No website found' ? 'No website' : row.isDone ? 'Done' : 'Not scanned yet',
         }))
       }
       const total = scan.leadIds.length || scan.urls.length
@@ -3449,6 +3453,8 @@ export function useAppValues() {
     // pin is plotted from them, so the shape on the map is the searched area itself — Lahore pins
     // land where Lahore is, and Manchester pins where Manchester is. Leads without coordinates
     // (an import, or a listing Google gave no position for) are spread on a fixed grid instead.
+    mapsPinSummary: `Showing ${Math.min(8,mapsDisplayed.filter(lead=>typeof lead.latitude==='number'&&typeof lead.longitude==='number').length)} pins of ${mapsDisplayed.length} saved results. All businesses are in Results below.`,
+    nextMapsLocation: !snapshot.running && mapsLocation.trim() && mapsLocation.trim().toLowerCase()!==((mapsRunId==='latest'?runs[0]:runs.find(run=>run.id===mapsRunId))?.location || '').toLowerCase() ? mapsLocation.trim() : '',
     mapsPins: (() => {
       const placed = mapsDisplayed.filter(lead=>typeof lead.latitude==='number'&&typeof lead.longitude==='number').slice(0, 8)
       const points = placed.filter(
@@ -3498,7 +3504,7 @@ export function useAppValues() {
           // The reference alternates its pill colours; the map keeps that alternation.
           color: index % 4 === 0 || index % 4 === 3 ? '#1C1C1C' : '#C8D5BB',
           ini: row.ini,
-          name: lead.name.length > 22 ? `${lead.name.slice(0, 21)}\u2026` : lead.name,
+          name: lead.name,
           x,
           y,
         }
@@ -3543,9 +3549,7 @@ export function useAppValues() {
     // The picks are what the last run brought back, which is a page of the ledger rather than the
     // whole workspace: a card each for hundreds of leads would be a scroll nobody finishes.
     pickCount: `${Math.min(ledger.length, 50)} ${Math.min(ledger.length, 50) === 1 ? 'place' : 'places'}`,
-    lastRunLine: ledger.some(row=>row.source==='import') ? 'Saved workspace · Maps captures and website imports' : runs.length
-      ? `${termsOfRun(runs[0]) ? `“${termsOfRun(runs[0])}” near ` : 'Near '}${runs[0].location || location} · ${shortDateTime(runs[0].started_at)}`
-      : `“${keywords.join(', ')}” near ${location} · nothing run yet`,
+    lastRunLine: 'Recent saved captures · Maps searches and website imports',
     /** The total the bookmark counter is out of: the picks the page is showing. */
     pickTotalLabel: `of ${Math.min(ledger.length, 50)} bookmarked`,
     savedLists: lists.map((list) => ({
@@ -3557,9 +3561,10 @@ export function useAppValues() {
         : 'Nothing saved into this list yet.',
       updated: list.updated_at ? `Updated ${shortDate(list.updated_at)}` : 'Nothing added yet',
       avatars: list.initials
-        .split(',')
-        .slice(0, 3)
+        .split(',').filter(Boolean)
+        .slice(0, Math.min(3,list.members))
         .map((ini) => ({ ini })),
+      moreMembers: Math.max(0,list.members-3),
       // The reference draws six pips; they fill in proportion to how many leads are in the list.
       // A style binding needs an object, not a CSS string, because the template passes it
       // straight to React.
@@ -3583,7 +3588,7 @@ export function useAppValues() {
     phoneAreas: (phone.summary?.areas ?? []).map((area) => ({
       code: area.code,
       // An international number has no UK place name, so it is labelled by its own prefix.
-      label: AREA_NAMES[area.code] ?? (area.code.startsWith('+') ? 'International' : area.code),
+      label: ({'042':'Lahore','021':'Karachi','051':'Islamabad / Rawalpindi','041':'Faisalabad','061':'Multan','091':'Peshawar','081':'Quetta','052':'Sialkot','055':'Gujranwala','022':'Hyderabad','062':'Bahawalpur','048':'Sargodha','071':'Sukkur'} as Record<string,string>)[area.code] ?? AREA_NAMES[area.code] ?? (area.code.startsWith('+') ? 'International' : area.code),
       count: String(area.count),
       width: `${Math.max(6, Math.round((area.count / Math.max(1, phone.summary?.areas[0]?.count ?? 1)) * 100))}%`,
     })),
@@ -3632,7 +3637,7 @@ export function useAppValues() {
     importRows: imports.rows,
     websiteRecentDomains: imports.rows.slice(0, 5).map((row) => row.domain),
     websitePreview: imports.preview,
-    importStatus: enrichmentActivity.find(item=>item.kind==='website' && item.status==='running')?.message || (imports.websiteBatches.length ? `${imports.websiteBatches.length} website imports on file` : 'Nothing imported yet'),
+    importStatus: enrichmentActivity.find(item=>item.kind==='website' && item.status==='running')?.message || (imports.websiteBatches.length ? `${imports.websiteBatches.length} website import runs on file` : 'Nothing imported yet'),
     importSummary: imports.websiteBatches.length
       ? (() => {
           const latest = imports.websiteBatches[0] as { source_count?: number; added?: number; skipped?: number }
@@ -3656,7 +3661,7 @@ export function useAppValues() {
     savedListCount:storedLeadCount,
     runCount: String(runStats.clean),
     runTotal: filteredTimeline.length,
-    runCountBadge: 'All time',
+    runCountBadge: 'Maps only · all time',
     runShowing: Math.min(filteredTimeline.length, runsLimit),
     runTimelineTotal: filteredTimeline.length,
     runEmpty: filteredTimeline.length ? '' : 'No activity matches this filter.',
@@ -3665,7 +3670,7 @@ export function useAppValues() {
     runsMoreOn: filteredTimeline.length > runsLimit ? '1' : '',
     showMoreRuns: () => setRunsLimit((current) => current + 25),
     runPlaces: runStats.places.toLocaleString('en-GB'),
-    runPlacesBadge: `${runs.filter((run) => shortDate(run.started_at) === shortDate(new Date().toISOString())).length} today`,
+    runPlacesBadge: `${runs.filter((run) => shortDate(run.started_at) === shortDate(new Date().toISOString())).reduce((sum,run)=>sum+(run.saved ?? run.found),0)} places today`,
     // The duration is drawn as its minutes with the seconds beside them, which is how the design
     // writes it, so the two halves are handed over separately.
     runMedian: formatDuration(runStats.medianMs).split(':')[0],
@@ -3714,7 +3719,7 @@ export function useAppValues() {
       return {
         when: `${shortDate(run.started_at)} ${shortTimeFormat.format(new Date(run.started_at))}`,
         keywords: keywords.length ? keywords.join(', ') : 'No keywords recorded',
-        summary: `${run.provider === 'chromium-maps' ? 'Google Maps' : run.provider} · ${run.location || 'no location'} · ${found} · ${formatDuration(run.duration_ms ?? 0)} · ${keywords.length} keyword pass${keywords.length === 1 ? '' : 'es'}${run.error ? ` · ${run.error}` : ''}`,
+        summary: `${run.provider === 'chromium-maps' ? 'Google Maps' : run.provider} · ${run.location || 'no location'} · ${found} · ${formatDuration(run.duration_ms ?? 0)} · ${keywords.length} keyword pass${keywords.length === 1 ? '' : 'es'}${run.error ? ` · ${userError(run.error)}` : ''}`,
         isDone: run.status === 'done',
         isFailed: run.status === 'failed',
         isCancelled: run.status === 'cancelled' || run.status === 'running' || run.status === 'queued',
@@ -3777,6 +3782,7 @@ export function useAppValues() {
     },
     pasteWebsiteClipboard,
     uploadWebsiteCsv,
+    retryChat: (text:string)=>void say(text),
     openChat: () => { if (!featureAccessAllowed()) { showAccessPrompt(); return }; setChatOpen(true) },
     openExp: () => openExport('leads', view === 'maps' && (mapsWebsite !== 'any' || mapsQuery.trim()) ? 1 : 0),
     openExpAll: () => openExport('leads', 2),
@@ -3823,7 +3829,7 @@ export function useAppValues() {
           return next
         }),
     })),
-    runBadge: snapshot.running ? 'RUNNING' : `${runStats.runs} RUNS`,
+    runBadge: snapshot.running ? 'RUNNING' : view==='runs' ? `${filteredTimeline.length} RECORDS` : `${runStats.runs} RUNS`,
     runChips: [
       ['All activity', timeline.length],
       ['Maps', runs.length],
@@ -3868,7 +3874,7 @@ export function useAppValues() {
     closeSavedMaps: () => {savedMapsExportRequest.current++;setSavedMapsExporting('');setSavedMapsOpen(false)},
     refreshSavedMaps: () => void refreshSavedMaps(),
     openSavedMapsExport: (id:string) => void openSavedMapsExport(id),
-    savedMapsRuns: runs.map(run=>({id:run.id,location:run.location || 'No location recorded',keywords:termsOfRun(run) || 'Google Maps search',count:run.saved ?? run.found,target:run.max_results,date:shortDateTime(run.started_at),status:run.status,error:run.error || '',selected:mapsRunId==='latest' ? run.id===runs[0]?.id : mapsRunId===run.id})),
+    savedMapsRuns: runs.map(run=>({id:run.id,location:run.location || 'No location recorded',keywords:termsOfRun(run) || 'Google Maps search',count:run.saved ?? run.found,target:run.max_results,date:shortDateTime(run.started_at),status:run.status,error:run.error ? userError(run.error) : '',selected:mapsRunId==='latest' ? run.id===runs[0]?.id : mapsRunId===run.id})),
     selectedMapsSearch: (()=>{if(snapshot.running)return{title:[snapshot.request?.location || location,(snapshot.request?.keywords ?? keywords).join(', ')].filter(Boolean).join(' · '),date:'Live results update as businesses are found'};const run=mapsRunId==='latest'?runs[0]:runs.find(item=>item.id===mapsRunId);return run?{title:[run.location,termsOfRun(run)].filter(Boolean).join(' · '),date:shortDateTime(run.started_at)}:null})(),
     mapsRunOptions: runs.map(run=>({id:run.id,label:`${new Date(run.started_at).toLocaleString()} · ${run.location}`,title:[termsOfRun(run),run.location].filter(Boolean).join(' · ') || 'Google Maps search',meta:`${run.found.toLocaleString()} leads · ${run.status}`,date:shortDateTime(run.started_at)})),
     selectMapsRun: (id:string) => {

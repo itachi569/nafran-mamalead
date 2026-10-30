@@ -95,17 +95,32 @@ async function request<T>(path: string, method = 'GET', body?: unknown, token?: 
   const base = billingUrl()
   if (!base) throw new Error('Billing server is not configured for this build.')
   const device = deviceIdentity()
+  const signal = AbortSignal.timeout(timeoutMs)
+  const attempts = path === '/v1/assist/chat' ? 2 : 1
+  for (let attempt=0;attempt<attempts;attempt++) {
   const response = await fetch(new URL(path, base), {
     method,
     headers: { 'x-nafran-device-id': device.id, 'x-nafran-device-platform': device.label,
       ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     redirect: 'error',
-    signal: AbortSignal.timeout(timeoutMs),
+    signal,
   })
-  const result = await response.json() as T & { error?: string }
-  if (!response.ok) throw new Error(result.error || `Billing server returned ${response.status}.`)
+  if ([502,503,504].includes(response.status)) {
+    await response.body?.cancel()
+    if (attempt+1<attempts) continue
+    throw new Error('MamaLead service is temporarily unavailable. Please retry shortly.')
+  }
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    await response.body?.cancel()
+    throw new Error('MamaLead service returned an unexpected response. Please retry shortly.')
+  }
+  let result: T & {error?:string}
+  try { result = await response.json() } catch { throw new Error('MamaLead service returned an incomplete response. Please retry.') }
+  if (!response.ok) throw new Error(result.error || `MamaLead service returned HTTP ${response.status}. Please retry.`)
   return result
+  }
+  throw new Error('MamaLead service is temporarily unavailable. Please retry shortly.')
 }
 
 let tokenPromise: Promise<string> | null = null
@@ -205,6 +220,8 @@ export async function billingRequestTrial(email: string, replaceExisting = false
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address) || address.length > 254) {
     throw new Error('Enter a valid email address for your trial key.')
   }
+  const status = await request<BillingStatus>('/v1/status', 'GET', undefined, await installationToken())
+  if (status.lifetime?.active || (status.license?.active && status.license.kind === 'lifetime')) throw new Error('Lifetime access is already active. You do not need a trial.')
   return request<{ emailSent: boolean; message: string }>('/v1/trial', 'POST', { email: address, replaceExisting }, await installationToken())
 }
 

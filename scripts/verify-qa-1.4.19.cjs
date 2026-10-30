@@ -27,7 +27,7 @@ async function main(){
   WebsiteEnricher.prototype.close=async()=>{}
   repo.importWebsites(workspace,['unrelated-import.test'])
   assert.ok(repo.leadsNeedingContact(workspace,'email',100,run.runId).every(row=>row.website!=='https://unrelated-import.test/'),'automatic enrichment must stay inside its Maps run')
-  assert.equal(repo.leadsNeedingContact(workspace,'email',100,run.runId).length,4)
+  assert.equal(repo.leadsNeedingContact(workspace,'email',100,run.runId).length,3)
   const job=repo.queueJob(workspace,'phone',rows.map(row=>row.id),{runId:run.runId}),events=[]
   await new EnrichmentRunner(db,repo,{onProgress:p=>events.push(p)}).drain()
   assert.equal(reads.length,3,'directory must never be fetched')
@@ -35,9 +35,9 @@ async function main(){
   assert.equal(outcomes[byName['Clinic — Lahore']].status,'found')
   assert.equal(outcomes[byName['Contact Form Only']].status,'not-published')
   assert.equal(outcomes[byName['Unavailable Clinic']].status,'error')
-  assert.match(outcomes[byName['Listed Clinic']].error,/directory/i)
+  assert.equal(outcomes[byName['Listed Clinic']].status,'skipped')
   const status=repo.jobStatus(workspace,job.jobId)
-  assert.equal(status.processed,4);assert.equal(status.failed,2);assert.equal(Object.keys(status.outcomes).length,4)
+  assert.equal(status.processed,4);assert.equal(status.failed,1);assert.equal(Object.keys(status.outcomes).length,4)
   assert.ok(events.some(p=>p.status==='running'&&p.processed>0&&p.processed<4),'per-lead progress')
   assert.ok(events.filter(p=>p.jobId===job.jobId).every(p=>p.runId===run.runId),'activity retains its source run id')
   assert.equal(repo.phoneLedger(workspace).find(row=>row.name==='Clinic — Lahore').lineType,'mobile')

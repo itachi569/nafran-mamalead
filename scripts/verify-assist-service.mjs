@@ -9,6 +9,16 @@ function fixture(overrides = {}) {
   const options = { env: { CEREBRAS_API_KEY: 'test-only-key' }, ErrorType: Failure, store: { reserveAssistUsage: async values => { buckets.push(values); return [5, values[1].limit - 1, 1999] } }, providerFetch: async () => Response.json({ choices: [{ message: { content: 'Hello from fixture' } }] }), ...overrides }
   return { service: createAssistService(options), buckets }
 }
+
+test('truncated answers are not presented as complete; actual scan errors reach the provider', async()=>{
+  let sent
+  const {service}=fixture({providerFetch:async(_,request)=>{sent=JSON.parse(request.body);return Response.json({choices:[{finish_reason:'length',message:{content:'Your error was caused by'}}]})}})
+  await assert.rejects(service.chat(row,{}, {...payload,context:{recentScanErrors:'phone: clinic.test DNS lookup failed',mapsError:'Browser unavailable',secret:'excluded'}}),error=>error.status===502&&/interrupted/.test(error.message))
+  const workspace=JSON.parse(sent.messages[1].content).workspace
+  assert.equal(workspace.recentScanErrors,'phone: clinic.test DNS lookup failed')
+  assert.equal(workspace.mapsError,'Browser unavailable')
+  assert.equal(workspace.secret,undefined)
+})
 test('server AI exposes configuration without exposing credentials', () => {
   assert.deepEqual(fixture().service.configuration(), { configured: true, savedOnDevice: false, mode: 'server' })
 })
@@ -60,6 +70,6 @@ test('multilingual policy preserves Roman Urdu/script and honors explicit langua
   assert.doesNotMatch(sent.messages[0].content,/Decision Makers finds|A Decision Makers pass|or Decision Makers, click/)
   assert.match(sent.messages[0].content,/desktop offers a page link/)
   assert.match(sent.messages[0].content,/Never promise that every website/)
-  assert.equal(sent.max_tokens,400)
+  assert.equal(sent.max_tokens,1600)
   assert.equal(sent.messages.at(-1).content,input)
 })

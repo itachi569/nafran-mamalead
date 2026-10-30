@@ -273,8 +273,8 @@ export function useSocialPage(): SocialPage {
         url: profile.profileUrl,
       })),
       scanError: outcomes[row.leadId]?.status==='error' ? outcomes[row.leadId].error || 'Scan failed. Retry this website.' : undefined,
-      isDone: outcomes[row.leadId] ? outcomes[row.leadId].status!=='error' : row.status === 'done',
-      isPending: row.status === 'pending',
+      isDone: outcomes[row.leadId] ? ['found','not-published'].includes(outcomes[row.leadId].status) : row.status === 'done',
+      isPending: row.domain !== 'No website found' && (outcomes[row.leadId] ? outcomes[row.leadId].status==='pending' : row.status === 'pending'),
       noProfiles: row.profiles.length === 0,
     }))
   }, [live, rows,outcomes])

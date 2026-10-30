@@ -11,6 +11,8 @@ import { parse, parseFragment, serialize, type DefaultTreeAdapterMap } from 'par
 import { isBusinessOwner, ownerEmail } from './owner-contact'
 import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, stripContactCodeExamples } from './email-extractor'
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
+import { readWebsitePage } from './http-page'
+import { userError } from '../user-errors'
 import {compareEmailContacts,emailContactPriority} from '../email-ranking'
 
 
@@ -50,6 +52,7 @@ export interface FoundPerson {
 }
 
 export interface WebsiteFindings {
+  canonicalWebsite?: string
   businessName?: string
   addresses?: string[]
   emails: FoundEmail[]
@@ -828,38 +831,16 @@ export class WebsiteEnricher {
     if(own)found.set(socialProfileIdentity(own),{...own,page:origin.href})
     let homeFailure = ''
     const read=async(raw:string,home=false):Promise<{url:string;html:string}|null>=>{
-      let url = raw
-      for (let attempt=0; attempt<(home&&!own?2:1) && !combined.aborted; attempt++) {
-        let retry = false
-        try{
-          const response=await fetch(url,{redirect:'follow',signal:AbortSignal.any([combined,AbortSignal.timeout(home?(own?2500:6000):4000)]),headers:{accept:'text/html,application/xhtml+xml','user-agent':'MamaLead contact scanner/1.5'}})
-          if(!response.ok){
-            await response.body?.cancel()
-            if(home&&!own)homeFailure=`${origin.host} could not be read (HTTP ${response.status}). Retry this website.`
-            // Do not repeat denied/challenged requests. Retry temporary server errors only.
-            retry=[408,500,502,503,504].includes(response.status)
-            if (!retry) return null
-          }else{
-            const final=response.url||url,reader=response.body?.getReader();if(!reader)return null
-            const decoder=new TextDecoder();let html='',bytes=0
-            // Keep the useful first part even on large homepages instead of discarding the site.
-            try{while(true){const chunk=await reader.read();if(chunk.done)break;const take=chunk.value.subarray(0,2_000_000-bytes);bytes+=take.length;html+=decoder.decode(take,{stream:true});if(bytes>=2_000_000)break}}finally{await reader.cancel().catch(()=>undefined)}
-            findings.pagesRead.push(final)
-            return {url:final,html:html+decoder.decode()}
-          }
-        }catch(error){
-          if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
-          const cause=error instanceof Error?(error as Error & {cause?:{code?:string}}).cause?.code || '':''
-          const timedOut=combined.aborted || /TIMEDOUT|TIMEOUT/.test(cause) || (error instanceof Error && /timeout|timed.?out/i.test(error.name+' '+error.message))
-          const certificate=/CERT|TLS|SSL/.test(cause)
-          if(home&&!own)homeFailure=certificate?`${origin.host} has a certificate problem. The website owner needs to fix it.`:timedOut?`${origin.host} took too long to respond. Retry this website.`:`${origin.host} could not be reached. Retry this website or check its address.`
-          retry=!certificate
-          // An old Maps HTTP URL may fail while the site's HTTPS endpoint is healthy.
-          if(home && url.startsWith('http://'))url=url.replace(/^http:/,'https:')
-        }
-        if (!retry || combined.aborted) break
+      try {
+        const page=await readWebsitePage(raw,{signal:combined,home,timeoutMs:home?5000:4000})
+        findings.pagesRead.push(page.url)
+        if(home){findings.canonicalWebsite=page.url;origin=new URL(page.url);homeFailure=''}
+        return page
+      } catch(error) {
+        if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
+        if(home)homeFailure=userError(error)
+        return null
       }
-      return null
     }
     const collect=(page:{url:string;html:string})=>{for(const social of socialLinksFromHtml(page.html,page.url)){const canonical=canonicalSocialProfile(social.profileUrl);if(canonical)found.set(socialProfileIdentity(canonical),social)}}
     try {
@@ -898,20 +879,16 @@ export class WebsiteEnricher {
     const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),16_000)
     const combined=AbortSignal.any([budget.signal,...(signal?[signal]:[])])
     const sameSite=(raw:string,base=origin.href):string|null=>{try{const url=new URL(decodeHtml(raw),base);url.hash='';return /^https?:$/.test(url.protocol)&&url.host.replace(/^www\./i,'')===origin.host.replace(/^www\./i,'')?url.href:null}catch{return null}}
+    const resolved=new Map<string,string>()
+    let homeFailure=''
     const read=async(raw:string):Promise<string>=>{
-      let url=sameSite(raw)
-      try{
-        for(let redirects=0;url&&redirects<4;redirects++){
-          const response=await fetch(url,{redirect:'manual',signal:AbortSignal.any([combined,AbortSignal.timeout(3500)]),headers:{'user-agent':'MamaLead contact scanner/1.5'}})
-          if(response.status>=300&&response.status<400){const next=sameSite(response.headers.get('location') || '',url);await response.body?.cancel();url=next;continue}
-          if(!response.ok||Number(response.headers.get('content-length')??0)>1_500_000){await response.body?.cancel();return ''}
-          const reader=response.body?.getReader();if(!reader)return ''
-          const decoder=new TextDecoder();let text='',bytes=0
-          try{while(true){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.length;if(bytes>1_500_000)break;text+=decoder.decode(chunk.value,{stream:true})}}finally{await reader.cancel()}
-          return text+decoder.decode()
-        }
-      }catch{/* One slow/blocked endpoint must not stall the website. */}
-      return ''
+      const home=raw===website||raw===origin.href
+      try {
+        const page=await readWebsitePage(raw,{signal:combined,home,timeoutMs:3500,maxBytes:1_500_000})
+        resolved.set(raw,page.url)
+        if(home){result.canonicalWebsite=page.url;origin=new URL(page.url)}
+        return page.html
+      }catch(error){if(signal?.aborted)throw error;if(home)homeFailure=userError(error);return ''}
     }
     const rank=(raw:string,label='')=>{
       const path=new URL(raw).pathname
@@ -925,6 +902,7 @@ export class WebsiteEnricher {
     const key=(raw:string)=>{const url=new URL(raw);return url.pathname.replace(/\/$/,'')+url.search}
     const append=(raw:string,label='',base=origin.href)=>{const url=sameSite(raw,base);if(url&&rank(url,label)>0&&!seen.has(key(url)))candidates.set(url,Math.max(candidates.get(url)??0,rank(url,label)))}
     const collect=(url:string,html:string)=>{
+      url=resolved.get(url) || url
       seen.add(key(url));if(!html)return
       result.pagesRead.push(url);collected.push(...publishedPhonesFromHtml(html,url))
       for(const link of siteLinksFromHtml(html))append(link.href,link.label,url)
@@ -965,7 +943,7 @@ export class WebsiteEnricher {
         if(matches.length===1){const target=matches[0][1];phone.pages.forEach(page=>target.pages.add(page));if((phone.score??0)>(target.score??0)){target.score=phone.score;target.page=phone.page}merged.delete(digits)}
       }
       result.phones=[...merged.values()].map(({pages,...phone})=>({...phone,score:Math.min(100,(phone.score??0)+Math.max(0,pages.size-1)*15)})).sort((a,b)=>(b.score??0)-(a.score??0))
-      if(!result.pagesRead.length)result.error=budget.signal.aborted?'The website took too long to respond. Retry this website.':'The website could not be read. Try again or check its URL.'
+      if(!result.pagesRead.length)result.error=homeFailure || (budget.signal.aborted?'The website took too long to respond. Retry this website.':'The website could not be read. Try again or check its URL.')
     }finally{clearTimeout(timer);budget.abort();if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')}
     return result
   }
@@ -979,21 +957,18 @@ export class WebsiteEnricher {
     const sameSite = (raw: string): string | null => {
       try { const u = new URL(decodeHtml(raw), origin); u.hash = ''; return /^https?:$/.test(u.protocol) && u.host.replace(/^www\./i,'') === origin.host.replace(/^www\./i,'') ? u.href : null } catch { return null }
     }
-    const read = async (url: string): Promise<string> => {
-      if (combined.aborted) throw new DOMException('Cancelled', 'AbortError')
-      // Validate every redirect before sending a request to its destination.
-      for (let redirects=0; redirects<4; redirects++) {
-        if (!sameSite(url)) return ''
-        const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.any([combined, AbortSignal.timeout(5000)]), headers: { 'user-agent': 'MamaLead contact scanner/1.5' } })
-        if (response.status >=300 && response.status <400) { const next=sameSite(new URL(response.headers.get('location') || '',url).href); if (!next) return ''; url=next; continue }
-        if (!response.ok || Number(response.headers.get('content-length') ?? 0)>2_000_000) return ''
-        const reader=response.body?.getReader(); if (!reader) return ''
-        const decoder=new TextDecoder(); let text=''; let bytes=0
-        try { while (true) { const chunk=await reader.read(); if(chunk.done)break; bytes+=chunk.value.length; if(bytes>2_000_000)break; text+=decoder.decode(chunk.value,{stream:true}) } } finally { await reader.cancel() }
-        return text+decoder.decode()
-      }
-      return ''
+    const resolved=new Map<string,string>()
+    let homeFailure=''
+    const read = async (url: string, home=false): Promise<string> => {
+      try {
+        const page=await readWebsitePage(url,{signal:combined,home,timeoutMs:5000})
+        resolved.set(url,page.url)
+        if(home){result.canonicalWebsite=page.url;origin=new URL(page.url)}
+        return page.html
+      }catch(error){if(signal?.aborted)throw error;if(home)homeFailure=userError(error);return ''}
     }
+    const homeHtml=await read(origin.href,true)
+    if(!homeHtml)return {...result,error:homeFailure || 'The website returned an empty page. Retry this website.'}
     const contactRank=(raw:string,label='') => {
       const path=new URL(raw,origin).pathname
       if (/\/(?:videos?|blog|news|articles?|products?)\//i.test(path)) return 0
@@ -1008,7 +983,7 @@ export class WebsiteEnricher {
     const queue=[origin.href]; const seen=new Set<string>()
     const append=(raw:string) => { const url=sameSite(raw); if(url && !seen.has(pageKey(url)) && !queue.some(saved=>pageKey(saved)===pageKey(url)) && queue.length<12){queue.push(url);queue.sort((a,b)=>a===origin.href?-1:b===origin.href?1:contactRank(b)-contactRank(a))} }
     try {
-      const home=read(origin.href).catch(()=>'')
+      const home=Promise.resolve(homeHtml)
       if(mainEmailOnly){
         const html=await home
         if(signal?.aborted)throw new DOMException('Cancelled','AbortError')
@@ -1040,7 +1015,8 @@ export class WebsiteEnricher {
         const url=queue.shift()!; if(seen.has(pageKey(url)))continue; seen.add(pageKey(url))
         if(contactRank(url)===1 && result.emails.length)continue
         const html=url===origin.href ? await home : await read(url).catch(()=>''); if(!html)continue
-        const found=contactFindingsFromHtml(html,url);result.pagesRead.push(url)
+        const pageUrl=resolved.get(url) || url
+        const found=contactFindingsFromHtml(html,pageUrl);result.pagesRead.push(pageUrl)
         if (!result.businessName && found.businessName) result.businessName=found.businessName
         if(contactRank(url)===1) {
           const siteHost=origin.hostname.replace(/^www\./i,'').toLowerCase(),brand=siteHost.split('.')[0]
@@ -1098,7 +1074,8 @@ export class WebsiteEnricher {
       const harvest = async (url: string): Promise<PageHarvest | null> => {
         if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
         try {
-          await page.goto(url, { waitUntil: 'domcontentloaded' })
+          const response=await page.goto(url, { waitUntil: 'domcontentloaded' })
+          if(response && !response.ok()){findings.error=`${siteHost} could not be read (HTTP ${response.status()}). Retry this website.`;return null}
           // Let late-injected footers and consent-free content settle without waiting for ads.
           await page.waitForTimeout(900)
           let collected = (await page.evaluate(COLLECT)) as PageHarvest
@@ -1202,7 +1179,7 @@ export class WebsiteEnricher {
 
       const home = await harvest(origin.href)
       if (!home) {
-        findings.error = `${siteHost} could not be reached.`
+        findings.error ||= `${siteHost} could not be reached.`
         await context.close()
         return findings
       }

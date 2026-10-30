@@ -1,4 +1,14 @@
 /** Shared by import previews and storage: canonicalise IDNs before deduplication. */
+export function cleanWebsiteUrl(value: string): string {
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:/i.test(value.trim()) ? value.trim() : `https://${value.trim()}`)
+    if (!websiteDomain(url.href)) return ''
+    url.hash = ''
+    for (const key of [...url.searchParams.keys()]) if (/^utm_|^(?:gclid|fbclid|msclkid|mc_eid)$/i.test(key)) url.searchParams.delete(key)
+    return url.href
+  } catch { return '' }
+}
+
 export function websiteDomain(value: string): string {
   const input = value.trim()
   if (!input || /[\s@]/u.test(input) || input.startsWith('#')) return ''

@@ -41,6 +41,8 @@ module.exports = {
   },
   win: {
     ...packageJson.build.win,
+    // Keep the generated Windows icon in source so packaging does not need WASM conversion.
+    icon: 'build/mamalead-icon.ico',
     signtoolOptions: { publisherName: 'Nafran LTD' },
     // electron-builder discovers WIN_CSC_LINK/CSC_LINK automatically. CI can opt into failing
     // instead of silently producing an unsigned installer with REQUIRE_CODE_SIGNING=1.

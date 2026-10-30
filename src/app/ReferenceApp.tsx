@@ -263,7 +263,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 <button type="button" aria-label="Dismiss trial and Lifetime notice" onClick={V.dismissPlanWelcome} style={{display: "grid", placeItems: "center", width: "30px", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: "#1C1C1C", fontSize: "22px", cursor: "pointer"}}>×</button>
               </section>
             ) : null}
-            <FeatureAccessBoundary allowed={V.featureAccessAllowed} onBlocked={V.showAccessPrompt}>
+            <FeatureAccessBoundary showLock={Boolean(V.isMaps)} allowed={V.featureAccessAllowed} onBlocked={V.showAccessPrompt}>
             {shows(V.isDashboard) ? (
               <>
               <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
@@ -801,7 +801,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{position: "relative", height: "clamp(240px,30vh,340px)", marginTop: "18px", borderRadius: "20px", overflow: "hidden", background: "#E9EBE4"}}>
                       {(V.mapsPins ?? []).map((pin, __ipin) => (
                         <Fragment key={__ipin}>
-                          <span data-pin="1" data-on={pin.reveal} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: "#F0F0F0", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
+                          <span data-pin="1" data-on={pin.reveal} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: pin.color === "#1C1C1C" ? "#F0F0F0" : "#1C1C1C", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
                             <span style={{display: "grid", placeItems: "center", width: "20px", height: "20px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "8.5px", fontWeight: "700"}}>{pin.ini}</span>
                             <span style={{overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}}>{pin.name}</span>
                           </span>
@@ -853,7 +853,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", minHeight: "46px", padding: "7px 10px", borderRadius: "14px", background: "#EAEAE8"}}>
                             {(V.keywords ?? []).map((kw, __ikw) => (
                               <Fragment key={__ikw}>
-                                <button type="button" data-kw="1" onClick={kw.remove} title="Remove keyword" style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 10px 6px 12px", border: "0", borderRadius: "999px", background: "#E2E4DE", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", cursor: "pointer", transition: "background .25s linear"}}>
+                                <button type="button" data-kw="1" onClick={kw.remove} title="Remove keyword" aria-label={"Remove keyword "+kw.label} style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 10px 6px 12px", border: "0", borderRadius: "999px", background: "#E2E4DE", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", cursor: "pointer", transition: "background .25s linear"}}>
                                   {kw.label}
                                   <span data-x="1" aria-hidden="true" style={{fontSize: "13px", color: "#7C8478", transition: "color .25s linear"}}>×</span>
                                 </button>
@@ -1023,11 +1023,11 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       </div>
                     </div>
                   </div>
-<div data-coverage-activity="1" style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,300px),1fr))",gap:20,marginTop:22}}>                  <div style={{marginTop: "22px", paddingTop: "20px", borderTop: "1px solid #E4E5E2"}}>
+<div data-coverage-activity="1" data-stale={V.nextMapsLocation ? "y" : "n"} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,300px),1fr))",gap:20,marginTop:22}}>                  <div style={{marginTop: "22px", paddingTop: "20px", borderTop: "1px solid #E4E5E2"}}>
                     <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px"}}>
                       <div>
                         <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Coverage Map</h2>
-                        <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.mapsAreas} · {V.mapsRadius}. Pins land as each place is captured.</p>
+                        <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Last run: {V.mapsAreas} · {V.mapsRadius}. {V.nextMapsLocation && <>Next run: {V.nextMapsLocation}. </>}{V.mapsPinSummary}</p>
                       </div>
                       <div style={{display: "flex", alignItems: "center", gap: "8px"}}>
                         <span style={{display: "inline-flex", alignItems: "center", gap: "8px", padding: "7px 14px", borderRadius: "999px", background: "#EAEAE8", fontSize: "12px", fontWeight: "500"}}>{V.foundLabel}</span>
@@ -1040,7 +1040,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{position: "relative", height: "clamp(250px,25vw,330px)", marginTop: "16px", borderRadius: "18px", overflow: "hidden", background: "#E9EBE4"}}>
                       {(V.mapsPins ?? []).map((pin, __ipin) => (
                         <Fragment key={__ipin}>
-                          <span data-pin="1" data-on={pin.on} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: "#F0F0F0", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
+                          <span data-pin="1" data-on={pin.on} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: pin.color === "#1C1C1C" ? "#F0F0F0" : "#1C1C1C", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
                             <span style={{display: "grid", placeItems: "center", width: "20px", height: "20px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "8.5px", fontWeight: "700"}}>{pin.ini}</span>
                             <span style={{overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}}>{pin.name}</span>
                           </span>
@@ -2269,7 +2269,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px"}}>
                     <div>
-                      <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Straight from the last run</div>
+                      <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Recent saved captures</div>
                       <h2 style={{margin: "10px 0 0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>{V.pickCount} to sort through</h2>
                       <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.lastRunLine}</p>
                     </div>
@@ -2355,15 +2355,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </div>
                         <p style={{margin: "8px 0 0", fontSize: "13px", lineHeight: "1.5", color: "#5A5F5C", textWrap: "pretty"}}>{l.note}</p>
                         <div style={{display: "flex", alignItems: "center", margin: "16px 0 0", paddingLeft: "9px"}}>
-                          <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "30px", height: "30px", marginLeft: "-9px", borderRadius: "999px", background: "#C8D5BB", border: "2px solid #F5F5F4", fontSize: "10px", fontWeight: "700"}}>
-                            {(l.avatars ?? []).map((a, __ia) => (
-                              <Fragment key={__ia}>
-                                <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "30px", height: "30px", marginLeft: "-9px", borderRadius: "999px", background: "#DDE3D6", border: "2px solid #F5F5F4", fontSize: "10px", fontWeight: "700"}}>{a.ini}</span>
-                              </Fragment>
-                            ))}
-                          </span>
-                          <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "30px", height: "30px", marginLeft: "-9px", borderRadius: "999px", background: "#DDE3D6", border: "2px solid #F5F5F4", fontSize: "10px", fontWeight: "700"}}>NS</span>
-                          <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "30px", height: "30px", marginLeft: "-9px", borderRadius: "999px", background: "#E3E4E1", border: "2px solid #F5F5F4", fontSize: "10px", fontWeight: "700"}}>AT</span>
+                          {(l.avatars ?? []).map((a,i)=><span key={i} aria-hidden="true" style={{display:'grid',placeItems:'center',width:30,height:30,marginLeft:-9,borderRadius:999,background:'#DDE3D6',border:'2px solid #F5F5F4',fontSize:10,fontWeight:700}}>{a.ini}</span>)}
+                          {l.moreMembers>0 && <span style={{marginLeft:8}}>+{l.moreMembers}</span>}
                         </div>
                         <div style={{display: "flex", gap: "4px", marginTop: "auto", paddingTop: "16px"}}>
                           <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
@@ -2410,7 +2403,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{fontSize: "clamp(40px,4vw,54px)", lineHeight: ".9", fontWeight: "700", letterSpacing: "-.04em", backgroundImage: "radial-gradient(circle at 50% 50%,#1C1C1C 1.45px,transparent 1.55px)", backgroundSize: "3.2px 3.2px", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", WebkitTextFillColor: "transparent", animation: "lsPop .7s cubic-bezier(.22,1,.36,1) both"}}>{V.runCount}</span>
                       <span style={{marginLeft: "auto", padding: "5px 11px", borderRadius: "999px", background: "#F5F5F4", fontSize: "11.5px", fontWeight: "500"}}>{V.runCountBadge}</span>
                     </div>
-                    <div style={{fontSize: "13.5px", color: "#4A4F4B"}}>Runs completed</div>
+                    <div style={{fontSize: "13.5px", color: "#4A4F4B"}}>Maps runs completed</div>
                     <div style={{display: "flex", gap: "4px"}}>
                       <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
                       <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
@@ -2666,12 +2659,12 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <button type="button" onClick={V.clearBulkKeywords} style={{height: "36px", padding: "0 12px", border: "0", background: "transparent", color: "#5A5F5C", fontFamily: "inherit", fontSize: "12.5px", textDecoration: "underline", cursor: "pointer"}}>Clear</button>
                     <span style={{marginLeft: "auto", padding: "7px 12px", borderRadius: "999px", background: "#DDE3D6", fontSize: "11.5px", fontWeight: "500"}}>{V.bulkKeywordCountLabel}</span>
                   </div>
-                  <p role="status" style={{fontSize:13}}>{V.bulkKeywordLongLabel}</p><p style={{fontSize:13}}>Add to current: {V.bulkKeywordAddLabel}</p>
+                  {V.bulkKeywordLongLabel && <p role="status" style={{fontSize:13}}>{V.bulkKeywordLongLabel}</p>}<p style={{fontSize:13}}>{V.bulkKeywordAddLabel}</p>
                   {shows(V.bulkKeywordHasTerms) ? (
                     <>
                     <div style={{marginTop: "18px", padding: "16px", borderRadius: "18px", background: "#FFFFFF"}}>
                       <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "8px"}}>
-                        <span style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Preview</span>
+                        <span style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Replace preview</span>
                         <span style={{fontSize: "11.5px", color: "#5A5F5C"}}>{V.bulkKeywordLimitLabel}</span>
                       </div>
                       <div style={{display: "flex", flexWrap: "wrap", gap: "7px", marginTop: "12px"}}>
@@ -2721,7 +2714,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   ) : null}
                   {(V.msgs ?? []).map((m, __im) => (
                     <Fragment key={__im}>
-                      <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}><AssistText text={m.text}/></span>
+                      <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}><AssistText text={m.text}/>{m.retry && <button type="button" onClick={()=>V.retryChat(m.retry!)} style={{display:'block',marginTop:8,padding:'8px 14px',borderRadius:20}}>Retry answer</button>}</span>
                       {m.who==='bot' && Boolean(m.actions?.length) && <div className="assist-shortcuts" aria-label="Open a related page">{m.actions!.map(key=><a key={key} href={`#${key}`} data-assist-destination={key} onClick={event=>{event.preventDefault();V.openAssistDestination(key)}}>{V.assistDestinations[key].label}<span aria-hidden="true">↗</span></a>)}</div>}
                     </Fragment>
                   ))}

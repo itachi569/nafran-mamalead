@@ -143,6 +143,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       setLicenseNotice({ kind: 'error', message: 'License verification is unavailable in this app session.' })
       return
     }
+    if (changeKey && activeLicense && !window.confirm('Replace the active license on this device? Your existing access stays active unless the new key is accepted.')) return
     setLicenseBusy(true)
     setBillingError('')
     setLicenseNotice(null)
@@ -335,6 +336,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" style={{ ...muted, margin: '10px 0', color: '#315F2D' }}>{licenseStepNotice || V.licenseNextStep}</p>}
             {trialSent && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={{ ...button, marginBottom: '10px' }}>Change email</button>}
             {activeLicense && !changeKey && <button type="button" onClick={()=>setChangeKey(true)} style={button}>Use a different key</button>}
+            {changeKey && <p role="status">A different key replaces this device’s active license. <button type="button" onClick={()=>{setChangeKey(false);setLicenseKey('');setLicenseNotice(null)}} style={button}>Cancel key change</button></p>}
             {(!activeLicense || changeKey) && <form onSubmit={(event) => { event.preventDefault(); void activateLicense() }} style={row}><label htmlFor="nafran-license-key">License key</label><input id="nafran-license-key" ref={licenseKeyInput} type={showKey ? "text" : "password"} value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value.toUpperCase().replace(/\s/g,'')); setLicenseNotice(null) }} autoComplete="off" placeholder="NF-XXXX-XXXX-…" style={{ flex: '1 1 280px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button type="button" aria-pressed={showKey} onClick={()=>setShowKey(value=>!value)} style={button}>{showKey?'Hide key':'Show key'}</button><button type="submit" disabled={licenseBusy} style={button}>{licenseBusy ? 'Activating…' : 'Activate'}</button></form>}
           </section>
           <section data-card="1" style={card}>

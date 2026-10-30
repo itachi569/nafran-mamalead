@@ -24,7 +24,7 @@ test('transient connection failure retries HTTP as HTTPS and clears the earlier 
   const requested=[]
   await mocked(async url=>{requested.push(url);if(requested.length===1)throw new TypeError('fetch failed');return response(url,html('recoveredclinic'))},async()=>{
     const result=await new WebsiteEnricher().inspectSocialFast('http://clinic.fixture.test/')
-    assert.deepEqual(requested,['http://clinic.fixture.test/','https://clinic.fixture.test/'])
+    assert.deepEqual(requested,['https://clinic.fixture.test/','https://www.clinic.fixture.test/'])
     assert.equal(result.error,null);assert.equal(result.socials.length,1)
   })
 })
@@ -53,7 +53,7 @@ test('hidden injected profile links are excluded; genuine visible links remain',
 test('50 sites complete with out-of-order progress, retry, one unavailable site and later successes',async()=>{
   const {db,repo,ws}=database(),events=[],attempts=new Map();let active=0,peak=0
   try{await mocked(async(url,init)=>{
-    const name=new URL(url).hostname.split('.')[0],n=Number(name.slice(4));attempts.set(n,(attempts.get(n)||0)+1)
+    const name=new URL(url).hostname.replace(/^www\./,'').split('.')[0],n=Number(name.slice(4));attempts.set(n,(attempts.get(n)||0)+1)
     active++;peak=Math.max(peak,active)
     try{
       await delay(n===0?300:15,init.signal)
@@ -106,7 +106,7 @@ test('a site that never responds times out after its retry without trapping othe
     await runner.drain()
     const status=repo.jobStatus(ws,job.jobId)
     assert.equal(status.processed,3);assert.equal(status.failed,1);assert.equal(status.found,2)
-    assert.match(status.outcomes[imported.leadIds[0]].error,/unavailable.fixture.test.*too long/)
+    assert.match(status.outcomes[imported.leadIds[0]].error,/too long/)
     assert(events.some(e=>e.processed===2&&e.activeLeadIds.includes(imported.leadIds[0])))
     assert(Date.now()-start<15000,'a permanently unresponsive site has a bounded retry budget')
   })}finally{db.close()}
