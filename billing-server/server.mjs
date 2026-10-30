@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { randomUUID } from 'node:crypto'
 import { createBillingHandler, HttpError } from './core.mjs'
 import { createLicenseAdminServer } from './admin-licenses.mjs'
+import { initializeOwnerLicenses, ownerLicense, activateOwnerLicense } from './owner-licenses.mjs'
 
 export function createBillingServer(options = {}) {
   const env = { ...(options.env ?? process.env) }
@@ -33,6 +34,7 @@ export function createBillingServer(options = {}) {
   const dbPath = resolve(env.BILLING_DB_PATH ?? './billing-server/data/billing.db')
   mkdirSync(dirname(dbPath), { recursive: true })
   const db = new DatabaseSync(dbPath)
+  initializeOwnerLicenses(db)
   db.exec(`create table if not exists installations (
     id text primary key, token_hash text not null unique, customer_id text,
     lifetime_session_id text, decision_subscription_id text,
@@ -168,7 +170,8 @@ export function createBillingServer(options = {}) {
       const paid = db.prepare('select l.* from licenses l join installations i on i.license_id = l.id where i.id = ?').get(installationId)
       if (paid) return { ...paid, kind: 'lifetime' }
       const trial = db.prepare('select t.* from trial_licenses t join installations i on i.license_id = t.id where i.id = ?').get(installationId)
-      return trial ? { ...trial, kind: 'trial' } : null
+      if (trial) return { ...trial, kind: 'trial' }
+      return ownerLicense(db.prepare('select l.* from owner_licenses l join installations i on i.license_id = l.id where i.id = ?').get(installationId))
     },
     decisionLicenseForInstallation: async (installationId) => db.prepare('select l.* from decision_licenses l join installations i on i.decision_license_id = l.id where i.id = ?').get(installationId) ?? null,
     decisionLicenseForPurchase: async (installationId) => db.prepare('select * from decision_licenses where installation_id = ?').get(installationId) ?? null,
@@ -197,8 +200,9 @@ export function createBillingServer(options = {}) {
       const trial = db.prepare('select * from trial_licenses where key_hash = ?').get(keyHash)
       if (trial) return { ...trial, kind: 'trial' }
       const decision = db.prepare('select * from decision_licenses where key_hash = ?').get(keyHash)
-      return decision ? { ...decision, kind: 'decision' } : null
+      return decision ? { ...decision, kind: 'decision' } : ownerLicense(db.prepare('select * from owner_licenses where key_hash = ?').get(keyHash))
     },
+    activateOwnerLicense: async (installationId, licenseId, activatedAt) => activateOwnerLicense(db, installationId, licenseId, activatedAt),
     trialById: async (id) => db.prepare('select * from trial_licenses where id = ?').get(id),
     trialByEmail: async (email) => db.prepare('select * from trial_licenses where email = ?').get(email),
     trialForInstallation: async (installationId) => db.prepare('select * from trial_licenses where installation_id = ?').get(installationId),
@@ -212,6 +216,7 @@ export function createBillingServer(options = {}) {
       try {
         const now = new Date().toISOString()
         const trial = db.prepare('select expires_at, revoked_at, bound_installation_id from trial_licenses where id = ?').get(trialId)
+          ?? db.prepare("select expires_at, revoked_at, bound_installation_id from owner_licenses where id = ? and kind = 'trial'").get(trialId)
         if (!trial || trial.revoked_at || trial.bound_installation_id !== installationId || !trial.expires_at || trial.expires_at <= now) { db.exec('COMMIT'); return null }
         db.prepare('delete from trial_map_runs where delivered is null and lease_until <= ?').run(now)
         const totals = db.prepare('select coalesce(sum(coalesce(delivered, 0)), 0) as used, coalesce(sum(case when delivered is null then reserved else 0 end), 0) as reserved from trial_map_runs where trial_id = ?').get(trialId)

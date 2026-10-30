@@ -186,8 +186,11 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     const purchasedLicense = typeof store.licenseForPurchase === 'function' ? await store.licenseForPurchase(row.id) : null
     const purchasedDecisionLicense = typeof store.decisionLicenseForPurchase === 'function' ? await store.decisionLicenseForPurchase(row.id) : null
     const isTrial = linkedLicense?.kind === 'trial'
-    const purchaseRow = linkedLicense && !isTrial ? await store.byId(linkedLicense.installation_id) : row
-    if (purchaseRow?.lifetime_session_id) {
+    const isOwnerGrant = linkedLicense?.owner_issued === true
+    const purchaseRow = linkedLicense && !isTrial && !isOwnerGrant ? await store.byId(linkedLicense.installation_id) : row
+    if (isOwnerGrant && !isTrial) {
+      lifetimeActive = Boolean(!linkedLicense.revoked_at && linkedLicense.activated_at && linkedLicense.bound_installation_id === row.id)
+    } else if (purchaseRow?.lifetime_session_id) {
       const session = await stripe(`checkout/sessions/${encodeURIComponent(purchaseRow.lifetime_session_id)}`)
       lifetimeActive = await paidLifetimeSession(session, purchaseRow.id)
     }
@@ -205,9 +208,9 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       : null
     const standalonePeriod = decisionLicenseActive ? await activeDecisionPass(decisionPurchaseRow) : null
     const directPeriod = row.device_id && !linkedDecisionLicense && (!linkedLicense || isTrial) ? await activeDecisionPass(row) : null
-    const lifetimePaidPeriod = licenseActive && !isTrial ? await activeDecisionPass(purchaseRow) ?? await activeDecisionPeriod(purchaseRow) : null
+    const lifetimePaidPeriod = licenseActive && !isTrial && !isOwnerGrant ? await activeDecisionPass(purchaseRow) ?? await activeDecisionPeriod(purchaseRow) : null
     const paidDecisionPeriod = standalonePeriod ?? directPeriod ?? lifetimePaidPeriod
-    const decisionPeriod = paidDecisionPeriod ?? (licenseActive && !isTrial ? includedDecisionPeriod(linkedLicense) : null)
+    const decisionPeriod = paidDecisionPeriod ?? (licenseActive && !isTrial && !isOwnerGrant ? includedDecisionPeriod(linkedLicense) : null)
     const decisionOwner = standalonePeriod ? decisionPurchaseRow : directPeriod ? row : purchaseRow
     const used = decisionPeriod ? await store.countDecisionUses(decisionOwner.id, decisionPeriod.key) : 0
     const decisionRemaining = decisionPeriod ? Math.max(0, DECISION_MONTHLY_LIMIT - used) : 0
@@ -441,9 +444,15 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
   async function activateLicense(row, licenseKey) {
     if (typeof store.licenseByHash !== 'function' || typeof store.attachLicense !== 'function') throw new HttpError(503, 'License storage is not configured.')
     const normalized = normalizeLicense(licenseKey)
-    if (!licensePattern.test(normalized)) throw new HttpError(400, 'Enter the license key exactly as it appears in the email.')
+    if (!licensePattern.test(normalized)) throw new HttpError(400, 'Enter your MamaLead license key exactly as provided.')
     const license = await store.licenseByHash(hash(normalized))
     if (!license || license.revoked_at) throw new HttpError(401, 'This license key is invalid or revoked.')
+    if (license.owner_issued) {
+      const activated = await store.activateOwnerLicense?.(row.id, license.id, new Date().toISOString())
+      if (!activated) throw new HttpError(409, 'This owner-issued key is revoked, expired, or already active on another installation.')
+      return { active: true, kind: activated.kind, email: activated.email ?? undefined, last4: activated.key_last4,
+        activatedAt: activated.activated_at, expiresAt: activated.expires_at }
+    }
     const isTrial = license.kind === 'trial'
     const isDecision = license.kind === 'decision'
     if (isTrial) {
@@ -604,6 +613,11 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         if (!licensePattern.test(normalized)) throw new HttpError(400, 'Enter a valid MamaLead license key.')
         const license = await store.licenseByHash(hash(normalized))
         if (!license || license.revoked_at) throw new HttpError(401, 'This license key is invalid or revoked.')
+        if (license.owner_issued) {
+          const bound = license.bound_installation_id && await store.byId(license.bound_installation_id)
+          if (!bound || bound.license_id !== license.id) throw new HttpError(403, 'Activate this owner-issued key in MamaLead first.')
+          return json(200, await downloadLink(bound))
+        }
         if (license.kind === 'trial') {
           if (!license.sent_at || (license.expires_at && Date.parse(license.expires_at) <= Date.now())) throw new HttpError(403, 'This trial key is not active.')
           if (!downloadConfigured()) throw new HttpError(503, 'The protected installer is not configured yet.')
