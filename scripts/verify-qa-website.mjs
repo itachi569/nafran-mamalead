@@ -38,6 +38,10 @@ try{
   assert.ok(await page.locator('.zip-search-demo [data-demo-slot]').first().evaluate(el=>getComputedStyle(el).animationName.includes('zipHeroDemoSlot')))
   assert.match(await page.locator('#top').innerText(),/Save 50% on Lifetime/)
   assert.doesNotMatch(await page.locator('#top').innerText(),/Launch window.*gone|v1\.4\.0/)
+  if(viewport.width<=640){
+   const offer=await page.locator('.zip-offer-main').boundingBox(),badge=await page.locator('.zip-offer-main>span:last-child').boundingBox()
+   assert.ok(badge.x>offer.x+offer.width*.65 && badge.y<offer.y+offer.height*.5,'discount badge stays beside the mobile offer')
+  }
   assert.equal(await page.locator('#top .hero-trial').getAttribute('href'),'#download')
   assert.match(await page.locator('.pricing-grid article').first().innerText(),/LIFETIME ACCESS/)
   assert.ok(await page.evaluate(()=>Boolean(document.querySelector('#pricing').compareDocumentPosition(document.querySelector('#how')) & Node.DOCUMENT_POSITION_FOLLOWING)))
