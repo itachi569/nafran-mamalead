@@ -1,7 +1,7 @@
 {
   "name": "nafran-leads-scraper",
   "private": true,
-  "version": "1.4.19",
+  "version": "1.4.20",
   "description": "Local-first Google Maps lead scraper and enrichment desktop app.",
   "author": {
     "name": "Nafran Leads",
@@ -42,9 +42,11 @@
     "decision-removal:test": "npm run build && node scripts/verify-decision-removal.cjs"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
     "fflate": "^0.8.3",
+    "libphonenumber-js": "^1.13.15",
     "lottie-web": "^5.13.0",
     "parse5": "^8.0.1",
     "pdf-lib": "^1.17.1",
@@ -61,6 +63,7 @@
     "cross-env": "^10.0.0",
     "electron": "^38.1.0",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.5",
     "wait-on": "^8.0.4"

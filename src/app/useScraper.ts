@@ -172,7 +172,7 @@ export function useScraper(): {
                 return []
               }
             })(),
-            location: last.location || 'Manchester',
+            location: last.location || '',
             locations: areas,
             maxResultsPerKeyword: last.max_results || 25,
             headless: HEADLESS,
@@ -193,7 +193,7 @@ export function useScraper(): {
           current.request ??
           lastRequest ?? {
             keywords: [],
-            location: 'Manchester',
+            location: '',
             maxResultsPerKeyword: 25,
             headless: HEADLESS,
           },

@@ -210,7 +210,7 @@ check('and which lists a lead is in', repo.listIdsForLead(ledger.rows[0].id).len
 
 const lists = repo.listLists(workspace.id)
 check('the list carries a member count', lists[0].members === 2, `${lists[0].members} members`)
-check('and sample initials for its avatars', lists[0].initials.length === 2, `"${lists[0].initials}"`)
+check('and business initials for its avatars', lists[0].initials.split(',').length === 2 && lists[0].initials.split(',').every(value => /^[A-Z]{1,2}$/.test(value)), `"${lists[0].initials}"`)
 check('list totals are aggregated', JSON.stringify(repo.listTotals(workspace.id)) === JSON.stringify({ lists: 1, leads: 2 }))
 
 repo.removeLeadFromList(list.id, ledger.rows[1].id)

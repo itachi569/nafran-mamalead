@@ -9,6 +9,8 @@
 import type { LocalDatabase } from '../db/local-db'
 import { LicenseAccessError } from '../billing/client'
 import { type Repository } from '../db/repository'
+import { userError } from '../user-errors'
+import { directoryScanError } from './source-policy'
 import { WebsiteEnricher } from './website'
 import { DEFAULT_LOOKUP_FIELDS, emptyLookupRow, lookupOptions, lookupRowFromFindings } from './website-lookup'
 
@@ -19,6 +21,7 @@ export type JobKind = 'email' | 'phone' | 'social' | 'website'
 const JOB_KINDS: JobKind[] = ['email', 'phone', 'social', 'website']
 
 export interface EnrichmentProgress {
+  runId?: string
   jobId: string
   kind: JobKind
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'
@@ -67,8 +70,10 @@ export class EnrichmentRunner {
   private controller: AbortController | null = null
   private looping = false
   private foregroundJobId = ''
+  private activeRunId = ''
   private activeProgress: EnrichmentProgress | null = null
   private stoppedJobId = ''
+  private outcomes: NonNullable<EnrichmentProgress['outcomes']> = {}
 
   constructor(
     private readonly db: LocalDatabase,
@@ -102,6 +107,8 @@ export class EnrichmentRunner {
         if (!job) break
         if (job.id === this.foregroundJobId) this.foregroundJobId = ''
         this.stoppedJobId = ''
+        this.outcomes = {}
+        try { this.activeRunId=JSON.parse(job.options || '{}').runId || '' } catch { this.activeRunId='' }
         try {
           if (!JOB_KINDS.includes(job.kind as JobKind)) { this.repository.markJob(job.id,'failed',0,'This scan module is no longer available.'); continue }
           const kind = job.kind as JobKind
@@ -221,6 +228,7 @@ export class EnrichmentRunner {
         processed += 1
         failed += 1
         searchFailure = 'Some saved businesses have no website to scan.'
+        this.outcomes[leadId] = {status:'error',searches:0,error:'No website is saved for this business.'}
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead?.name || '',message:'Skipped a business without a website.'})
         continue
       }
@@ -228,6 +236,9 @@ export class EnrichmentRunner {
       let siteFailure: string | null = null
       try {
 
+      const directoryError = directoryScanError(lead.website)
+      if (directoryError) throw new Error(directoryError)
+      const beforeFound = found
       if (isLookup) this.repository.saveWebsiteLookupRow(job.id,{...emptyLookupRow(lead),status:'running'})
       this.emit({
         jobId: job.id,
@@ -264,8 +275,8 @@ export class EnrichmentRunner {
           } else if (isLookup) findings.error=displayed.error; else siteFailure=displayed.error
         } catch (error) {
           if (signal.aborted)throw new DOMException('Enrichment cancelled','AbortError')
-          if (isLookup) findings.error='The displayed contact pages could not finish loading. Retry this website.'
-          else siteFailure='The displayed contact pages could not finish loading. Retry this website.'
+          if (isLookup) findings.error=userError(error)
+          else siteFailure=userError(error)
         } finally { renderedSignal.removeEventListener('abort',closeRendered);await this.enricher.close() }
       }
       // Social scans deliberately stay on the bounded HTTP path. Falling back to Chromium after a
@@ -274,8 +285,12 @@ export class EnrichmentRunner {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
       findings.emails.sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
       findings.emails=findings.emails.slice(0,1)
+      if (siteFailure) findings.error = siteFailure
+      if(findings.error)findings.error=userError(findings.error)
       if (isLookup) this.repository.saveWebsiteLookupRow(job.id,lookupRowFromFindings(lead,findings,fields))
       if (findings.error) {
+        findings.error = userError(findings.error)
+        this.outcomes[leadId] = {status:'error',searches:0,error:findings.error}
         processed += 1
         failed += 1
         searchFailure = findings.error
@@ -320,6 +335,7 @@ export class EnrichmentRunner {
       // The site has now been read, whatever came back. The finder pages show the leads that are
       // covered so far, so this is written before the next lead is started rather than at the end.
       this.repository.markLeadScanned(leadId)
+      this.outcomes[leadId] = {status:found > beforeFound ? 'found' : 'not-published',searches:0}
       this.emit({
         jobId: job.id,
         kind,
@@ -339,7 +355,8 @@ export class EnrichmentRunner {
         if (error instanceof LicenseAccessError) throw error
         processed += 1
         failed += 1
-        searchFailure = error instanceof Error ? error.message : String(error)
+        searchFailure = userError(error)
+        this.outcomes[leadId] = {status:'error',searches:0,error:searchFailure}
         if (isLookup) this.repository.saveWebsiteLookupRow(job.id,{...emptyLookupRow(lead),status:'failed',error:searchFailure})
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead.name,message:`Could not finish ${lead.name}: ${searchFailure}`})
       }
@@ -367,7 +384,7 @@ export class EnrichmentRunner {
   }
 
   private emit(progress: Omit<EnrichmentProgress, 'at' | 'failed'> & {failed?:number}): void {
-    const complete: EnrichmentProgress = {...progress,failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
+    const complete: EnrichmentProgress = {...progress,runId:progress.jobId ? this.activeRunId : undefined,outcomes:{...this.outcomes},failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
     if (progress.jobId) {
       this.activeProgress = complete
       this.repository.saveJobProgress(progress.jobId,complete)

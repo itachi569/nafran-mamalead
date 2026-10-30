@@ -1,0 +1,92 @@
+// Isolated UI regression checks for the supplied 1.4.19 QA report.
+const assert=require('node:assert/strict')
+const {mkdtempSync,mkdirSync}=require('node:fs')
+const {tmpdir}=require('node:os')
+const {join,resolve}=require('node:path')
+const {_electron}=require('playwright')
+async function main(){
+ const out=resolve('screenshots/qa-1.4.19/ui');mkdirSync(out,{recursive:true})
+ const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
+ const app=await _electron.launch({...(process.argv.includes('--packaged')?{executablePath:resolve('release/win-unpacked/MamaLead.exe')}:{args:['.'],cwd:process.cwd()}),args:[...(process.argv.includes('--packaged')?[]:['.']),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-qa-ui-'))],env,timeout:60000})
+ try{
+  const initial=await app.firstWindow();await initial.locator('[data-view="dashboard"]').waitFor()
+  await app.evaluate(({app,ipcMain})=>{
+   const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'))
+   const {db,repository}=req('./dist-electron/db/index.js').openDatabase(),ws=db.ensureWorkspace().id
+   globalThis.__qa={active:false,activations:0,trials:0,db,repository,ws}
+   const override=(name,fn)=>{ipcMain.removeHandler(name);ipcMain.handle(name,fn)}
+   override('billing:status',()=>({configured:true,connected:true,mode:'test',coreLicenseActive:__qa.active,license:{active:__qa.active,kind:__qa.active?'lifetime':null,last4:__qa.active?'ABCD':null,email:'qa@fixture.test'},lifetime:{active:true,amount:1000000,currency:'pkr'},mapsLeads:{used:0,remaining:300,limit:300},trial:{active:false}}))
+   override('billing:request-trial',()=>{__qa.trials++;return {sent:true,email:'qa@fixture.test'}})
+   override('billing:activate',()=>{__qa.activations++;__qa.active=true;return {active:true,kind:'lifetime'}})
+   override('billing:invoices',()=>[])
+  })
+  const page=await app.firstWindow(),errors=[];page.on('pageerror',e=>errors.push(e.message))
+  await page.reload();await page.locator('[data-view="maps"]').waitFor()
+  await page.click('[data-view="maps"]')
+  await page.locator('[data-location="1"]').click()
+  await page.getByRole('button',{name:'Get my 1-day trial',exact:true}).waitFor()
+  await page.getByRole('button',{name:'Get my 1-day trial',exact:true}).click()
+  await page.locator('#desktop-trial-email').waitFor()
+  assert.ok(await page.locator('#desktop-trial-email').isVisible())
+  await page.locator('#desktop-trial-email').fill('qa@fixture.test')
+  await page.getByRole('button',{name:'Send trial key',exact:true}).click()
+  await page.waitForTimeout(350)
+  assert.equal(await app.evaluate(()=>__qa.trials),1)
+  await page.screenshot({path:join(out,'trial.png')})
+  console.log('PASS locked Maps field opens gate; trial CTA reveals form and submits once')
+  await page.click('[data-stab="acct"]')
+  const key=page.locator('#nafran-license-key')
+  await key.fill(' nf-abcd ')
+  assert.equal(await key.inputValue(),'NF-ABCD')
+  await page.getByRole('button',{name:'Show key',exact:true}).click()
+  assert.equal(await key.getAttribute('type'),'text')
+  await page.getByRole('button',{name:'Activate',exact:true}).click()
+  assert.equal(await app.evaluate(()=>__qa.activations),0,'malformed key must be stopped before IPC')
+  await page.locator('[data-license-notice]').filter({hasText:/NF|key/i}).waitFor()
+  await key.fill('NF'+('-ABCD'.repeat(10)))
+  await page.getByRole('button',{name:'Activate',exact:true}).click()
+  await page.getByRole('button',{name:'Use a different key',exact:true}).waitFor()
+  assert.equal(await key.count(),0)
+  assert.match(await page.locator('#license-section').innerText(),/ending ABCD/)
+  await page.screenshot({path:join(out,'active-license.png')})
+  await page.click('[data-stab="plan"]')
+  assert.equal(await page.locator('#trial-section').count(),0)
+  assert.equal(await page.locator('[data-lifetime-buy]').count(),0)
+  console.log('PASS key normalization/show/validation; active card replaces input; Lifetime upsells hidden')
+  await app.evaluate(()=>{
+   const {repository,ws}=__qa
+   const imported=repository.importWebsites(ws,['qa-clinic.test'])
+   const id=imported.leadIds[0];__qa.leadId=id
+   __qa.db.run('update leads set name=?,phone=?,address=?,rating=?,review_count=? where id=?',['QA Clinic — Lahore','03001234567','Lahore, Pakistan',4.5,30,id])
+   repository.upsertContact({leadId:id,kind:'email',value:'hello@qa-clinic.test',source:'https://qa-clinic.test'})
+   for(const kind of ['email','phone','social']){
+    const job=repository.queueJob(ws,kind,[id])
+    repository.markJob(job.jobId,'failed',0,'Website returned HTTP 503.')
+    repository.saveJobProgress(job.jobId,{status:'failed',processed:1,total:1,found:0,failed:1,outcomes:{[id]:{status:'error',error:'Website returned HTTP 503.',searches:0}}})
+   }
+  })
+  await page.reload();await page.locator('[data-view="leads"]').click()
+  await page.getByRole('button',{name:'QA Clinic — Lahore',exact:true}).first().click()
+  await page.getByRole('dialog',{name:'Lead details'}).waitFor()
+  const detail=await page.getByRole('dialog',{name:'Lead details'}).innerText()
+  assert.match(detail,/hello@qa-clinic.test/);assert.match(detail,/Lahore, Pakistan/);assert.match(detail,/4.5 \/ 5/)
+  await page.screenshot({path:join(out,'lead-details.png')})
+  await page.getByRole('button',{name:'Close lead details'}).click()
+  for(const view of ['email','phone','social']){
+   await page.click('[data-view="'+view+'"]')
+   await page.getByText(/Scan failed|Failed — retry scan/).first().waitFor({timeout:10000})
+   await page.getByText('Website returned HTTP 503.',{exact:false}).first().waitFor()
+   await page.screenshot({path:join(out,view+'-failure.png')})
+  }
+  await page.getByRole('button',{name:'Scan visible websites',exact:true}).waitFor()
+  console.log('PASS lead details; email/phone/social persist failure reason on route entry; social scan action')
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].maximize())
+  await page.waitForTimeout(400)
+  const sizes=await page.evaluate(()=>({viewport:document.documentElement.clientWidth,root:document.querySelector('#root').getBoundingClientRect().width,scroll:document.documentElement.scrollWidth}))
+  assert.ok(Math.abs(sizes.viewport-sizes.root)<2 && sizes.scroll<=sizes.viewport+1,JSON.stringify(sizes))
+  await page.screenshot({path:join(out,'maximized.png')})
+  assert.deepEqual(errors,[])
+  console.log('PASS maximized root fills window without horizontal strip; no renderer errors')
+ }finally{await app.close()}
+}
+main().catch(e=>{console.error(e);process.exitCode=1})

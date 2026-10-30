@@ -1,3 +1,4 @@
+import { contactQuality } from '../../electron/lead-quality'
 // The reference app keeps everything in one component: a state object plus renderVals(), which
 // hands the template a flat bag of values and callbacks. This hook is that same component — the
 // state, the actions and the values bag — with two deliberate changes:
@@ -111,14 +112,7 @@ function notificationTime(at: string): string {
 
 // Contact completeness, in the same spirit as the reference's score column: a lead with a
 // website, a phone number, a rating and real review volume is worth contacting first.
-function scoreLead(lead: Lead): number {
-  let score = 40
-  if (lead.website) score += 20
-  if (lead.phone) score += 20
-  if (lead.rating !== null) score += 10
-  if ((lead.reviewCount ?? 0) > 50) score += 10
-  return score
-}
+function scoreLead(lead: Lead): number { return contactQuality(lead) }
 
 function formatDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000))
@@ -215,6 +209,7 @@ function googleNoteFor(status: { profile: boolean; signedIn: boolean } | null): 
 
 /** One reading of a lead, shared by the ledger rows, the filter chips and the summary card. */
 interface LedgerLead {
+  id: string
   ini: string
   name: string
   domain: string
@@ -266,6 +261,7 @@ function hostOf(website: string): string {
 
 function leadToLedger(lead: Lead): LedgerLead {
   return {
+    id:lead.id,
     ini: initialsOf(lead.name),
     name: lead.name,
     domain: hostOf(lead.website),
@@ -284,12 +280,13 @@ function leadToLedger(lead: Lead): LedgerLead {
 
 function storedToLedger(row: StoredLead): LedgerLead {
   return {
+    id:row.id,
     ini: initialsOf(row.name),
     name: row.name,
     domain: hostOf(row.website),
     area: row.area || row.address || 'Address pending',
     saved: shortDate(row.captured_at),
-    score: 40 + (row.website ? 20 : 0) + (row.phone ? 20 : 0) + (row.rating !== null ? 10 : 0) + ((row.review_count ?? 0) > 50 ? 10 : 0),
+    score: row.score ?? contactQuality(row),
     rating: row.rating === null ? 'Not rated' : `${row.rating} ★ ${row.review_count ?? 0}`,
     note: row.review_count ? `${row.review_count} reviews` : row.category || 'Captured lead',
     hasPhone: Boolean(row.phone),
@@ -302,6 +299,7 @@ function storedToLedger(row: StoredLead): LedgerLead {
 /** Offline demo mode paints the reference's own sample rows through the same bindings. */
 function pickToLedger(row: LeadRow): LedgerLead {
   return {
+    id:row[2],
     ini: row[0],
     name: row[1],
     domain: row[2],
@@ -463,6 +461,7 @@ export function useAppValues() {
   /** Whether the open import modal is the Social Profiles one, which files profile URLs. */
   const socialImportOpen = social.importOpen
   const [expOpen, setExpOpen] = useState(false)
+  const [detailLeadId,setDetailLeadId]=useState('')
   const [exportSelection, setExportSelection] = useState<SimpleExportSelection | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
   const exportLock = useRef(false)
@@ -667,6 +666,7 @@ export function useAppValues() {
     if (!bridge?.onProgress) return
     return bridge.onProgress((progress) => {
       setEnrichmentActivity((current) => [progress, ...current.filter((item) => item.jobId !== progress.jobId)].slice(0, 8))
+      if(progress.status==='failed')recentErrors.current=[progress.kind+': '+progress.message,...recentErrors.current].slice(0,3)
       if(progress.status!=='failed' && progress.status!=='done')return
       if(progress.kind==='website' && progress.status==='done')return
       const view=progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
@@ -675,6 +675,7 @@ export function useAppValues() {
     })
   }, [notify])
 
+  const recentErrors=useRef<string[]>([])
   const say = useCallback(async (text: string) => {
     const trimmed = String(text ?? '').trim()
     if (!trimmed) return
@@ -688,7 +689,7 @@ export function useAppValues() {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.assist
     try {
       if (!bridge?.chat) throw new Error('MamaLead Assist is available in the MamaLead desktop app with an internet connection.')
-      let context = assistantContextRef.current
+      const context = {...assistantContextRef.current,recentScanErrors:recentErrors.current.join(' | '),mapsError:snapshot.error || null,troubleshootingRule:'Use the actual errors above. If the cause is not known, say so and ask for the error. Do not assume a licensing, key, or browser failure.'}
       const result = await bridge.chat({
         messages: next.slice(-16).map((message) => ({
           role: message.who === 'me' ? ('user' as const) : ('assistant' as const),
@@ -710,7 +711,7 @@ export function useAppValues() {
       chatPendingRef.current = Math.max(0, chatPendingRef.current - 1)
       if (chatPendingRef.current === 0) setChatTyping(false)
     }
-  }, [featureAccessAllowed, showAccessPrompt])
+  }, [featureAccessAllowed, showAccessPrompt,snapshot.error])
 
   const go = useCallback((next: string) => {
     setView(Object.hasOwn(VIEW_NAMES, next) ? next : 'dashboard')
@@ -941,7 +942,8 @@ export function useAppValues() {
     // The location field is tagged by the generator. Selecting by position was wrong: the
     // keyword input sits above it, so the run searched whatever the keyword box held.
     const locationField = document.querySelector<HTMLInputElement>('[data-location="1"]')
-    const location = (locationField?.value ?? '').trim() || 'Manchester'
+    const location = (locationField?.value ?? '').trim()
+    if(!location){flash('Enter a city or area to search.');locationField?.focus();return}
     // The town alone, without the country the field may also carry: a district search reads
     // "physiotherapy Gulberg", and Google is told the town separately as "in Lahore".
     const town = townOf(location) || location
@@ -1019,7 +1021,8 @@ export function useAppValues() {
    */
   const splitByDistrict = useCallback(() => {
     const locationField = document.querySelector<HTMLInputElement>('[data-location="1"]')
-    const raw = (locationField?.value ?? '').trim() || 'Manchester'
+    const raw = (locationField?.value ?? '').trim()
+    if(!raw){flash('Enter a city or area first.');return}
     const area = districtsFor(raw)
     // The location may carry a country ("Lahore, Pakistan"), so the town is the first segment;
     // stripping only that leaves a readable district name for the message.
@@ -1938,6 +1941,7 @@ export function useAppValues() {
       }
       if (leadIds) count = leadIds.length
     }
+    if(!count){flash('There are no results to export.');return}
     setExportSelection({ title, summary: exportKind === 'invoices' ? description : `${count.toLocaleString()} ${description} · choose a file format`, request: {
       kind: exportKind, limit: count, delimiter: 'csv', columns,
       fileName: `${stem}-${new Date().toISOString().slice(0,10)}`,
@@ -2045,9 +2049,10 @@ export function useAppValues() {
   useEffect(() => { paintTheme(dark) }, [dark])
 
   useEffect(() => {
-    const onResize = () => layout()
+    let frame=0
+    const onResize = () => {cancelAnimationFrame(frame);frame=requestAnimationFrame(()=>{layout();frame=requestAnimationFrame(layout)})}
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    return () => {cancelAnimationFrame(frame);window.removeEventListener('resize', onResize)}
   }, [])
 
   useEffect(() => {
@@ -2124,12 +2129,18 @@ export function useAppValues() {
       }
     }
 
+    const unsubscribe = bridge.onProgress?.(progress => {
+      if (progress.status==='idle') return
+      window.clearTimeout(timer)
+      timer=window.setTimeout(()=>{void refreshLists(); email.refresh(); social.refresh(); reload()}, progress.status==='running'?250:0)
+    })
     void poll()
     return () => {
+      unsubscribe?.()
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [notify, refreshLists])
+  }, [notify, refreshLists, email.refresh, social.refresh, reload])
 
   // Fetch only the first page for All Leads. A search or chip change starts a new query over the
   // whole database; stale responses cannot overwrite a newer query.
@@ -2195,7 +2206,7 @@ export function useAppValues() {
   const mode = EXP_MODES[expMode] ?? EXP_MODES.leads
   const scope = mode.scopes[expScope] ?? mode.scopes[0]
   const columnsOn = expCols.filter((column) => column.on).length
-  const location = snapshot.request?.location ?? 'Manchester'
+  const location = snapshot.request?.location || 'Choose a city'
   const timeline = useMemo(() => [
     ...runs.map((run) => ({ kind: 'maps' as const, id: run.id, at: run.finished_at || run.started_at, run })),
     ...imports.batches.map((batch) => ({
@@ -2269,12 +2280,12 @@ export function useAppValues() {
       title: snapshot.message || 'Maps scrape running',
       detail: `${snapshot.found} of ${snapshot.target || '—'} places captured`,
     }] : []),
-    ...enrichmentActivity.map((item) => ({
+    ...enrichmentActivity.filter(item=>item.runId && item.runId===(snapshot.running?snapshot.runId:mapsRunId==='latest'?runs[0]?.id:mapsRunId)).map((item) => ({
       key: `enrichment-${item.jobId}`, at: item.at, level: item.status === 'failed' ? 'WARN' : item.status === 'running' ? 'LIVE' : 'OK',
       title: `${item.kind} lookup ${item.status}${item.leadName ? ` · ${item.leadName}` : ''}`,
       detail: `${item.processed} of ${item.total} processed · ${item.found} found${item.status === 'failed' && item.message ? ` · ${item.message}` : ''}`,
     })),
-    ...runs.filter((run) => run.provider === 'chromium-maps').slice(0, 6).map((run) => ({
+    ...runs.filter((run) => run.provider === 'chromium-maps' && run.id===(mapsRunId==='latest'?runs[0]?.id:mapsRunId)).slice(0, 1).map((run) => ({
       key: `run-${run.id}`, at: run.finished_at || run.started_at,
       level: run.status === 'failed' ? 'WARN' : run.status === 'done' ? 'OK' : 'INFO',
       title: `Maps scrape ${run.status}${run.location ? ` · ${run.location}` : ''}`,
@@ -2648,6 +2659,7 @@ export function useAppValues() {
     })
     : emailFinder.rows
   const emailTableRows=emailValidityRows.map(row=>{
+    if(row.lookupOutcome?.status==='error')return {...row,primary:row.emailDetails.length?row.primary:'Not checked',statusLabel:'Scan failed',isFound:false,isMuted:true}
     if(!emailFinder.q.trim())return row
     const details=row.emailDetails.filter(address=>savedSearchScore([address.value],emailFinder.q)>0)
     if(!details.length)return row
@@ -2701,6 +2713,15 @@ export function useAppValues() {
     progressSelector: '[data-finder-progress="phone"]',
   })
 
+  const priorFinderPage=useRef(view)
+  useEffect(()=>{
+    if(priorFinderPage.current===view)return
+    priorFinderPage.current=view
+    if(view==='email'){emailFinder.exit();void email.refresh()}
+    if(view==='phone'){phoneFinder.exit();void refreshPhone()}
+    if(view==='social'){if(scan.phase!=='scanning')exitScan();social.refresh()}
+    if(['leads','email','phone','social','dashboard'].includes(view))void refreshLists()
+  },[view])
   const phoneTableRows=phoneFinder.rows.map(row=>{
     if(!isPhoneSearch(phoneFinder.q))return row
     const matched=searchSavedRows(row.items,phoneFinder.q,item=>[item.t])
@@ -2740,6 +2761,7 @@ export function useAppValues() {
       label,
       count: `${rows.length} added`,
       rows: rows.map((lead) => ({
+        id:lead.id,
         ini: lead.ini,
         name: lead.name,
         domain: lead.domain,
@@ -2779,6 +2801,7 @@ export function useAppValues() {
   }
 
   return {
+    canExportCurrent:view==='maps'?mapsMatches.length>0:view==='email'?emailFinder.rows.length>0:view==='phone'?phoneFinder.rows.length>0:storedLeadCount>0,
     featureAccessAllowed,
     showAccessPrompt,
     workspaceName: /^(Nafran Leads|Local workspace)$/i.test(workspaceName) ? "MamaLead" : workspaceName,
@@ -2813,6 +2836,7 @@ export function useAppValues() {
     activeRange: range,
     activeTab: stab,
     activeView: view,
+    detailLeadId, openLeadDetail:(id:string)=>setDetailLeadId(id), closeLeadDetail:()=>setDetailLeadId(''),
     lifetimeCheckoutPending: lifetimeCheckoutUntil > Date.now(),
 
     licenseNextStep,
@@ -2914,9 +2938,7 @@ export function useAppValues() {
     verifyEmailValidity: () => void verifyEmailValidity(),
     verifyEmailLeadValidity: (leadIds:string[]) => void verifyEmailValidity(leadIds),
     // The next run shares one total cap across all keywords and selected areas.
-    foundLabel: snapshot.running
-      ? `${found} of ${Math.max(found, snapshot.target || found)} mapped`
-      : `0 of ${Math.max(1, maxResults)} mapped`,
+    foundLabel: `${mapsDisplayed.filter(lead=>Number.isFinite(lead.latitude)&&Number.isFinite(lead.longitude)).length} of ${mapsDisplayed.length} with coordinates · ${Math.min(8,mapsDisplayed.filter(lead=>Number.isFinite(lead.latitude)&&Number.isFinite(lead.longitude)).length)} shown`,
     goDashboard: () => go('dashboard'),
 
     goEmail: () => go('email'),
@@ -3109,6 +3131,7 @@ export function useAppValues() {
     // The ledger spans more than one run, and the map plots all of it, so its caption names every
     // area the pins came from rather than only the one searched last.
     mapsAreas: snapshot.running ? snapshot.request?.location || location : (mapsRunId==='latest' ? runs[0] : runs.find(run=>run.id===mapsRunId))?.location || location,
+    mapsDefaultLocation: snapshot.request?.location || "",
     mapsRadius: pinSpread(mapsDisplayed),
     mapsRadiusShort: pinSpread(mapsDisplayed),
     mapsActivity,
@@ -3268,12 +3291,12 @@ export function useAppValues() {
           name: row.name,
           domain: row.domain,
           scanning: '',
-          scanLabel: '',
+          scanLabel: row.scanError || '',
           profiles: row.profiles.map((profile) => ({ tag: profile.short, url: profile.url })),
           chips: row.profiles.map((profile) => ({ t: profile.short, k: profile.label, url: profile.url })),
-          none: row.noProfiles ? '1' : '',
-          pill: row.isDone ? 'done' : 'pending',
-          status: row.isDone ? 'Done' : 'Pending',
+          none: !row.scanError && row.noProfiles ? '1' : '',
+          pill: row.scanError ? 'failed' : row.isDone ? 'done' : 'pending',
+          status: row.scanError ? 'Failed — retry scan' : row.isDone ? 'Done' : 'Pending',
         }))
       }
       const total = scan.leadIds.length || scan.urls.length
@@ -3295,18 +3318,20 @@ export function useAppValues() {
           name: row?.name ?? host,
           domain: row?.domain || host,
           scanning: isActive ? '1' : '',
-          scanLabel: isActive ? 'Scanning…' : '',
+          scanLabel: isActive ? 'Scanning…' : row?.scanError || '',
           profiles: (row?.profiles ?? []).map((profile) => ({ tag: profile.short, url: profile.url })),
           // The panel's chips carry the platform's label as the tooltip; the table's carry the URL.
           chips: (row?.profiles ?? []).map((profile) => ({ t: profile.short, k: profile.label, url: profile.url })),
-          none: !isActive && isDone && row?.noProfiles ? '1' : '',
-          pill: isActive ? 'scanning' : isDone ? 'done' : 'pending',
-          status: isActive ? 'Scanning' : isDone ? 'Done' : scan.stopped ? 'Not scanned' : 'Waiting',
+          none: !isActive && !row?.scanError && isDone && row?.noProfiles ? '1' : '',
+          pill: isActive ? 'scanning' : row?.scanError ? 'failed' : isDone ? 'done' : 'pending',
+          status: isActive ? 'Scanning' : row?.scanError ? 'Failed — retry scan' : isDone ? 'Done' : scan.stopped ? 'Not scanned' : 'Waiting',
         }
       })
     })(),
+    retrySocial: (domain:string)=>void runWebsiteScan([domain]),
     exportProfiles: openProfileExport,
     profileExportOpen,
+    profileExportEmpty: !social.rows.some(row=>profileExportLeadIds.includes(row.leadId) && row.profiles.length),
     profileExportSummary: `${profileExportLeadIds.length} visible lead${profileExportLeadIds.length === 1 ? '' : 's'} · saved profile links only`,
     exportProfilesExcel: () => void runProfileExport('xlsx'),
     exportProfilesPdf: () => void runProfileExport('pdf'),
@@ -3417,7 +3442,7 @@ export function useAppValues() {
     // land where Lahore is, and Manchester pins where Manchester is. Leads without coordinates
     // (an import, or a listing Google gave no position for) are spread on a fixed grid instead.
     mapsPins: (() => {
-      const placed = mapsDisplayed.slice(0, 8)
+      const placed = mapsDisplayed.filter(lead=>typeof lead.latitude==='number'&&typeof lead.longitude==='number').slice(0, 8)
       const points = placed.filter(
         (lead): lead is typeof lead & { latitude: number; longitude: number } =>
           typeof lead.latitude === 'number' && typeof lead.longitude === 'number',
@@ -3436,7 +3461,8 @@ export function useAppValues() {
         }
       }
       /** Keeps a pin inside the plot and away from the very edge, where its label would clip. */
-      const inset = (share: number) => `${Math.min(92, Math.max(4, Math.round(share * 100)))}%`
+      const inset = (share: number) => `${Math.min(72, Math.max(8, Math.round(share * 100)))}%`
+      const usedPositions:{x:number;y:number}[]=[]
       return placed.map((lead, index) => {
         let x = `${spread[index] ?? 50}%`
         let y = `${drop[index] ?? 50}%`
@@ -3450,6 +3476,9 @@ export function useAppValues() {
           x = inset(across * 0.84 + 0.08)
           y = inset(down * 0.78 + 0.11)
         }
+        let px=parseFloat(x),py=parseFloat(y)
+        for(let attempt=0;attempt<8 && usedPositions.some(point=>Math.abs(point.x-px)<24 && Math.abs(point.y-py)<12);attempt++){py=18+(index*13+attempt*13)%65;px=Math.min(74,Math.max(24,px))}
+        usedPositions.push({x:px,y:py});x=px+'%';y=py+'%'
         const row = leadToLedger(lead)
         return {
           // The stylesheet hides every pin until `data-on="y"`, which is what fades it in as the
@@ -3506,7 +3535,7 @@ export function useAppValues() {
     // The picks are what the last run brought back, which is a page of the ledger rather than the
     // whole workspace: a card each for hundreds of leads would be a scroll nobody finishes.
     pickCount: `${Math.min(ledger.length, 50)} ${Math.min(ledger.length, 50) === 1 ? 'place' : 'places'}`,
-    lastRunLine: runs.length
+    lastRunLine: ledger.some(row=>row.source==='import') ? 'Saved workspace · Maps captures and website imports' : runs.length
       ? `${termsOfRun(runs[0]) ? `“${termsOfRun(runs[0])}” near ` : 'Near '}${runs[0].location || location} · ${shortDateTime(runs[0].started_at)}`
       : `“${keywords.join(', ')}” near ${location} · nothing run yet`,
     /** The total the bookmark counter is out of: the picks the page is showing. */
@@ -3520,7 +3549,7 @@ export function useAppValues() {
         : 'Nothing saved into this list yet.',
       updated: list.updated_at ? `Updated ${shortDate(list.updated_at)}` : 'Nothing added yet',
       avatars: list.initials
-        .split('')
+        .split(',')
         .slice(0, 3)
         .map((ini) => ({ ini })),
       // The reference draws six pips; they fill in proportion to how many leads are in the list.
@@ -3535,9 +3564,9 @@ export function useAppValues() {
         },
       })),
     })),
-    queueEmail: () => void queueEnrichment('email'),
-    queuePhone: () => void queueEnrichment('phone'),
-    queueSocial: () => void queueEnrichment('social'),
+    queueEmail: emailFinder.act,
+    queuePhone: phoneFinder.act,
+    queueSocial: () => { if(!db || scan.phase==='scanning')return;void Promise.all(social.visibleLeadIds.map(id=>db.leads.get(id))).then(rows=>{const urls=rows.map(row=>row?.website || '').filter(Boolean);if(urls.length)runWebsiteScan(urls);else flash('There are no websites in this view to scan.')}).catch(error=>flash(String(error.message))) },
     runImport,
     ...dashboardValues,
     ...billingValues,
@@ -3616,7 +3645,9 @@ export function useAppValues() {
     // four tiles each carry a figure, a badge and sometimes a half — a duration is written as
     // minutes and seconds and the clean count as a fraction — so all of them are stated separately
     // rather than as one pre-joined string the page would have to take apart again.
-    runCount: String(runStats.runs),
+    savedListCount:storedLeadCount,
+    runCount: String(runStats.clean),
+    runTotal: filteredTimeline.length,
     runCountBadge: 'All time',
     runShowing: Math.min(filteredTimeline.length, runsLimit),
     runTimelineTotal: filteredTimeline.length,
@@ -4070,7 +4101,7 @@ export function useAppValues() {
     notify,
     notificationCenter,
     openNotification,
-    unreadNotifications: String(notifications.filter(item=>item.unread).length),
+    unreadNotifications: String(notifications.filter(item=>item.unread && Boolean(item.action || item.level==='error')).length),
     notificationsCountLabel: notifications.length+' saved · '+notifications.filter(item=>item.unread).length+' unread',
     openNotifications: () => setNotificationsOpen(current=>!current),
     closeNotifications: () => setNotificationsOpen(false),

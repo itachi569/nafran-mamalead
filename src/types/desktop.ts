@@ -310,6 +310,7 @@ export interface LocalApi {
     cancel: (jobId: string) => Promise<{ cancelled: boolean }>
     totals: () => Promise<{ queued: number; running: number; done: number; failed: number }>
     status: (jobId: string) => Promise<EnrichmentJobStatus | null>
+    outcomes: (kind:string) => Promise<NonNullable<EnrichmentJobStatus['outcomes']>>
     /** Leads each kind of enrichment pass has covered, for the billing lookup meters. */
     usage: () => Promise<Record<string, number>>
     covered: (kind: string, statuses: string[]) => Promise<string[]>
@@ -421,6 +422,7 @@ export interface EnrichmentJobStatus {
 }
 
 export interface EnrichmentProgress {
+  runId?: string
   jobId: string
   kind: 'email' | 'phone' | 'social' | 'website'
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'

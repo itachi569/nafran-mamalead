@@ -8,10 +8,12 @@ import { fileURLToPath } from 'node:url'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const assets = [
+  ['src/assets/fonts/satoshi-400.ttf','dist-electron/export/assets/satoshi-400.ttf'],
+  ['src/assets/fonts/satoshi-700.ttf','dist-electron/export/assets/satoshi-700.ttf'],
   ['electron/db/schema.sql', 'dist-electron/db/schema.sql'],
-  ['electron/export/assets/mamalead-original.jpeg', 'dist-electron/export/assets/mamalead-original.jpeg'],
-  ['electron/export/assets/mamalead-logo.png', 'dist-electron/export/assets/mamalead-logo.png'],
-  ['electron/export/assets/mamalead-watermark.png', 'dist-electron/export/assets/mamalead-watermark.png'],
+  ['electron/export/assets/mamalead-print.jpeg', 'dist-electron/export/assets/mamalead-print.jpeg'],
+  ['electron/export/assets/mamalead-header.png', 'dist-electron/export/assets/mamalead-header.png'],
+  ['electron/export/assets/mamalead-sheet.png', 'dist-electron/export/assets/mamalead-sheet.png'],
 ]
 
 for (const [from, to] of assets) {

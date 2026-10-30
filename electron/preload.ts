@@ -1,3 +1,4 @@
+import { userError } from './user-errors'
 import { contextBridge, ipcRenderer } from 'electron'
 import type { UpdateStatus } from './updates'
 import type { ProviderId, RunProgress, RunSummary, StartRunRequest } from './scraper/types'
@@ -18,11 +19,13 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
  * other async API and a database failure arrives as an Error with a readable message.
  */
 async function call<T>(channel: string, payload?: unknown): Promise<T> {
+  try {
   const result = (await ipcRenderer.invoke(channel, payload)) as T | { error: string }
   if (result && typeof result === 'object' && 'error' in result && typeof (result as { error: unknown }).error === 'string') {
     throw new Error((result as { error: string }).error)
   }
   return result as T
+  } catch (error) { throw new Error(userError(error)) }
 }
 
 const local = {
@@ -97,6 +100,7 @@ const local = {
     cancel: (jobId: string) => call<{ cancelled: boolean }>('db:jobs:cancel', { jobId }),
     totals: () => call('db:jobs:totals'),
     status: (jobId: string) => call<{ status: 'queued' | 'running' | 'done' | 'failed' } | null>('db:jobs:status', { jobId }),
+    outcomes: (kind:string) => call('db:jobs:outcomes', {kind}),
     usage: () => call('db:jobs:usage'),
     covered: (kind: string, statuses: string[]) => call<string[]>('db:jobs:covered', { kind, statuses }),
   },

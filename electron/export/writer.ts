@@ -7,14 +7,16 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { app, dialog, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import ExcelJS from 'exceljs'
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
+import { phoneInfo } from '../phone-format'
+import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
 import type { Repository } from '../db/repository'
 
 import {compareEmailContacts} from '../email-ranking'
 
-const logoAsset = join(__dirname, 'assets', 'mamalead-original.jpeg')
-const headerLogoAsset = join(__dirname, 'assets', 'mamalead-logo.png')
-const watermarkAsset = join(__dirname, 'assets', 'mamalead-watermark.png')
+const logoAsset = join(__dirname, 'assets', 'mamalead-print.jpeg')
+const headerLogoAsset = join(__dirname, 'assets', 'mamalead-header.png')
+const watermarkAsset = join(__dirname, 'assets', 'mamalead-sheet.png')
 
 export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles' | 'website'
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf'
@@ -208,7 +210,7 @@ function rowsFor(
     const phones = (repository.listContacts(workspaceId,'phone',[lead.id]) as {value:string;score:number|null}[]).sort((a,b)=>(b.score??0)-(a.score??0))
     const bestPhone=phones.find(phone=>(phone.score??0)>=50)?.value
     const phoneValues=[bestPhone,lead.phone,...phones.map(item=>item.value)].filter((value):value is string=>Boolean(value && value.replace(/\D/g,'').length>=9 && value.replace(/\D/g,'').length<=15))
-    const allPhones=Array.from(new Map(phoneValues.map(value=>[value.replace(/\D/g,''),value])).values())
+    const allPhones=Array.from(new Map(phoneValues.map(value=>{const normalized=phoneInfo(value,lead.address+' '+lead.website).number;return [normalized.replace(/\D/g,''),normalized]})).values())
     const emails = (repository.listContacts(workspaceId, 'email', [lead.id]) as { value: string; score: number | null;source?:string }[]).sort(compareEmailContacts).slice(0,1)
     const socials = repository.listSocialProfiles(workspaceId, [lead.id]) as { platform: string }[]
 
@@ -240,10 +242,16 @@ function exportTable(repository: Repository, workspaceId: string, request: Expor
   const { columns, rows } = rowsFor(repository, workspaceId, request)
   const chosen = request.columns.filter((label) => columns[label])
   if (!chosen.length) throw new Error('Choose at least one column to export.')
-  return {
-    columns: chosen,
-    values: rows.map((row) => chosen.map((label) => columns[label](row))),
+  const values=rows.map(row=>chosen.map(label=>columns[label](row)))
+  const phoneColumn=chosen.indexOf('Phone')
+  if(request.format==='xlsx' && phoneColumn>=0){
+    const max=Math.max(1,...values.map(row=>row[phoneColumn].split('\n').filter(Boolean).length))
+    if(max>1){
+      chosen.splice(phoneColumn,1,...Array.from({length:max},(_,i)=>'Phone '+(i+1)))
+      for(const row of values){const phones=row[phoneColumn].split('\n');row.splice(phoneColumn,1,...Array.from({length:max},(_,i)=>phones[i]||''))}
+    }
   }
+  return {columns:chosen,values}
 }
 
 /**
@@ -275,7 +283,7 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   workbook.title = `MamaLead - ${exportTitle(kind)}`
   workbook.subject = `${exportTitle(kind)} export`
   const sheet = workbook.addWorksheet(exportTitle(kind))
-  const watermark = workbook.addImage({ filename: watermarkAsset, extension: 'png' })
+  const watermark = workbook.addImage({ buffer: readFileSync(watermarkAsset) as any, extension: 'png' })
   sheet.addBackgroundImage(watermark)
   const lastColumn = Math.max(1, table.columns.length)
   const lastColumnLetter = sheet.getColumn(lastColumn).letter
@@ -291,7 +299,7 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   // Branding is part of the sheet itself, so it also appears when opened or printed.
   sheet.mergeCells(1, 1, 1, lastColumn)
   sheet.getRow(1).height = 58
-  const headerLogo = workbook.addImage({ filename: headerLogoAsset, extension: 'png' })
+  const headerLogo = workbook.addImage({ buffer: readFileSync(headerLogoAsset) as any, extension: 'png' })
   // Embed the actual brand artwork as a drawing, not only a worksheet background.
   sheet.addImage(headerLogo, {
     tl: { col: 0.05, row: 0.1 },
@@ -343,11 +351,11 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
   sheet.views = [{ state: 'frozen', ySplit: 4 }]
   sheet.pageSetup = { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:4', printArea: `A1:${lastColumnLetter}${Math.max(4, table.values.length + 4)}` }
   sheet.headerFooter.oddFooter = `&Lmamalead&C${exportTitle(kind)}&RPage &P of &N`
-  return Buffer.from(await workbook.xlsx.writeBuffer())
+  return Buffer.from(await workbook.xlsx.writeBuffer({zip:{compression:'DEFLATE',compressionOptions:{level:9}}}))
 }
 
 function pdfText(value: string): string {
-  return value.replace(/[^\x20-\x7E]/g, '?')
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
 }
 
 function drawPdfBrandHeader(page: PDFPage, logo: PDFImage, font: PDFFont, bold: PDFFont, title: string, summary: string, margin: number): void {
@@ -390,10 +398,13 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
   pdf.setTitle(`MamaLead - ${exportTitle(kind)}`)
   pdf.setAuthor('MamaLead')
   pdf.setSubject(`${exportTitle(kind)} export`)
-  const logo = await pdf.embedJpg(readFileSync(logoAsset))
-  const headerLogo = await pdf.embedPng(readFileSync(headerLogoAsset))
-  const font = await pdf.embedFont(StandardFonts.Helvetica)
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+  // pdf-lib's JPEG parser reads from byte zero of the backing ArrayBuffer. Node buffers
+  // may be pooled with a nonzero offset, so give the parser an owned byte array.
+  const logo = await pdf.embedJpg(Uint8Array.from(readFileSync(logoAsset)))
+  const headerLogo = await pdf.embedPng(Uint8Array.from(readFileSync(headerLogoAsset)))
+  pdf.registerFontkit(fontkit)
+  const font = await pdf.embedFont(Uint8Array.from(readFileSync(join(__dirname,'assets','satoshi-400.ttf'))),{subset:true})
+  const bold = await pdf.embedFont(Uint8Array.from(readFileSync(join(__dirname,'assets','satoshi-700.ttf'))),{subset:true})
   const wideTable = (kind === 'website' && table.columns.length >= 7)
   const width = wideTable ? 1191 : 842
   const height = wideTable ? 842 : 595
@@ -404,6 +415,7 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
     if (kind === 'website') return ({'Business name':1.8,Website:1.8,Emails:2.2,'Phone numbers':1.8,'Business address':2.2,'Social links':2.2,Sources:2.4,Status:1.1,Error:1.8} as Record<string,number>)[column] ?? 1.5
 
     if (column === 'Email' || column === 'Emails') return 2.2
+    if (column === 'Phone') return 1.55
     if (column === 'Profile URL') return 3.2
     if (column === 'Business name' || column === 'Address' || column === 'Description') return 1.8
     if (column === 'Domain' || column === 'Handle' || column === 'Keywords') return 1.5
@@ -505,9 +517,6 @@ export async function writeExport(
   request: ExportRequest,
 ): Promise<ExportResult | null> {
   const format = request.format ?? 'csv'
-  const table = exportTable(repository, workspaceId, request)
-  const payload = format === 'csv' ? buildExport(repository, workspaceId, request) : null
-
   const baseName = request.fileName.replace(/\.(?:csv|tsv|xlsx|pdf)$/i, '')
   const extension = format === 'xlsx' ? 'xlsx' : format === 'pdf' ? 'pdf' : request.fileName.toLowerCase().endsWith('.tsv') ? 'tsv' : 'csv'
   const defaultFileName = `${baseName}.${extension}`
@@ -522,6 +531,9 @@ export async function writeExport(
     ? await dialog.showSaveDialog(window, { defaultPath, title: 'Save export', filters })
     : await dialog.showSaveDialog({ defaultPath, title: 'Save export', filters })
   if (picked.canceled || !picked.filePath) return null
+  const table=exportTable(repository,workspaceId,request)
+  if(!table.values.length)throw new Error('There are no results to export.')
+  const payload=format==='csv'?buildExport(repository,workspaceId,request):null
 
   const content = format === 'xlsx'
     ? await buildXlsx(table, request.kind)

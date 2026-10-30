@@ -847,7 +847,7 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
     // addresses yet, which is exactly what enrichment reads. Queued here rather than in the
     // renderer so a run enriches whether or not a window is watching.
     if (stored && finalSummary.leads.length) {
-      queueEnrichmentForNewLeads(finalSummary.leads.map((lead) => lead.name))
+      queueEnrichmentForNewLeads(stored.runId)
     }
 
     // The app's own browser was opened for this run, so the run is what closes it. Leaving it open
@@ -1050,13 +1050,13 @@ ipcMain.handle('enrichment:stop', (_event, payload: { jobId?: string } = {}) => 
  * Called after a scrape so the pages fill themselves in. The queue is durable, so if the app is
  * closed mid-run the work is still waiting on the next launch.
  */
-function queueEnrichmentForNewLeads(_names: string[]): void {
+function queueEnrichmentForNewLeads(runId: string): void {
   try {
     const { db, repository } = openDatabase()
     const workspace = db.ensureWorkspace()
     for (const kind of ['email', 'social'] as const) {
-      const leads = repository.leadsNeedingContact(workspace.id, kind, 50)
-      if (leads.length) repository.queueJob(workspace.id, kind, leads.map((lead) => lead.id))
+      const leads = repository.leadsNeedingContact(workspace.id, kind, 10000, runId)
+      if (leads.length) repository.queueJob(workspace.id, kind, leads.map((lead) => lead.id), {runId})
     }
     void enricher?.drain()
   } catch {

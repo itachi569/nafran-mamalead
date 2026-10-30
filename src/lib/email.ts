@@ -374,7 +374,7 @@ export async function fetchEmailCoverage(db: Db, options: { showing?: number } =
   const rings = await countEmailPages(db)
 
   const cascade: CascadeStep[] = [
-    { label: 'Scraped', note: 'from Google Maps', count: matched.leads, width: '100%', arrow: true },
+    { label: 'Saved leads', note: 'Maps and website imports', count: matched.leads, width: '100%', arrow: true },
     {
       label: 'Website found',
       note: `${share(matched.with_website, matched.leads)}% of scraped`,

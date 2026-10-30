@@ -68,7 +68,7 @@ export type FinderRowOf<Row> = Row & {
   scanLabel: string
   items: FinderItem[]
   none: boolean
-  pill: 'done' | 'scanning' | 'pending'
+  pill: 'done' | 'scanning' | 'pending' | 'failed'
   status: string
   /** True when the scan found this page's detail on the site. */
   onThisSite: boolean
@@ -429,7 +429,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   // The filter and the search both narrow the list; the scan narrows it further to the sites it
   // has reached, which is what makes "Show all leads" mean something.
   const visible = useMemo(() => {
-    const base = term.trim() ? sourceRows : scanOn ? scopedRows : source.defaultScopeIds ? sourceRows.filter(row=>source.defaultScopeIds!.includes(row.leadId)) : sourceRows
+    const base = term.trim() ? sourceRows : scanOn ? scopedRows : sourceRows
     return searchSavedRows(base,term,fieldsOf).filter((row) => {
       if (filter === 'done') return row.scanned
       if (filter === 'valid' || filter === 'invalid' || filter === 'risky' || filter === 'unknown' || filter === 'unchecked') {
@@ -447,28 +447,36 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
   // Results are backed by the database; no timer pretends a website has been scanned.
   const revealed = visible
 
+  const [savedOutcomes, setSavedOutcomes] = useState<NonNullable<EnrichmentJobStatus['outcomes']>>({})
+  useEffect(() => {
+    let alive=true
+    void db?.jobs.outcomes(source.historyScope).then(value=>{if(alive)setSavedOutcomes(value)}).catch(()=>undefined)
+    return ()=>{alive=false}
+  }, [db,source.historyScope,source.rows,progress.processed,running])
   const rows = useMemo<FinderRowOf<Row>[]>(
     () =>
       revealed.map((row) => {
         const position = scopeIds?.indexOf(row.leadId) ?? -1
         const tracked = scanOn && position >= 0
-        const attempted = tracked ? position < progress.processed : row.scanned
+        const outcome = (tracked ? progress.outcomes[row.leadId] : undefined) ?? savedOutcomes[row.leadId]
+        const attempted = tracked ? position < progress.processed : Boolean(outcome) || row.scanned
         const checking = running && (tracked ? position === progress.processed : !row.scanned)
+        const failed = !checking && outcome?.status === 'error'
         return ({
         ...row,
-        lookupOutcome: tracked ? progress.outcomes[row.leadId] : undefined,
+        lookupOutcome: checking ? undefined : outcome,
         domain: row.domain || 'No website',
         scanning: checking,
-        scanLabel: checking ? 'Scanning…' : tracked && !attempted ? 'Not scanned yet' : '',
+        scanLabel: failed ? outcome?.error || 'Scan failed. Retry this website.' : checking ? 'Scanning…' : tracked && !attempted ? 'Not scanned yet' : '',
         items: source.filterItemsOnSearch && term
           ? row.items.filter((item) => matchesFinderSearch(`${row.searchText ?? ''} ${row.domain} ${item.t} ${item.k}`, term))
           : row.items,
-        none: !running && row.items.length === 0,
-        pill: attempted ? 'done' : checking ? 'scanning' : 'pending',
-        status: attempted ? 'Done' : checking ? 'Scanning' : tracked ? 'Not scanned yet' : row.statusLabel || 'Pending',
+        none: !running && !failed && row.items.length === 0,
+        pill: checking ? 'scanning' : failed ? 'failed' : attempted ? 'done' : 'pending',
+        status: checking ? 'Scanning' : failed ? 'Failed — retry scan' : attempted ? 'Done' : tracked ? 'Not scanned yet' : row.statusLabel || 'Pending',
         onThisSite: row.items.length > 0,
       })}),
-    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed,progress.outcomes],
+    [revealed, running, source.filterItemsOnSearch, source.historyScope, term,scopeIds,scanOn,progress.processed,progress.outcomes,savedOutcomes],
   )
 
   const scanned = useMemo(

@@ -18,7 +18,7 @@ const types = {
   '.woff2': 'font/woff2',
 }
 
-const allowedFile = /^(?:index\.html|privacy\.html|support\.js|sales\.js|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
+const allowedFile = /^(?:index\.html|privacy\.html|terms\.html|support\.js|sales\.js|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
 
 const server = createServer(async (request, response) => {
   if (request.method !== 'GET' && request.method !== 'HEAD') {

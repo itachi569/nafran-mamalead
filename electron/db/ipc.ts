@@ -50,6 +50,7 @@ export const LOCAL_CHANNELS = [
   'db:jobs:cancel',
   'db:jobs:totals',
   'db:jobs:status',
+  'db:jobs:outcomes',
   'db:jobs:usage',
   'db:jobs:covered',
   'db:lookup:start',
@@ -174,6 +175,7 @@ export function registerLocalDatabase(
     },
     'db:jobs:totals': () => repository.jobTotals(workspace.id),
     'db:jobs:status': (_repo, _workspace, payload: { jobId: string }) => repository.jobStatus(workspace.id, payload.jobId),
+    'db:jobs:outcomes': (_repo, _workspace, payload: {kind:string}) => repository.scanOutcomes(workspace.id,payload.kind),
     'db:jobs:usage': () => repository.lookupUsage(workspace.id),
     'db:jobs:covered': (_repo, _workspace, payload: { kind: string; statuses: string[] }) =>
       Array.from(repository.coveredLeads(workspace.id, payload.kind, payload.statuses)),

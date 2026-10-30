@@ -1,8 +1,10 @@
+import { contactQuality } from '../lead-quality'
 // Reads and writes for the pages, kept in one place so the IPC layer stays thin and the
 // renderer never sees SQL.
 //
 // The shapes returned here are the ones the renderer's service layers consume, so the hooks
 // above them did not change when the storage moved to this machine.
+import { phoneInfo } from '../phone-format'
 import { randomUUID } from 'node:crypto'
 import { currentPeriod, nowIso, type LocalDatabase } from './local-db'
 import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFields, type WebsiteLookupRow } from '../enrichment/website-lookup'
@@ -165,9 +167,7 @@ export function normaliseDomain(raw: string): string {
 }
 
 /** A UK mobile begins 07, however the number is written. */
-function isMobile(value: string): boolean {  const digits = value.replace(/[^\d+]/g, '')
-  return /^(\+447|07)/.test(digits)
-}
+function isMobile(value: string): boolean { return phoneInfo(value).mobile }
 
 /** One social profile read out of a pasted line. */
 export interface SocialUrl {
@@ -360,6 +360,8 @@ function safeJsonArray(value: string | null): string[] {
  * Numbers from abroad keep their country and city prefix so the page can still group them.
  */
 function areaCodeOf(value: string): string {
+  const info=phoneInfo(value)
+  if(info.area)return info.area
   const digits = value.replace(/[^\d+]/g, '')
   if (!digits) return ''
   if (/^(\+447|07)/.test(digits)) return '07 mobile'
@@ -393,14 +395,7 @@ export interface DashboardTotals {
 }
 
 /** Contact completeness, mirroring the worker's scoring so stored and shown scores agree. */
-export function scoreLead(lead: LeadInput): number {
-  let score = 40
-  if (lead.website) score += 20
-  if (lead.phone) score += 20
-  if (lead.rating !== null && lead.rating !== undefined) score += 10
-  if ((lead.reviewCount ?? 0) > 50) score += 10
-  return score
-}
+export function scoreLead(lead: LeadInput): number { return contactQuality(lead) }
 
 export class Repository {
   constructor(private readonly db: LocalDatabase) {}
@@ -537,7 +532,7 @@ export class Repository {
     ) ?? { runs: 0, clean: 0, places: 0 }
     const durations = this.db
       .query<{ duration_ms: number }>(
-        `select duration_ms from scrape_runs where workspace_id = ? and duration_ms is not null order by duration_ms`,
+        `select duration_ms from scrape_runs where workspace_id = ? and status = 'done' and duration_ms is not null order by duration_ms`,
         [workspaceId],
       )
       .map((row) => row.duration_ms)
@@ -572,15 +567,18 @@ export class Repository {
     }
     const hasEmail = "exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email')"
     const hasSocial = 'exists (select 1 from social_profiles s where s.lead_id = l.id)'
-    if (options.filter === 'phone') where.push("l.phone <> ''")
+    const hasPhone="(l.phone <> '' or exists (select 1 from lead_contacts c where c.lead_id=l.id and c.kind='phone'))"
+    if (options.filter === 'phone') where.push(hasPhone)
     if (options.filter === 'email') where.push(hasEmail)
     if (options.filter === 'social') where.push(hasSocial)
-    if (options.filter === 'missing') where.push(`l.phone = '' and not ${hasEmail} and not ${hasSocial}`)
+    if (options.filter === 'missing') where.push(`not ${hasPhone} and not ${hasEmail} and not ${hasSocial}`)
     const predicate = where.join(' and ')
     const rows = this.db.query<StoredLead>(
       `select l.*,
+              case when l.phone <> '' then l.phone else coalesce((select value from lead_contacts c where c.lead_id=l.id and c.kind='phone' order by coalesce(score,0) desc limit 1),'') end as phone,
               case when ${hasEmail} then 1 else 0 end as has_email,
-              case when ${hasSocial} then 1 else 0 end as has_social
+              case when ${hasSocial} then 1 else 0 end as has_social,
+              (select count(*) from lead_contacts c where c.lead_id=l.id and c.kind='email' and c.validation_status='valid') as verified_email
        from leads l
        where ${predicate}
        order by l.captured_at desc, l.id desc
@@ -588,7 +586,7 @@ export class Repository {
       [...params, limit, offset],
     )
     const total = this.db.one<{ n: number }>(`select count(*) as n from leads l where ${predicate}`, params)?.n ?? 0
-    return { rows, total }
+    return { rows:rows.map(row=>({...row,score:contactQuality(row)})), total }
   }
 
   leadSummary(workspaceId: string): {
@@ -604,14 +602,14 @@ export class Repository {
     const counts = (sql: string) => this.db.one<{ n: number }>(sql, [workspaceId])?.n ?? 0
     return {
       total,
-      withPhone: counts("select count(*) as n from leads where workspace_id = ? and phone <> ''"),
+      withPhone: counts("select count(*) as n from leads l where workspace_id = ? and (phone <> '' or exists (select 1 from lead_contacts c where c.lead_id=l.id and c.kind='phone'))"),
       withWebsite: counts("select count(*) as n from leads where workspace_id = ? and website <> ''"),
       withEmail: counts(
         "select count(distinct lead_id) as n from lead_contacts where workspace_id = ? and kind = 'email'",
       ),
       withSocial: counts('select count(distinct lead_id) as n from social_profiles where workspace_id = ?'),
       noContact: counts(`select count(*) as n from leads l where l.workspace_id = ? and l.phone = ''
-        and not exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email')
+        and not exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind in ('email','phone'))
         and not exists (select 1 from social_profiles s where s.lead_id = l.id)`),
       byProvider: this.db.query<{ provider: string; count: number }>(
         'select provider, count(*) as count from leads where workspace_id = ? group by provider order by count desc',
@@ -621,7 +619,13 @@ export class Repository {
   }
 
   getLead(workspaceId: string, id: string): StoredLead | null {
-    return this.db.one<StoredLead>('select * from leads where workspace_id = ? and id = ?', [workspaceId, id])
+    const lead = this.db.one<StoredLead>(`select l.*,
+      exists(select 1 from lead_contacts c where c.lead_id=l.id and c.kind='email') as has_email,
+      exists(select 1 from lead_contacts c where c.lead_id=l.id and c.kind='email' and c.validation_status='valid') as verified_email,
+      exists(select 1 from social_profiles s where s.lead_id=l.id) as has_social,
+      case when l.phone<>'' then l.phone else coalesce((select value from lead_contacts c where c.lead_id=l.id and c.kind='phone' order by coalesce(score,0) desc limit 1),'') end as phone
+      from leads l where workspace_id=? and id=?`,[workspaceId,id])
+    return lead ? {...lead,score:contactQuality(lead)} : null
   }
 
   fillLeadAddress(leadId: string, addresses: string[]): void {
@@ -728,7 +732,7 @@ export class Repository {
     this.db.run('update leads set bookmarked = ? where workspace_id = ? and id = ?', [bookmarked ? 1 : 0, workspaceId, id])
   }
 
-  leadsNeedingContact(workspaceId: string, kind: 'email' | 'phone' | 'social', limit = 200): StoredLead[] {    const clause =
+  leadsNeedingContact(workspaceId: string, kind: 'email' | 'phone' | 'social', limit = 200, runId?: string): StoredLead[] {    const clause =
       kind === 'social'
         ? 'not exists (select 1 from social_profiles s where s.lead_id = l.id)'
         : `not exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = '${kind}')`
@@ -737,9 +741,10 @@ export class Repository {
        where l.workspace_id = ?
          and l.website <> ''
          and ${clause}
+         ${runId ? 'and exists(select 1 from scrape_run_leads rl where rl.lead_id=l.id and rl.run_id=?)' : ''}
        order by l.score desc
        limit ?`,
-      [workspaceId, limit],
+      [workspaceId,...(runId?[runId]:[]), limit],
     )
   }
 
@@ -785,21 +790,22 @@ export class Repository {
       const onFile = byLead.get(lead.id) ?? []
       const best=onFile.find(entry=>(entry.score??0)>=50)
       const numbers = [best?.value,lead.phone, ...onFile.map((entry) => entry.value)].filter((value):value is string=>Boolean(value))
-      const shown = numbers[0] ?? ''
-      const found=onFile.map(entry=>({value:entry.value,page:entry.source}))
-      if(lead.phone && !found.some(entry=>entry.value.replace(/\D/g,'')===lead.phone.replace(/\D/g,'')))found.push({value:lead.phone,page:'Saved Maps number'})
+      const info=phoneInfo(numbers[0] ?? '',lead.address+' '+lead.area+' '+lead.website)
+      const shown = info.number
+      const found=onFile.map(entry=>({value:phoneInfo(entry.value,lead.address+' '+lead.website).number,page:entry.source}))
+      if(lead.phone && !found.some(entry=>entry.value.replace(/\D/g,'')===lead.phone.replace(/\D/g,'')))found.push({value:phoneInfo(lead.phone,lead.address+' '+lead.website).number,page:'Saved Maps number'})
       return {
         id: lead.id,
         index: String(offset + index + 1).padStart(3, '0'),
         name: lead.name,
         phone: shown,
         mainSource: best?.source ?? '',
-        areaCode: areaCodeOf(shown),
+        areaCode: info.area || areaCodeOf(shown),
         area: lead.area,
         address: lead.address,
         website: lead.website,
         // A number the listing gave is the switchboard; one read from the site is a direct line.
-        lineType: !shown ? 'missing' : isMobile(shown) ? 'mobile' : lead.phone ? 'reception' : 'direct',
+        lineType: !shown ? 'missing' : info.mobile ? 'mobile' : lead.phone ? 'reception' : 'direct',
         hasNumber: Boolean(shown),
         lastScannedAt: lead.last_scanned_at,
         found,
@@ -810,8 +816,8 @@ export class Repository {
   /** Totals for the phone page: how many lines there are, of what kind, and where they dial to. */
   phoneSummary(workspaceId: string): PhoneSummary {
     // A compact projection covers the full workspace; the visible phone book stays paged.
-    const rows = this.db.query<{ phone: string; website: string; found_phone: string | null; found_score: number | null }>(
-      `select l.phone, l.website,
+    const rows = this.db.query<{ phone: string; website: string; address: string; found_phone: string | null; found_score: number | null }>(
+      `select l.phone, l.website, l.address,
               (select c.value from lead_contacts c where c.lead_id = l.id and c.kind = 'phone'
                order by coalesce(c.score,0) desc, c.created_at, c.id limit 1) as found_phone,
               (select max(c.score) from lead_contacts c where c.lead_id=l.id and c.kind='phone') as found_score
@@ -831,10 +837,11 @@ export class Repository {
         if (row.website) canBackfill += 1
         continue
       }
-      if (isMobile(number)) mobile += 1
+      const info=phoneInfo(number,row.address+' '+row.website)
+      if (info.mobile) mobile += 1
       else if (row.phone) reception += 1
       else direct += 1
-      const areaCode = areaCodeOf(number)
+      const areaCode = info.area
       if (areaCode) byArea.set(areaCode, (byArea.get(areaCode) ?? 0) + 1)
     }
     return {
@@ -1182,9 +1189,9 @@ export class Repository {
               (select count(*) from list_items i where i.list_id = l.id) as members,
               (select max(i.added_at) from list_items i where i.list_id = l.id) as updated_at,
               coalesce((
-                select group_concat(ini, '')
+                select group_concat(ini, ',')
                 from (
-                  select (select substr(trim(ld.name), 1, 1) from leads ld where ld.id = i2.lead_id) as ini
+                  select (select upper(substr(trim(ld.name),1,1) || case when instr(trim(ld.name),' ')>0 then substr(trim(ld.name),instr(trim(ld.name),' ')+1,1) else '' end) from leads ld where ld.id = i2.lead_id) as ini
                   from list_items i2 where i2.list_id = l.id limit 3
                 )
               ), '') as initials
@@ -1361,6 +1368,24 @@ export class Repository {
       if (row.status in totals) totals[row.status as keyof typeof totals] = row.n
     }
     return totals
+  }
+
+  /** Latest completed outcome per lead, retained across page changes and app restarts. */
+  scanOutcomes(workspaceId: string, kind: string): Record<string,{status:'found'|'not-published'|'error'; searches:number; error?:string}> {
+    const result: Record<string,{status:'found'|'not-published'|'error'; searches:number; error?:string}> = {}
+    for (const row of this.db.query<{options:string;lead_ids:string;status:string;error:string|null}>(
+      "select options, lead_ids, status, error from enrichment_jobs where workspace_id = ? and kind = ? order by created_at desc, rowid desc", [workspaceId,kind])) {
+      try {
+        const progress=JSON.parse(row.options || '{}').progress || {}
+        const outcomes=progress.outcomes || {}
+        // Older failed jobs still need a visible failure, never a false 'not found'.
+        if (!progress.outcomes && row.status==='failed' && row.error!=='Cancelled by user') {
+          for (const id of JSON.parse(row.lead_ids)) outcomes[id]={status:'error', searches:0,error:row.error || 'This scan failed. Retry this website.'}
+        }
+        for (const [id,outcome] of Object.entries(outcomes)) if (!(id in result)) result[id]=outcome as typeof result[string]
+      } catch { /* A malformed historical record must not hide the rest of the workspace. */ }
+    }
+    return result
   }
 
   /** The state of one queued pass, so a page can wait for its own scan rather than the whole queue. */

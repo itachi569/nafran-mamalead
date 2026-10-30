@@ -18,7 +18,9 @@ export function useNotifications(enabled:boolean) {
     timer.current=window.setTimeout(()=>{setToast(null);removed.current=null},4500)
   },[])
   const notify=useCallback((title:string,body:string,level:AppNotification['level']='info',runId?:string,details:NotificationDetails={})=>{
-    if(details.eventKey){const prior=current.current.find(item=>item.eventKey===details.eventKey);if(prior)return prior.id}
+    const groupKey=details.eventKey || (runId ? 'run:'+runId+':'+(details.kind || level) : level==='error'?'error:'+title+':'+body:'')
+    if(groupKey){const prior=current.current.find(item=>item.eventKey===groupKey);if(prior){if(prior.body!==body)commit(current.current.map(item=>item.id===prior.id?{...item,body,title,at:new Date().toISOString()}:item));return prior.id}}
+    details={...details,eventKey:groupKey || undefined}
     const item:AppNotification={id:crypto.randomUUID(),title,body,level,runId,at:new Date().toISOString(),unread:true,...details,chips:details.chips?.slice(0,4)}
     commit([item,...current.current].slice(0,MAX_NOTIFICATIONS))
     if(nativeEnabled.current)void window.desktop?.notifications?.show(title,body,item.id).catch(()=>undefined)

@@ -15,6 +15,8 @@ const row = { display: 'flex', flexWrap: 'wrap', gap: '12px', padding: '12px 0',
 const button = { border: 0, borderRadius: '999px', padding: '9px 15px', background: '#E5E5E5', color: '#1C1C1C', fontFamily: 'inherit', cursor: 'pointer' } as const
 
 export function SettingsPanel({ V }: { V: AppValues }) {
+  const tabScroll=useRef<Record<string,number>>({})
+  const switchTab=(click:()=>void,id:string)=>{tabScroll.current[V.activeTab]=window.scrollY;click();requestAnimationFrame(()=>window.scrollTo({top:tabScroll.current[id] ?? (document.querySelector('.settings-header')?.getBoundingClientRect().top ?? 0)+window.scrollY,behavior:'instant'}))}
   const billingApi = window.desktop?.billing
   const [billing, setBilling] = useState<BillingStatus>({ configured: false, connected: false, message: 'Checking Stripe billing…' })
   const [invoices, setInvoices] = useState<BillingInvoice[]>([])
@@ -32,6 +34,8 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const trialEmailInput = useRef<HTMLInputElement>(null)
   const [licenseStepNotice, setLicenseStepNotice] = useState('')
   const [licenseKey, setLicenseKey] = useState('')
+  const [showKey,setShowKey] = useState(false)
+  const [changeKey,setChangeKey] = useState(false)
   const licenseKeyInput = useRef<HTMLInputElement>(null)
   const [licenseBusy, setLicenseBusy] = useState(false)
   const [licenseNotice, setLicenseNotice] = useState<{ kind: 'error' | 'success'; message: string } | null>(null)
@@ -43,6 +47,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   useEffect(() => {
     const jump = V.billingJump
     if (!jump || (jump.target === 'license' ? !V.tabAcct : !V.tabPlan)) return
+    if (jump.target==='license') setChangeKey(true)
     if (jump.target === 'trial' && !trialOpen) { setTrialOpen(true); return }
     // Billing cards arrive asynchronously. Keep the requested destination until it exists.
     const section = document.getElementById(`${jump.target}-section`)
@@ -125,10 +130,13 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   }
 
   const activateLicense = async () => {
-    const key = licenseKey.trim()
+    const key = licenseKey.trim().toUpperCase().replace(/\s/g,'')
     if (!key) {
       setLicenseNotice({ kind: 'error', message: 'Enter your MamaLead license key first.' })
       return
+    }
+    if (!/^NF(?:-[A-Z0-9]{4}){10}$/.test(key)) {
+      setLicenseNotice({kind:'error',message:'Paste the complete key: NF followed by 10 groups of 4 characters. Spaces are removed automatically.'}); return
     }
     if (!billingApi) {
       setLicenseNotice({ kind: 'error', message: 'License verification is unavailable in this app session.' })
@@ -140,6 +148,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     try {
       await billingApi.activate(key)
       setLicenseKey('')
+      setChangeKey(false)
       const status = await refreshBilling()
       if (!status?.coreLicenseActive && !(status?.license?.active && status.license.kind !== 'decision')) {
         throw new Error('This key does not activate this build. Use a 1-day trial or Lifetime key.')
@@ -213,6 +222,8 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     ['Phone lookups', V.usedPhoneLookups, V.meterPhone],
     ['Social lookups', V.usedSocialLookups, V.meterSocial],
   ] as const
+  const lifetimeActive=Boolean(billing.license?.active && billing.license.kind==='lifetime')
+  const activeLicense=Boolean(billing.coreLicenseActive && billing.license?.active)
   const lifetimePlanReady = billing.lifetime?.currency === 'pkr' && billing.lifetime.amount === 1000000 && billing.lifetime.interval === null
 
   const paymentSetupMessage = billing.connected && !lifetimePlanReady
@@ -230,14 +241,14 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     </header>
     <div data-settings="1" className="settings-layout">
       <nav data-tabs="1" data-active={V.activeTab} aria-label="Settings sections" className="settings-tabs">
-        {tabs.map(([id, label, click]) => <button key={id} data-stab={id} type="button" onClick={click} aria-current={V.activeTab === id ? 'page' : undefined}>{label}</button>)}
+        {tabs.map(([id, label, click]) => <button key={id} data-stab={id} type="button" onClick={()=>switchTab(click,id)} aria-current={V.activeTab === id ? 'page' : undefined}>{label}</button>)}
       </nav>
       <div className="settings-content">
         {V.tabPlan && <>
-          {billing.connected && billing.lifetime && <section data-card="1" className="billing-stage">
+          {!lifetimeActive && <section data-card="1" className="billing-stage">
             <div className="billing-stage-heading">
               <div><h2>MamaLead billing</h2><p>{lifetimePlanReady ? `Prices and purchase status are verified with Stripe${billing.mode === 'test' ? ' test mode' : ''}.` : 'PKR Checkout update pending on the billing server. Payment is paused until the prices match.'}</p></div>
-              <span className="billing-status-pill">{billing.lifetime.active ? 'Purchased' : lifetimePlanReady ? 'Not purchased' : 'PKR setup pending'}</span>
+              <span className="billing-status-pill">{billing.lifetime?.active ? 'Purchased' : lifetimePlanReady ? 'Not purchased' : 'PKR setup pending'}</span>
             </div>
             {paymentSetupMessage && <p data-checkout-setup-alert="1" role="status" className="billing-setup-alert">{paymentSetupMessage}</p>}
             <div id="lifetime-section" tabIndex={-1} className="billing-offer" style={{scrollMarginTop:24}}>
@@ -254,10 +265,10 @@ export function SettingsPanel({ V }: { V: AppValues }) {
                   <div><span>03</span> Paste the key in Account to activate</div>
                 </div>
               </div>
-              <div className="billing-offer-benefits" aria-label="Lifetime plan benefits"><span>✓ Unlimited Maps leads</span><span>✓ Unlimited email lookups</span><span>✓ Unlimited phone lookups</span><span>✓ Unlimited social lookups</span></div>
+              <p className="billing-plan-note">By continuing, review our <a href="https://mamalead.com/terms.html" target="_blank" rel="noreferrer">Terms of use</a> and <a href="https://mamalead.com/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>.</p><div className="billing-offer-benefits" aria-label="Lifetime plan benefits"><span>✓ Unlimited Maps leads</span><span>✓ Unlimited email lookups</span><span>✓ Unlimited phone lookups</span><span>✓ Unlimited social lookups</span></div>
               <div className="billing-offer-bottom">
-                {billing.lifetime.active ? <button type="button" onClick={V.goTabAcct} className="billing-offer-button">Open Account <span aria-hidden="true">↗</span></button> : <button type="button" data-lifetime-buy="1" disabled={billingBusy || !billingApi || !lifetimePlanReady} onClick={() => void startLifetimeCheckout()} className="billing-offer-button">{!lifetimePlanReady ? 'Payment setup pending' : billingBusy ? 'Opening Stripe…' : 'Buy now'} <span aria-hidden="true">↗</span></button>}
-                <p>{billing.lifetime.active ? 'Your lifetime purchase is verified. Enter the emailed key in Account to activate this machine.' : lifetimePlanReady ? 'Enter your email and card directly on Stripe Checkout. Your lifetime key will be sent to that email after payment.' : 'Checkout will be available after the billing server has the Rs 10,000 PKR Stripe price.'}</p>
+                {billing.lifetime?.active ? <button type="button" onClick={V.goTabAcct} className="billing-offer-button">Open Account <span aria-hidden="true">↗</span></button> : <button type="button" data-lifetime-buy="1" disabled={billingBusy || !billingApi || !lifetimePlanReady} onClick={() => void startLifetimeCheckout()} className="billing-offer-button">{!lifetimePlanReady ? 'Payment setup pending' : billingBusy ? 'Opening Stripe…' : 'Buy now'} <span aria-hidden="true">↗</span></button>}
+                <p>{billing.lifetime?.active ? 'Your lifetime purchase is verified. Enter the emailed key in Account to activate this machine.' : lifetimePlanReady ? 'Enter your email and card directly on Stripe Checkout. Your lifetime key will be sent to that email after payment.' : 'Checkout will be available after the billing server has the Rs 10,000 PKR Stripe price.'}</p>
               </div>
             </div>
             <div className="billing-plan-grid">
@@ -277,10 +288,10 @@ export function SettingsPanel({ V }: { V: AppValues }) {
           </section>}
           <section data-maps-plan-guide="1" style={{ ...card, background: '#F5F5F4', border: '1px solid #E4E7DF' }}>
             <p style={{ ...muted, margin: 0, fontSize: '11px', fontWeight: 600, letterSpacing: '.16em', textTransform: 'uppercase' }}>Maps scraper allowance</p>
-            <h2 style={{ margin: '7px 0 5px', fontSize: '21px', fontWeight: 500 }}>Choose how many leads you need</h2>
+            <h2 style={{ margin: '7px 0 5px', fontSize: '21px', fontWeight: 500 }}>Your Maps allowance</h2>
             <p style={{ ...muted, margin: '0 0 17px' }}>Your activated key sets the total number of Google Maps leads you can collect.</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
-              <div data-maps-plan="trial" style={{ padding: '18px 19px', borderRadius: '18px', background: '#E5ECDF', border: '1px solid #C8D5BB' }}>
+              {!lifetimeActive && <div data-maps-plan="trial" style={{ padding: '18px 19px', borderRadius: '18px', background: '#E5ECDF', border: '1px solid #C8D5BB' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <strong style={{ fontSize: '13px', fontWeight: 600 }}>1-day trial</strong>
                   {billing.trial?.active && <span style={{ padding: '4px 9px', borderRadius: '999px', background: '#D1DFC8', color: '#24452A', fontSize: '10px', fontWeight: 600 }}>ACTIVE</span>}
@@ -289,7 +300,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
                 <p style={{ ...muted, margin: '10px 0 0' }}>Shared across every keyword and search during your 24-hour trial.</p>
                 {billing.trial?.active && billing.mapsLeads?.limit === 300 && <p style={{ margin: '12px 0 0', fontSize: '12px', fontWeight: 600, color: '#24452A' }}>{billing.mapsLeads.remaining ?? 0} leads remaining</p>}
               </div>
-              <div data-maps-plan="lifetime" style={{ padding: '18px 19px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #E0E4DC' }}>
+              }<div data-maps-plan="lifetime" style={{ padding: '18px 19px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #E0E4DC' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <strong style={{ fontSize: '13px', fontWeight: 600 }}>Lifetime</strong>
                   {billing.license?.active && billing.license.kind === 'lifetime' && <span style={{ padding: '4px 9px', borderRadius: '999px', background: '#E5ECDF', color: '#24452A', fontSize: '10px', fontWeight: 600 }}>ACTIVE</span>}
@@ -302,7 +313,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
           <section data-card="1" style={{ ...card, background: 'linear-gradient(160deg,#E9EDE4,#CBD8BC)' }}>
             <h2 style={{ margin: 0, fontSize: '21px', fontWeight: 500 }}>Local usage</h2>
             <p style={muted}>{billing.license?.active && billing.license.kind === 'lifetime' ? 'Unlimited Maps leads with your lifetime key.' : billing.trial?.active ? `${billing.mapsLeads?.remaining ?? 0} of 300 trial Maps leads remaining across all keywords.` : 'Activate a trial or lifetime key to see your Maps lead allowance.'}</p>
-            <p style={{ margin: '8px 0' }}><strong>{V.usedScrapes.toLocaleString('en-GB')}</strong> Maps runs completed on this device this month</p>
+            <p style={{ margin: '8px 0' }}><strong>{V.usedScrapes.toLocaleString('en-GB')}</strong> Maps run attempts recorded on this device this month</p>
             <p style={muted}>Usage window: {V.cycleRange}</p>
           </section>
           <section data-card="1" style={card}>
@@ -319,7 +330,8 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             <p style={muted}>{billing.coreLicenseActive && billing.license?.active ? `${billing.license.kind === 'trial' ? '1-day trial' : 'Lifetime license'} active on this machine${billing.license.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license.email ? ` · ${billing.license.email}` : ''}.` : 'Paste a trial or lifetime key from your email to unlock this machine.'}</p>
             {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" style={{ ...muted, margin: '10px 0', color: '#315F2D' }}>{licenseStepNotice || V.licenseNextStep}</p>}
             {trialSent && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={{ ...button, marginBottom: '10px' }}>Change email</button>}
-            <form onSubmit={(event) => { event.preventDefault(); void activateLicense() }} style={row}><label htmlFor="nafran-license-key">License key</label><input id="nafran-license-key" ref={licenseKeyInput} type="password" value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value); setLicenseNotice(null) }} autoComplete="off" placeholder="NF-XXXX-XXXX-…" style={{ flex: '1 1 280px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button type="submit" disabled={licenseBusy} style={button}>{licenseBusy ? 'Activating…' : 'Activate'}</button></form>
+            {activeLicense && !changeKey && <button type="button" onClick={()=>setChangeKey(true)} style={button}>Use a different key</button>}
+            {(!activeLicense || changeKey) && <form onSubmit={(event) => { event.preventDefault(); void activateLicense() }} style={row}><label htmlFor="nafran-license-key">License key</label><input id="nafran-license-key" ref={licenseKeyInput} type={showKey ? "text" : "password"} value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value.toUpperCase().replace(/\s/g,'')); setLicenseNotice(null) }} autoComplete="off" placeholder="NF-XXXX-XXXX-…" style={{ flex: '1 1 280px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button type="button" aria-pressed={showKey} onClick={()=>setShowKey(value=>!value)} style={button}>{showKey?'Hide key':'Show key'}</button><button type="submit" disabled={licenseBusy} style={button}>{licenseBusy ? 'Activating…' : 'Activate'}</button></form>}
           </section>
           <section data-card="1" style={card}>
             <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Local account</h2>

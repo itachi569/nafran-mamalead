@@ -52,7 +52,7 @@ async function main(){
   if((await table.innerText()).includes('Karachi Business'))throw Error('Other city leaked into results');
   if(await page.getByRole('searchbox',{name:'Filter leads',exact:true}).inputValue()!=='')throw Error('Old results filter was not cleared');
   if(!(await page.locator('.maps-active-search').innerText()).includes('Lahore · Dentists'))throw Error('Selected search not labelled');
-  await page.locator('[data-results]').screenshot({path:join(out,'lahore-saved-results.png')});
+  await page.screenshot({path:join(out,'lahore-saved-results.png'),animations:'disabled'});
   await open.click();await query.fill('Clinics');const bulk=drawer.locator('[data-saved-run="bulk"]');await bulk.waitFor();
   if(!(await bulk.innerText()).includes('1,005 saved leads'))throw Error('Count used duplicates instead of stored leads');
   await bulk.getByRole('button',{name:'Export Islamabad search'}).click();await exportDialog.getByRole('button',{name:'Excel (.xlsx)',exact:true}).click();await exportDialog.waitFor({state:'detached'});
@@ -92,7 +92,7 @@ async function main(){
   if(await page.getByRole('searchbox',{name:'Filter leads',exact:true}).inputValue()!=='')throw Error('Current run hidden behind old filter');
   await emitLead(1);await emitLead(2);await table.getByText('Sialkot Live 2',{exact:true}).waitFor();if(await table.getByRole('row').count()!==3)throw Error('Live rows not appended/deduplicated');
   if(!(await page.locator('.maps-active-search').innerText()).includes('Current scan')||!(await page.locator('.maps-active-search').innerText()).includes('Sialkot'))throw Error('Live scan labelled as saved search');
-  await page.locator('[data-results]').screenshot({path:join(out,'current-scan-live-results.png')});
+  await page.screenshot({path:join(out,'current-scan-live-results.png')});
   await app.evaluate(({BrowserWindow})=>{
     const t=globalThis.__savedMaps,request=t.liveRequest;const at='2026-10-30T12:00:00Z';
     const summary={runId:'current-live',status:'done',provider:'chromium-maps',query:{...request.query,location:'Sialkot'},leads:t.liveLeads,startedAt:at,finishedAt:at,durationMs:1500,error:null};

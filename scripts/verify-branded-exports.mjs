@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -42,7 +43,8 @@ const sheet = workbook.worksheets[0]
 assert.ok(sheet.getBackgroundImageId() != null, 'Excel background logo is missing')
 assert.equal(sheet.getImages().length, 1, 'Excel must embed the original header logo')
 const embeddedLogo = workbook.getImage(sheet.getImages()[0].imageId)
-assert.deepEqual(Buffer.from(embeddedLogo.buffer), readFileSync(resolve('electron/export/assets/mamalead-logo.png')), 'Excel header must use the original brand asset')
+const hash = value => createHash('sha256').update(value).digest('hex')
+assert.equal(hash(Buffer.from(embeddedLogo.buffer)), hash(readFileSync(resolve('electron/export/assets/mamalead-header.png'))), 'Excel header must use the optimized brand asset')
 assert.ok(sheet.getRow(1).height >= 58, 'Excel header must have room for the logo')
 assert.equal(sheet.getCell('A4').value, 'Business name')
 assert.equal(sheet.getCell('A5').value, 'Manchester Clinic 1')

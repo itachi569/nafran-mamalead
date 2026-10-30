@@ -44,6 +44,7 @@ export interface SocialRowView {
   name: string
   domain: string
   profiles: { label: string; short: string; handle: string; url: string }[]
+  scanError?: string
   isDone: boolean
   isPending: boolean
   noProfiles: boolean
@@ -195,6 +196,7 @@ export function useSocialPage(): SocialPage {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<SocialRow[]>([])
+  const [outcomes,setOutcomes]=useState<Record<string,{status:string;error?:string}>>({})
   const [total, setTotal] = useState(0)
   const [donuts, setDonuts] = useState<SocialDonut[]>(DEMO_SOCIAL_DONUTS)
   const [extras, setExtras] = useState<SocialExtra[]>(DEMO_SOCIAL_EXTRAS)
@@ -240,6 +242,7 @@ export function useSocialPage(): SocialPage {
       // which rows are on screen, and they can only be honest about a lead the page has seen.
       const page = await fetchSocialPage(db, { limit: 200 })
       setRows(page.rows)
+      setOutcomes(await db.jobs.outcomes('social'))
       setTotal(page.total)
       setDonuts(page.donuts)
       setExtras(page.extras)
@@ -269,11 +272,12 @@ export function useSocialPage(): SocialPage {
         handle: profile.handle,
         url: profile.profileUrl,
       })),
-      isDone: row.status === 'done',
+      scanError: outcomes[row.leadId]?.status==='error' ? outcomes[row.leadId].error || 'Scan failed. Retry this website.' : undefined,
+      isDone: outcomes[row.leadId] ? outcomes[row.leadId].status!=='error' : row.status === 'done',
       isPending: row.status === 'pending',
       noProfiles: row.profiles.length === 0,
     }))
-  }, [live, rows])
+  }, [live, rows,outcomes])
 
   /**
    * What the search and the filter leave on screen.

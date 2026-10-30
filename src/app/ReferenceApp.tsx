@@ -4,6 +4,8 @@
 //
 // Every {{ value }} binding resolves against the object returned by useAppValues(), so a
 // missing or renamed binding fails the TypeScript build instead of silently rendering wrong.
+import { LeadDetails } from './LeadDetails'
+import { AssistText } from './AssistText'
 import { Fragment, type ReactElement } from 'react'
 import type { AppValues } from './useAppValues'
 import { SettingsPanel } from './SettingsPanel'
@@ -40,6 +42,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
   return (
     <>
       <WorkspaceDialogs V={V}/>
+      {V.detailLeadId && <LeadDetails id={V.detailLeadId} onClose={V.closeLeadDetail}/>}
       <ScanReturn V={V}/>
       <NotificationToast V={V}/>
       <FinderSearchHistory V={V}/>
@@ -675,7 +678,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <strong style={{fontWeight: "700", color: "#F0F0F0"}}>{V.dashExportReady}</strong>
                             {' '}leads ready to export with usable contact data
                           </span>
-                          <button type="button" onClick={V.openExpAll} data-attn="1" style={{minWidth: "132px", padding: "9px 16px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear,color .25s linear", flex: "none"}} data-exportgo="1">Export now</button>
+                          <button type="button" onClick={V.openExpAll} disabled={Number(V.storedLeadCount.replace(/,/g,""))===0} data-attn="1" style={{minWidth: "132px", padding: "9px 16px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear,color .25s linear", flex: "none"}} data-exportgo="1">Export now</button>
                         </div>
                         </>
                       ) : null}
@@ -710,7 +713,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           </span>
                           <span data-qa-arrow="1" aria-hidden="true" style={{color: "#5A5F5C", fontSize: "13px", transition: "transform .35s cubic-bezier(.22,1,.36,1)"}}>→</span>
                         </button>
-                        <button type="button" onClick={V.openExpAll} data-qa="1" style={{display: "flex", alignItems: "center", gap: "14px", width: "100%", padding: "14px 16px", border: "0", borderRadius: "16px", background: "#EAEAE8", fontFamily: "inherit", textAlign: "left", cursor: "pointer", transition: "background .25s linear"}}>
+                        <button type="button" onClick={V.openExpAll} disabled={Number(V.storedLeadCount.replace(/,/g,""))===0} data-qa="1" style={{display: "flex", alignItems: "center", gap: "14px", width: "100%", padding: "14px 16px", border: "0", borderRadius: "16px", background: "#EAEAE8", fontFamily: "inherit", textAlign: "left", cursor: "pointer", transition: "background .25s linear"}}>
                           <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "34px", height: "34px", borderRadius: "11px", background: "#DDE3D6", color: "#3A4238", flex: "none"}}>
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M12 4v10"></path>
@@ -749,7 +752,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                               <path d="M12 21s6.5-6 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 15 12 21 12 21z"></path>
                               <circle cx="12" cy="10.5" r="2.2"></circle>
                             </svg>
-                            {' '}Manchester · 25km
+                            {' '}{V.mapsAreas} · {V.mapsRadius}
                           </div>
                         </div>
                         <div style={{borderLeft: "1px solid #E4E5E2", paddingLeft: "18px"}}>
@@ -798,9 +801,9 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{position: "relative", height: "clamp(240px,30vh,340px)", marginTop: "18px", borderRadius: "20px", overflow: "hidden", background: "#E9EBE4"}}>
                       {(V.mapsPins ?? []).map((pin, __ipin) => (
                         <Fragment key={__ipin}>
-                          <span data-pin="1" data-on={pin.reveal} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: "#F0F0F0", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
+                          <span data-pin="1" data-on={pin.reveal} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: "#F0F0F0", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
                             <span style={{display: "grid", placeItems: "center", width: "20px", height: "20px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "8.5px", fontWeight: "700"}}>{pin.ini}</span>
-                            {pin.name}
+                            <span style={{overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}}>{pin.name}</span>
                           </span>
                         </Fragment>
                       ))}
@@ -862,8 +865,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </div>
                         <label style={{display: "block"}}>
                           <span style={{display: "block", fontSize: "12.5px", color: "#4A4F4B", marginBottom: "7px"}}>Location</span>
-                          <input type="text" defaultValue="Manchester" style={{width: "100%", height: "46px", padding: "0 16px", border: "0", borderRadius: "14px", background: "#EAEAE8", fontSize: "15px", color: "#1C1C1C", outline: "none"}} data-location="1" />
-                          <span style={{display: "block", marginTop: "7px", fontSize: "12px", color: "#5A5F5C"}}>Leave blank to use your current location.</span>
+                          <input type="text" defaultValue={V.mapsDefaultLocation} placeholder="Enter a city or area" style={{width: "100%", height: "46px", padding: "0 16px", border: "0", borderRadius: "14px", background: "#EAEAE8", fontSize: "15px", color: "#1C1C1C", outline: "none"}} data-location="1" />
+                          <span style={{display: "block", marginTop: "7px", fontSize: "12px", color: "#5A5F5C"}}>Enter a city or area. Your last search location is reused.</span>
                         </label>
                         <div>
                           <span style={{display: "block", fontSize: "12.5px", color: "#4A4F4B", marginBottom: "7px"}}>Max results per run</span>
@@ -1036,9 +1039,9 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{position: "relative", height: "clamp(250px,25vw,330px)", marginTop: "16px", borderRadius: "18px", overflow: "hidden", background: "#E9EBE4"}}>
                       {(V.mapsPins ?? []).map((pin, __ipin) => (
                         <Fragment key={__ipin}>
-                          <span data-pin="1" data-on={pin.on} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: "#F0F0F0", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
+                          <span data-pin="1" data-on={pin.on} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: "#F0F0F0", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
                             <span style={{display: "grid", placeItems: "center", width: "20px", height: "20px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "8.5px", fontWeight: "700"}}>{pin.ini}</span>
-                            {pin.name}
+                            <span style={{overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}}>{pin.name}</span>
                           </span>
                         </Fragment>
                       ))}
@@ -1167,7 +1170,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </svg>
                         <input type="search" placeholder="Filter leads..." aria-label="Filter leads" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} data-mapsfilter="1" value={V.mapsQueryText} onInput={V.onMapsInput} />
                       </div>
-                      <button type="button" disabled={V.mapsResultsLoading} onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
+                      <button type="button" disabled={V.mapsResultsLoading || !V.canExportCurrent} onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M12 4v10"></path>
                           <path d="M8 10.5l4 4 4-4"></path>
@@ -1232,6 +1235,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </svg>
                       </span>
                     </span>
+                    <button type="button" onClick={V.queueSocial} disabled={V.socialScanProgress.scanning} className="finder-scan-action" data-social-scan="1">Scan visible websites</button>
                     <button type="button" onClick={V.openImp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}} data-socimpopen="1">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 15.5V4"></path>
@@ -1331,7 +1335,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}} data-profcard="1">Profiles</h2>
                       <p data-soccount="1" style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Showing {V.socialShowing} of {V.socialTotal} leads.</p>
                     </div>
-                    <button type="button" onClick={V.exportProfiles} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
+                    <button type="button" onClick={V.exportProfiles} disabled={V.profileExportEmpty} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 4v10"></path>
                         <path d="M8 10.5l4 4 4-4"></path>
@@ -1371,7 +1375,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                                 </span>
                                 </>
                               ) : null}
-                              <SocialProfileLinks profiles={sr.profiles ?? []}/>
+                              <SocialProfileLinks profiles={sr.profiles ?? []}/>{!sr.scanning && sr.scanLabel && <span style={{fontSize:12,color:"#923b32",overflowWrap:"anywhere"}}>{sr.scanLabel} <button type="button" onClick={()=>V.retrySocial(sr.domain)}>Retry</button></span>}
                               {shows(sr.none) ? (
                                 <>
                                 <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>No profiles found</span>
@@ -1667,7 +1671,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Showing {V.emailShowing} of {V.emailTotal} leads.</p>
                     </div>
                     <button type="button" className="email-validity-check" data-email-validity="1" data-email-validity-results="1" disabled={!V.emailCanVerifyResults} onClick={V.verifyEmailValidity}>{V.emailValidityBusy==='1'?V.emailValidityLabel:'Check email validity'}</button>
-                    <button type="button" onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
+                    <button type="button" onClick={V.openExp} disabled={!V.canExportCurrent} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 4v10"></path>
                         <path d="M8 10.5l4 4 4-4"></path>
@@ -1794,12 +1798,13 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                                 </>
                               ) : null}
                             </span>
-                            {shows(r.isFound) ? (
+                            {r.lookupOutcome?.status==='error' && <span title={r.lookupOutcome.error} style={{fontSize:12,color:"#923b32"}}>Scan failed<button type="button" onClick={()=>V.fEmail.scanImported([r.leadId])}>Retry</button><small style={{display:"block",whiteSpace:"normal"}}>{r.lookupOutcome.error}</small></span>}
+                            {shows(r.isFound) && r.lookupOutcome?.status!=='error' ? (
                               <>
                               <span data-col="status" style={{minWidth: "88px", fontSize: "12.5px", fontWeight: "500", whiteSpace: "nowrap"}}>{r.statusLabel}</span>
                               </>
                             ) : null}
-                            {shows(r.isMuted) ? (
+                            {shows(r.isMuted) && r.lookupOutcome?.status!=='error' ? (
                               <>
                               <span data-col="status" style={{minWidth: "88px", fontSize: "12.5px", color: "#5A5F5C", whiteSpace: "nowrap"}}>{r.statusLabel}</span>
                               </>
@@ -2042,7 +2047,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Phone Book</h2>
                       <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Showing {V.phoneShowing} of {V.phoneTotal} leads.</p>
                     </div>
-                    <button type="button" onClick={V.openExp} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
+                    <button type="button" onClick={V.openExp} disabled={!V.canExportCurrent} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 4v10"></path>
                         <path d="M8 10.5l4 4 4-4"></path>
@@ -2068,7 +2073,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <span style={{display: "grid", placeItems: "center", width: "16px", height: "16px", borderRadius: "5px", border: "1.5px solid #C6C8C4"}}></span>
                             <span data-col="idx" style={{minWidth: "34px", fontSize: "12.5px", color: "#5A5F5C", fontVariantNumeric: "tabular-nums"}}>{p.index}</span>
                             <span style={{minWidth: "158px", fontSize: "14.5px", fontWeight: "500"}}>{p.name}</span>
-                            <span className="phone-result-numbers" style={{minWidth:"156px",fontSize:"13.5px",fontVariantNumeric:"tabular-nums",color:"#1C1C1C"}}><span title={p.mainSource || undefined}>{p.phone}</span>{p.mainSource && <small>Main website contact</small>}{p.extraNumbers.length>0&&<details><summary>+{p.extraNumbers.length} more number{p.extraNumbers.length===1?'':'s'}</summary>{p.extraNumbers.map(number=><span key={number.value} title={number.page}>{number.value}</span>)}</details>}</span>
+                            <span className="phone-result-numbers" style={{minWidth:"156px",fontSize:"13.5px",fontVariantNumeric:"tabular-nums",color:"#1C1C1C"}}><span title={p.mainSource || undefined}>{p.lookupOutcome?.status==='error'&&!p.hasNumber?'Not checked':p.phone}</span>{p.lookupOutcome?.status==='error'&&<span title={p.lookupOutcome.error}>Scan failed · <button type="button" onClick={()=>V.fPhone.scanImported([p.id])}>Retry</button><small>{p.lookupOutcome.error}</small></span>}{p.mainSource && <small>Main website contact</small>}{p.extraNumbers.length>0&&<details><summary>+{p.extraNumbers.length} more number{p.extraNumbers.length===1?'':'s'}</summary>{p.extraNumbers.map(number=><span key={number.value} title={number.page}>{number.value}</span>)}</details>}</span>
                             <span style={{minWidth: "104px"}}>
                               {shows(p.isReception) ? (
                                 <>
@@ -2113,13 +2118,13 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <h1 style={{margin: "0", fontSize: "clamp(26px,2.6vw,36px)", lineHeight: "1.1", letterSpacing: "-.03em", fontWeight: "400"}}>All Leads</h1>
                       <span style={{display: "inline-flex", alignItems: "center", gap: "7px", padding: "6px 13px", borderRadius: "999px", background: "#C8D5BB", fontSize: "10.5px", fontWeight: "500", letterSpacing: ".14em"}}>
                         <span aria-hidden="true" style={{width: "6px", height: "6px", borderRadius: "999px", background: "#1C1C1C"}}></span>
-                        128 SAVED{' '}
+                        {V.savedListCount} SAVED{' '}
                       </span>
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "74ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>Every place any run has ever captured lands here and stays. Runs only add — nothing is overwritten, nothing expires.</p>
                   </div>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
-                    <button type="button" onClick={V.openExpAll} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
+                    <button type="button" onClick={V.openExpAll} disabled={Number(V.storedLeadCount.replace(/,/g,""))===0} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M12 4v10"></path>
                         <path d="M8 10.5l4 4 4-4"></path>
@@ -2248,7 +2253,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                                 <li data-row="1" style={{display: "grid", gridTemplateColumns: "44px minmax(0,2fr) minmax(0,1.45fr) 104px 66px 88px", alignItems: "center", gap: "12px", padding: "14px 0", borderTop: "1px solid #E4E5E2", transition: "background .25s linear"}}>
                                   <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "40px", height: "40px", borderRadius: "12px", background: "#C8D5BB", fontSize: "13px", fontWeight: "700"}}>{lc.ini}</span>
                                   <span style={{minWidth: "0"}}>
-                                    <span style={{display: "block", fontSize: "14.5px", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{lc.name}</span>
+                                    <button type="button" className="lead-detail-link" onClick={()=>V.openLeadDetail(lc.id)} title="View saved contact details">{lc.name}</button>
                                     <span style={{display: "block", marginTop: "3px", fontSize: "12.5px", color: "#5A5F5C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{lc.domain}</span>
                                   </span>
                                   <span style={{display: "flex", gap: "5px"}}>
@@ -2309,7 +2314,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <p style={{margin: "8px 0 0", maxWidth: "74ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>A run brings back everything it finds. Read through them here, bookmark the ones actually worth calling, and save just those into a list.</p>
                   </div>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
-                    <button type="button" data-ghost="1" onClick={V.openExpView} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Export selection</button>
+                    <button type="button" data-ghost="1" onClick={V.openExpView} disabled={!V.canExportCurrent} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Export selection</button>
                     <button type="button" onClick={V.saveToList} data-run="1" style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M6.5 3.5h11v17l-5.5-3.6-5.5 3.6z"></path>
@@ -2447,7 +2452,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "74ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>Every scrape, import and enrichment pass this machine has run, with what it captured and what it cost.</p>
                   </div>
-                  <button type="button" onClick={V.openExpRuns} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
+                  <button type="button" onClick={V.openExpRuns} disabled={V.savedMapsCount===0} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 4v10"></path>
                       <path d="M8 10.5l4 4 4-4"></path>
@@ -2582,7 +2587,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </ul>
                   </div>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "18px", paddingTop: "16px", borderTop: "1px solid #E4E5E2"}}>
-                    <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Showing {V.runShowing} of {V.runCount} runs · log kept for 90 days</span>
+                    <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Showing {V.runShowing} of {V.runTotal} records · log kept for 90 days</span>
                     {shows(V.runsMoreOn) ? (
                       <>
                       <button type="button" data-more="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}} onClick={V.showMoreRuns}>
@@ -2751,7 +2756,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
             {V.savedMapsOpen ? <SavedMapsSearches V={V}/> : null}
             {shows(V.impOpen) ? <ImportWebsitesDialog V={V}/> : null}
             {shows(V.expOpen) ? <ExportDialog title={V.expTitle} summary={V.simpleExportSummary} busy={V.exportBusy} empty={V.simpleExportEmpty} onExport={format => format === 'xlsx' ? V.exportExcel() : V.exportPdf()} onClose={V.closeExp} /> : null}
-            {shows(V.profileExportOpen) ? <ExportDialog social title="Export social profiles" summary={V.profileExportSummary} busy={V.exportBusy} empty={false} onExport={format => format === 'xlsx' ? V.exportProfilesExcel() : V.exportProfilesPdf()} onClose={V.closeProfileExport} /> : null}
+            {shows(V.profileExportOpen) ? <ExportDialog social title="Export social profiles" summary={V.profileExportSummary} busy={V.exportBusy} empty={V.profileExportEmpty} onExport={format => format === 'xlsx' ? V.exportProfilesExcel() : V.exportProfilesPdf()} onClose={V.closeProfileExport} /> : null}
             {shows(V.chatOpen) ? (
               <>
               <div data-chat-panel="1" style={{position: "fixed", right: "clamp(12px,2vw,26px)", bottom: "clamp(12px,2vw,26px)", zIndex: "95", width: "min(384px,calc(100vw - 24px))", maxHeight: "min(80vh,620px)", display: "flex", flexDirection: "column", borderRadius: "24px", background: "#F5F5F4", boxShadow: "0 34px 70px -34px rgba(28,28,28,.75)", overflow: "hidden", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
@@ -2772,7 +2777,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   ) : null}
                   {(V.msgs ?? []).map((m, __im) => (
                     <Fragment key={__im}>
-                      <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}>{m.text}</span>
+                      <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}><AssistText text={m.text}/></span>
                       {m.who==='bot' && Boolean(m.actions?.length) && <div className="assist-shortcuts" aria-label="Open a related page">{m.actions!.map(key=><a key={key} href={`#${key}`} data-assist-destination={key} onClick={event=>{event.preventDefault();V.openAssistDestination(key)}}>{V.assistDestinations[key].label}<span aria-hidden="true">↗</span></a>)}</div>}
                     </Fragment>
                   ))}
