@@ -31,7 +31,9 @@ try{
    assert.deepEqual(tiny,[],'mobile text at least 12px')
    await page.goto(base,{waitUntil:'networkidle'})
   }
-  assert.match(await page.locator('#top h1').innerText(),/Rs 10,000/)
+  assert.match(await page.locator('#top h1').innerText(),/Find Your Next Client\s+on Google Maps\./)
+  assert.match(await page.locator('.hero-job-note').innerText(),/Looking for a job\? Find companies you can approach\./)
+  assert.match(await page.locator('.hero-buy').innerText(),/Rs 10,000\s+Get Lifetime Access/)
   assert.equal(await page.locator('#top .hero-trial').getAttribute('href'),'#download')
   assert.match(await page.locator('.pricing-grid article').first().innerText(),/LIFETIME ACCESS/)
   assert.ok(await page.evaluate(()=>Boolean(document.querySelector('#pricing').compareDocumentPosition(document.querySelector('#how')) & Node.DOCUMENT_POSITION_FOLLOWING)))
