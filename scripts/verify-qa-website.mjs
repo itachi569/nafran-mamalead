@@ -14,7 +14,7 @@ try{
  browser=await chromium.launch({headless:true})
  const out=resolve('screenshots/qa-1.4.19/website');mkdirSync(out,{recursive:true})
  for(const viewport of [{width:1440,height:1000},{width:390,height:844},{width:375,height:812},{width:768,height:1024}]){
-  const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(e.message))
+  const page=await browser.newPage({viewport});const errors=[],failedResources=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)failedResources.push(r.status()+' '+r.url())})
   await page.goto(base,{waitUntil:'networkidle'})
   assert.ok(await page.locator('a[href="mailto:billing@nafran.co"]').count())
   assert.ok(await page.locator('a[href="/terms.html"],a[href="terms.html"]').count())
@@ -34,6 +34,10 @@ try{
   assert.match(await page.locator('#top h1').innerText(),/Find Your Next Client\s+on Google Maps\./)
   assert.match(await page.locator('.hero-job-note').innerText(),/Looking for a job\? Find companies you can approach\./)
   assert.match(await page.locator('.hero-buy').innerText(),/Rs 10,000\s+Get Lifetime Access/)
+  assert.equal(await page.locator('.zip-search-demo [data-demo-slot]').count(),10)
+  assert.ok(await page.locator('.zip-search-demo [data-demo-slot]').first().evaluate(el=>getComputedStyle(el).animationName.includes('zipHeroDemoSlot')))
+  assert.match(await page.locator('#top').innerText(),/Save 50% on Lifetime/)
+  assert.doesNotMatch(await page.locator('#top').innerText(),/Launch window.*gone|v1\.4\.0/)
   assert.equal(await page.locator('#top .hero-trial').getAttribute('href'),'#download')
   assert.match(await page.locator('.pricing-grid article').first().innerText(),/LIFETIME ACCESS/)
   assert.ok(await page.evaluate(()=>Boolean(document.querySelector('#pricing').compareDocumentPosition(document.querySelector('#how')) & Node.DOCUMENT_POSITION_FOLLOWING)))
@@ -48,7 +52,12 @@ try{
   assert.ok(await page.locator('a[href="mailto:billing@nafran.co"]').count())
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
   await page.screenshot({path:out+'/terms-'+viewport.width+'.png'})
-  assert.deepEqual(errors,[]);await page.close()
+  assert.deepEqual(errors,[]);assert.deepEqual(failedResources,[]);await page.close()
  }
+ const reduced=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'reduce'})
+ await reduced.goto(base,{waitUntil:'networkidle'})
+ const visibleSlots=await reduced.locator('.zip-search-demo [data-demo-slot]').evaluateAll(els=>els.filter(el=>getComputedStyle(el).opacity==='1').map(el=>el.textContent))
+ assert.deepEqual(visibleSlots,['dentists','Lahore'],'reduced motion keeps a readable static demo')
+ await reduced.close()
  console.log('PASS desktop/mobile homepage and Terms; support/terms links; no retired subscription CTA; no overflow or JS errors')
 }finally{await browser?.close();child.kill()}
