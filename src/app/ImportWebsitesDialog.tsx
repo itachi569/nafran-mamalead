@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppValues } from './useAppValues'
-import { importPreview, websiteListFromCsv } from './website-import'
+import { importPreview, websiteListFromCsv, WEBSITE_IMPORT_LIMIT } from './website-import'
 import './import-websites-dialog.css'
 import { EmailValidityChoice } from './EmailValidityChoice'
 
 type Source = 'paste' | 'file' | 'run'
-type WebsiteFile = ReturnType<typeof websiteListFromCsv> & { name: string; bytes: number }
+type WebsiteFile = ReturnType<typeof websiteListFromCsv> & { name: string; bytes: number; content: string }
 
 function SourceIcon({ kind }: { kind: Source | 'search' | 'close' }) {
   return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -36,12 +36,12 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
   const destination = V.isEmail ? 'Email Finder' : V.isPhone ? 'Phone Finder' : V.isWebsite ? 'Website Lookup' : 'Social Profiles'
   const preview = useMemo(() => importPreview(V.impValue), [V.impValue])
 
-  const ready = preview.sites.length + preview.profiles.length
+  const ready = preview.sites.length + (V.isSocial ? preview.profiles.length : 0)
 
   const busy = source === 'file' ? reading : source === 'run' && loadingRun
   const tabs = [
     { id: 'paste', title: 'Paste links', detail: 'One per line' },
-    { id: 'file', title: 'Upload a file', detail: 'CSV or TSV · 20 MB' },
+    { id: 'file', title: 'Upload a file', detail: 'CSV, TSV or Excel · 20 MB' },
     { id: 'run', title: 'From a Maps run', detail: 'Saved results' },
   ] as const
 
@@ -52,7 +52,7 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
     dialog.querySelector<HTMLButtonElement>('.wi-close')?.focus()
     const trapFocus = (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return
-      const targets = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), textarea, [tabindex="0"]')).filter(el => el.getClientRects().length)
+      const targets = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), textarea, select, [tabindex="0"]')).filter(el => el.getClientRects().length)
       const first = targets[0], last = targets[targets.length - 1]
       if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last?.focus() }
       else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { event.preventDefault(); first?.focus() }
@@ -67,19 +67,19 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
     V.setImportText(next === 'paste' ? paste : next === 'file' ? file?.text ?? '' : loadingRun ? '' : runText)
   }
 
-  function acceptFile(name: string, content: string, bytes: number) {
-    if (!/\.(csv|tsv)$/i.test(name)) throw new Error('Choose a CSV or TSV website list.')
-    if (bytes > 20 * 1024 * 1024) throw new Error('Choose a CSV or TSV file no larger than 20 MB.')
-    const next = { ...websiteListFromCsv(content), name, bytes }
+  function acceptFile(name: string, content: string, bytes: number, column?: number) {
+    if (!/\.(csv|tsv|xlsx)$/i.test(name)) throw new Error('Choose a CSV, TSV or Excel website list.')
+    if (bytes > 20 * 1024 * 1024) throw new Error('Choose a CSV, TSV or Excel file no larger than 20 MB.')
+    const next = { ...websiteListFromCsv(content, column), name, bytes, content }
     if (!alive.current) return
-    setFile(next); setError('')
+    setFile(next); setError(next.error)
     if (activeSource.current === 'file') V.setImportText(next.text)
   }
 
   async function browse() {
     setReading(true); setError('')
     try { const picked = await V.chooseWebsiteCsv(); if (picked) acceptFile(picked.name, picked.content, picked.bytes) }
-    catch (err) { if (alive.current) setError(err instanceof Error ? err.message : 'The file could not be read.') }
+    catch (err) { if (alive.current) { setFile(null); if (activeSource.current === 'file') V.setImportText(''); setError(err instanceof Error ? err.message : 'The file could not be read.') } }
     finally { if (alive.current) setReading(false) }
   }
 
@@ -126,15 +126,16 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
           if (!dropped) return
           setError(''); setReading(true)
           try {
-            if (event.dataTransfer.files.length !== 1) throw new Error('Drop one CSV or TSV file at a time.')
-            if (!/\.(csv|tsv)$/i.test(dropped.name) || dropped.size > 20 * 1024 * 1024) throw new Error('Drop a CSV or TSV file no larger than 20 MB.')
-            acceptFile(dropped.name, await dropped.text(), dropped.size)
-          } catch (err) { if (alive.current) setError(err instanceof Error ? err.message : 'The file could not be read.') }
+            if (event.dataTransfer.files.length !== 1) throw new Error('Drop one website list at a time.')
+            if (!/\.(csv|tsv|xlsx)$/i.test(dropped.name) || dropped.size > 20 * 1024 * 1024) throw new Error('Drop a CSV, TSV or Excel file no larger than 20 MB.')
+            const checked = await window.desktop!.readWebsiteFile(dropped.name, new Uint8Array(await dropped.arrayBuffer()))
+            acceptFile(checked.name, checked.content, checked.bytes)
+          } catch (err) { if (alive.current) { setFile(null); if (activeSource.current === 'file') V.setImportText(''); setError(err instanceof Error ? err.message : 'The file could not be read.') } }
           finally { if (alive.current) setReading(false) }
         }}>
-          <div className="wi-file-heading"><span className="wi-file-icon"><SourceIcon kind="file"/></span><div className="wi-file-copy"><strong>{file?.name ?? 'Choose your website list'}</strong><span>{file ? `${file.rowCount.toLocaleString()} rows · ${sizeLabel(file.bytes)}` : 'CSV or TSV · up to 20 MB'}</span></div><button type="button" className="wi-primary website-file-picker" disabled={reading} onClick={() => void browse()}>{reading ? 'Opening…' : file ? 'Change file' : 'Choose file'}</button></div>
+          <div className="wi-file-heading"><span className="wi-file-icon"><SourceIcon kind="file"/></span><div className="wi-file-copy"><strong>{file?.name ?? 'Choose your website list'}</strong><span>{file ? `${file.rowCount.toLocaleString()} rows · ${sizeLabel(file.bytes)}` : 'CSV, TSV or Excel · up to 20 MB'}</span></div><button type="button" className="wi-primary website-file-picker" disabled={reading} onClick={() => void browse()}>{reading ? 'Opening…' : file ? 'Change file' : 'Choose file'}</button></div>
           {file ? <div className="wi-file-preview"><table aria-label="Website file preview"><thead><tr><th>Row</th><th title={file.label}>Column {file.column} · {file.label}</th><th>Status</th></tr></thead><tbody>{file.preview.rows.slice(0, 5).map((row, index) => <tr key={index}><td>{index + 1}</td><td title={row.value}>{row.value || 'No website'}</td><td><span data-ftag={row.status.toLowerCase()}>{row.status}</span></td></tr>)}</tbody></table><p>{file.rowCount > 5 ? `${(file.rowCount - 5).toLocaleString()} more rows · ` : ''}{ready.toLocaleString()} ready · {file.preview.duplicates} duplicate{file.preview.duplicates === 1 ? '' : 's'} · {file.preview.invalid} skipped</p></div> : <div className="wi-drop-empty"><SourceIcon kind="paste"/><span>Drop your file here, or choose it from your computer.</span><small>Your website or domain column is detected automatically.</small></div>}
-          <p className="wi-hint">Drop another CSV or TSV on this box to replace it. The website or domain column is read automatically.</p>
+          <p className="wi-hint">Drop another CSV, TSV or Excel file on this box to replace it. The website or domain column is read automatically.</p>
         </div>}
         {source === 'run' && <>
           <div className="wi-runs" role="group" aria-label="Saved Google Maps runs">
@@ -143,8 +144,10 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
           </div>
           {(V.mapsRunOptions.length > 0) && <p className="wi-hint" role="status">{<>{loadingRun ? 'Loading websites from this run…' : runId ? `${ready} unique website${ready === 1 ? '' : 's'} ready for ${destination}.` : 'Choose a saved run to load its websites.'} Duplicate domains are merged before scanning.</>}</p>}
         </>}
-        {(error || (V.isWebsite && V.websiteLookup.error)) && <p className="wi-error" role="alert">{error || V.websiteLookup.error}</p>}
+        {file && source === 'file' && <label className="wi-hint">Website column <select aria-label="Website column" value={file.columnIndex} onChange={event=>acceptFile(file.name,file.content,file.bytes,Number(event.target.value))}>{file.columns.map(c=><option key={c.index} value={c.index}>{c.label}</option>)}</select></label>}
       </div>
+      {(error || (V.isWebsite && V.websiteLookup.error)) && <p className="wi-error" role="alert">{error || V.websiteLookup.error}</p>}
+      {ready > WEBSITE_IMPORT_LIMIT && <p className="wi-batch-notice" role="status">{ready} ready · {ready-WEBSITE_IMPORT_LIMIT} over the {WEBSITE_IMPORT_LIMIT} limit. Scan the first {WEBSITE_IMPORT_LIMIT}; the remaining links are saved for the next time you open Import websites.</p>}
       {source === 'paste' && <div className="wi-stats" id="website-import-count" data-import-count="1" role="status">
         <div className="wi-ready"><strong>{ready}</strong><span>ready to {preview.profiles.length && !preview.sites.length ? 'import' : 'scan'}</span></div>
         <div><strong>{preview.duplicates}</strong><span>duplicates merged</span></div>

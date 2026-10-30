@@ -865,7 +865,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </div>
                         <label style={{display: "block"}}>
                           <span style={{display: "block", fontSize: "12.5px", color: "#4A4F4B", marginBottom: "7px"}}>Location</span>
-                          <input type="text" defaultValue={V.mapsDefaultLocation} placeholder="Enter a city or area" style={{width: "100%", height: "46px", padding: "0 16px", border: "0", borderRadius: "14px", background: "#EAEAE8", fontSize: "15px", color: "#1C1C1C", outline: "none"}} data-location="1" />
+                          <input type="text" value={V.mapsDefaultLocation} onChange={V.onMapsLocation} placeholder="Enter a city or area" style={{width: "100%", height: "46px", padding: "0 16px", border: "0", borderRadius: "14px", background: "#EAEAE8", fontSize: "15px", color: "#1C1C1C", outline: "none"}} data-location="1" />
                           <span style={{display: "block", marginTop: "7px", fontSize: "12px", color: "#5A5F5C"}}>Enter a city or area. Your last search location is reused.</span>
                         </label>
                         <div>
@@ -906,6 +906,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             {' '}Bulk import keywords{' '}
                           </button>
                         </div>
+                        <p data-maps-session="1" style={{fontSize:13,margin:'8px 0'}}>Mode: {V.mapsSessionLabel} · <button type="button" disabled={V.runState!=='idle'} onClick={V.changeMapsSession} style={{border:0,background:'transparent',font:'inherit',textDecoration:'underline',cursor:'pointer'}}>Change</button></p>
                         <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "2px"}}>
                           <button type="button" data-run="1" data-runbtn="1" data-state={V.runState} onClick={V.runScrape} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", flex: "1", minWidth: "172px", height: "46px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
                             <span data-runidle="1" style={{alignItems: "center", gap: "9px"}}>
@@ -2665,6 +2666,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <button type="button" onClick={V.clearBulkKeywords} style={{height: "36px", padding: "0 12px", border: "0", background: "transparent", color: "#5A5F5C", fontFamily: "inherit", fontSize: "12.5px", textDecoration: "underline", cursor: "pointer"}}>Clear</button>
                     <span style={{marginLeft: "auto", padding: "7px 12px", borderRadius: "999px", background: "#DDE3D6", fontSize: "11.5px", fontWeight: "500"}}>{V.bulkKeywordCountLabel}</span>
                   </div>
+                  <p role="status" style={{fontSize:13}}>{V.bulkKeywordLongLabel}</p><p style={{fontSize:13}}>Add to current: {V.bulkKeywordAddLabel}</p>
                   {shows(V.bulkKeywordHasTerms) ? (
                     <>
                     <div style={{marginTop: "18px", padding: "16px", borderRadius: "18px", background: "#FFFFFF"}}>

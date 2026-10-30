@@ -1,4 +1,5 @@
 import { contactQuality } from '../lead-quality'
+import { websiteDomain } from '../website-domain'
 // Reads and writes for the pages, kept in one place so the IPC layer stays thin and the
 // renderer never sees SQL.
 //
@@ -17,14 +18,14 @@ import {compareEmailContacts} from '../email-ranking'
 export interface RunSummaryInput {
   runId?: string
   provider: string
-  status: 'done' | 'failed' | 'cancelled'
+  status: 'running' | 'done' | 'failed' | 'cancelled'
   keywords: string[]
   location: string
   maxResultsPerKeyword: number
   detail: boolean
   durationMs: number
   startedAt: string
-  finishedAt: string
+  finishedAt: string | null
   error: string | null
   leads: LeadInput[]
 }
@@ -157,13 +158,7 @@ const WORKPLACE_WORD =
  * all become the same thing, so a list can be pasted in any shape.
  */
 export function normaliseDomain(raw: string): string {
-  const trimmed = raw.trim().toLowerCase()
-  if (!trimmed || trimmed.startsWith('#')) return ''
-  const withoutScheme = trimmed.replace(/^[a-z]+:\/\//, '')
-  const host = withoutScheme.split(/[/?#]/)[0].replace(/^www\./, '')
-  // A host needs a dot and a plausible ending; anything else is not a website.
-  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)) return ''
-  return host
+  return websiteDomain(raw)
 }
 
 /** A UK mobile begins 07, however the number is written. */
@@ -421,10 +416,13 @@ export class Repository {
   saveRun(workspaceId: string, summary: RunSummaryInput): { runId: string; saved: number } {
     return this.db.transaction(() => {
       const runId = summary.runId ?? randomUUID()
+      const previous = this.db.one<{status:string}>('select status from scrape_runs where id = ?', [runId])
       this.db.run(
         `insert into scrape_runs
            (id, workspace_id, provider, status, keywords, location, max_results, detail, found, error, started_at, finished_at, duration_ms)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         on conflict(id) do update set status=excluded.status, error=excluded.error,
+           finished_at=excluded.finished_at, duration_ms=excluded.duration_ms`,
         [
           runId,
           workspaceId,
@@ -458,6 +456,8 @@ export class Repository {
 
       for (const lead of summary.leads) {
         if (!lead.name) continue
+        // A streamed row may be seen again in the final summary, including providers without place IDs.
+        if (!lead.placeRef && this.db.one('select l.id from leads l join scrape_run_leads rl on rl.lead_id=l.id where rl.run_id=? and l.name=? and l.address=? and l.website=?', [runId,lead.name,lead.address ?? '',lead.website ?? ''])) continue
         const capturedAt = lead.capturedAt ?? nowIso()
         const score = lead.score ?? scoreLead(lead)
         const leadId = randomUUID()
@@ -502,8 +502,9 @@ export class Repository {
         }
       }
 
-      // Every call here reports a finished run, so it counts against the plan.
-      this.db.run(
+      this.db.run('update scrape_runs set found=(select count(*) from scrape_run_leads where run_id=?) where id=?', [runId,runId])
+      // Streaming checkpoints are not additional runs. Finalising twice is also idempotent.
+      if (summary.status !== 'running' && (!previous || previous.status === 'running')) this.db.run(
         `insert into usage_counters (workspace_id, period, scrapes_used) values (?, ?, 1)
          on conflict (workspace_id, period) do update set scrapes_used = scrapes_used + 1`,
         [workspaceId, currentPeriod()],
@@ -511,6 +512,10 @@ export class Repository {
 
       return { runId, saved }
     })
+  }
+
+  recoverInterruptedRuns(): void {
+    this.db.run("update scrape_runs set status='failed', error='Interrupted: MamaLead closed before this scan finished. Captured leads were kept.', finished_at=? where status in ('running','queued')", [nowIso()])
   }
 
   listRuns(workspaceId: string, limit = 50): StoredRun[] {

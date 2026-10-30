@@ -1,4 +1,5 @@
 import { contactQuality } from '../../electron/lead-quality'
+import {parseBulkKeywords, keywordMergePreview, readMapsDraft, MAX_MAP_KEYWORDS} from './map-keywords'
 // The reference app keeps everything in one component: a state object plus renderVals(), which
 // hands the template a flat bag of values and callbacks. This hook is that same component — the
 // state, the actions and the values bag — with two deliberate changes:
@@ -12,7 +13,7 @@ import { useNotifications } from './useNotifications'
 import { defaultNotificationAction } from './notification-model'
 export type { AppNotification } from './notification-model'
 import { useWebsiteLookup } from './useWebsiteLookup'
-import { importPreview, isProfileLine, pastedLines, websiteListFromCsv } from './website-import'
+import { importPreview, isProfileLine, pastedLines, websiteListFromCsv, pendingImport, savePendingImport, WEBSITE_IMPORT_LIMIT } from './website-import'
 import { isBusinessOwner, sourcedOwnerEmail } from '../../electron/enrichment/owner-contact'
 import { usesRomanUrdu } from '../../electron/assist-language'
 import { assistDestinations, assistShortcuts, type AssistDestination } from '../../electron/assist-navigation'
@@ -58,7 +59,6 @@ type ChatMessage = { who: string; text: string; actions?: AssistDestination[] }
 const INITIAL_CHAT_MESSAGES: ChatMessage[] = []
 /** How many leads one page of the ledger draws before its own "Load 20 more" is offered. */
 const LEDGER_PAGE = 200
-const MAX_MAP_KEYWORDS = 8
 const NOTIFICATIONS_ENABLED_KEY = 'nafran.notifications.enabled'
 const EMAIL_VERIFY_AFTER_SCAN_KEY = 'nafran.email.verifyAfterScan'
 const LIFETIME_CHECKOUT_PENDING_KEY = 'nafran.billing.lifetimeCheckoutUntil'
@@ -80,22 +80,6 @@ function readPendingLifetimeCheckout(): number {
   } catch {
     return 0
   }
-}
-
-/** Cleans a pasted keyword list while preserving the user's order. */
-function parseBulkKeywords(raw: string): { terms: string[]; supplied: number; duplicates: number } {
-  const supplied = String(raw ?? '')
-    .split(/[\r\n,;\t]+/)
-    .map((term) => term.replace(/^\s*(?:[-*•]+|\d+[.)])\s*/, '').replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-  const seen = new Set<string>()
-  const terms = supplied.filter((term) => {
-    const key = term.toLocaleLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-  return { terms, supplied: supplied.length, duplicates: supplied.length - terms.length }
 }
 
 // Reuse ICU formatters: constructing one for every saved run on every click blocks rendering.
@@ -348,7 +332,8 @@ export function useAppValues() {
 
   const [view, setView] = useState('dashboard')
   const [range, setRange] = useState<'7 Days' | '30 Days' | 'All Time'>('30 Days')
-  const [maxResults, setMaxResults] = useState(25)
+  const [maxResults, setMaxResults] = useState(() => readMapsDraft().max)
+  const [mapsLocation, setMapsLocation] = useState(() => readMapsDraft().location)
   const [dark, setDark] = useState(readStoredTheme)
   // How the browser behaves during a run. Both survive a restart, because a choice made after
   // being throttled should not have to be made again on the next launch.
@@ -440,7 +425,8 @@ export function useAppValues() {
   const [chPhones, setChPhones] = useState(true)
   const [chSocial, setChSocial] = useState(true)
   const [chLinkedin, setChLinkedin] = useState(false)
-  const [keywords, setKeywords] = useState<string[]>(['physiotherapy', 'skin care doctor', 'sports massage'])
+  const [keywords, setKeywords] = useState<string[]>(() => readMapsDraft().keywords)
+  useEffect(() => { try { localStorage.setItem('mamalead.maps.draft',JSON.stringify({keywords,max:maxResults,location:mapsLocation})) } catch {} }, [keywords,maxResults,mapsLocation])
   const [bulkKeywordsOpen, setBulkKeywordsOpen] = useState(false)
   const [bulkKeywordsText, setBulkKeywordsText] = useState('')
   const [stab, setStab] = useState('plan')
@@ -456,7 +442,7 @@ export function useAppValues() {
   // Derive counts from the visible text, so closing/clearing never leaves an old scan count.
   const impPreview = useMemo(()=>importPreview(impValue),[impValue])
   const impSites = impPreview.sites.length
-  const impProfiles = impPreview.profiles.length
+  const impProfiles = view === 'social' ? impPreview.profiles.length : 0
   const impCount = impSites + impProfiles
   /** Whether the open import modal is the Social Profiles one, which files profile URLs. */
   const socialImportOpen = social.importOpen
@@ -852,10 +838,9 @@ export function useAppValues() {
   }, [flash, go])
 
   const addKeyword = useCallback((raw: string) => {
-    const parts = String(raw ?? '')
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
+    const parsed = parseBulkKeywords(raw)
+    if (parsed.tooLong.length) flash('Keywords must be 80 characters or fewer. Long keywords were skipped.')
+    const parts = parsed.terms
     if (!parts.length) return
     setKeywords((current) => {
       const next = [...current]
@@ -864,9 +849,10 @@ export function useAppValues() {
       })
       return next
     })
-  }, [])
+  }, [flash])
 
   const bulkKeywordPreview = useMemo(() => parseBulkKeywords(bulkKeywordsText), [bulkKeywordsText])
+  const bulkMerge = useMemo(() => keywordMergePreview(keywords,bulkKeywordPreview.terms), [keywords,bulkKeywordPreview])
 
   const closeBulkKeywords = useCallback(() => {
     setBulkKeywordsOpen(false)
@@ -935,7 +921,13 @@ export function useAppValues() {
     // Open the choice immediately using the current UI entitlement. The main process still
     // verifies the licence before either kind of run, including revocations and trial limits.
     if (!featureAccessAllowed()) { setMapsPrompt('license'); return }
-    if (typeof useGoogle !== 'boolean') { setMapsPrompt('google'); return }
+    if (typeof useGoogle !== 'boolean') {
+      if (!scraperSettings.sessionMode) { setMapsPrompt('google'); return }
+      useGoogle = scraperSettings.sessionMode === 'google'
+    } else {
+      const next = {...scraperSettings, sessionMode:useGoogle ? 'google' as const : 'guest' as const}
+      setScraperSettings(next); storeScraperSettings(next)
+    }
     setMapsPrompt(null)
     setRunMinimized(false)
     setMapsRunId('latest'); setMapsHistoryLeads(null); setMapsSelected([]); setMapsQuery(''); setMapsLimit(25)
@@ -2320,7 +2312,7 @@ export function useAppValues() {
   const runNote = snapshot.running
     ? snapshot.message || 'Scanning Google Maps…'
     : exportRun
-      ? (exportRun.saved ?? exportRun.found).toLocaleString()+' results · '+(termsOfRun(exportRun) || 'Google Maps search')+' near '+(exportRun.location || 'your selected location')+' · '+shortDateTime(exportRun.started_at)
+      ? (exportRun.status==='cancelled'?'Stopped by you':exportRun.status==='failed'?(/^Interrupted:/.test(exportRun.error || '')?'Interrupted':'Failed'):exportRun.status==='running'?'Running':'Completed')+' · '+(exportRun.saved ?? exportRun.found).toLocaleString()+' of '+exportRun.max_results+' results · '+(termsOfRun(exportRun) || 'Google Maps search')+' near '+(exportRun.location || 'your selected location')+' · '+shortDateTime(exportRun.started_at)
       : 'Start a scan. Your searches and their results are saved automatically on this device.'
 
   /**
@@ -2975,6 +2967,8 @@ export function useAppValues() {
     addBulkKeywords: () => applyBulkKeywords('add'),
     bulkKeywordHasTerms: bulkKeywordPreview.terms.length > 0,
     bulkKeywordCountLabel: `${bulkKeywordPreview.terms.length} unique keyword${bulkKeywordPreview.terms.length === 1 ? '' : 's'} ready`,
+    bulkKeywordLongLabel: bulkKeywordPreview.tooLong.length ? `${bulkKeywordPreview.tooLong.length} keywords exceed 80 characters and will not be added.` : '',
+    bulkKeywordAddLabel: `${keywords.length} current + ${bulkMerge.added} new = ${bulkMerge.total}; ${bulkMerge.skipped} over the limit will not be added.`,
     bulkKeywordDuplicateLabel: bulkKeywordPreview.duplicates
       ? `${bulkKeywordPreview.duplicates} duplicate${bulkKeywordPreview.duplicates === 1 ? '' : 's'} will be removed`
       : 'Duplicates are removed automatically',
@@ -2992,7 +2986,12 @@ export function useAppValues() {
       const field = document.querySelector<HTMLTextAreaElement>('[data-imptext="1"]')
       const raw = field?.value ?? impText.current
       impText.current = raw
-      const { profiles: profileLines, sites: siteLines } = importPreview(raw)
+      const parsed = importPreview(raw)
+      const all = [...parsed.sites, ...(view === 'social' ? parsed.profiles : [])]
+      const batch = importPreview(all.slice(0,WEBSITE_IMPORT_LIMIT).join('\n'))
+      const {profiles:profileLines,sites:siteLines} = batch
+      try { savePendingImport(view, all.slice(WEBSITE_IMPORT_LIMIT)) }
+      catch { flash('The remaining websites could not be saved. Split this list into batches of 500 before scanning.'); return }
       if (!profileLines.length && !siteLines.length) {
         flash('Paste a website URL first, then choose Scan.')
         return
@@ -3123,7 +3122,7 @@ export function useAppValues() {
     // phone number, a website and an address. Every figure is read from the run itself.
     mapsProgress: String(snapshot.running ? snapshot.found : mapsDisplayed.length),
     mapsProgressTotal: String(snapshot.running ? snapshot.target : mapsDisplayed.length),
-    mapsProgressBadge: snapshot.running ? 'Running' : mapsDisplayed.length ? 'Done' : 'Not run',
+    mapsProgressBadge: snapshot.running ? 'Running' : exportRun?.status==='cancelled' ? 'Stopped by you' : exportRun?.status==='failed' ? 'Interrupted / failed' : mapsDisplayed.length ? 'Done' : 'Not run',
     mapsProgressBars: bars(snapshot.target ? (snapshot.found || 0) / snapshot.target : 0, '#A9BC9B'),
     // The place actually being searched, so the panel and the map name it rather than the
     // reference's own city. A run in flight reports its request; otherwise the last run's.
@@ -3131,7 +3130,10 @@ export function useAppValues() {
     // The ledger spans more than one run, and the map plots all of it, so its caption names every
     // area the pins came from rather than only the one searched last.
     mapsAreas: snapshot.running ? snapshot.request?.location || location : (mapsRunId==='latest' ? runs[0] : runs.find(run=>run.id===mapsRunId))?.location || location,
-    mapsDefaultLocation: snapshot.request?.location || "",
+    mapsDefaultLocation: mapsLocation,
+    onMapsLocation: (event: React.ChangeEvent<HTMLInputElement>) => setMapsLocation(event.currentTarget.value),
+    mapsSessionLabel: scraperSettings.sessionMode === 'google' ? 'Google account' : scraperSettings.sessionMode === 'guest' ? 'Private guest session' : 'Choose at first run',
+    changeMapsSession: () => setMapsPrompt('google'),
     mapsRadius: pinSpread(mapsDisplayed),
     mapsRadiusShort: pinSpread(mapsDisplayed),
     mapsActivity,
@@ -3186,6 +3188,7 @@ export function useAppValues() {
     impCountNote: impValue.trim() ? `${impSites} unique website${impSites === 1 ? '' : 's'}${impProfiles ? ` · ${impProfiles} social profile${impProfiles === 1 ? '' : 's'}` : ''}${impPreview.skipped ? ` · ${impPreview.skipped} duplicate or invalid line${impPreview.skipped === 1 ? '' : 's'} skipped` : ''}` : 'Add websites or choose a CSV to see how many will be scanned.',
     impValue,
     impScanLabel: (() => {
+      if (impCount > WEBSITE_IMPORT_LIMIT) return `Scan first ${WEBSITE_IMPORT_LIMIT}`
       const sites = `Scan ${impSites} site${impSites === 1 ? '' : 's'}`
       const profiles = `Import ${impProfiles} profile${impProfiles === 1 ? '' : 's'}`
       if (!impProfiles) return sites
@@ -3695,7 +3698,7 @@ export function useAppValues() {
       } catch {
         keywords = []
       }
-      const found = run.found ? `${run.found} place${run.found === 1 ? '' : 's'}` : 'no places'
+      const found = `${run.found || 0} of ${run.max_results} results`
       // The chart beside each row: one bar per keyword pass, drawn against the tallest run on the
       // page so the bars can be compared with one another rather than only within a row.
       const tallest = Math.max(1, ...runs.map((entry) => entry.found ?? 0))
@@ -3711,8 +3714,8 @@ export function useAppValues() {
         isFailed: run.status === 'failed',
         isCancelled: run.status === 'cancelled' || run.status === 'running' || run.status === 'queued',
         done: 'Done',
-        failed: 'Failed',
-        cancelled: run.status === 'running' ? 'Running' : run.status === 'queued' ? 'Queued' : 'Cancelled',
+        failed: /^Interrupted:/.test(run.error || '') ? 'Interrupted' : 'Failed',
+        cancelled: run.status === 'running' ? 'Running' : run.status === 'queued' ? 'Queued' : 'Stopped by you',
         bars,
         actionLabel: 'Open Maps',
         open: () => go('maps'),
@@ -3781,8 +3784,9 @@ export function useAppValues() {
     openImp: () => {
 
       if (view === 'website') websiteLookup.clearError()
-      setImpValue('')
-      impText.current = ''
+      const pending = pendingImport(view)
+      setImpValue(pending)
+      impText.current = pending
       setImpOpen(true)
       if (view === 'social') social.openImport()
     },
@@ -3859,7 +3863,7 @@ export function useAppValues() {
     closeSavedMaps: () => {savedMapsExportRequest.current++;setSavedMapsExporting('');setSavedMapsOpen(false)},
     refreshSavedMaps: () => void refreshSavedMaps(),
     openSavedMapsExport: (id:string) => void openSavedMapsExport(id),
-    savedMapsRuns: runs.map(run=>({id:run.id,location:run.location || 'No location recorded',keywords:termsOfRun(run) || 'Google Maps search',count:run.saved ?? run.found,date:shortDateTime(run.started_at),status:run.status,error:run.error || '',selected:mapsRunId==='latest' ? run.id===runs[0]?.id : mapsRunId===run.id})),
+    savedMapsRuns: runs.map(run=>({id:run.id,location:run.location || 'No location recorded',keywords:termsOfRun(run) || 'Google Maps search',count:run.saved ?? run.found,target:run.max_results,date:shortDateTime(run.started_at),status:run.status,error:run.error || '',selected:mapsRunId==='latest' ? run.id===runs[0]?.id : mapsRunId===run.id})),
     selectedMapsSearch: (()=>{if(snapshot.running)return{title:[snapshot.request?.location || location,(snapshot.request?.keywords ?? keywords).join(', ')].filter(Boolean).join(' · '),date:'Live results update as businesses are found'};const run=mapsRunId==='latest'?runs[0]:runs.find(item=>item.id===mapsRunId);return run?{title:[run.location,termsOfRun(run)].filter(Boolean).join(' · '),date:shortDateTime(run.started_at)}:null})(),
     mapsRunOptions: runs.map(run=>({id:run.id,label:`${new Date(run.started_at).toLocaleString()} · ${run.location}`,title:[termsOfRun(run),run.location].filter(Boolean).join(' · ') || 'Google Maps search',meta:`${run.found.toLocaleString()} leads · ${run.status}`,date:shortDateTime(run.started_at)})),
     selectMapsRun: (id:string) => {
@@ -3945,7 +3949,7 @@ export function useAppValues() {
           : updateStatus.state === 'checking'
             ? 'Checking…'
             : 'Check for updates',
-    updateActionDisabled: updateStatus.state === 'checking' || updateStatus.state === 'downloading' ? '1' : '0',
+    updateActionDisabled: !updateStatus.enabled || updateStatus.state === 'checking' || updateStatus.state === 'downloading' ? '1' : '0',
     checkForUpdates,
     downloadUpdate,
     installUpdate,

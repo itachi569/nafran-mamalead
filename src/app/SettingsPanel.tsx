@@ -31,6 +31,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const [trialChangeBlocked, setTrialChangeBlocked] = useState(false)
   const [trialEmailReset, setTrialEmailReset] = useState(0)
   const [trialNotice, setTrialNotice] = useState('')
+  const [trialInvalid, setTrialInvalid] = useState(false)
   const trialEmailInput = useRef<HTMLInputElement>(null)
   const [licenseStepNotice, setLicenseStepNotice] = useState('')
   const [licenseKey, setLicenseKey] = useState('')
@@ -181,7 +182,10 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   }
   const requestTrial = async () => {
     if (!billingApi || trialBusy) return
+    if (billing.lifetime?.active || (billing.license?.active && billing.license.kind==='lifetime')) return
     const email = trialEmail.trim().toLowerCase()
+    if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setTrialInvalid(true); setTrialNotice('Enter a valid email address for your trial key.'); trialEmailInput.current?.focus(); return }
+    setTrialInvalid(false)
     const replacing = trialCorrecting || Boolean(billing.trialRequest?.requested && billing.trialRequest.canChangeEmail)
     setTrialBusy(true)
     setTrialNotice('')
@@ -222,7 +226,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     ['Phone lookups', V.usedPhoneLookups, V.meterPhone],
     ['Social lookups', V.usedSocialLookups, V.meterSocial],
   ] as const
-  const lifetimeActive=Boolean(billing.license?.active && billing.license.kind==='lifetime')
+  const lifetimeActive=Boolean(billing.lifetime?.active || (billing.license?.active && billing.license.kind==='lifetime'))
   const activeLicense=Boolean(billing.coreLicenseActive && billing.license?.active)
   const lifetimePlanReady = billing.lifetime?.currency === 'pkr' && billing.lifetime.amount === 1000000 && billing.lifetime.interval === null
 
@@ -277,11 +281,11 @@ export function SettingsPanel({ V }: { V: AppValues }) {
                 <div className="billing-plan-heading"><h3>1-day trial · up to 300 Maps leads across all keywords</h3>{billing.trial?.active && <span className="billing-plan-pill">Active</span>}</div>
                 <div className="billing-plan-action"><strong>Free</strong>{billing.trial?.active ? <span className="billing-plan-date">Until {new Date(billing.trial.expiresAt!).toLocaleString()}</span> : trialSent ? <button type="button" onClick={V.goTabAcct}>Enter key in Account</button> : <button type="button" data-trial-open="1" disabled={trialBusy} onClick={() => setTrialOpen(true)}>Get 1-day trial key</button>}</div>
                 {billing.trial?.active && billing.mapsLeads?.limit != null ? <p data-trial-maps-usage="1" className="billing-plan-note">{billing.mapsLeads.used ?? 0} of {billing.mapsLeads.limit} Maps leads used · {billing.mapsLeads.remaining ?? 0} remaining.</p> : <p className="billing-plan-note">Enter your email, receive a trial key, then activate it in Account. The 24 hours start at activation.</p>}
-                {!billing.trial?.active && !trialChangeBlocked && trialOpen && <form data-trial-form="1" className="billing-trial-form" onSubmit={(event) => { event.preventDefault(); void requestTrial() }}>
-                  <label htmlFor="desktop-trial-email">{trialCorrecting ? 'New email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" ref={trialEmailInput} type="email" autoComplete="email" required disabled={trialBusy} value={trialEmail} onChange={(event) => { setTrialEmail(event.target.value); setTrialNotice(''); setTrialEmailConflict(false) }} placeholder="you@example.com" /></label>
+                {!billing.trial?.active && !trialChangeBlocked && trialOpen && <form noValidate data-trial-form="1" className="billing-trial-form" onSubmit={(event) => { event.preventDefault(); void requestTrial() }}>
+                  <label htmlFor="desktop-trial-email">{trialCorrecting ? 'New email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" aria-invalid={trialInvalid} aria-describedby="trial-email-notice" ref={trialEmailInput} type="email" autoComplete="email" required disabled={trialBusy} value={trialEmail} onChange={(event) => { setTrialEmail(event.target.value); setTrialInvalid(false); setTrialNotice(''); setTrialEmailConflict(false) }} placeholder="you@example.com" /></label>
                   <button type="submit" disabled={trialBusy} style={{ ...button, background: "#1C1C1C", color: "white", padding: "13px 22px", fontWeight: 600 }}>{trialBusy ? 'Sending…' : trialCorrecting ? 'Send replacement key' : 'Send trial key'}</button>
                 </form>}
-                {trialNotice && <p data-trial-notice="1" role="status" className="billing-plan-note">{trialNotice}</p>}
+                {trialNotice && <p id="trial-email-notice" data-trial-notice="1" role={trialInvalid ? "alert" : "status"} className="billing-plan-note">{trialNotice}</p>}
                 {(trialSent || trialEmailConflict) && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={button}>Change email</button>}
               </div>
             </div>

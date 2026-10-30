@@ -402,7 +402,15 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     return { email, emailSent: true, last4: licenseKey.slice(-4) }
   }
 
+  async function rejectLifetimeTrial(row) {
+    const linked = await store.licenseForInstallation?.(row.id)
+    if ((linked?.kind === 'lifetime' || row.lifetime_session_id) && (await verifiedStatus(row)).lifetime?.active) {
+      throw new HttpError(409, 'This installation already has Lifetime access. A trial cannot replace it.')
+    }
+  }
+
   async function issueTrial(row, rawEmail, replaceExisting = false) {
+    await rejectLifetimeTrial(row)
     if (!sendEmail && (!env.RESEND_API_KEY?.trim() || !env.EMAIL_FROM?.trim())) throw new HttpError(503, 'Trial email delivery is not configured yet.')
     const email = String(rawEmail ?? '').trim().toLowerCase()
     if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address for your trial key.')
@@ -447,6 +455,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     if (!licensePattern.test(normalized)) throw new HttpError(400, 'Enter your MamaLead license key exactly as provided.')
     const license = await store.licenseByHash(hash(normalized))
     if (!license || license.revoked_at) throw new HttpError(401, 'This license key is invalid or revoked.')
+    if (license.kind === 'trial') await rejectLifetimeTrial(row)
     if (license.owner_issued) {
       const activated = await store.activateOwnerLicense?.(row.id, license.id, new Date().toISOString())
       if (!activated) throw new HttpError(409, 'This owner-issued key is revoked, expired, or already active on another installation.')
@@ -842,7 +851,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           return json(200, await downloadLink(row))
         }
       }
-      if (method === 'GET' && url.pathname === '/v1/download') {
+      if ((method === 'GET' || method === 'HEAD') && url.pathname === '/v1/download') {
         const platform = url.searchParams.get('platform') || 'windows'
         if (!['windows', 'mac', 'mac-arm64', 'mac-x64'].includes(platform)) throw new HttpError(400, 'Choose Windows, Mac Apple Silicon, or Mac Intel for the download.')
         // No grant means the installer is free to download. A supplied but invalid
@@ -861,6 +870,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           if (!status?.license?.active && !status?.lifetime?.active) throw new HttpError(403, 'This download grant is no longer active.')
         }
         const recordDownload = async () => {
+          if (method === 'HEAD') return
           try {
             if (subjectId && typeof store.recordDownload === 'function') await store.recordDownload(randomUUID(), downloadInstallationId, new Date().toISOString())
             else if (!subjectId && typeof store.recordPublicDownload === 'function') await store.recordPublicDownload(randomUUID(), new Date().toISOString())
@@ -871,13 +881,15 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           const blob = await getBlob(source.blobPath, { access: 'private' })
           if (blob?.statusCode !== 200 || !blob.stream) throw new HttpError(503, 'The protected installer is not available yet.')
           await recordDownload()
-          return { status: 200, body: blob.stream, headers: { 'content-type': blob.blob?.contentType || 'application/octet-stream', 'content-disposition': `attachment; filename="${source.filename}"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } }
+          if (method === 'HEAD') await blob.stream.cancel?.()
+          return { status: 200, body: method === 'HEAD' ? '' : blob.stream, headers: { 'content-type': blob.blob?.contentType || 'application/octet-stream', 'content-disposition': `attachment; filename="${source.filename}"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } }
         }
         if (source.localPath) {
-          const local = await getLocalInstaller?.(source.localPath)
-          if (!local?.stream || !Number.isSafeInteger(local.size) || local.size < 1) throw new HttpError(503, 'The protected installer is not available yet.')
+          const local = await getLocalInstaller?.(source.localPath, {head:method === 'HEAD'})
+          if (!local || (method !== 'HEAD' && !local.stream) || !Number.isSafeInteger(local.size) || local.size < 1) throw new HttpError(503, 'The protected installer is not available yet.')
           await recordDownload()
-          return { status: 200, body: local.stream, headers: { 'content-type': 'application/octet-stream', 'content-length': String(local.size), 'content-disposition': `attachment; filename="${source.filename}"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } }
+          if (method === 'HEAD') await local.stream?.cancel?.()
+          return { status: 200, body: method === 'HEAD' ? '' : local.stream, headers: { 'content-type': 'application/octet-stream', 'content-length': String(local.size), 'content-disposition': `attachment; filename="${source.filename}"`, 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' } }
         }
         await recordDownload()
         return { status: 302, body: '', headers: { location: source.redirectUrl, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } }

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LocalApi } from '../types/desktop'
 import { DEFAULT_LOOKUP_FIELDS, type WebsiteLookupFields, type WebsiteLookupSession } from '../../electron/enrichment/website-lookup'
-import { importPreview } from './website-import'
+import { importPreview, pendingImport, savePendingImport, WEBSITE_IMPORT_LIMIT } from './website-import'
 
 export function useWebsiteLookup(db: LocalApi | null, allowed: () => boolean, onFinished: (session:WebsiteLookupSession) => void) {
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(() => pendingImport('lookup-page'))
   const [fields, setFields] = useState<WebsiteLookupFields>({...DEFAULT_LOOKUP_FIELDS})
   const [session, setSession] = useState<WebsiteLookupSession | null>(null)
   const [preparing, setPreparing] = useState(false)
@@ -65,18 +65,19 @@ export function useWebsiteLookup(db: LocalApi | null, allowed: () => boolean, on
 
   const start = useCallback(async (lines?: string[], chosen?: WebsiteLookupFields): Promise<boolean> => {
     if (lock.current || running || !callbacks.current.allowed()) return false
-    const sites=importPreview(lines ? lines.join('\n') : input).sites
+    const all=importPreview(lines ? lines.join('\n') : input).sites
+    const sites=all.slice(0,WEBSITE_IMPORT_LIMIT)
     const options=chosen ?? fields
     setError('');setExportNote('')
     if (!sites.length) {setError('Add at least one business website to start the lookup.');return false}
-    if (sites.length>500) {setError('Scan up to 500 unique websites at a time. Split this list into smaller batches.');return false}
     if (!Object.values(options).some(Boolean)) {setError('Select at least one detail to find.');return false}
     if (!db) {setError('Open MamaLead desktop to scan websites.');return false}
     lock.current=true;setPreparing(true);generation.current++
     try {
+      savePendingImport('lookup-page', all.slice(WEBSITE_IMPORT_LIMIT))
       const next=await db.lookup.start(sites,options)
       if (!alive.current) return false
-      currentJob.current=next.jobId;active.current.add(next.jobId);finishCallbacks.current.set(next.jobId,callbacks.current.onFinished);setSession(next);setSelected([]);setInput('')
+      currentJob.current=next.jobId;active.current.add(next.jobId);finishCallbacks.current.set(next.jobId,callbacks.current.onFinished);setSession(next);setSelected([]);setInput(all.slice(WEBSITE_IMPORT_LIMIT).join('\n'))
       void window.desktop?.enrichment.prioritize(next.jobId).catch(err=>{if(alive.current){setError(err instanceof Error ? err.message : 'The scan could not start.');void refresh()}})
       return true
     } catch (err) {if(alive.current)setError(err instanceof Error ? err.message : 'The lookup could not start.');return false}

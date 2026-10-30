@@ -299,10 +299,10 @@ export function createBillingServer(options = {}) {
     revokeDecision: async (subscriptionId) => { db.prepare('update installations set decision_subscription_id = null where decision_subscription_id = ?').run(subscriptionId) },
   }
   let handler
-  const getLocalInstaller = options.getLocalInstaller ?? (async (path) => {
+  const getLocalInstaller = options.getLocalInstaller ?? (async (path, {head=false}={}) => {
     const file = await stat(path).catch(() => null)
     if (!file?.isFile()) return null
-    return { size: file.size, stream: Readable.toWeb(createReadStream(path)) }
+    return { size: file.size, stream: head ? null : Readable.toWeb(createReadStream(path)) }
   })
   const hasLocalInstaller = options.hasLocalInstaller ?? (async (path) => {
     const file = await stat(path).catch(() => null)
@@ -320,7 +320,7 @@ export function createBillingServer(options = {}) {
     }
     const corsHeaders = origin ? {
       'access-control-allow-origin': origin,
-      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-methods': 'GET, HEAD, POST, OPTIONS',
       'access-control-allow-headers': 'Authorization, Content-Type',
       'access-control-max-age': '600',
       vary: 'Origin',

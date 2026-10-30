@@ -38,11 +38,12 @@ try {
   const active = (await call('/v1/status', first)).body
   check('Lifetime grants unlimited Maps without a payment record', active.mode === 'live' && active.coreLicenseActive && active.license.kind === 'lifetime' && active.lifetime.active && active.mapsLeads.limit === null && !active.hasCustomer)
   check('retired Decision Makers is not granted', !active.decisionMaker.active)
+  const trial = issue('trial', '--email', 'owner@example.com')
+  check('Lifetime cannot be downgraded by requesting or activating a private trial', (await call('/v1/trial', first, {email:'trial@example.com'})).status === 409 && (await call('/v1/activate', first, {licenseKey:trial.licenseKey})).status === 409 && (await call('/v1/status', first)).body.license.kind === 'lifetime')
   check('owner key cannot be used on a second installation', (await call('/v1/activate', second, {licenseKey:lifetime.licenseKey},'b'.repeat(64))).status === 409)
   execFileSync(process.execPath, [resolve('scripts/issue-owner-license.mjs'), '--db', database, '--revoke', lifetime.id, '--reason', 'Revocation verification'], { stdio: 'pipe' })
   check('revocation immediately removes Lifetime access', !(await call('/v1/status', first)).body.coreLicenseActive)
   check('revoked owner key cannot reactivate', (await call('/v1/activate', first, {licenseKey:lifetime.licenseKey})).status === 401)
-  const trial = issue('trial', '--email', 'owner@example.com')
   const activated = (await call('/v1/activate', first, {licenseKey:trial.licenseKey})).body
   check('trial begins a 24-hour clock on first activation', activated.active && Date.parse(activated.expiresAt)-Date.parse(activated.activatedAt) === 86400000)
   const again = (await call('/v1/activate', first, {licenseKey:trial.licenseKey})).body

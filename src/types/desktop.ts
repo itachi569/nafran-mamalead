@@ -451,6 +451,7 @@ export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'co
 export interface DesktopApi {
 
   chooseWebsiteCsv: () => Promise<{ name: string; content: string; bytes: number } | null>
+  readWebsiteFile: (name: string, bytes: Uint8Array) => Promise<{name:string;content:string;bytes:number}>
   billing: {
     status: () => Promise<{
       configured: boolean

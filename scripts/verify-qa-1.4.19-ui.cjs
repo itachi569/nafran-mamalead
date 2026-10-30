@@ -15,7 +15,7 @@ async function main(){
    const {db,repository}=req('./dist-electron/db/index.js').openDatabase(),ws=db.ensureWorkspace().id
    globalThis.__qa={active:false,activations:0,trials:0,db,repository,ws}
    const override=(name,fn)=>{ipcMain.removeHandler(name);ipcMain.handle(name,fn)}
-   override('billing:status',()=>({configured:true,connected:true,mode:'test',coreLicenseActive:__qa.active,license:{active:__qa.active,kind:__qa.active?'lifetime':null,last4:__qa.active?'ABCD':null,email:'qa@fixture.test'},lifetime:{active:true,amount:1000000,currency:'pkr'},mapsLeads:{used:0,remaining:300,limit:300},trial:{active:false}}))
+   override('billing:status',()=>({configured:true,connected:true,mode:'test',coreLicenseActive:__qa.active,license:{active:__qa.active,kind:__qa.active?'lifetime':null,last4:__qa.active?'ABCD':null,email:'qa@fixture.test'},lifetime:{active:__qa.active,amount:1000000,currency:'pkr'},mapsLeads:{used:0,remaining:300,limit:300},trial:{active:false}}))
    override('billing:request-trial',()=>{__qa.trials++;return {sent:true,email:'qa@fixture.test'}})
    override('billing:activate',()=>{__qa.activations++;__qa.active=true;return {active:true,kind:'lifetime'}})
    override('billing:invoices',()=>[])

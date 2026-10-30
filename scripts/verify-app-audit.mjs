@@ -144,10 +144,21 @@ try {
   console.log('PASS bookmark, named list created through UI, real destination counts and duplicate-safe saving')
 
   // Use real trial accounting and runner with the offline provider, across three area keywords.
-  await page.evaluate(() => { window.__auditDone = ''; window.desktop.scraper.onDone(summary => { window.__auditDone = summary.runId }) })
+  await page.evaluate(() => {
+    window.__auditDone = ''; window.__auditCheckpoint = null
+    window.desktop.scraper.onDone(summary => { window.__auditDone = summary.runId })
+    window.desktop.scraper.onProgress(async progress => {
+      if (!progress.lead || window.__auditCheckpoint) return
+      const runs = await window.desktop.local.runs.list()
+      const run = runs.find(r => r.id === progress.runId)
+      if (run?.status === 'running' && run.found > 0) window.__auditCheckpoint = {status:run.status,found:run.found}
+    })
+  })
   const run = await page.evaluate(() => window.desktop.scraper.start({ provider: 'mock', query: { keywords: ['dentist Clifton', 'clinic DHA', 'dentist Saddar'], location: 'Karachi', maxResultsPerKeyword: 20, maxResultsTotal: 20 } }))
   await page.waitForFunction(id => window.__auditDone === id, run.runId, { timeout: 20000 })
   const last = await page.evaluate(() => window.desktop.scraper.last())
+  const checkpoint = await page.evaluate(() => window.__auditCheckpoint)
+  assert.ok(checkpoint?.status === 'running' && checkpoint.found > 0, 'captured leads must be persisted before scan completion')
   assert.equal(last.leads.length, 20); assert.equal(last.query.region, 'pk')
   assert.equal((await page.evaluate(() => window.desktop.billing.status())).mapsLeads.used, 20)
   await page.click('[data-view="runs"]')

@@ -9,6 +9,7 @@ import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './scrape
 import { ScrapeRunner } from './scraper/runner'
 import { normaliseQuery, type StartRunRequest } from './scraper/types'
 import { closeDatabase, openDatabase } from './db'
+import { readWebsiteFile, WEBSITE_FILE_LIMIT } from './imports/website-file'
 import { registerLocalDatabase } from './db/ipc'
 import { EnrichmentRunner } from './enrichment/runner'
 import { isUsableEmail } from './enrichment/website'
@@ -406,18 +407,23 @@ ipcMain.handle('imports:chooseWebsiteCsv', async (event) => {
     const selection = await dialog.showOpenDialog(parent, {
       title: 'Import websites into MamaLead',
       buttonLabel: 'Use this file',
-      filters: [{ name: 'Website lists (CSV or TSV)', extensions: ['csv', 'tsv'] }],
+      filters: [{ name: 'Website lists (CSV, TSV or Excel)', extensions: ['csv', 'tsv', 'xlsx'] }],
       properties: ['openFile'],
     })
     const file = selection.filePaths[0]
     if (selection.canceled || !file) return null
-    if (!['.csv', '.tsv'].includes(extname(file).toLowerCase())) throw new Error('Choose a CSV or TSV website list.')
+    if (!['.csv', '.tsv', '.xlsx'].includes(extname(file).toLowerCase())) throw new Error('Choose a CSV, TSV or Excel website list.')
     const info = await stat(file)
     if (!info.isFile() || info.size > 20 * 1024 * 1024) throw new Error('Choose a CSV or TSV file smaller than 20 MB.')
-    return { name: basename(file), content: await readFile(file, 'utf8'), bytes: info.size }
+    return readWebsiteFile(basename(file), await readFile(file))
   } finally {
     websiteFileDialogOpen = false
   }
+})
+
+ipcMain.handle('imports:readWebsiteFile', (_event, payload: {name:string; bytes:Uint8Array}) => {
+  if (!payload || typeof payload.name !== 'string' || !(payload.bytes instanceof Uint8Array) || payload.bytes.length > WEBSITE_FILE_LIMIT) throw new Error('Choose a website list no larger than 20 MB.')
+  return readWebsiteFile(basename(payload.name), payload.bytes)
 })
 
 function stripePage(raw: string, allowed: string[]): string {
@@ -779,6 +785,10 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
   reservingMapsRun = true
   let quota: Awaited<ReturnType<typeof billingReserveMaps>> | undefined
   let handle: ReturnType<ScrapeRunner['start']>
+  const {db: runDb, repository: runRepository} = openDatabase()
+  const workspaceId = runDb.ensureWorkspace().id
+  const runStartedAt = new Date().toISOString()
+  let checkpointSaved = 0
   try {
     const requestedTotal = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length)
     quota = await billingReserveMaps(requestedTotal)
@@ -789,7 +799,18 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
     query: { ...request?.query, maxResultsTotal: Math.min(requestedTotal, quota.allowed) },
     context,
     executablePath,
-    onProgress: (progress) => broadcast('scraper:progress', progress),
+    onProgress: (progress) => {
+      if (progress.status === 'running') {
+        const checkpoint = runRepository.saveRun(workspaceId, {
+          runId:progress.runId, provider:progress.provider, status:'running', keywords:query.keywords,
+          location:query.location, maxResultsPerKeyword:Math.min(requestedTotal,quota!.allowed), detail:query.detail,
+          durationMs:Date.now()-Date.parse(runStartedAt), startedAt:runStartedAt, finishedAt:null, error:null,
+          leads:progress.lead ? [progress.lead] : [],
+        })
+        checkpointSaved += checkpoint.saved
+      }
+      broadcast('scraper:progress', progress)
+    },
     })
   } catch (error) {
     if (quota?.reservationId) void billingSettleMaps(quota.reservationId, 0).catch(() => undefined)
@@ -818,10 +839,10 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
         if (settled.accepted < summary.leads.length) finalSummary = { ...summary, leads: summary.leads.slice(0, settled.accepted) }
       } catch (error) {
         storeError = error instanceof Error ? error.message : String(error)
-        finalSummary = { ...summary, leads: [], status: 'failed', error: 'Trial lead usage could not be confirmed. Retry when the license server is available.' }
+        finalSummary = { ...summary, status: 'failed', error: 'Trial lead usage could not be confirmed. Captured leads were kept; reconnect to the license server before another scan.' }
       }
     }
-    if (!storeError) try {
+    try {
       const { db, repository } = openDatabase()
       stored = repository.saveRun(db.ensureWorkspace().id, {
         runId: finalSummary.runId,
@@ -829,7 +850,7 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
         status: finalSummary.status === 'idle' || finalSummary.status === 'running' ? 'done' : finalSummary.status,
         keywords: finalSummary.query.keywords,
         location: finalSummary.query.location,
-        maxResultsPerKeyword: finalSummary.query.maxResultsPerKeyword,
+        maxResultsPerKeyword: finalSummary.query.maxResultsTotal ?? finalSummary.query.maxResultsPerKeyword,
         detail: finalSummary.query.detail,
         durationMs: finalSummary.durationMs,
         startedAt: finalSummary.startedAt,
@@ -837,6 +858,7 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
         error: finalSummary.error,
         leads: finalSummary.leads,
       })
+      stored.saved += checkpointSaved
     } catch (error) {
       storeError = error instanceof Error ? error.message : String(error)
     }

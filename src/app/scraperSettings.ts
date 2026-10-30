@@ -10,6 +10,7 @@
 // a hand-edited store cannot set a pacing fast enough to hammer Google.
 
 export interface ScraperSettings {
+  sessionMode?: 'guest' | 'google'
   /** Show the Chromium window while scraping instead of running it headless. */
   visible: boolean
   /** Version of the explicit browser choice in the pre-run dialog. */
@@ -74,6 +75,7 @@ export function readScraperSettings(): ScraperSettings {
       paceMaxSeconds: Math.max(paceMinSeconds, paceMaxSeconds),
       browserPath: typeof parsed.browserPath === 'string' ? parsed.browserPath.trim() : '',
       googleProfile: parsed.googleProfile === true,
+      sessionMode: parsed.sessionMode === 'guest' || parsed.sessionMode === 'google' ? parsed.sessionMode : undefined,
     }
   } catch {
     return { ...DEFAULT_SCRAPER_SETTINGS }

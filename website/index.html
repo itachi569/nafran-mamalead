@@ -87,14 +87,33 @@
   #pricing,#download{scroll-margin-top:120px}
   @media(max-width:600px){#top{padding-top:38px!important}.hero-offer h1{font-size:clamp(34px,8.7vw,48px)}.hero-offer .hero-description{font-size:15px}.hero-benefits{gap:7px}.hero-benefits li{font-size:12px;padding:7px 11px 7px 7px}.hero-actions{gap:10px;margin-top:24px}.hero-actions a{width:100%;min-height:60px;font-size:15px;padding:14px 18px;gap:10px}.hero-buy strong{font-size:18px;padding-right:10px}.hero-trial-note{padding:13px 16px}.hero-offer .hero-payment-note{font-size:12px}#pricing,#download{scroll-margin-top:175px}}
 
+
+  .mobile-download,.mobile-menu-button{display:none} #mobile-menu[hidden]{display:none}
+  #mobile-menu{display:none;padding:8px 16px 16px;background:#f5f5f1;border-top:1px solid #dce1d6}
+  #mobile-menu a{display:flex;align-items:center;min-height:48px;padding:10px 14px;border-radius:12px;font-size:15px}
+  #mobile-menu a:hover{background:#e5ebdd}
+  @media(max-width:640px){#mobile-menu[data-open="true"]{display:block}}
+  @media(max-width:640px){
+    .site-header .site-header-row{padding:8px 12px!important;gap:8px!important;flex-wrap:nowrap!important;min-height:60px}
+    .site-header .desktop-nav,.site-header .desktop-support,.site-header .desktop-pricing{display:none!important}
+    .site-header .site-header-row>a:first-child{gap:7px!important;margin-right:auto;min-height:44px}
+    .site-header .site-header-row>a:first-child span span:last-child{display:none!important}
+    .site-header .mobile-download{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:8px 14px;border-radius:999px;background:#1c1c1c;color:white;font-size:14px}
+    .mobile-menu-button{display:grid;place-items:center;min-width:44px;height:44px;border:1px solid #cbd4c3;border-radius:50%;background:#e7edde;color:#1c1c1c;cursor:pointer}
+    footer a{display:inline-flex!important;align-items:center;min-height:44px;min-width:44px;padding:10px 0;font-size:14px!important}
+    .latest-eyebrow,.latest-assist-example span,.plan-label,.offer-comparison small,.hero-price-context .offer-saving small,[style*="font-size: 10"],[style*="font-size: 11"]{font-size:12px!important}
+    .latest-feature-grid p,.latest-assist p,.plan-next p{font-size:14px}
+    .hero-price-context{flex-wrap:wrap;justify-content:center}.hero-price-context .offer-saving{font-size:21px}
+    #pricing,#download,#how,#modules,#privacy,#faq,#latest{scroll-margin-top:76px}
+  }
 </style>
 </helmet>
 <div style="position: relative; background: #EFEFEF; overflow-x: hidden;">
   <div style="position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(60vw 52vh at 4% 6%, rgba(169,188,155,.5), transparent 62%), radial-gradient(56vw 50vh at 96% 34%, rgba(200,213,187,.46), transparent 62%), radial-gradient(62vw 56vh at 20% 88%, rgba(213,222,203,.46), transparent 66%);"></div>
   <div style="position: relative; z-index: 1;">
 
-  <header style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
-    <div style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
+  <header class="site-header" style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
+    <div class="site-header-row" style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
       <a href="#top" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
         <img data-brand-logo="mamalead" src="/img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" decoding="async" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
         <span style="line-height: 1.1;">
@@ -102,16 +121,21 @@
           <span style="display: block; font-size: 10.5px; color: #555956;">Windows desktop app</span>
         </span>
       </a>
-      <a href="mailto:billing@nafran.co" style="color:inherit;font-size:13px;text-decoration:none;padding:8px;">Support</a>
-      <nav style="margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); overflow-x: auto; max-width: 100%;">
+      <a class="desktop-support" href="mailto:billing@nafran.co" style="color:inherit;font-size:13px;text-decoration:none;padding:8px;">Support</a>
+      <nav class="desktop-nav" aria-label="Main navigation" style="margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); overflow-x: auto; max-width: 100%;">
         <a href="#how" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">How it works</a>
         <a href="#modules" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Modules</a>
         <a href="#privacy" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Privacy</a>
         <a href="#pricing" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Pricing</a>
         <a href="#faq" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">FAQ</a>
       </nav>
-      <a href="#pricing" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500; white-space: nowrap; transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF;">Rs 10,000 · Lifetime</a>
+      <a class="desktop-pricing" href="#pricing" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500; white-space: nowrap; transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF;">Rs 10,000 · Lifetime</a>
+      <a class="mobile-download" href="#download">Download</a>
+      <button class="mobile-menu-button" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>
+    <nav id="mobile-menu" aria-label="Mobile navigation" hidden>
+      <a href="#pricing">Pricing · Rs 10,000 Lifetime</a><a href="#download">Free trial / Windows download</a><a href="#how">How it works</a><a href="#modules">Modules</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a><a href="mailto:billing@nafran.co">Support</a>
+    </nav>
   </header>
 
   <section id="top" data-screen-label="Hero" style="position: relative; overflow: hidden; padding: 64px 0 76px;">

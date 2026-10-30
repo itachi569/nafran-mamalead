@@ -21,6 +21,7 @@ export function WorkspaceDialogs({ V }: { V: AppValues }) {
           <button style={button} onClick={V.runGoogle}>{V.mapsGoogleConnected ? 'Continue with Google' : 'Sign in with Google'}</button>
           <button style={light} onClick={V.runGuest}>Continue without sign-in</button>
         </div>
+        <p style={{fontSize:13,color:'#4a4f4b'}}>Your choice is remembered on this device. Use Change below Run with filters to choose another mode.</p>
         <label style={{display:'flex',alignItems:'flex-start',gap:12,padding:18,marginTop:20,border:'1px solid #d9ddd4',borderRadius:18,cursor:'pointer'}}>
           <input type="checkbox" checked={V.swBrowser==='1'} onChange={V.toggleBrowser} style={{width:20,height:20,marginTop:2,accentColor:'#1c1c1c',flexShrink:0}}/>
           <span><strong style={{display:'block',fontWeight:500}}>Show the browser window</strong><span style={{display:'block',marginTop:6,fontSize:13,lineHeight:1.6,color:'#5A5F5C'}}>Watch Google Maps while it scans. Turn off to scan in the background. If Google needs you to sign in, its window always opens.</span></span>

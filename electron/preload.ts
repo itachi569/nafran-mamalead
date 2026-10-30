@@ -209,6 +209,7 @@ const enrichment = {
 const desktop = {
 
   chooseWebsiteCsv: () => call<{ name: string; content: string; bytes: number } | null>('imports:chooseWebsiteCsv'),
+  readWebsiteFile: (name: string, bytes: Uint8Array) => call<{name:string;content:string;bytes:number}>('imports:readWebsiteFile', {name,bytes}),
   getInfo: (): Promise<{ version: string; platform: string; isPackaged: boolean; electron: string }> =>
     ipcRenderer.invoke('app:info'),
   billing: {

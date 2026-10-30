@@ -1,4 +1,12 @@
+import { websiteDomain } from '../../electron/website-domain'
 const PROFILE_HOSTS = ['instagram.com', 'facebook.com', 'fb.com', 'linkedin.com', 'tiktok.com', 'youtube.com', 'youtu.be', 'twitter.com', 'x.com']
+export const WEBSITE_IMPORT_LIMIT = 500
+export function pendingImport(view: string): string { try { return localStorage.getItem(`mamalead.import.remaining.${view}`) || '' } catch { return '' } }
+export function savePendingImport(view: string, lines: string[]): void {
+  const key = `mamalead.import.remaining.${view}`
+  if (lines.length) localStorage.setItem(key, lines.join('\n'))
+  else localStorage.removeItem(key)
+}
 
 export function isProfileLine(line: string): boolean {
   const trimmed = line.trim()
@@ -24,19 +32,19 @@ function previewLines(lines: string[]) {
   let duplicates = 0, invalid = 0
   for (const line of lines) {
     const profile = isProfileLine(line)
-    const host = line.toLowerCase().replace(/^[a-z]+:\/\//, '').split(/[/?#]/)[0].replace(/^www\./, '')
+    const host = websiteDomain(line)
     const key = profile ? `profile:${line}` : `site:${host}`
-    if (!profile && !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host)) {
+    if (!profile && !host) {
       invalid++
       rows.push({ value: line, status: 'Skipped' })
     } else if (seen.has(key)) {
       duplicates++
-      rows.push({ value: profile ? line : host, status: 'Duplicate' })
+      rows.push({ value: line, status: 'Duplicate' })
     } else {
       seen.add(key)
       if (profile) profiles.push(line)
-      else sites.push(line)
-      rows.push({ value: profile ? line : host, status: 'Ready' })
+      else sites.push(`https://${host}`)
+      rows.push({ value: line, status: 'Ready' })
     }
   }
   return { sites, profiles, rows, duplicates, invalid, skipped: duplicates + invalid }
@@ -69,9 +77,7 @@ function csvRows(text: string): string[][] {
   return rows
 }
 
-function looksLikeWebsite(value: string): boolean {
-  return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:[/:?#].*)?$/i.test(value.trim())
-}
+function looksLikeWebsite(value: string): boolean { return Boolean(websiteDomain(value)) }
 
 function columnLetter(column: number): string {
   let label = ''
@@ -80,10 +86,14 @@ function columnLetter(column: number): string {
 }
 
 /** Prefer the website/domain column over other URLs, including a social profile column. */
-export function websiteListFromCsv(text: string) {
+export function websiteListFromCsv(text: string, selectedColumn?: number) {
+  if (/[\u0000-\u0008\u000e-\u001f]/u.test(text.slice(0,4096)) || /^PK\u0003\u0004/.test(text)) throw new Error('This file is not a text CSV/TSV.')
   const rows = csvRows(text.replace(/^\uFEFF/, ''))
-  if (!rows.length) return { text: '', column: 'A', label: 'website', rowCount: 0, preview: previewLines([]) }
-  const labels = rows[0].map(value => value.trim().toLowerCase().replace(/[_-]+/g, ' '))
+  if (!rows.length) throw new Error('This file is empty.')
+  // Our own Excel exports have branding above the actual column headings.
+  const headerRow = rows.findIndex((row,index) => index < 30 && row.some(cell => /^(?:(?:company|business)[ _-])?(?:website|domain|site|url)(?:[ _-](?:url|address))?$/i.test(cell.trim())))
+  const first = headerRow >= 0 ? headerRow : 0
+  const labels = rows[first].map(value => value.trim().toLowerCase().replace(/[_-]+/g, ' '))
   const websiteHeader = labels.findIndex(value => /^(?:(?:company|business) )?(?:website|domain|site)(?: (?:url|address))?$/.test(value))
   const header = websiteHeader >= 0 ? websiteHeader : labels.findIndex(value => /^(?:url|web address|website link)$/.test(value))
   let column = header >= 0 ? header : 0
@@ -96,6 +106,11 @@ export function websiteListFromCsv(text: string) {
     }
   }
   // Keep duplicates and invalid cells for the preview; only importPreview's accepted lines scan.
-  const values = rows.slice(header >= 0 ? 1 : 0).map(row => (row[column] ?? '').trim())
-  return { text: values.join('\n'), column: columnLetter(column), label: header >= 0 ? rows[0][column] : 'website', rowCount: values.length, preview: previewLines(values) }
+  const hasHeader = header >= 0 || (!rows[first].some(looksLikeWebsite) && rows.length > 1 && rows[first].length > 1)
+  if (selectedColumn !== undefined && Number.isInteger(selectedColumn) && selectedColumn >= 0 && selectedColumn < rows[first].length) column = selectedColumn
+  const values = rows.slice(hasHeader ? first + 1 : first).map(row => (row[column] ?? '').trim())
+  const preview = previewLines(values)
+  const columns = rows[first].map((label,index) => ({index,label:hasHeader ? label : `Column ${columnLetter(index)}`}))
+  return { text: values.join('\n'), column: columnLetter(column), columnIndex:column, label: hasHeader ? rows[first][column] : 'website', rowCount: values.length, preview, columns,
+    error: preview.sites.length + preview.profiles.length ? '' : `No website or domain column found. Columns found: ${columns.map(c=>c.label).join(', ')}. Choose a column or upload a list containing website URLs.` }
 }

@@ -116,3 +116,7 @@ body[data-theme="dark"] .wi-error { background:#432e24; color:#f5d2bf; }
   .wi-footer { margin-top:6px; padding-top:10px; padding-bottom:10px; }
 }
 @media(prefers-reduced-motion:reduce) { .wi-dialog { animation:none; } .wi-sources [data-src] { transition:none; } }
+
+.wi-dialog > .wi-error, .wi-batch-notice { flex:none; margin:8px 24px; padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.4; }
+.wi-batch-notice {background:#e7edde;color:#263421;}
+.wi-hint select {font:inherit;padding:8px;border:1px solid var(--wi-border);border-radius:8px;background:var(--wi-bg);color:var(--wi-ink);max-width:100%;}

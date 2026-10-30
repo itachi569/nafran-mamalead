@@ -41,7 +41,7 @@ async function main(){
   const query=drawer.getByRole('searchbox',{name:'Search saved searches'});
   await query.fill('lahore');if(await drawer.locator('[data-saved-run]').count()!==1)throw Error('City filter failed');
   const lahore=drawer.locator('[data-saved-run="lahore"]');
-  if(!(await lahore.innerText()).includes('20 saved leads'))throw Error('Saved count incorrect');
+  if(!(await lahore.innerText()).includes('20 of 2000 leads saved'))throw Error('Saved count incorrect');
   await lahore.getByRole('button',{name:'Export Lahore search'}).click();const exportDialog=page.getByRole('dialog',{name:'Export saved Google Maps search'});
   await exportDialog.waitFor();if(!(await exportDialog.innerText()).includes('Lahore · Dentists · 20 saved businesses'))throw Error('Wrong export summary');
   await exportDialog.getByRole('button',{name:'PDF (.pdf)',exact:true}).click();await exportDialog.waitFor({state:'detached'});
@@ -54,7 +54,7 @@ async function main(){
   if(!(await page.locator('.maps-active-search').innerText()).includes('Lahore · Dentists'))throw Error('Selected search not labelled');
   await page.screenshot({path:join(out,'lahore-saved-results.png'),animations:'disabled'});
   await open.click();await query.fill('Clinics');const bulk=drawer.locator('[data-saved-run="bulk"]');await bulk.waitFor();
-  if(!(await bulk.innerText()).includes('1,005 saved leads'))throw Error('Count used duplicates instead of stored leads');
+  if(!(await bulk.innerText()).includes('1,005 of 2000 leads saved'))throw Error('Count used duplicates instead of stored leads');
   await bulk.getByRole('button',{name:'Export Islamabad search'}).click();await exportDialog.getByRole('button',{name:'Excel (.xlsx)',exact:true}).click();await exportDialog.waitFor({state:'detached'});
   await bulk.getByRole('button',{name:'View results'}).click();await drawer.waitFor({state:'detached'});
   await page.waitForFunction(()=>document.querySelector('[data-results]')?.textContent.includes('Showing 25 of 1005 results'));
@@ -95,12 +95,18 @@ async function main(){
   await page.screenshot({path:join(out,'current-scan-live-results.png')});
   await app.evaluate(({BrowserWindow})=>{
     const t=globalThis.__savedMaps,request=t.liveRequest;const at='2026-10-30T12:00:00Z';
-    const summary={runId:'current-live',status:'done',provider:'chromium-maps',query:{...request.query,location:'Sialkot'},leads:t.liveLeads,startedAt:at,finishedAt:at,durationMs:1500,error:null};
+    const summary={runId:'current-live',status:'cancelled',provider:'chromium-maps',query:{...request.query,location:'Sialkot'},leads:t.liveLeads,startedAt:at,finishedAt:at,durationMs:1500,error:null};
     summary.stored=t.repository.saveRun(t.ws,{...summary,keywords:request.query.keywords,location:'Sialkot',maxResultsPerKeyword:20,detail:true});
     for(const win of BrowserWindow.getAllWindows())win.webContents.send('scraper:done',summary);
   });
   await page.waitForFunction(()=>document.querySelector('.maps-active-search')?.textContent.includes('Latest saved search'));
-  await open.click();const liveSaved=drawer.locator('[data-saved-run="current-live"]');await liveSaved.waitFor();if(!(await liveSaved.innerText()).includes('2 saved leads'))throw Error('Completed live scan not saved');
+  await open.click();const liveSaved=drawer.locator('[data-saved-run="current-live"]');await liveSaved.waitFor();if(!(await liveSaved.innerText()).includes('2 of 20 leads saved'))throw Error('Completed live scan not saved');
+  if(!(await liveSaved.innerText()).includes('Stopped by you'))throw Error('Stopped run looks completed in saved searches');
+  await drawer.getByRole('button',{name:'Close saved searches'}).click();
+  if(!(await page.locator('body').innerText()).includes('Stopped by you · 2 of 20 results'))throw Error('Stopped run header lacks status and target');
+  await page.locator('[data-view="runs"]').click();
+  await page.getByText('Stopped by you',{exact:true}).waitFor();
+  if(!(await page.locator('body').innerText()).includes('2 of 20 results'))throw Error('Run history lacks captured/target count');
   if(errors.length)throw Error(errors.join('; '));
   const result={packaged:await app.evaluate(({app})=>app.isPackaged),version:await app.evaluate(({app})=>app.getVersion()),exports:exportChecks,checks:['top header saved-search button','old lower dropdown removed','58 persisted searches with older-search pagination','city/keyword filter','per-search PDF/Excel export','exports ignore current result filters','opening the selected city only','filters reset on search switch','actual unique saved counts','1005-row results and full export','empty/error search handling','reload persistence','new saved search refresh','export cancel returns to history','keyboard focus/Escape','dark and small layout','current scan shown live below','new-run filter reset','live row deduplication','live location labels','completed current scan auto-saved']};
   writeFileSync(join(out,sourceMode?'source-check.json':'packaged-check.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));

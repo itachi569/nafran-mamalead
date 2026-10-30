@@ -34,10 +34,9 @@ async function main() {
     const cardVisible = await card.isVisible()
     check('settings shows the app updates card', cardVisible)
     if (cardVisible) {
-      check('settings explains the disabled development state', /not configured|installed app/i.test(await card.innerText()))
-      check('update action is available for a manual check', await card.getByRole('button').isEnabled())
-      await card.getByRole('button').click()
-      check('manual check keeps the disabled state clear', /not configured|installed app/i.test(await card.innerText()))
+      check('settings explains the disabled development state', /not configured|installed.*app/i.test(await card.innerText()))
+      check('unsupported update action is disabled', await card.getByRole('button').isDisabled())
+      check('unsupported build makes no automatic-check promise', !/every 4 hours|notified about new releases/i.test(await card.innerText()))
     }
   } finally {
     await app.close()
