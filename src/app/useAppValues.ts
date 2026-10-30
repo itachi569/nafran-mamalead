@@ -12,7 +12,7 @@ import { defaultNotificationAction } from './notification-model'
 export type { AppNotification } from './notification-model'
 import { useWebsiteLookup } from './useWebsiteLookup'
 import { importPreview, isProfileLine, pastedLines, websiteListFromCsv } from './website-import'
-import { isBusinessOwner, ownerEmail } from '../../electron/enrichment/owner-contact'
+import { isBusinessOwner, sourcedOwnerEmail } from '../../electron/enrichment/owner-contact'
 import { usesRomanUrdu } from '../../electron/assist-language'
 import { assistDestinations, assistShortcuts, type AssistDestination } from '../../electron/assist-navigation'
 import type {
@@ -3040,7 +3040,7 @@ export function useAppValues() {
     return {...row,phone:matched[0].t,mainSource:matched[0].t===row.phone?row.mainSource:undefined,extraNumbers:row.items.filter(item=>item.t!==matched[0].t).map(item=>({value:item.t,page:item.k}))}
   })
   const dmScope = new Set(dmSession.current.leadIds)
-  const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id) && isBusinessOwner(person.title)).map(person=>({...person,email:ownerEmail(person.full_name,person.email)}))
+  const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id) && isBusinessOwner(person.title)).map(person=>({...person,email:sourcedOwnerEmail(person.full_name,person.email,person.email_evidence,person.source)}))
   const dmSuggestions = suggestions.filter((person) => dmScope.has(person.lead_id) && !dmPeopleRows.some(saved=>saved.lead_id===person.lead_id && saved.full_name.toLowerCase()===person.full_name.toLowerCase()))
   const dmMatchedIds = new Set(dmPeopleRows.map((person) => person.lead_id))
   const dmLinkedinIds = new Set(dmPeopleRows.filter((person) => person.linkedin_url).map((person) => person.lead_id))
@@ -3050,7 +3050,7 @@ export function useAppValues() {
     withLinkedin: dmLinkedinIds.size, named: dmMatchedIds.size, matched: dmMatchedIds.size,
     missing: dmSessionLeads.length - dmMatchedIds.size,
   } }
-  const dmSavedPeople=people.rows.filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:ownerEmail(person.full_name,person.email)}))
+  const dmSavedPeople=people.rows.filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:sourcedOwnerEmail(person.full_name,person.email,person.email_evidence,person.source)}))
   const dmSearchLeads=[...new Map([...dmSessionLeads.map(lead=>({id:lead.id,name:lead.name,website:lead.website,last_scanned_at:lead.last_scanned_at})),...dmSavedPeople.map(person=>({id:person.lead_id,name:person.lead_name,website:person.lead_website,last_scanned_at:person.last_scanned_at}))].map(lead=>[lead.id,lead])).values()]
   const dmFinder = useFinderScan({
     historyScope:'dm',

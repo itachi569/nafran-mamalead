@@ -35,5 +35,11 @@ try {
   repo.addDecisionMaker({...input,email:'',replaceEmail:true})
   assert.equal(repo.decisionMakerLedger(workspaceId)[0].email,'')
   assert.equal(repo.decisionMakerLedger(workspaceId).length,1)
-  console.log(JSON.stringify({passed:true,checks:['legacy contact survives additive migration','indexed evidence persists across incomplete retries','exports preserve the weaker evidence label','readable page upgrades evidence and a completed empty rescan clears it','rescans retain one contact identity'],customerDatabaseAccess:false},null,2))
+  repo.addDecisionMaker({...input,email:'website@janetcole.test',source:'https://janetcole.test/project',emailEvidence:'personal-page',replaceEmail:true})
+  assert.equal(repo.decisionMakerLedger(workspaceId)[0].email,'website@janetcole.test')
+  const personalExport=buildExport(repo,workspaceId,{kind:'people',limit:1,leadIds:[leadId],columns:['Owner','Owner email','Email evidence','Source'],delimiter:'csv',fileName:'owners.csv'})
+  assert.match(personalExport.body,/website@janetcole.test/);assert.match(personalExport.body,/Published personal website/)
+  repo.addDecisionMaker({...input,email:'website@janetcole.test',source:'https://janetcole.test/project',emailEvidence:'page',replaceEmail:true})
+  assert.equal(repo.decisionMakerLedger(workspaceId)[0].email,'','Unverified mailbox cannot borrow the personal-page exception')
+  console.log(JSON.stringify({passed:true,checks:['legacy contact survives additive migration','indexed evidence persists across incomplete retries','exports preserve the weaker evidence label','readable page upgrades evidence and a completed empty rescan clears it','rescans retain one contact identity','verified personal-page contacts survive storage and export','unverified generic mailbox cannot borrow personal-page evidence'],customerDatabaseAccess:false},null,2))
 } finally {db.close()}

@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import ExcelJS from 'exceljs'
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
 import type { Repository } from '../db/repository'
-import { isBusinessOwner, ownerEmail } from '../enrichment/owner-contact'
+import { isBusinessOwner, sourcedOwnerEmail } from '../enrichment/owner-contact'
 import {compareEmailContacts} from '../email-ranking'
 
 const logoAsset = join(__dirname, 'assets', 'mamalead-original.jpeg')
@@ -194,8 +194,8 @@ function rowsFor(
     return { columns: {
       'Business name': (row) => text(row.name), Domain: LEAD_COLUMNS.Domain,
       Owner: (row) => text(row.full_name),
-      'Owner email': (row) => ownerEmail(text(row.full_name),text(row.email)),
-      'Email evidence': (row) => row.email ? row.email_evidence==='search-index' ? 'Search index; live page unavailable' : 'Published page' : '',
+      'Owner email': (row) => sourcedOwnerEmail(text(row.full_name),text(row.email),text(row.email_evidence),text(row.source)),
+      'Email evidence': (row) => row.email ? row.email_evidence==='search-index' ? 'Search index; live page unavailable' : row.email_evidence==='personal-page' ? 'Published personal website' : 'Published page' : '',
       Source: (row) => text(row.source),
     }, rows }
   }

@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { currentPeriod, nowIso, type LocalDatabase } from './local-db'
 import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFields, type WebsiteLookupRow } from '../enrichment/website-lookup'
-import { isBusinessOwner, ownerEmail, ownerIdentityKey } from '../enrichment/owner-contact'
+import { isBusinessOwner, sourcedOwnerEmail, ownerIdentityKey } from '../enrichment/owner-contact'
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
 import {compareEmailContacts} from '../email-ranking'
 
@@ -133,7 +133,7 @@ export interface ImportedLead {
 
 export interface DecisionMakerRow {  id: string
   source: string
-  email_evidence: 'page' | 'search-index'
+  email_evidence: 'page' | 'search-index' | 'personal-page'
   lead_id: string
   full_name: string
   title: string
@@ -982,7 +982,7 @@ export class Repository {
        where d.workspace_id = ?
        order by d.created_at desc`,
       [workspaceId],
-    ).filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:ownerEmail(person.full_name,person.email)}))
+    ).filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:sourcedOwnerEmail(person.full_name,person.email,person.email_evidence,person.source)}))
   }
 
   /**
@@ -1324,7 +1324,7 @@ export class Repository {
     linkedinUrl?: string
     source?: string
     replaceEmail?: boolean
-    emailEvidence?: 'page' | 'search-index'
+    emailEvidence?: 'page' | 'search-index' | 'personal-page'
   }): { id: string } {
     const lead = this.db.one<{ workspace_id: string }>('select workspace_id from leads where id = ?', [input.leadId])
     const workspaceId = lead?.workspace_id ?? input.workspaceId

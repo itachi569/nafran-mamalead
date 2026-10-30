@@ -45,7 +45,7 @@ export interface FoundPerson {
   /** Both public pages when an explicit short owner signature is resolved by its own team list. */
   identityEvidence?: string[]
   email?: string
-  emailEvidence?: 'page' | 'search-index'
+  emailEvidence?: 'page' | 'search-index' | 'personal-page'
   phone?: string
 }
 

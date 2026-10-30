@@ -18,3 +18,17 @@ export function ownerEmail(fullName: string, email: string): string {
   const names = fullName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter(part=>part.length >= 3 && !['mrs','miss','prof','doctor'].includes(part))
   return names.some(name=>key.includes(name)) ? value : ''
 }
+
+/** Preserve a contact whose personal-page authorship was checked by discovery.
+ * Old/unverified company inboxes never gain this exception from their domain alone. */
+export function sourcedOwnerEmail(fullName:string,email:string,evidence:string,source:string):string{
+ const named=ownerEmail(fullName,email)
+ if(named)return named
+ if(evidence!=='personal-page')return ''
+ const value=email.trim().toLowerCase()
+ if(!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(value) || /^(?:support|sales|privacy|legal|billing|no.?reply)@/i.test(value))return ''
+ try{
+  const url=new URL(source),host=url.hostname.replace(/^www\./i,'')
+  return /^https?:$/.test(url.protocol) && value.split('@')[1]===host && ownerIdentityKey(fullName).split(' ').some(part=>part.length>=4 && host.split('.')[0].includes(part))?value:''
+ }catch{return ''}
+}

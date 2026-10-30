@@ -178,7 +178,7 @@ export interface PhoneSummary {
 
 export interface DecisionMakerRow {
   source: string
-  email_evidence: 'page' | 'search-index'
+  email_evidence: 'page' | 'search-index' | 'personal-page'
   id: string
   lead_id: string
   full_name: string

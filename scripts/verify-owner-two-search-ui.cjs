@@ -5,6 +5,7 @@ async function main(){
  const app=await _electron.launch({executablePath:path.join(root,packaged?'release/win-unpacked/MamaLead.exe':'node_modules/electron/dist/electron.exe'),args:[...packaged?[]:[root],'--user-data-dir='+fs.mkdtempSync(path.join(os.tmpdir(),'owner-two-search-ui-'))],env,timeout:60000})
  try{
   await app.evaluate(({app,ipcMain,BrowserWindow,dialog},out)=>{
+   ipcMain.removeHandler('notifications:show');ipcMain.handle('notifications:show',()=>({shown:false}))
    const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'))
    const {db,repository:repo}=req('./dist-electron/db/index.js').openDatabase(),ws=db.ensureWorkspace().id,{EnrichmentRunner}=req('./dist-electron/enrichment/runner.js')
    const state={db,repo,ws,queries:[],jobs:[],exports:[],slow:false,hold:true,resume:null,providerFailed:true};globalThis.__ownerTwo=state
