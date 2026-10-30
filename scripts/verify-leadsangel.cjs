@@ -21,7 +21,13 @@ async function main() {
   assert.deepEqual(readLeadsAngelBundle(file), credentials)
   assert.equal(parseLeadsAngelResult('A@EXAMPLE.COM', { status: 'safe', score: 92 }).status, 'valid')
   assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unsafe', reason: 'recipient_rejected' }).status, 'invalid')
+  assert.equal(parseLeadsAngelResult('check@invalid.invalid', { status: 'invalid', reason: 'syntax', score: 0 }).status, 'invalid')
+  assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unknown', reason: 'syntax' }).status, 'unknown')
   assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unsafe', reason: 'smtp_timeout' }).status, 'unknown')
+  assert.equal(parseLeadsAngelResult('a@example.com', { status: 'invalid', reason: 'rcpt_rejected_550', score: 5 }).status, 'invalid')
+  assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unknown', reason: 'rcpt_rejected_550' }).status, 'unknown')
+  assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unsafe', reason: 'rcpt_rejected_550' }).status, 'unknown')
+  assert.equal(parseLeadsAngelResult('a@example.com', { status: 'catch_all', reason: 'recipient_and_random_address_accepted' }).status, 'risky')
 
   const originalFetch = global.fetch
   const calls = []

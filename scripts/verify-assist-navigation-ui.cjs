@@ -27,7 +27,6 @@ async function main(){
   ['reports k bary m btao','reports','Insights / Reports'],
   ['email finder kaise use karun','email','Email Finder'],
   ['phone finder kaise use karun','phone','Phone Finder'],
-  ['decision maker owner email kahan h','dm','Decision Makers'],
   ['website lookup ka kya kam h','website','Website Lookup'],
   ['google maps kya karta h','maps','Google Maps Scraper'],
   ['all leads ka kya kam h','leads','All Leads'],

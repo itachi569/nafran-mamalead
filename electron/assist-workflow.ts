@@ -1,7 +1,7 @@
 import type {AssistMessage} from './assist'
 
 const guide='\n\n[Import websites > Paste links / Upload a file (CSV/TSV) / From a Maps run > Scan N sites starts scanning. Search filters saved data. Email Finder: one published main email; validity checks this import. Export: Excel/PDF. Keys: Settings & Billing.]'
-const style='\n\n[Decision Makers / owner-email lookup is unavailable in this desktop build. Never offer that page, a pass, or owner lookup. Available modules: Maps, Social Profiles, Email Finder (main business email), Phone Finder, Website Lookup. Reply in 1-3 short sentences, under 60 words; plain text. Explain purpose if asked what, steps if asked how. Name the relevant app page for its link. Do not invent controls or claim actions. Reports is the Insights / Reports card on Dashboard, not a tab.]'
+const style='\n\n[Decision Makers/owner lookup and passes are unavailable; never offer them. Reply in 1-3 short sentences, under 60 words, plain text. Explain purpose for what, steps for how. Name the relevant page for its link; never invent controls or claim actions. Reports opens from Dashboard Insights / Reports.]'
 
 /** Keep older connected servers aware of this desktop's controls without changing billing facts. */
 export function assistMessagesWithWorkflowHint(messages:AssistMessage[]):AssistMessage[]{

@@ -1,0 +1,26 @@
+{
+  "version": "1.4.19",
+  "packaged": true,
+  "capturedAt": "2026-10-30T06:43:43.289Z",
+  "theme": "light",
+  "viewport": {
+    "width": 1440,
+    "height": 1040
+  },
+  "data": "Fictional businesses and .example domains; isolated temporary profile",
+  "provider": "Simulated LeadsAngel responses; no real mailbox verification",
+  "liveNetworkCalls": 0,
+  "actualBillingCalls": 0,
+  "savedBusinesses": 7,
+  "publishedMainEmails": 6,
+  "validityScope": 3,
+  "progressText": "Checked 1 of 3 emails in the current list. 2 remaining.",
+  "stopConfirmed": true,
+  "remainingUnchecked": 2,
+  "files": [
+    "email.png",
+    "email-validity.png",
+    "email-results.png"
+  ],
+  "rendererErrors": []
+}

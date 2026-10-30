@@ -58,13 +58,13 @@ async function launch() {
   await page.locator('[data-view="dashboard"]').waitFor()
 }
 async function pages(label) {
-  for (const view of ['dashboard', 'maps', 'social', 'email', 'phone', 'dm', 'website', 'leads', 'lists', 'runs', 'settings']) {
+  for (const view of ['dashboard', 'maps', 'social', 'email', 'phone', 'website', 'leads', 'lists', 'runs', 'settings']) {
     await page.click(`[data-view="${view}"]`)
     await page.waitForTimeout(100)
     assert.ok(await page.locator('section[data-card], [data-website-lookup] .wl-card').count(), `${view} has content`)
     assert.ok((await page.locator('body').innerText()).length > 300)
   }
-  console.log(`PASS ${label}: all 11 app pages render`)
+  console.log(`PASS ${label}: all 10 app pages render`)
 }
 try {
   await new Promise(done => service.server.listen(0, '127.0.0.1', done))

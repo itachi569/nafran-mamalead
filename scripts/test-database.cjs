@@ -10,7 +10,7 @@ const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 
 const { LocalDatabase } = require('../dist-electron/db/local-db.js')
-const { Repository, personNameFromEmail, personNameFromLinkedIn } = require('../dist-electron/db/repository.js')
+const { Repository } = require('../dist-electron/db/repository.js')
 const { buildExport } = require('../dist-electron/export/writer.js')
 
 const results = []
@@ -194,8 +194,8 @@ check('confidence bands are bucketed to five points', confidence.every((band) =>
 
 // ---------------------------------------------------------------- decision makers
 
-repo.addDecisionMaker({ workspaceId: workspace.id, leadId: target.id, fullName: 'Ruth Ellery', title: 'Clinic Director' })
-check('a decision maker is stored against its lead', repo.listDecisionMakers(workspace.id).length === 1)
+check('retired Decision Makers write API is unavailable', repo.addDecisionMaker === undefined)
+check('retired Decision Makers list API is unavailable', repo.listDecisionMakers === undefined)
 
 // ---------------------------------------------------------------- lists
 
@@ -310,74 +310,10 @@ try {
 }
 check('an export with no usable columns is refused', noColumns)
 
-// ---------------------------------------------------------------- decision maker suggestions
-
-console.log('\n--- decision maker suggestions ---')
-
-// A name in an email local part is a suggestion; a role mailbox or a free provider is not.
-check('a dotted local part names a person', personNameFromEmail('ruth.ellery@clinic.co.uk') === 'Ruth Ellery', String(personNameFromEmail('ruth.ellery@clinic.co.uk')))
-check('a single given name is accepted', personNameFromEmail('anastasia@an-gri.com') === 'Anastasia', String(personNameFromEmail('anastasia@an-gri.com')))
-check('an underscored local part is accepted', personNameFromEmail('maria_umer@drmariaumer.com') === 'Maria Umer')
-check('a role mailbox is refused', personNameFromEmail('info@clinic.co.uk') === null)
-check('reception is refused', personNameFromEmail('reception.arndaledental@portmandentex.com') === null)
-check('a free provider is refused', personNameFromEmail('dermics.pk@gmail.com') === null)
-check('a public mailbox stays refused unless a search asks for it', personNameFromEmail('ruth.ellery@gmail.com') === null)
-check('a search may name a person at a public mailbox', personNameFromEmail('ruth.ellery@gmail.com', { allowPublicMailbox: true }) === 'Ruth Ellery', String(personNameFromEmail('ruth.ellery@gmail.com', { allowPublicMailbox: true })))
-check('a hyphenated desk name is refused', personNameFromEmail('manchester-rec@mydentist.co.uk') === null)
-check('a brand-shaped local part is refused', personNameFromEmail('drzarqaclinic@gmail.com') === null)
-
-// A LinkedIn profile slug names the person; a company page names the business.
-check(
-  'a profile slug names the person',
-  personNameFromLinkedIn('https://www.linkedin.com/in/dr-rabia-hayat-dermatologist-in-lahore-158a68221') === 'Dr Rabia Hayat',
-  String(personNameFromLinkedIn('https://www.linkedin.com/in/dr-rabia-hayat-dermatologist-in-lahore-158a68221')),
-)
-check(
-  'a plain profile slug is accepted',
-  personNameFromLinkedIn('https://www.linkedin.com/in/aleem-uddin-3b31a3355') === 'Aleem Uddin',
-  String(personNameFromLinkedIn('https://www.linkedin.com/in/aleem-uddin-3b31a3355')),
-)
-check('a long surname slug is handled', personNameFromLinkedIn('https://www.linkedin.com/in/anastasia-gridnevskaya-b05a67a4') === 'Anastasia Gridnevskaya')
-check('a company page names nobody', personNameFromLinkedIn('https://uk.linkedin.com/company/mydentistuk') === null)
-check('a company page with a name in it still names nobody', personNameFromLinkedIn('https://www.linkedin.com/company/dr-rizwan-phsiotherapy-home-service') === null)
-
-// The offline pass builds suggestions from rows already on file.
-// Use a different business: adding a secondary personal mailbox must not replace
-// the already-selected main contact address on the first business.
-const suggestionLead = ledger.rows[2]
-repo.upsertContact({ leadId: suggestionLead.id, kind: 'email', value: 'ruth.ellery@deansgate.test', source: 'website', score: 86 })
-const built = repo.buildSuggestions(workspace.id)
-check('suggestions are built from what is on file', built.suggested > 0, `${built.suggested} suggested`)
-const candidates = repo.listCandidates(workspace.id)
-check('the suggested person appears', candidates.some((c) => c.full_name === 'Ruth Ellery'), candidates.map((c) => c.full_name).join(', '))
-check('a suggestion carries its evidence', candidates.every((c) => c.evidence.length > 0), candidates[0]?.evidence ?? '')
-check('building twice does not duplicate', repo.buildSuggestions(workspace.id).suggested === 0)
-check('candidate totals are reported', repo.candidateTotals(workspace.id).suggested === candidates.length)
-
-// The confirmed table is only ever written to by a confirmation.
-const beforeConfirm = repo.listDecisionMakers(workspace.id)
-const toConfirm = candidates.find((c) => c.full_name === 'Ruth Ellery')
-const confirmed = repo.confirmCandidate(workspace.id, toConfirm.id)
-check('a suggestion can be confirmed', confirmed.confirmed)
-const afterConfirm = repo.listDecisionMakers(workspace.id)
-const alreadyNamed = beforeConfirm.some((row) => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name)
-check('confirming stores the named contact without duplicating an existing person',
-  afterConfirm.length === beforeConfirm.length + (alreadyNamed ? 0 : 1) &&
-  afterConfirm.some((row) => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name && row.email === toConfirm.email))
-check('and removes it from the suggestions', !repo.listCandidates(workspace.id).some((c) => c.id === toConfirm.id))
-check('an inferred name without an owner role is not presented as an owner', !repo.decisionMakerLedger(workspace.id).some(row => row.lead_id === toConfirm.lead_id && row.full_name === toConfirm.full_name))
-
-const toDismiss = repo.listCandidates(workspace.id)[0]
-if (toDismiss) {
-  repo.dismissCandidate(workspace.id, toDismiss.id)
-  check('a suggestion can be dismissed', !repo.listCandidates(workspace.id).some((c) => c.id === toDismiss.id))
-  check('a dismissed suggestion is still on record', repo.listCandidates(workspace.id, true).some((c) => c.id === toDismiss.id))
-  check('and is not suggested again', repo.buildSuggestions(workspace.id).suggested === 0)
+// Retired owner discovery must not be reachable through the repository.
+for (const method of ['buildSuggestions','listCandidates','confirmCandidate','decisionMakerLedger']) {
+  check('retired repository method unavailable: '+method, repo[method] === undefined)
 }
-
-// The prune must leave confirmed people alone.
-const prunedPeople = repo.pruneNoisyPeople(() => true)
-check('a permissive prune removes nothing', prunedPeople.removed === 0)
 
 // ---------------------------------------------------------------- address quality
 

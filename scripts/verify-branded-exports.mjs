@@ -30,9 +30,8 @@ const repository = {
     return [{ value: `contact-${ids[0]}@example.org`, score: 90 }]
   },
   listSocialProfiles() { return [{ platform: 'Instagram' }] },
-  listDecisionMakers() { return [{ full_name: 'Alex Morgan' }] },
 }
-const columns = ['Business name', 'Domain', 'Phone', 'Email', 'Address', 'Rating', 'Review count', 'Socials', 'Decision maker', 'Saved date']
+const columns = ['Business name', 'Domain', 'Phone', 'Email', 'Address', 'Rating', 'Review count', 'Socials', 'Saved date']
 
 const xlsx = await buildFormattedExport(repository, 'test', { kind: 'leads', format: 'xlsx', limit: 24, delimiter: ',', columns, fileName: 'mamalead-leads' })
 const xlsxPath = join(output, 'mamalead-leads.xlsx')
@@ -50,7 +49,7 @@ assert.equal(sheet.getCell('A5').value, 'Manchester Clinic 1')
 assert.equal(sheet.getCell('A28').value, 'Manchester Clinic 24')
 assert.equal(sheet.getCell('A5').border?.right?.style, 'hair')
 assert.ok(!sheet.getCell('A5').fill?.pattern || sheet.getCell('A5').fill.pattern === 'none', 'data cell fill would hide the logo background')
-assert.equal(sheet.autoFilter, 'A4:J28')
+assert.equal(sheet.autoFilter, 'A4:I28')
 console.log('PASS  Excel has 24 readable lead rows, columns, filters, borders and logo background')
 
 const pdfExport = await buildFormattedExport(repository, 'test', { kind: 'leads', format: 'pdf', limit: 24, delimiter: ',', columns, fileName: 'mamalead-leads' })
@@ -63,40 +62,8 @@ assert.ok(images.length >= 2, 'PDF must include both header logo and watermark')
 console.log(`PASS  PDF has ${pdf.getPageCount()} pages and embedded logo artwork`)
 console.log(`Preview files: ${xlsxPath} | ${pdfPath}`)
 
-const peopleColumns = ['Business name', 'Domain', 'Owner', 'Owner email', 'Source']
-const people = Array.from({ length: 6 }, (_, i) => ({
-  lead_id: leads[i].id,
-  full_name: ['Alex Morgan', 'Sam Taylor', 'Jordan Lee', 'Casey Park', 'Jamie Reed', 'Robin Wells'][i],
-  title: i % 2 ? 'Owner' : 'Founder',
-  email: `${['alex','sam','jordan','casey','jamie','robin'][i]}@clinic-${i + 1}.example.org`,
-  phone: `+44 161 555 ${1100 + i}`,
-  business_emails: `hello@clinic-${i + 1}.example.org`,
-  business_phones: leads[i].phone,
-  lead_address: leads[i].address,
-  published_socials: `https://www.facebook.com/sampleclinic${i + 1}\nhttps://www.instagram.com/sampleclinic${i + 1}`,
-  linkedin_url: `https://www.linkedin.com/in/sample-contact-${i + 1}`,
-  source: `${leads[i].website}/team`,
-  created_at: '2026-10-28T00:00:00Z',
-}))
-const peopleRepository = { getLead: (_workspace, id) => leads.find(lead => lead.id === id), decisionMakerLedger: () => people }
-const peopleRequest = { kind: 'people', limit: 6, delimiter: ',', columns: peopleColumns, leadIds: people.map(person => person.lead_id), fileName: 'decision-makers' }
+// Retired exports must reject explicitly instead of silently producing a wrong table.
 for (const format of ['pdf', 'xlsx']) {
-  const result = await buildFormattedExport(peopleRepository, 'test', { ...peopleRequest, format })
-  assert.equal(result.rows, 6)
-  assert.deepEqual(result.columns, peopleColumns)
-  writeFileSync(join(output, `mamalead-decision-makers.${format}`), result.content)
-  if (format === 'xlsx') {
-    const book = new ExcelJS.Workbook(); await book.xlsx.load(result.content)
-    const sheet = book.worksheets[0]
-    assert.deepEqual(sheet.getRow(4).values.slice(1), peopleColumns)
-    assert.equal(sheet.getCell('C5').value, 'Alex Morgan')
-    assert.equal(sheet.getCell('C10').value, 'Robin Wells')
-    assert.equal(sheet.getImages().length, 1)
-    assert.equal(sheet.autoFilter, 'A4:E10')
-    assert.equal(sheet.getCell('D5').value,'alex@clinic-1.example.org')
-  } else {
-    const document = await PDFDocument.load(result.content)
-    assert.equal(document.getPage(0).getWidth(), 842, 'Owner email table uses landscape paper')
-  }
+  await assert.rejects(() => buildFormattedExport(repository, 'test', { kind: 'people', format, limit: 24, columns: [], fileName: 'retired' }), /no longer available/)
 }
-console.log('PASS Decision Makers PDF and Excel contain five owner-email columns and six owner rows')
+console.log('PASS Retired owner exports are rejected; current lead exports keep their branding')

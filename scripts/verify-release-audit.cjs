@@ -8,9 +8,9 @@ const group = process.argv[2] || 'core'
 const output = resolve(process.argv[3] || join(root, 'screenshots/release-audit'))
 const groups = {
   core: [
-    'test-database.cjs', 'test-deep-pass.cjs', 'test-auto-updates.cjs',
+    'test-database.cjs', 'test-auto-updates.cjs',
     'test-assist-navigation.cjs', 'test-email-validity-reliability.cjs',
-    'test-owner-discovery.cjs', 'test-owner-evidence.cjs', 'verify-main-email.cjs',
+    'verify-main-email.cjs',
     'verify-social-profiles.cjs', 'verify-contact-crawl.cjs', 'verify-maps-limits.cjs',
     'verify-maps-browser-limits.cjs', 'verify-maps-website-filter.cjs',
     'verify-branded-exports.mjs', 'verify-packaging-config.cjs', 'verify-updates.cjs',
@@ -21,7 +21,7 @@ const groups = {
     'verify-app-audit.mjs', 'verify-finder-search.cjs',
     'verify-notifications.cjs', 'verify-assist-navigation-ui.cjs',
     'verify-email-validity-ui.cjs', 'verify-email-validity-filters.cjs',
-    'verify-2000-leads.cjs', 'verify-import-count.cjs', 'verify-decision-saved-count.cjs',
+    'verify-2000-leads.cjs', 'verify-import-count.cjs', 'verify-decision-removal.cjs',
     'verify-saved-maps-searches.cjs', 'verify-website-lookup-ui.cjs',
   ],
 }

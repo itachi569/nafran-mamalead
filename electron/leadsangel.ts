@@ -50,8 +50,10 @@ export function parseLeadsAngelResult(email: string, value: unknown): EmailValid
   let verdict: EmailValidityResult['status'] = 'unknown'
   if (status === 'safe' || status === 'valid' || status === 'deliverable') verdict = 'valid'
   else if (status === 'risky' || status === 'catch_all' || status === 'accept_all') verdict = 'risky'
+  // Preserve this explicit provider verdict; an inconclusive SMTP 550 stays Unknown.
+  else if (status === 'invalid' && reason === 'rcpt_rejected_550') verdict = 'invalid'
   else if ((status === 'unsafe' || status === 'invalid' || status === 'undeliverable')
-    && /invalid_syntax|no_mx|recipient_rejected|mailbox_not_found|does_not_exist|domain_not_found/.test(reason)) verdict = 'invalid'
+    && (reason === 'syntax' || /invalid_syntax|no_mx|recipient_rejected|mailbox_not_found|does_not_exist|domain_not_found/.test(reason))) verdict = 'invalid'
   return {
     email: email.trim().toLowerCase(),
     status: verdict,

@@ -56,6 +56,8 @@ test('multilingual policy preserves Roman Urdu/script and honors explicit langua
   assert.match(sent.messages[0].content,/Enter is optional/)
   assert.match(sent.messages[0].content,/1-3 short sentences/)
   assert.match(sent.messages[0].content,/under 60 words/)
+  assert.match(sent.messages[0].content,/Decision Makers and owner-email lookup have been removed/)
+  assert.doesNotMatch(sent.messages[0].content,/Decision Makers finds|A Decision Makers pass|or Decision Makers, click/)
   assert.match(sent.messages[0].content,/desktop offers a page link/)
   assert.match(sent.messages[0].content,/Never promise that every website/)
   assert.equal(sent.max_tokens,400)

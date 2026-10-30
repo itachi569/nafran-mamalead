@@ -5,7 +5,7 @@ const {assistMessagesWithLanguageHint}=require('../dist-electron/assist-language
 for(const [question,answer,page,expected] of [
  ['social profile ka kya kam h','Import websites in Social Profiles.','dashboard',['social']],
  ['reports kahan milti h','Reports shows totals.','email',['reports']],
- ['owner email find karni h','Decision Makers shows published owner emails.','dashboard',['dm']],
+ ['owner email find karni h','Decision Makers is no longer available.','dashboard',[]],
  ['email validity kaise karun','Open Email Finder.','dashboard',['email']],
  ['where do I download the app update?','App updates is in Account.','dashboard',['updates']],
  ['رپورٹ کہاں ہے؟','Open Reports.','dashboard',['reports']],

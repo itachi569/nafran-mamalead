@@ -4,8 +4,8 @@ const {mkdtempSync,mkdirSync,writeFileSync}=require('node:fs');
 const {tmpdir}=require('node:os');
 const root=resolve(__dirname,'..');
 const {_electron}=createRequire(join(root,'package.json'))('playwright');
-const sourceMode=!process.argv.includes('--packaged');
-const output=resolve(root,'screenshots/release-audit/MamaLead-decision-progress');mkdirSync(output,{recursive:true});
+const sourceMode=!process.argv.includes('--packaged') && process.env.NAFRAN_TEST_PACKAGED!=='1';
+const output=resolve(root,'screenshots/release-audit/MamaLead-import-count');mkdirSync(output,{recursive:true});
 
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
@@ -37,12 +37,12 @@ async function main(){
   });
   const page=await app.firstWindow();await page.setViewportSize({width:1280,height:900});await page.reload();
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.locator('[data-view="dm"]').waitFor({timeout:60000});await page.locator('[data-view="dm"]').click();
+  await page.locator('[data-view="email"]').waitFor({timeout:60000});await page.locator('[data-view="email"]').click();
   const open=()=>page.getByRole('button',{name:'Import websites',exact:true}).filter({visible:true}).click();
   const modal=page.locator('[data-impmodal="1"]'),scan=modal.locator('[data-importgo]');
   const count=async n=>{await modal.getByRole('button',{name:`Scan ${n} site${n===1?'':'s'}`,exact:true}).waitFor();if(!((await modal.locator('.wi-summary').innerText()).includes(String(n))))throw Error('Footer count differs from scan count')};
   const empty=async()=>{await modal.locator('textarea').waitFor();if(await modal.locator('textarea').inputValue()!==''||!await scan.isDisabled())throw Error('Previous websites/count survived reopening')};
-  await open();await empty();checks.push('new Decision Makers import is empty with disabled scan');
+  await open();await empty();checks.push('new Email Finder import is empty with disabled scan');
   await modal.locator('textarea').fill(Array.from({length:13},(_,i)=>`https://paste${i}.example.org`).join('\n'));await count(13);
   await page.keyboard.press('Escape');await modal.waitFor({state:'detached'});await open();await empty();checks.push('13-site paste is cleared by Escape and clean reopen');
   await modal.locator('textarea').fill(Array.from({length:13},(_,i)=>`https://old${i}.example.org`).join('\n'));await count(13);
@@ -58,17 +58,16 @@ async function main(){
   await modal.getByRole('tab',{name:/Paste links/}).click();await count(31);
   await modal.getByRole('tab',{name:/Upload a file/}).click();await count(100);checks.push('switching Paste/File restores only that source count');
   await modal.getByRole('tab',{name:/From a Maps run/}).click();if(!await scan.isDisabled())throw Error('File websites leaked into unselected Maps source');
-  await modal.locator('[data-runpick]').first().click();await modal.getByRole('button',{name:'Scan 19 leads',exact:true}).waitFor();
-  if(!(await modal.locator('.wi-hint').innerText()).includes('18 with a website'))throw Error('Saved lead website breakdown not explained');checks.push('saved Decision Maker run retains 19 businesses including duplicate and missing websites');
+  await modal.locator('[data-runpick]').first().click();await count(17);
+  checks.push('saved Maps run counts 17 unique websites; duplicate and missing URLs are excluded');
   await modal.locator('[data-runpick]').nth(1).click();await modal.getByRole('alert').waitFor();if(!await scan.isDisabled())throw Error('Empty Maps run reuses previous source');checks.push('empty Maps run cannot reuse the preceding count');
   await modal.getByRole('tab',{name:/Paste links/}).click();await count(31);await scan.click();await modal.waitFor({state:'detached'});
   const state=await app.evaluate(()=>globalThis.__countTest);
   if(state.nativeCalls!==1||state.imports.length!==1||state.imports[0].length!==31||!state.imports[0].includes('https://paste30.example.org'))throw Error('Submitted scan differs from displayed current source count');checks.push('scan dispatch submits exactly 31 current source URLs, including the final row');
-  await page.waitForFunction(()=>document.querySelector('[data-decision-progress] [role="progressbar"]')?.getAttribute('aria-valuenow')==='100');
   await open();await empty();checks.push('completed submission reopens empty without the previous import');
   await modal.locator('section').screenshot({path:join(output,sourceMode?'import-empty-source.png':'import-empty-packaged.png')});
   if(errors.length)throw Error('Renderer errors '+errors.join('; '));checks.push('no renderer errors');
-  const result={passed:true,packaged:await app.evaluate(({app})=>app.isPackaged),checks,selectedCounts:[13,31,100,19],published:false};
+  const result={passed:true,packaged:await app.evaluate(({app})=>app.isPackaged),checks,selectedCounts:[13,31,100,17],published:false};
   writeFileSync(join(output,sourceMode?'source-import-count.json':'packaged-import-count.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
  }finally{await app.close()}
 }
