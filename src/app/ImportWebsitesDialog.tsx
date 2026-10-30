@@ -6,8 +6,6 @@ import { EmailValidityChoice } from './EmailValidityChoice'
 
 type Source = 'paste' | 'file' | 'run'
 type WebsiteFile = ReturnType<typeof websiteListFromCsv> & { name: string; bytes: number }
-type SavedLead = { id: string; name: string; website: string }
-const uniqueLeads = (leads: SavedLead[]) => [...new Map(leads.map(lead => [lead.id, lead])).values()]
 
 function SourceIcon({ kind }: { kind: Source | 'search' | 'close' }) {
   return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -20,13 +18,13 @@ function sizeLabel(bytes: number) {
 }
 
 export function ImportWebsitesDialog({ V }: { V: AppValues }) {
-  const selectedMaps = V.isDm ? V.decisionImportSelection : null
-  const [source, setSource] = useState<Source>(selectedMaps?.leads.length ? 'run' : 'paste')
+
+  const [source, setSource] = useState<Source>('paste')
   const [paste, setPaste] = useState(V.impValue)
   const [file, setFile] = useState<WebsiteFile | null>(null)
-  const [runId, setRunId] = useState(selectedMaps?.leads.length ? 'selected-maps' : '')
+  const [runId, setRunId] = useState('')
   const [runText, setRunText] = useState('')
-  const [runLeads, setRunLeads] = useState<SavedLead[]>(() => uniqueLeads(selectedMaps?.leads ?? []))
+
   const [reading, setReading] = useState(false)
   const [loadingRun, setLoadingRun] = useState(false)
   const [error, setError] = useState('')
@@ -35,11 +33,11 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
   const activeSource = useRef(source)
   const alive = useRef(true)
   const runRequest = useRef(0)
-  const destination = V.isEmail ? 'Email Finder' : V.isPhone ? 'Phone Finder' : V.isDm ? 'Decision Makers' : V.isWebsite ? 'Website Lookup' : 'Social Profiles'
+  const destination = V.isEmail ? 'Email Finder' : V.isPhone ? 'Phone Finder' : V.isWebsite ? 'Website Lookup' : 'Social Profiles'
   const preview = useMemo(() => importPreview(V.impValue), [V.impValue])
-  const decisionRun = V.isDm && source === 'run'
-  const ready = decisionRun ? runLeads.length : preview.sites.length + preview.profiles.length
-  const withWebsite = runLeads.filter(lead => Boolean(lead.website.trim())).length
+
+  const ready = preview.sites.length + preview.profiles.length
+
   const busy = source === 'file' ? reading : source === 'run' && loadingRun
   const tabs = [
     { id: 'paste', title: 'Paste links', detail: 'One per line' },
@@ -87,15 +85,9 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
 
   async function pickRun(id: string) {
     const request = ++runRequest.current
-    setRunId(id); setRunText(''); setRunLeads([]); setLoadingRun(true); setError(''); V.setImportText('')
+    setRunId(id); setRunText(''); setLoadingRun(true); setError(''); V.setImportText('')
     try {
-      if (V.isDm) {
-        const leads = uniqueLeads(await V.importSavedRunLeads(id))
-        if (!alive.current || request !== runRequest.current) return
-        setRunLeads(leads)
-        if (!leads.length && activeSource.current === 'run') setError('This run has no saved leads. Choose another run.')
-        return
-      }
+
       const sites = await V.importSavedRun(id)
       if (!alive.current || request !== runRequest.current) return
       const text = sites.join('\n')
@@ -108,7 +100,7 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
   return <div className="wi-overlay" data-socimp="1" data-impmodal="1" onClick={event => { if (event.target === event.currentTarget) V.closeImp() }} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); V.closeImp() } }}>
     <section ref={panel} className="wi-dialog" role="dialog" aria-modal="true" aria-labelledby="website-import-title" aria-describedby="website-import-description">
       <header className="wi-header">
-        <div><span className="wi-destination"><span/>Into {destination}</span><h2 id="website-import-title">{decisionRun ? 'Scan saved leads' : 'Import websites'}</h2><p id="website-import-description">{decisionRun ? 'Choose saved leads. Every selected business stays in your scan.' : 'Choose your website list. Duplicate links are merged before scanning.'}</p></div>
+        <div><span className="wi-destination"><span/>Into {destination}</span><h2 id="website-import-title">{'Import websites'}</h2><p id="website-import-description">{'Choose your website list. Duplicate links are merged before scanning.'}</p></div>
         <button type="button" className="wi-close" aria-label="Close import dialog" onClick={V.closeImp}><SourceIcon kind="close"/></button>
       </header>
       <div className="wi-sources" role="tablist" aria-label="Website source" data-impsrc={source}>
@@ -146,10 +138,10 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
         </div>}
         {source === 'run' && <>
           <div className="wi-runs" role="group" aria-label="Saved Google Maps runs">
-            {selectedMaps && <button type="button" className="wi-run" aria-pressed={runId === 'selected-maps'} data-selected-map-leads="1" onClick={() => { runRequest.current++;setRunId('selected-maps');setRunLeads(uniqueLeads(selectedMaps.leads));setRunText('');setLoadingRun(false);setError('');V.setImportText('') }}><span className="wi-run-dot"/><span><strong>{selectedMaps.label}</strong><span className="wi-meta">{selectedMaps.leads.length} selected leads</span></span></button>}
-            {V.mapsRunOptions.length ? V.mapsRunOptions.map(run => <button type="button" key={run.id} className="wi-run" aria-pressed={runId === run.id} data-runpick="1" data-on={runId === run.id ? 'yes' : 'no'} onClick={() => void pickRun(run.id)}><span className="wi-run-dot"/><span><strong>{run.title}</strong><span className="wi-meta">{run.meta}</span></span><span className="wi-run-date">{run.date}</span></button>) : !selectedMaps ? <div className="wi-empty"><SourceIcon kind="run"/><strong>No saved Maps runs yet</strong><p>Run a Google Maps search first, or use Paste links or Upload a file.</p></div> : null}
+
+            {V.mapsRunOptions.length ? V.mapsRunOptions.map(run => <button type="button" key={run.id} className="wi-run" aria-pressed={runId === run.id} data-runpick="1" data-on={runId === run.id ? 'yes' : 'no'} onClick={() => void pickRun(run.id)}><span className="wi-run-dot"/><span><strong>{run.title}</strong><span className="wi-meta">{run.meta}</span></span><span className="wi-run-date">{run.date}</span></button>) : <div className="wi-empty"><SourceIcon kind="run"/><strong>No saved Maps runs yet</strong><p>Run a Google Maps search first, or use Paste links or Upload a file.</p></div>}
           </div>
-          {(V.mapsRunOptions.length > 0 || selectedMaps) && <p className="wi-hint" role="status">{decisionRun ? loadingRun ? 'Loading leads from this run…' : runId ? `${ready} lead${ready === 1 ? '' : 's'} selected · ${withWebsite} with a website · ${ready - withWebsite} without a website. All selected businesses stay in the scan, including those sharing a website. Businesses without a website are checked by name and location.` : 'Choose a saved run to scan all its leads.' : <>{loadingRun ? 'Loading websites from this run…' : runId ? `${ready} unique website${ready === 1 ? '' : 's'} ready for ${destination}.` : 'Choose a saved run to load its websites.'} Duplicate domains are merged before scanning.</>}</p>}
+          {(V.mapsRunOptions.length > 0) && <p className="wi-hint" role="status">{<>{loadingRun ? 'Loading websites from this run…' : runId ? `${ready} unique website${ready === 1 ? '' : 's'} ready for ${destination}.` : 'Choose a saved run to load its websites.'} Duplicate domains are merged before scanning.</>}</p>}
         </>}
         {(error || (V.isWebsite && V.websiteLookup.error)) && <p className="wi-error" role="alert">{error || V.websiteLookup.error}</p>}
       </div>
@@ -158,7 +150,7 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
         <div><strong>{preview.duplicates}</strong><span>duplicates merged</span></div>
         <div><strong>{preview.invalid}</strong><span>not a website</span></div>
       </div>}
-      <footer className="wi-footer website-import-footer"><span className="wi-summary" role="status">{busy ? decisionRun ? 'Preparing your leads…' : 'Preparing your websites…' : ready ? decisionRun ? `${ready.toLocaleString()} selected lead${ready === 1 ? '' : 's'} ready` : `${ready.toLocaleString()} unique ${preview.profiles.length ? 'items' : ready === 1 ? 'website' : 'websites'} ready` : decisionRun ? 'Choose saved leads to start your scan' : 'Add websites to start your scan'}</span><div><button type="button" className="wi-cancel" data-socimpcancel="1" onClick={V.closeImp}>Cancel</button><button type="button" className="wi-primary wi-scan" data-socimpgo="1" data-importgo="1" data-run="1" disabled={Boolean(busy) || (decisionRun ? !ready : !V.impHasLines)} onClick={decisionRun ? () => V.scanDecisionLeads(runLeads.map(lead => lead.id)) : V.impImport}><SourceIcon kind="search"/>{decisionRun ? ready && !busy ? `Scan ${ready} lead${ready === 1 ? '' : 's'}` : 'Scan leads' : V.impHasLines && !busy ? V.impScanLabel : 'Scan websites'}</button></div></footer>
+      <footer className="wi-footer website-import-footer"><span className="wi-summary" role="status">{busy ? 'Preparing your websites…' : ready ? `${ready.toLocaleString()} unique ${preview.profiles.length ? 'items' : ready === 1 ? 'website' : 'websites'} ready` : 'Add websites to start your scan'}</span><div><button type="button" className="wi-cancel" data-socimpcancel="1" onClick={V.closeImp}>Cancel</button><button type="button" className="wi-primary wi-scan" data-socimpgo="1" data-importgo="1" data-run="1" disabled={Boolean(busy) || !V.impHasLines} onClick={V.impImport}><SourceIcon kind="search"/>{V.impHasLines && !busy ? V.impScanLabel : 'Scan websites'}</button></div></footer>
     </section>
   </div>
 }

@@ -3,8 +3,8 @@ import type { AppValues } from './useAppValues'
 import './saved-search.css'
 
 export function FinderSearchHistory({V}:{V:AppValues}) {
-  const finder=V.fPhone.histOpen?V.fPhone:V.fEmail.histOpen?V.fEmail:V.fDm.histOpen?V.fDm:null
-  const title=V.fPhone.histOpen?'Phone Finder':V.fEmail.histOpen?'Email Finder':'Decision Makers'
+  const finder=V.fPhone.histOpen?V.fPhone:V.fEmail.histOpen?V.fEmail:null
+  const title=V.fPhone.histOpen?'Phone Finder':'Email Finder'
   const close=useRef<()=>void>(()=>undefined),panel=useRef<HTMLElement>(null)
   close.current=finder?.closeHist ?? (()=>undefined)
   const open=Boolean(finder)

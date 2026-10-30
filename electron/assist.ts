@@ -13,7 +13,7 @@ export async function askAssist(request: AssistChatRequest = {}): Promise<Assist
     .slice(-8).map((message) => ({ role: message.role, content: message.content.trim().slice(0, 1200) }))
     .filter((message) => message.content)
   const context: Record<string, string | number | boolean | null> = {}
-  for (const name of ['page', 'totalLeads', 'leadsWithEmail', 'leadsWithPhone', 'leadsWithSocialProfiles', 'namedDecisionMakers', 'missingDecisionMakers', 'leadsReadyToExport', 'mapsRuns', 'placesCaptured']) {
+  for (const name of ['page', 'totalLeads', 'leadsWithEmail', 'leadsWithPhone', 'leadsWithSocialProfiles', 'leadsReadyToExport', 'mapsRuns', 'placesCaptured']) {
     const value = request.context?.[name]
     if (typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value) || value === null) context[name] = value
     else if (typeof value === 'string') context[name] = value.slice(0, 100)

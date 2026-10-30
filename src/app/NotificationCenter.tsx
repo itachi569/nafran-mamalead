@@ -14,7 +14,7 @@ function actionLabel(item:AppNotification):string {
   const action=defaultNotificationAction(item)
   if(!action)return ''
   if(action.type==='reveal-export')return 'Show in folder'
-  return {maps:'Review leads',social:'Open profiles',email:'Open Email Finder',phone:'Open Phone Finder',dm:'Open Decision Makers',website:'Open Website Lookup',settings:'Open Settings & Billing',runs:'Open activity'}[action.view]
+  return {maps:'Review leads',social:'Open profiles',email:'Open Email Finder',phone:'Open Phone Finder',website:'Open Website Lookup',settings:'Open Settings & Billing',runs:'Open activity'}[action.view]
 }
 
 export function NotificationCenter({V}:{V:AppValues}) {

@@ -13,7 +13,7 @@ export const RUN_FILTERS: [string, string][] = [['All runs', '42'], ['Maps', '31
 export const DELIMS: [string, string][] = [['Comma', '.csv'], ['Semicolon', '.csv'], ['Tab', '.tsv'], ['Excel (.xlsx)', '.xlsx']];
 export const VIEW_NAMES: Record<string, string> = {
   dashboard: 'Dashboard', maps: 'Google Maps', social: 'Social Profiles', email: 'Email Finder',
-  phone: 'Phone Finder', dm: 'Decision Makers', website: 'Website Lookup',
+  phone: 'Phone Finder', website: 'Website Lookup',
   leads: 'All Leads', lists: 'Saved Lists', runs: 'Run History', settings: 'Workspace & Settings'
 };
 export const DEMO_NOTES: Record<string, string> = {
@@ -66,7 +66,7 @@ export const EXP_MODES: Record<string, ExportMode> = {
     cols: [
       ['Business name', true], ['Domain', true], ['Phone', true], ['Email', true],
       ['Address', true], ['Rating', true], ['Review count', false], ['Socials', true],
-      ['Score', true], ['Decision maker', false], ['Source', false], ['Saved date', true]
+      ['Score', true], ['Source', false], ['Saved date', true]
     ]
   },
   runs: {

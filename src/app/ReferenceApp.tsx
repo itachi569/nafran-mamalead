@@ -9,7 +9,7 @@ import type { AppValues } from './useAppValues'
 import { SettingsPanel } from './SettingsPanel'
 import { ExportDialog } from './ExportDialog'
 import { FeatureAccessBoundary } from './FeatureAccessBoundary'
-import { WorkspaceDialogs, ScanReturn, MapsResults, WebsiteFilter, DecisionResults } from './WorkspaceActions'
+import { WorkspaceDialogs, ScanReturn, MapsResults, WebsiteFilter } from './WorkspaceActions'
 import { NotificationCenter, NotificationToast } from './NotificationCenter'
 import { FinderSearchHistory } from './FinderSearchHistory'
 import { SavedMapsButton, SavedMapsSearches } from './SavedMapsSearches'
@@ -17,9 +17,9 @@ import { WebsiteLookupPanel } from './WebsiteLookupPanel'
 import { ImportWebsitesDialog } from './ImportWebsitesDialog'
 import { SocialProfileLinks } from './SocialProfileLinks'
 import { EmailValidityChoice } from './EmailValidityChoice'
-import { DecisionScanProgress } from './DecisionScanProgress'
+
 import { FinderScanProgress } from './FinderScanProgress'
-import { OwnerBrowserControl } from './OwnerBrowserControl'
+
 import mamaLeadIcon from '../../build/mamalead-icon.png'
 
 /**
@@ -139,15 +139,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   <span data-tail="1" aria-hidden="true" style={{color: "#6C766F"}}>→</span>
                   <span data-arrow="1" aria-hidden="true" style={{placeItems: "center", width: "30px", height: "30px", borderRadius: "999px", fontSize: "12px", flex: "none"}}>↘</span>
                 </button>
-                <button type="button" data-view="dm" onClick={V.goDm} style={{display: "flex", alignItems: "center", gap: "10px", width: "100%", height: "42px", padding: "0 14px", border: "0", borderRadius: "999px", fontSize: "14px", fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
-                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                    <circle cx="12" cy="8" r="3.4"></circle>
-                    <path d="M5.5 19.5c1-3.1 3.4-4.7 6.5-4.7s5.5 1.6 6.5 4.7"></path>
-                  </svg>
-                  <span style={{flex: "1"}}>Decision Makers</span>
-                  <span data-tail="1" aria-hidden="true" style={{color: "#6C766F"}}>→</span>
-                  <span data-arrow="1" aria-hidden="true" style={{placeItems: "center", width: "30px", height: "30px", borderRadius: "999px", fontSize: "12px", flex: "none"}}>↘</span>
-                </button>
+
                 <button type="button" data-view="website" onClick={V.goWebsite} style={{display: "flex", alignItems: "center", gap: "10px", width: "100%", height: "42px", padding: "0 14px", border: "0", borderRadius: "999px", fontSize: "14px", fontFamily: "inherit", textAlign: "left", cursor: "pointer"}}>
                   <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
                     <path d="M9.5 14.5l-2 2a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0"></path>
@@ -447,19 +439,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </span>
                         <span style={{fontSize: "13px", color: "#4A4F4B"}}>Socials</span>
                       </div>
-                      <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "10px"}}>
-                        <span style={{position: "relative", display: "grid", placeItems: "center", width: "86px", height: "86px"}}>
-                          <svg viewBox="0 0 100 100" aria-hidden="true" style={{position: "absolute", inset: "0", width: "100%", height: "100%", transform: "rotate(-90deg)"}}>
-                            <circle cx="50" cy="50" r="44" fill="none" stroke="#DADCD7" strokeWidth="6"></circle>
-                            <circle cx="50" cy="50" r="44" fill="none" stroke="#1C1C1C" strokeWidth="6" strokeLinecap="round" strokeDasharray="276.5" strokeDashoffset={V.dashDmOffset}></circle>
-                          </svg>
-                          <span style={{fontSize: "20px", fontWeight: "400", letterSpacing: "-.02em"}}>
-                            {V.dashDmPct}
-                            <span style={{fontSize: "11px", color: "#5A5F5C"}}>%</span>
-                          </span>
-                        </span>
-                        <span style={{fontSize: "13px", color: "#4A4F4B"}}>LinkedIn DM</span>
-                      </div>
+
                     </div>
                   </section>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "linear-gradient(200deg,#B9CBA8 0%,#8FA382 100%)", color: "#F7F9F5", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
@@ -1228,13 +1208,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                     <p style={{margin: "8px 0 0", maxWidth: "76ch", fontSize: "14.5px", color: "#5A5F5C", textWrap: "pretty"}}>All scraped leads with their social profile URLs. Same engine as Email Finder — different lens.</p>
                   </div>
-                  <button type="button" data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}} onClick={V.deepRun} data-deeprun="1">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="12" cy="12" r="8.5"></circle>
-                      <path d="M3.5 12h17M12 3.5c2.2 2.4 3.3 5.3 3.3 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.3-5.3-3.3-8.5S9.8 5.9 12 3.5z"></path>
-                    </svg>
-                    {' '}Deep enrich missing{' '}
-                  </button>
+
                 </div>
                 <div data-socbar="1" style={{position: "sticky", top: "12px", zIndex: "30", padding: "14px 16px", borderRadius: "22px", background: "#F5F5F4", boxShadow: "0 18px 36px -26px rgba(28,28,28,.55)"}} data-soctoolbar="1">
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
@@ -1284,7 +1258,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </button>
                   </div>
                   <p id="saved-social-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search all saved profiles by company, website, handle or profile URL. Matches appear below as you type.</p>
-                  
+
                 </div>
                 {V.socialScanProgress.scanOn && <FinderScanProgress kind="social" scan={V.socialScanProgress}/>}
                 <div data-podium="1" style={{display: "grid", gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)", gap: "clamp(12px,1.4vw,20px)", alignItems: "start"}}>
@@ -2128,90 +2102,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </div>
               </>
             ) : null}
-            {shows(V.isDm) ? (
-              <>
-              <div data-saved-search-page="dm" data-searching={Boolean(V.fDm.q.trim())} style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
-                <div><h1 style={{margin:0,fontSize:'clamp(26px,2.6vw,36px)',lineHeight:1.1,fontWeight:400,letterSpacing:'-.03em'}}>Decision Makers</h1><p style={{margin:'10px 0 0',maxWidth:'76ch',fontSize:14,lineHeight:1.6,color:'#5A5F5C'}}>Find the business owner's published email. Import websites to check owner/founder evidence and a matching direct email.</p></div>
-                <OwnerBrowserControl/>
-                <div data-socbar="1" style={{position: "sticky", top: "12px", zIndex: "30", padding: "14px 16px", borderRadius: "22px", background: "#F5F5F4", boxShadow: "0 18px 36px -26px rgba(28,28,28,.55)"}}>
-                  <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px"}}>
-                    <div style={{display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "220px", height: "44px", padding: "0 16px", borderRadius: "999px", background: "#EAEAE8"}}>
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#3A3D3B" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true" style={{flex: "none"}}>
-                        <circle cx="11" cy="11" r="6.5"></circle>
-                        <path d="M16 16l4.5 4.5"></path>
-                      </svg>
-                      <input data-fq="dm" type="search" onInput={V.fDm.onInput} onKeyDown={V.fDm.onKey} onBlur={V.fDm.onBlur} placeholder="Search saved decision makers…" aria-label="Search saved decision makers" aria-describedby="saved-dm-search-help" style={{flex: "1", minWidth: "0", height: "100%", border: "0", background: "transparent", fontSize: "13.5px", color: "#1C1C1C", outline: "none"}} value={V.fDm.q} />
-                    </div>
-                    <span style={{position: "relative", display: "block"}}>
-                      <select onChange={V.fDm.onState} aria-label="Filter rows" style={{height: "44px", padding: "0 36px 0 16px", border: "0", borderRadius: "999px", background: "#EAEAE8", fontFamily: "inherit", fontSize: "13.5px", color: "#1C1C1C", outline: "none", appearance: "none"}}>
-                        <option>All</option>
-                        <option>Named contacts</option>
-                        <option>Blocked leads</option>
-                        <option>Pending</option>
-                        <option>No website</option>
-                      </select>
-                      <span aria-hidden="true" style={{position: "absolute", right: "14px", top: "15px", display: "block", pointerEvents: "none", color: "#4A4F4B"}}>
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 9.5l6 6 6-6"></path>
-                        </svg>
-                      </span>
-                    </span>
-                    <button type="button" onClick={V.fDm.act} disabled={V.fDm.scanning} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "44px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}} data-fact="fDm">
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="8" r="3.5"></circle>
-                        <path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"></path>
-                      </svg>
-                      {' '}{V.fDm.scanning ? 'Scan running…' : V.fDm.actLabel}{' '}
-                    </button>
-                    <button type="button" onClick={V.openImp} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "44px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 15.5V4"></path>
-                        <path d="M8 7.5l4-4 4 4"></path>
-                        <path d="M4.5 19.5h15"></path>
-                      </svg>
-                      {' '}Import websites{' '}
-                    </button>
-                    <button type="button" onClick={V.fDm.refresh} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "44px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M20 12a8 8 0 1 1-2.6-5.9"></path>
-                        <path d="M20 4v4.5h-4.5"></path>
-                      </svg>
-                      {' '}Refresh{' '}
-                    </button>
-                    <button type="button" onClick={V.fDm.openHist} data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "44px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M4 12a8 8 0 1 0 2.4-5.7"></path>
-                        <path d="M4 4.5V8.5h4"></path>
-                        <path d="M12 8v4.5l3 2"></path>
-                      </svg>
-                      {' '}History{' '}
-                      <span style={{display: "grid", placeItems: "center", minWidth: "22px", height: "22px", padding: "0 6px", borderRadius: "999px", background: "#C8D5BB", fontSize: "11px", fontWeight: "600"}}>{V.fDm.count}</span>
-                    </button>
-                  </div>
-                  <p id="saved-dm-search-help" style={{margin: "10px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#5A5F5C"}}>Search saved owners by name, role, company, website or email. Matches appear below as you type.</p>
-                  <div className="saved-search-count" style={{display:'flex',justifyContent:'flex-end',marginTop:10}}><span data-fcount="dm" style={{marginLeft: "auto", fontSize: "12px", color: "#5A5F5C"}}>{V.dmShowing} rows on screen</span></div>
-                </div>
-                {shows(V.fDm.scanOn || V.fDm.q.trim()) ? (
-                  <>
-                  <DecisionScanProgress scan={V.fDm}/>
-                  <section data-saved-results="dm" data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                    <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
-                      <h2 data-fres="dm" style={{scrollMarginTop: "130px", margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Owner emails</h2>
 
-                    </div>
-                    <DecisionResults V={V}/>
-                    <div data-dm-export-options="1" style={{display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "20px", paddingTop: "18px", borderTop: "1px solid #DEDFDC"}}>
-                      <button type="button" disabled={V.dmExportDisabled} onClick={V.exportDmExcel} style={{padding: "12px 22px", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#FFFFFF", fontFamily: "inherit", fontSize: "13.5px", cursor: V.dmExportDisabled ? "default" : "pointer", opacity: V.dmExportDisabled ? .5 : 1}}>Download Excel (.xlsx)</button>
-                      <button type="button" disabled={V.dmExportDisabled} onClick={V.exportDmPdf} style={{padding: "12px 22px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", cursor: V.dmExportDisabled ? "default" : "pointer", opacity: V.dmExportDisabled ? .5 : 1}}>Download PDF</button>
-                      {V.dmExportBusy ? <span role="status" style={{alignSelf: "center", fontSize: "13px"}}>Saving export…</span> : null}
-                    </div>
-                  </section>
-                  </>
-                ) : null}
-                <section data-card="1" style={{padding:24,borderRadius:22,background:'#F5F5F4'}}><h2 style={{margin:0,fontSize:18,fontWeight:500}}>Published owner emails only</h2><p style={{margin:'10px 0 0',fontSize:13,lineHeight:1.7,color:'#5A5F5C'}}>We search for the website's founder and email, then check targeted searches and public source pages as needed. Gmail is included when the published address matches the owner. The scan stops when a match is found. A staff profile or general inbox does not count. Not published means no matching owner email was found in the checked sources.</p></section>
-              </div>
-              </>
-            ) : null}
             {shows(V.isWebsite) ? <WebsiteLookupPanel V={V}/> : null}
             {shows(V.isLeads) ? (
               <>

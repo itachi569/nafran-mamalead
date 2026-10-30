@@ -16,10 +16,7 @@ import { isBusinessOwner, sourcedOwnerEmail } from '../../electron/enrichment/ow
 import { usesRomanUrdu } from '../../electron/assist-language'
 import { assistDestinations, assistShortcuts, type AssistDestination } from '../../electron/assist-navigation'
 import type {
-  CandidateRow,
   DashboardTotals,
-  DecisionMakerFunnel,
-  DecisionMakerRow,
   EnrichmentProgress,
   Lead,
   LeadSummary,
@@ -41,7 +38,7 @@ import {
   type LeadRow,
 } from './referenceData'
 import { localDb } from '../lib/local'
-import { describeDeepKey, readDeepKey, storeDeepKey } from './deepKey'
+
 import { pageLabelOf, type EmailTone } from '../lib/email'
 import { districtsFor, townOf } from './districts'
 import { PACE_LIMITS, paceToMs, readScraperSettings, storeScraperSettings, type ScraperSettings } from './scraperSettings'
@@ -64,9 +61,6 @@ const MAX_MAP_KEYWORDS = 8
 const NOTIFICATIONS_ENABLED_KEY = 'nafran.notifications.enabled'
 const EMAIL_VERIFY_AFTER_SCAN_KEY = 'nafran.email.verifyAfterScan'
 const LIFETIME_CHECKOUT_PENDING_KEY = 'nafran.billing.lifetimeCheckoutUntil'
-const DECISION_CHECKOUT_PENDING_KEY = 'nafran.billing.decisionCheckoutUntil'
-const DECISION_100_ALERT_KEY = 'nafran.billing.decision100Alert'
-const DECISION_500_ALERT_KEY = 'nafran.billing.decision500Alert'
 
 function readNotificationsEnabled(): boolean {
   if (typeof window === 'undefined') return true
@@ -85,14 +79,6 @@ function readPendingLifetimeCheckout(): number {
   } catch {
     return 0
   }
-}
-
-function readPendingDecisionCheckout(): number {
-  if (typeof window === 'undefined') return 0
-  try {
-    const until = Number(window.localStorage.getItem(DECISION_CHECKOUT_PENDING_KEY))
-    return Number.isFinite(until) && until > Date.now() && until < Date.now() + 60 * 60 * 1000 ? until : 0
-  } catch { return 0 }
 }
 
 /** Cleans a pasted keyword list while preserving the user's order. */
@@ -341,8 +327,7 @@ const LEAD_FILTER_KEYS = ['all', 'phone', 'email', 'social', 'missing'] as const
  * "Enrich all pending", "Deep enrich all missing" — so the label decides the pass and the worker
  * does the rest.
  */
-function enrichmentForLabel(label: string): 'email' | 'phone' | 'social' | 'decision-maker' | null {
-  if (/decision maker|decision-maker|named contact/i.test(label)) return 'decision-maker'
+function enrichmentForLabel(label: string): 'email' | 'phone' | 'social' | null {
   if (/phone|callable|direct line/i.test(label)) return 'phone'
   if (/social|instagram|profile/i.test(label)) return 'social'
   if (/email|address|smtp|verify|search missing|enrich|deep enrich|cascade/i.test(label)) return 'email'
@@ -441,9 +426,7 @@ export function useAppValues() {
     const core = status.coreLicenseActive ?? Boolean(status.license?.active && status.license.kind !== 'decision')
     const trialValid = status.trial?.active && (!status.trial.expiresAt || Date.parse(status.trial.expiresAt) > Date.now())
     if (core && (status.lifetime?.active || trialValid)) return true
-    const decisionKey = status.decisionKeyActive ?? (status.license?.active && status.license.kind === 'decision')
-    return view === 'dm' && Boolean(decisionKey && status.decisionMaker?.active && status.decisionMaker.monthlyRemaining > 0 &&
-      (!status.decisionMaker.renewsAt || Date.parse(status.decisionMaker.renewsAt) > Date.now()))
+    return false
   }, [featureBilling, view])
   const [reportsOpen, setReportsOpen] = useState(false)
   const [reportsLoading, setReportsLoading] = useState(false)
@@ -462,7 +445,7 @@ export function useAppValues() {
   const [swWarn, setSwWarn] = useState(readNotificationsEnabled)
   const [impOpen, setImpOpen] = useState(false)
   const [impValue, setImpValue] = useState('')
-  const [decisionImportSelection,setDecisionImportSelection] = useState<{label:string;leads:Pick<StoredLead,'id'|'name'|'website'>[]}|null>(null)
+
   // The shared paste box: what is in it, and how many lines that is. The modal's button appears
   // only once there is something to import.
   const impText = useRef('')
@@ -489,22 +472,18 @@ export function useAppValues() {
   const [leadSearch, setLeadSearch] = useState('')
   /** Where the local database file sits and how large it is, as the store card states it. */
   const [store, setStore] = useState<{ path: string; size: string } | null>(null)
-  /** Which blocker the Decision Makers page is filtering its unmatched leads by. */
-  const [dmBlocker, setDmBlocker] = useState('All blockers')
+
   // The DataForSEO key: the saved one, what is typed over it, and what the account last said.
-  const [deepKey, setDeepKey] = useState(readDeepKey)
-  const [deepKeyDraft, setDeepKeyDraft] = useState('')
-  const [deepKeyCheck, setDeepKeyCheck] = useState<{ ok: boolean; balance: number | null; note: string } | null>(null)
-  const [deepKeyTesting, setDeepKeyTesting] = useState(false)
+
   /** True when this machine's environment supplied the key rather than the app's own Settings. */
-  const [deepKeyFromEnvironment, setDeepKeyFromEnvironment] = useState(false)
+
   const [leadsAngelConfigured, setLeadsAngelConfigured] = useState(false)
   const [leadsAngelExpiresOn, setLeadsAngelExpiresOn] = useState<string | null>(null)
   const emailValidityScope=useRef<string[]>([])
   const [emailAutoVerifyOn,setEmailAutoVerifyOn]=useState(()=>{try{return window.localStorage.getItem(EMAIL_VERIFY_AFTER_SCAN_KEY)==='1'}catch{return false}})
   const toggleEmailAutoVerify=()=>setEmailAutoVerifyOn(current=>{const next=!current;try{window.localStorage.setItem(EMAIL_VERIFY_AFTER_SCAN_KEY,next?'1':'0')}catch{/* Keep the choice for this session. */}return next})
   /** Number of captured Maps leads the user wants to send through the owner/email pass. */
-  const [deepLeadLimit, setDeepLeadLimit] = useState(10)
+
   const [runFilter, setRunFilter] = useState(0)
   const [delim, setDelim] = useState(0)
   const [chatOpen, setChatOpen] = useState(false)
@@ -515,9 +494,7 @@ export function useAppValues() {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationCenter=useNotifications(swWarn)
   const {notifications,notify,markRead:markNotificationRead,markAllRead:markNotificationsRead,remove:deleteNotification}=notificationCenter
-  const [decisionCheckoutUntil, setDecisionCheckoutUntil] = useState(readPendingDecisionCheckout)
-  const [decisionPrompt, setDecisionPrompt] = useState('')
-  const [decisionAllowance, setDecisionAllowance] = useState<{ used: number; remaining: number; limit: number; renewsAt: string | null; status: string } | null>(null)
+
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     state: 'disabled',
     version: null,
@@ -532,13 +509,13 @@ export function useAppValues() {
   const chatMessagesRef = useRef<ChatMessage[]>(INITIAL_CHAT_MESSAGES)
   const chatPendingRef = useRef(0)
   const assistantContextRef = useRef<Record<string, string | number | boolean | null>>({})
-  const decisionAlertPeriods = useRef(new Set<string>())
+
   const previousScrapeRunning = useRef(snapshot.running)
   const enrichmentWasActive = useRef(false)
   const runScrapeRef = useRef<() => void>(() => undefined)
   // actionClick is bound once to the document, so it reaches the current enricher through a ref.
   // The count it reports is what the finder pages put on their coverage card while a pass runs.
-  const queueEnrichmentRef = useRef<(kind: 'email' | 'phone' | 'social' | 'decision-maker') => Promise<number>>(
+  const queueEnrichmentRef = useRef<(kind: 'email' | 'phone' | 'social') => Promise<number>>(
     async () => 0,
   )
   const runImportRef = useRef<() => Promise<void>>(async () => undefined)
@@ -549,7 +526,7 @@ export function useAppValues() {
   /** Changes whenever a scan is replaced or cancelled, so late IPC replies cannot reopen it. */
   const scanToken = useRef(0)
   /** Each finder starts its own pass after Import websites, scoped to the pasted URLs. */
-  const runFinderImportRef = useRef<(page: 'email' | 'phone' | 'dm', lines: string[]) => void>(() => undefined)
+  const runFinderImportRef = useRef<(page: 'email' | 'phone', lines: string[]) => void>(() => undefined)
 
   // Read the saved profile once on launch: a sign-in made on an earlier run is still a sign-in, and
   // the row that offers one should say so before the user goes looking. A run that connects Google
@@ -606,50 +583,6 @@ export function useAppValues() {
     }
     previousAccess.current={active,seen:true}
   },[featureBilling,notify])
-
-  const updateDecisionAllowance = useCallback((allowance: { monthlyUsed: number; monthlyRemaining: number; monthlyLimit: number; renewsAt: string | null; periodId?: string | null; status: string } | null) => {
-    if (!allowance) { setDecisionAllowance(null); return }
-    setDecisionAllowance({ used: allowance.monthlyUsed, remaining: allowance.monthlyRemaining, limit: allowance.monthlyLimit, renewsAt: allowance.renewsAt, status: allowance.status })
-    if (allowance.monthlyRemaining <= 0 || allowance.monthlyRemaining > 500 || !allowance.renewsAt) return
-    const period = allowance.periodId || allowance.renewsAt
-    const threshold = allowance.monthlyRemaining <= 100 ? 100 : 500
-    const alertId = `${period}:${threshold}`
-    if (decisionAlertPeriods.current.has(alertId)) return
-    const storageKey = threshold === 100 ? DECISION_100_ALERT_KEY : DECISION_500_ALERT_KEY
-    try {
-      if (window.localStorage.getItem(storageKey) === period) return
-      window.localStorage.setItem(storageKey, period)
-      if (threshold === 100) window.localStorage.setItem(DECISION_500_ALERT_KEY, period)
-    } catch { /* Keep the alert for this app session. */ }
-    decisionAlertPeriods.current.add(alertId)
-    if (threshold === 100) decisionAlertPeriods.current.add(`${period}:500`)
-    notify('Decision Makers allowance is low', `${allowance.monthlyRemaining} of ${allowance.monthlyLimit} searches remain in this period.`, 'info')
-  }, [notify])
-
-  useEffect(() => {
-    const bridge = window.desktop?.billing
-    if (!bridge) return
-    let cancelled = false
-    const refresh = async () => {
-      try {
-        const status = await bridge.status()
-        if (!cancelled && status.connected) updateDecisionAllowance(status.decisionMaker ?? null)
-      } catch { /* Keep the last verified allowance until the next connection. */ }
-    }
-    const onUsage = (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => {
-      updateDecisionAllowance({ monthlyUsed: usage.used, monthlyRemaining: usage.remaining, monthlyLimit: 1000, renewsAt: usage.renewsAt, periodId: usage.periodId, status: 'active' })
-    }
-    void refresh()
-    const unsubscribe = bridge.onDecisionUsage?.(onUsage)
-    window.addEventListener('focus', refresh)
-    window.addEventListener('nafran:billing-updated', refresh)
-    return () => {
-      cancelled = true
-      unsubscribe?.()
-      window.removeEventListener('focus', refresh)
-      window.removeEventListener('nafran:billing-updated', refresh)
-    }
-  }, [updateDecisionAllowance])
 
   useEffect(() => {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.updates
@@ -730,9 +663,9 @@ export function useAppValues() {
       setEnrichmentActivity((current) => [progress, ...current.filter((item) => item.jobId !== progress.jobId)].slice(0, 8))
       if(progress.status!=='failed' && progress.status!=='done')return
       if(progress.kind==='website' && progress.status==='done')return
-      const view=progress.kind==='decision-maker' || progress.kind==='deep'?'dm':progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
-      const label=view==='dm'?'Owner email scan':view==='email'?'Email scan':view==='phone'?'Phone scan':view==='social'?'Social profile scan':'Website scan'
-      notify(label+(progress.status==='failed'?' failed':' finished'),progress.message || 'Review the scan results in the app.',progress.status==='failed'?'error':'success',undefined,{kind:progress.status==='failed'?'warn':'import',chips:[progress.processed+(view==='dm'?' leads':' sites'),progress.found+' details found'],action:{type:'view',view},actionLabel:'Open '+(view==='dm'?'Decision Makers':view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:'enrichment:'+(progress.jobId || progress.at)+':'+progress.status})
+      const view=progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
+      const label=view==='email'?'Email scan':view==='phone'?'Phone scan':view==='social'?'Social profile scan':'Website scan'
+      notify(label+(progress.status==='failed'?' failed':' finished'),progress.message || 'Review the scan results in the app.',progress.status==='failed'?'error':'success',undefined,{kind:progress.status==='failed'?'warn':'import',chips:[progress.processed+' sites',progress.found+' details found'],action:{type:'view',view},actionLabel:'Open '+(view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:'enrichment:'+(progress.jobId || progress.at)+':'+progress.status})
     })
   }, [notify])
 
@@ -748,37 +681,8 @@ export function useAppValues() {
     chatPendingRef.current += 1
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.assist
     try {
-      // Quota answers come directly from the billing server. A language model must never guess a
-      // paid allowance or repeat an old local counter when another device has used searches.
-      const romanUrduQuota=usesRomanUrdu(trimmed)
-      const englishQuotaWords=new Set('how many much decision makers maker dm search searches are is do i we my our have remain remaining left used usage quota limit the this month period please can tell me what s of for now still total and'.split(' '))
-      const englishQuota=/^[\x00-\x7f]*$/.test(trimmed)&&trimmed.toLowerCase().split(/[^a-z]+/).filter(Boolean).every(word=>englishQuotaWords.has(word))
-      if ((romanUrduQuota||englishQuota) && /\b(decision\s*makers?|dm\s*searches?)\b/i.test(trimmed) && /\b(kitn\w*|baqi|baki|reh\w*|bach\w*|remaining|left|used|usage|quota|limit)\b/i.test(trimmed)) {
-        const status = await window.desktop?.billing?.status()
-        const quota = status?.connected ? status.decisionMaker : null
-        const romanUrdu = romanUrduQuota
-        const response = !quota
-          ? romanUrdu ? 'Abhi billing server se Decision Maker allowance verify nahi ho rahi. Connection check karke dobara poochhein.' : 'I cannot verify your Decision Maker allowance right now. Check the billing connection and try again.'
-          : quota.monthlyRemaining > 0
-            ? romanUrdu ? `Aap ke ${quota.monthlyRemaining} of ${quota.monthlyLimit} Decision Maker searches baqi hain. Yeh count server se verify hua hai.` : `You have ${quota.monthlyRemaining} of ${quota.monthlyLimit} Decision Maker searches remaining in this period. This count is verified by the server.`
-            : romanUrdu ? 'Is period mein 0 Decision Maker searches baqi hain. Settings → Usage mein Rs 1,000 ka naya period khareed kar dobara use karein.' : 'You have 0 Decision Maker searches remaining. Open Settings → Usage to buy the next Rs 1,000 period.'
-        if (quota) updateDecisionAllowance(quota)
-        const withBot = [...chatMessagesRef.current, { who: 'bot', text: response, actions: assistShortcuts(trimmed,response,String(assistantContextRef.current.page ?? 'dashboard')) }]
-        chatMessagesRef.current = withBot
-        setMsgs(withBot)
-        return
-      }
       if (!bridge?.chat) throw new Error('MamaLead Assist is available in the MamaLead desktop app with an internet connection.')
       let context = assistantContextRef.current
-      if (/decision\s*makers?|dm\s*searches?/i.test(trimmed)) {
-        try {
-          const status = await window.desktop?.billing?.status()
-          if (status?.connected && status.decisionMaker) {
-            updateDecisionAllowance(status.decisionMaker)
-            context = { ...context, decisionMakerSearchesRemaining: status.decisionMaker.monthlyRemaining, decisionMakerSearchesLimit: status.decisionMaker.monthlyLimit, decisionMakerPeriodEndsAt: status.decisionMaker.renewsAt, decisionMakerAccessStatus: status.decisionMaker.status }
-          }
-        } catch { /* Other support questions still work when billing is offline. */ }
-      }
       const result = await bridge.chat({
         messages: next.slice(-16).map((message) => ({
           role: message.who === 'me' ? ('user' as const) : ('assistant' as const),
@@ -800,10 +704,10 @@ export function useAppValues() {
       chatPendingRef.current = Math.max(0, chatPendingRef.current - 1)
       if (chatPendingRef.current === 0) setChatTyping(false)
     }
-  }, [updateDecisionAllowance, featureAccessAllowed, showAccessPrompt])
+  }, [featureAccessAllowed, showAccessPrompt])
 
   const go = useCallback((next: string) => {
-    setView(next)
+    setView(Object.hasOwn(VIEW_NAMES, next) ? next : 'dashboard')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
@@ -848,8 +752,7 @@ export function useAppValues() {
       go('settings')
       // Re-read server state; a protocol link is navigation, never proof of payment.
       const status = await bridge.status().catch(() => null)
-      const needsKey = !status?.coreLicenseActive && !status?.decisionKeyActive ||
-        Boolean(status?.purchaseEmail && !status.coreLicenseActive) || Boolean(status?.decisionKeyEmail && !status.decisionKeyActive)
+      const needsKey = !status?.coreLicenseActive || Boolean(status?.purchaseEmail && !status.coreLicenseActive)
       setStab(needsKey ? 'acct' : 'plan')
       if (needsKey) setBillingJump({target:'license'})
       window.dispatchEvent(new Event('nafran:billing-updated'))
@@ -858,89 +761,6 @@ export function useAppValues() {
     void returnToBilling()
     return unsubscribe
   }, [go])
-
-  const startDecisionCheckoutWatch = useCallback(() => {
-    const until = Date.now() + 60 * 60 * 1000
-    try { window.localStorage.setItem(DECISION_CHECKOUT_PENDING_KEY, String(until)) } catch { /* Poll for this session. */ }
-    setDecisionCheckoutUntil(until)
-  }, [])
-
-  useEffect(() => {
-    const bridge = window.desktop?.billing
-    if (!bridge?.claimDecisionSubscribeHandoff || !bridge.onDecisionSubscribeHandoff) return
-    let busy = false
-    let cancelled = false
-    const openFromWebsite = async () => {
-      if (busy || cancelled) return
-      busy = true
-      try {
-        const claimed = await bridge.claimDecisionSubscribeHandoff()
-        if (!claimed || cancelled) return
-        go('settings')
-        setStab('plan')
-        const result = await bridge.checkout('decisionMaker', '')
-        if (!result.opened) throw new Error('Stripe Checkout could not be opened.')
-        startDecisionCheckoutWatch()
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Decision Makers payment could not be opened.'
-        notify('Decision Makers payment unavailable', message, 'error')
-        window.dispatchEvent(new CustomEvent('nafran:billing-error', { detail: message }))
-      } finally { busy = false }
-    }
-    const unsubscribe = bridge.onDecisionSubscribeHandoff(() => { void openFromWebsite() })
-    void openFromWebsite()
-    return () => { cancelled = true; unsubscribe() }
-  }, [go, notify, startDecisionCheckoutWatch])
-
-  useEffect(() => {
-    if (!decisionCheckoutUntil) return
-    const bridge = window.desktop?.billing
-    if (!bridge) return
-    let cancelled = false
-    let checking = false
-    const stopWatch = () => {
-      try { window.localStorage.removeItem(DECISION_CHECKOUT_PENDING_KEY) } catch { /* Session state still clears. */ }
-      setDecisionCheckoutUntil(0)
-    }
-    const checkPayment = async () => {
-      if (cancelled || checking) return
-      if (Date.now() >= decisionCheckoutUntil) { stopWatch(); return }
-      checking = true
-      try {
-        const status = await bridge.status()
-        if (cancelled || !status.connected) return
-        updateDecisionAllowance(status.decisionMaker ?? null)
-        if (status.decisionKeyEmail && !status.decisionKeyActive) {
-          stopWatch()
-          setLicenseNextStep(`Payment confirmed. Your Decision Makers key was sent to ${status.decisionKeyEmail}. Paste it below to activate this machine.`)
-          notify('Decision Makers key sent', `Your key was emailed to ${status.decisionKeyEmail}. Activate it in Settings → Account.`, 'success')
-          go('settings')
-          setStab('acct')
-          return
-        }
-        if (status.decisionMaker?.active && status.decisionMaker.status !== 'included') {
-          stopWatch()
-          setDecisionPrompt('')
-          const until = status.decisionMaker.renewsAt ? new Date(status.decisionMaker.renewsAt).toLocaleDateString() : 'the end of this paid period'
-          notify('Decision Makers are ready', `${status.decisionMaker.monthlyRemaining} of 1,000 searches are available until ${until}.`, 'success')
-          window.dispatchEvent(new Event('nafran:billing-updated'))
-          window.dispatchEvent(new Event('nafran:decision-payment-confirmed'))
-          go('settings')
-          setStab('plan')
-        }
-      } catch { /* Keep checking while Stripe Checkout finishes. */ }
-      finally { checking = false }
-    }
-    const onFocus = () => { void checkPayment() }
-    void checkPayment()
-    const timer = window.setInterval(() => void checkPayment(), 5000)
-    window.addEventListener('focus', onFocus)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [decisionCheckoutUntil, go, notify, updateDecisionAllowance])
 
   // Stripe Checkout runs in the user's browser. Only the billing server's paid status can move
   // this app to the licence field; opening Checkout alone must never count as a purchase.
@@ -1324,24 +1144,6 @@ export function useAppValues() {
     return () => window.clearTimeout(timer)
   }, [googlePanel])
 
-  /**
-   * What the deep pass is working with, read once at launch.
-   *
-   * A machine that supplies the key through its own environment has it already, so the Settings row
-   * says where it came from rather than claiming there is none. A key saved in the app is handed
-   * over with it, so a pass started before Settings was ever opened still has one to use.
-   */
-  useEffect(() => {
-    const bridge = typeof window === 'undefined' ? undefined : window.desktop?.deep
-    if (!bridge?.status) return
-    const saved = readDeepKey()
-    if (saved) void bridge.key(saved)
-    void bridge
-      .status()
-      .then((status) => setDeepKeyFromEnvironment(status.fromEnvironment))
-      .catch(() => undefined)
-  }, [])
-
   useEffect(() => {
     void window.desktop?.emailValidity?.status().then((status) => {
       setLeadsAngelConfigured(status.leadsAngelConfigured)
@@ -1385,7 +1187,6 @@ export function useAppValues() {
       setImpOpen(false)
       setImpValue('')
       impText.current = ''
-      setDecisionImportSelection(null)
       closeBulkKeywords()
       setExpOpen(false)
       setProfileExportOpen(false)
@@ -1414,7 +1215,6 @@ export function useAppValues() {
       }
       // Enrichment actions queue real work instead of only reporting it. The worker reads each
       // lead's own website, so these are the buttons that fill the Email, Social, Phone and
-      // Decision Maker pages.
       const enrichmentKind = enrichmentForLabel(label)
       if (enrichmentKind) {
         void queueEnrichmentRef.current(enrichmentKind)
@@ -1451,11 +1251,9 @@ export function useAppValues() {
   const [mapsLimit, setMapsLimit] = useState(25)
   // What is typed in the Maps results filter. The table beside it narrows to the matches.
   const [mapsQuery, setMapsQuery] = useState('')
-  // How many blocked leads the Decision Makers page is listing. The page draws forty at a time and
   // its own "Show all" raises that rather than pretending to. The matched contacts are paged the
   // same way, so a workspace with thousands of named people does not draw every card at once.
-  const [dmBlockerLimit, setDmBlockerLimit] = useState(40)
-  const [dmContactLimit, setDmContactLimit] = useState(40)
+
   // All Leads owns a database page; only rows the user has requested live in the renderer.
   const [leadPage, setLeadPage] = useState<StoredLead[]>([])
   const [leadPageTotal, setLeadPageTotal] = useState(0)
@@ -1478,16 +1276,7 @@ export function useAppValues() {
   const [rangeDashboard, setRangeDashboard] = useState<{ range: typeof range; totals: DashboardTotals } | null>(null)
   const rangeRequest = useRef(0)
   const [phone, setPhone] = useState<{ rows: PhoneRow[]; summary: PhoneSummary | null }>({ rows: [], summary: null })
-  const [people, setPeople] = useState<{ rows: DecisionMakerRow[]; funnel: DecisionMakerFunnel | null }>({
-    rows: [],
-    funnel: null,
-  })
-  const [suggestions, setSuggestions] = useState<CandidateRow[]>([])
-  // Decision Makers starts empty and owns the exact websites in the current import.
-  const dmSession = useRef({ generation: 0, leadIds: [] as string[] })
-  const [dmSessionLeads, setDmSessionLeads] = useState<StoredLead[]>([])
-  const [dmExportBusy, setDmExportBusy] = useState(false)
-  const dmExportLock = useRef(false)
+
   const [imports, setImports] = useState<{
     batches: Record<string, unknown>[]
     websiteBatches: Record<string, unknown>[]
@@ -1545,7 +1334,6 @@ export function useAppValues() {
       if (historyRequest === runsRequest.current) {setRuns(history);setRunStats(counts)}
       setDashboard(totals)
       if (request === rangeRequest.current) setRangeDashboard(periodTotals ? { range, totals: periodTotals } : null)
-      // The Phone Finder and Decision Makers pages read their own tables.
       void refreshPhone()
       // Website Lookup: the batches and the leads they created, read in one call.
       void Promise.all([db.imports.ledger(), db.imports.list(5000)])
@@ -1554,23 +1342,17 @@ export function useAppValues() {
           const recent = websiteLeads[0]
           let preview: typeof imports.preview = null
           if (recent) {
-            const [lead, emails, socials, people] = await Promise.all([
-              db.leads.get(recent.id),
-              db.contacts.list('email', [recent.id]),
-              db.social.list([recent.id]),
-              db.people.list([recent.id]),
-            ])
+            const [lead, emails, socials] = await Promise.all([db.leads.get(recent.id), db.contacts.list('email', [recent.id]), db.social.list([recent.id])])
             if (lead) {
               const email = emails.find((item) => typeof item.value === 'string')
-              const person = people.find((item) => typeof item.full_name === 'string')
               preview = {
                 domain: hostOf(lead.website),
                 name: lead.name,
                 address: lead.address || '',
                 phone: lead.phone || '',
                 email: typeof email?.value === 'string' ? email.value : '',
+                person: '',
                 socials: socials.map((item) => String(item.platform ?? '')).filter(Boolean).join(', '),
-                person: person ? `${String(person.full_name)}${person.title ? ` · ${String(person.title)}` : ''}` : '',
               }
             }
           }
@@ -1710,18 +1492,9 @@ export function useAppValues() {
     }
   }, [db, keep, listTarget, lists, newListName, snapshot.leads, refreshLists, flash])
 
-  const showDecisionPassPrompt = useCallback((message: string) => {
-    if (!/decision makers?.*(?:pass|searches|access|subscribe|renew)|(?:pass|searches|subscribe|renew).*decision makers?/i.test(message)) return false
-    setDecisionPrompt('Your Decision Makers allowance has ended. Buy the next Rs 1,000 pass to unlock 1,000 searches for 30 days.')
-    setView('settings')
-    setStab('plan')
-    flash('Decision Makers paused. Buy the next 30-day pass in Settings → Usage.')
-    return true
-  }, [flash])
-
   /** Queues an enrichment pass over the leads still missing the kind of contact asked for. */
   const queueEnrichment = useCallback(
-    async (kind: 'email' | 'phone' | 'social' | 'decision-maker'): Promise<number> => {
+    async (kind: 'email' | 'phone' | 'social'): Promise<number> => {
       if (!db) {
         flash('The local database is not available in this window.')
         return 0
@@ -1730,13 +1503,12 @@ export function useAppValues() {
         email: 'email',
         phone: 'phone',
         social: 'social',
-        'decision-maker': 'decision maker',
+
       }[kind]
       try {
-        // A phone or a decision maker is read from the lead's website just like an address is.
         const leads = await db.leads.needing(kind === 'social' ? 'social' : kind === 'phone' ? 'phone' : 'email')
         if (!leads.length) {
-          flash(`Every lead with a website already has ${kind === 'decision-maker' ? 'a named contact' : `a ${label} detail`}.`)
+          flash(`Every lead with a website already has a ${label} detail.`)
           return 0
         }
         const { queued, jobId } = await db.jobs.queue(kind, leads.map((lead) => lead.id))
@@ -1746,11 +1518,11 @@ export function useAppValues() {
         return queued
       } catch (error) {
         const message = error instanceof Error ? error.message : 'The pass could not be queued.'
-        if (kind !== 'decision-maker' || !showDecisionPassPrompt(message)) flash(message)
+        flash(message)
         return 0
       }
     },
-    [db, flash, showDecisionPassPrompt],
+    [db, flash],
   )
   queueEnrichmentRef.current = queueEnrichment
 
@@ -1762,23 +1534,23 @@ export function useAppValues() {
    * website are dropped — there is nothing to read — and the rest are queued as one job.
    */
   const queueLeads = useCallback(
-    async (kind: 'email' | 'phone' | 'decision-maker', leadIds: string[]): Promise<{ queued: number; jobId: string }> => {
+    async (kind: 'email' | 'phone', leadIds: string[]): Promise<{ queued: number; jobId: string }> => {
       if (!db || !leadIds.length) return { queued: 0, jobId: '' }
       try {
         const result = await db.jobs.queue(kind, leadIds)
         // A finder action is an explicit foreground request. Wake the worker now instead of
         // waiting for the next background tick or an unrelated job to finish.
         await (window.desktop?.enrichment?.prioritize?.(result.jobId) ?? window.desktop?.enrichment?.start?.())
-        const label = kind === 'email' ? 'email' : kind === 'phone' ? 'phone' : 'decision maker'
+        const label = kind === 'email' ? 'email' : 'phone'
         flash(`${result.queued} ${result.queued === 1 ? 'lead' : 'leads'} queued for ${label} enrichment.`)
         return result
       } catch (error) {
         const message = error instanceof Error ? error.message : 'The pass could not be queued.'
-        if (kind !== 'decision-maker' || !showDecisionPassPrompt(message)) flash(message)
+        flash(message)
         return { queued: 0, jobId: '' }
       }
     },
-    [db, flash, showDecisionPassPrompt],
+    [db, flash],
   )
 
   /** Checks the email addresses currently represented on the Email Finder page. */
@@ -1885,7 +1657,6 @@ export function useAppValues() {
       return
     }
     const value = lines.join('\n')
-    setDecisionImportSelection(null)
     impText.current = value
     setImpValue(value)
     setImpOpen(true)
@@ -2065,78 +1836,6 @@ export function useAppValues() {
     })
     return () => window.cancelAnimationFrame(frame)
   }, [scan.phase])
-
-  /**
-   * Builds suggestions from what is already on file and shows them. No page is visited: the
-   * addresses and company pages already in the database are enough to propose names, which a
-   * person then confirms or dismisses.
-   */
-  const buildSuggestions = useCallback(async () => {
-    if (!db) {
-      flash('The local database is not available in this window.')
-      return
-    }
-    try {
-      const { suggested } = await db.people.buildSuggestions()
-      // The new rows are shown straight away rather than waiting for the next refresh. Decided
-      // ones come back too, so a card that was dismissed in this session keeps its Undo.
-      setSuggestions(await db.people.candidates(true))
-      void refreshLists()
-      flash(
-        suggested
-          ? `${suggested} new name${suggested === 1 ? '' : 's'} suggested. Confirm the ones that are right.`
-          : 'Nothing new to suggest from what is on file.',
-      )
-    } catch (error) {
-      flash(error instanceof Error ? error.message : 'Suggestions could not be built.')
-    }
-  }, [db, refreshLists, flash])
-
-  const confirmSuggestion = useCallback(
-    async (id: string) => {
-      if (!db) return
-      try {
-        await db.people.confirm(id)
-        setSuggestions(await db.people.candidates(true))
-        void refreshLists()
-        flash('Added to the named contacts.')
-      } catch (error) {
-        flash(error instanceof Error ? error.message : 'That suggestion could not be confirmed.')
-      }
-    },
-    [db, refreshLists, flash],
-  )
-
-  const dismissSuggestion = useCallback(
-    async (id: string) => {
-      if (!db) return
-      try {
-        await db.people.dismiss(id)
-        // Dismissed rows are read back as well, because the card that was decided now carries the
-        // outcome and the Undo that reverses it.
-        setSuggestions(await db.people.candidates(true))
-        flash('Dismissed. It will not be suggested again.')
-      } catch (error) {
-        flash(error instanceof Error ? error.message : 'That suggestion could not be dismissed.')
-      }
-    },
-    [db, refreshLists, flash],
-  )
-
-  /** Puts a dismissed suggestion back in the queue. A confirmed one has already become a contact. */
-  const restoreSuggestion = useCallback(
-    async (id: string) => {
-      if (!db) return
-      try {
-        await db.people.restore(id)
-        setSuggestions(await db.people.candidates(true))
-        flash('Back in the queue.')
-      } catch (error) {
-        flash(error instanceof Error ? error.message : 'That suggestion could not be restored.')
-      }
-    },
-    [db, flash],
-  )
 
   useEffect(() => {
     if (!db || snapshot.running) { setMapsResultsLoading(false); return }
@@ -2320,7 +2019,7 @@ export function useAppValues() {
       if (!result) return
       setExpOpen(false)
       flash(`Saved ${result.rows} row${result.rows === 1 ? '' : 's'} to ${result.path}.`)
-      
+
     } catch (error) {
       flash(error instanceof Error ? error.message : 'The export could not be written.')
     } finally { exportLock.current = false; setExportBusy(false) }
@@ -2365,26 +2064,6 @@ export function useAppValues() {
   )
 
   /** The named contacts and the funnel behind them, read in one call. */
-  const refreshPeople = useCallback(async () => {
-    if (!db) return
-    const session = dmSession.current
-    try {
-      const [rows, funnel, candidates, sessionLeads] = await Promise.all([
-        db.people.ledger(),
-        db.people.funnel(),
-        // Dismissed suggestions come back too: a decided card shows its outcome and can be undone.
-        db.people.candidates(true),
-        Promise.all(session.leadIds.map((id) => db.leads.get(id))),
-      ])
-      setPeople({ rows: rows as DecisionMakerRow[], funnel })
-      setSuggestions(candidates)
-      if (session.generation === dmSession.current.generation) {
-        setDmSessionLeads(sessionLeads.filter((lead): lead is StoredLead => Boolean(lead)))
-      }
-    } catch {
-      // Leaving the last good value on screen beats clearing the page on a read failure.
-    }
-  }, [db])
 
   // Reloaded whenever a run finishes, because a run changes both the lead count and the usage.
   useEffect(() => {
@@ -2403,12 +2082,8 @@ export function useAppValues() {
     }
   }, [refreshMapsAllowance])
 
-  // The Decision Makers page reads its funnel from the database, so it has to be filled on the
   // first load as well. Without this the page only ever populated when an enrichment pass
   // happened to finish while the window was open, and showed zeroes the rest of the time.
-  useEffect(() => {
-    void refreshPeople()
-  }, [refreshPeople, snapshot.running, snapshot.revision])
 
   /**
    * The enrichment worker writes while the window is open, so its results have to be pulled in
@@ -2432,11 +2107,10 @@ export function useAppValues() {
         }
         if (enrichmentWasActive.current) {
           enrichmentWasActive.current = false
-          
+
         }
         // It has stopped, so whatever it found is now on file.
         await refreshLists()
-        await refreshPeople()
       } catch {
         // A failed poll just means no refresh; the next action will reload anyway.
       }
@@ -2447,19 +2121,7 @@ export function useAppValues() {
       cancelled = true
       if (timer) window.clearTimeout(timer)
     }
-  }, [notify, refreshLists, refreshPeople])
-
-  // A paid deep pass can finish between the queue poll ticks. Refresh its suggestions directly
-  // from the completion event so the Decision Makers page shows the saved owner immediately.
-  useEffect(() => {
-    const bridge = typeof window === 'undefined' ? undefined : window.desktop?.enrichment
-    if (!bridge?.onProgress) return
-    return bridge.onProgress((progress) => {
-      if (progress.kind === 'deep' && (progress.status === 'done' || progress.status === 'failed')) {
-        void refreshPeople()
-      }
-    })
-  }, [refreshPeople])
+  }, [notify, refreshLists])
 
   // Fetch only the first page for All Leads. A search or chip change starts a new query over the
   // whole database; stale responses cannot overwrite a newer query.
@@ -2642,7 +2304,6 @@ export function useAppValues() {
       ? (exportRun.saved ?? exportRun.found).toLocaleString()+' results · '+(termsOfRun(exportRun) || 'Google Maps search')+' near '+(exportRun.location || 'your selected location')+' · '+shortDateTime(exportRun.started_at)
       : 'Start a scan. Your searches and their results are saved automatically on this device.'
 
-
   /**
    * Whether the run is still getting Google connected rather than scraping.
    *
@@ -2681,13 +2342,13 @@ export function useAppValues() {
   const dashWithPhone = selectedDashboard?.withPhone ?? 0
   const dashWithEmail = selectedDashboard?.withEmail ?? 0
   const dashWithSocial = selectedDashboard?.withSocial ?? 0
-  const dashDm = selectedDashboard?.decisionMakers ?? 0
+
   const dashEnriched = selectedDashboard?.enriched ?? 0
   const dashExportReady = selectedDashboard?.exportReady ?? 0
   const dashPhonePct = dashShare(dashWithPhone)
   const dashEmailPct = dashShare(dashWithEmail)
   const dashSocialPct = dashShare(dashWithSocial)
-  const dashDmPct = dashShare(dashDm)
+
   const biggestPlatform = selectedDashboard?.platforms[0]
   // Compare a selected window with the equally long preceding window.
   const dashScrapeDelta = (() => {
@@ -2731,8 +2392,7 @@ export function useAppValues() {
       count: String(category.count),
       width: `${Math.max(6, Math.round((category.count / Math.max(1, selectedDashboard?.categories[0]?.count ?? 1)) * 100))}%`,
     })),
-    dashDmOffset: offset(dashDmPct),
-    dashDmPct,
+
     dashEmailOffset: offset(dashEmailPct),
     dashEmailPct,
     dashEnriched,
@@ -2863,8 +2523,8 @@ export function useAppValues() {
   const usedEmailLookups = plan.lookups.email ?? 0
   const usedPhoneLookups = plan.lookups.phone ?? 0
   const usedSocialLookups = plan.lookups.social ?? 0
-  const usedDmLookups = plan.lookups['decision-maker'] ?? 0
-  const busiestLookup = Math.max(1, usedEmailLookups, usedPhoneLookups, usedSocialLookups, usedDmLookups)
+
+  const busiestLookup = Math.max(1, usedEmailLookups, usedPhoneLookups, usedSocialLookups)
   const billingValues = {
     // The window the usage counters actually cover: the current calendar month.
     cycleRange: (() => {
@@ -2879,12 +2539,12 @@ export function useAppValues() {
     usedEmailLookups,
     usedPhoneLookups,
     usedSocialLookups,
-    usedDmLookups,
+
     meterScrapes: lookupWidth(usage?.used ?? 0, usage?.limit ?? 2000),
     meterEmail: lookupWidth(usedEmailLookups, busiestLookup),
     meterPhone: lookupWidth(usedPhoneLookups, busiestLookup),
     meterSocial: lookupWidth(usedSocialLookups, busiestLookup),
-    meterDm: lookupWidth(usedDmLookups, busiestLookup),
+
   }
 
   // Chips count the whole ledger rather than a fixed sample, so the numbers agree with the rows.
@@ -3039,155 +2699,18 @@ export function useAppValues() {
     if(!matched.length)return row
     return {...row,phone:matched[0].t,mainSource:matched[0].t===row.phone?row.mainSource:undefined,extraNumbers:row.items.filter(item=>item.t!==matched[0].t).map(item=>({value:item.t,page:item.k}))}
   })
-  const dmScope = new Set(dmSession.current.leadIds)
-  const dmPeopleRows = people.rows.filter((person) => dmScope.has(person.lead_id) && isBusinessOwner(person.title)).map(person=>({...person,email:sourcedOwnerEmail(person.full_name,person.email,person.email_evidence,person.source)}))
-  const dmSuggestions = suggestions.filter((person) => dmScope.has(person.lead_id) && !dmPeopleRows.some(saved=>saved.lead_id===person.lead_id && saved.full_name.toLowerCase()===person.full_name.toLowerCase()))
-  const dmMatchedIds = new Set(dmPeopleRows.map((person) => person.lead_id))
-  const dmLinkedinIds = new Set(dmPeopleRows.filter((person) => person.linkedin_url).map((person) => person.lead_id))
-  const dmEmailIds = new Set(dmPeopleRows.filter(person=>person.email).map(person=>person.lead_id))
-  const dmPeople = { rows: dmPeopleRows, funnel: {
-    total: dmSessionLeads.length, withWebsite: dmSessionLeads.filter((lead) => lead.website).length,
-    withLinkedin: dmLinkedinIds.size, named: dmMatchedIds.size, matched: dmMatchedIds.size,
-    missing: dmSessionLeads.length - dmMatchedIds.size,
-  } }
-  const dmSavedPeople=people.rows.filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:sourcedOwnerEmail(person.full_name,person.email,person.email_evidence,person.source)}))
-  const dmSearchLeads=[...new Map([...dmSessionLeads.map(lead=>({id:lead.id,name:lead.name,website:lead.website,last_scanned_at:lead.last_scanned_at})),...dmSavedPeople.map(person=>({id:person.lead_id,name:person.lead_name,website:person.lead_website,last_scanned_at:person.last_scanned_at}))].map(lead=>[lead.id,lead])).values()]
-  const dmFinder = useFinderScan({
-    historyScope:'dm',
-    defaultScopeIds:dmSession.current.leadIds,
-    rows: dmSearchLeads.map((lead) => {
-      const named = dmSavedPeople.filter((person) => person.lead_id === lead.id)
-      return {
-        leadId: lead.id,
-        domain: lead.website?.trim() ? hostOf(lead.website) : '',
-        searchText: lead.name,
-        searchFields:[lead.name,lead.website,...named.flatMap(person=>[person.full_name,person.title,person.email])],
-        scanned: Boolean(lead.last_scanned_at),
-        items: named.map((person) => ({ t: person.full_name, k: person.email || 'Email not published' })),
-        statusLabel: named.length ? `${named.length} owner${named.length===1?'':'s'}` : 'Owner not identified',
-      }
-    }),
-    mode: 'scan',
-    queue: async (leadIds) => {
-      const result = await queueLeads('decision-maker', leadIds)
-      if (leadIds.length && !result.jobId) throw new Error('The Decision Maker scan could not start.')
-      return result
-    },
-    jobStatus: (jobId) => db?.jobs.status(jobId) ?? Promise.resolve(null),
-    refresh: refreshPeople,
-    ringSource: (rows) => [
-      { name: 'Selected leads', count: rows.length },
-      { name: 'With website', count: rows.filter(row=>row.domain).length },
-      { name: 'Owner identified', count: rows.filter(row=>dmMatchedIds.has(row.leadId)).length },
-      { name: 'Owner email found', count: rows.filter(row=>dmEmailIds.has(row.leadId)).length },
-    ],
-    actionLabel: 'Find owner emails',
-    runningLabel: () => 'Checking owner/founder evidence and published email addresses…',
-    doneLabel: () => `${dmPeopleRows.filter(person=>person.email).length} published owner email${dmPeopleRows.filter(person=>person.email).length === 1 ? '' : 's'} found. Generic business mailboxes are excluded.`,
-    onExport: () => void runDecisionExport('xlsx'),
-    // Bring this import's people and direct export buttons into view after the pass settles.
-    resultSelector: '[data-fres="dm"]',
-    progressSelector: '[data-decision-progress]',
-    filterItemsOnSearch: true,
-  })
-
-  const dmVisibleLeadIds = new Set(dmFinder.rows.map((row) => row.leadId))
-  const dmCompletedLeadIds = new Set(dmFinder.rows.filter(row=>!dmFinder.scanOn || Boolean(row.lookupOutcome && row.lookupOutcome.status!=='error')).map(row=>row.leadId))
-  const dmVisiblePeople = (dmFinder.q.trim()?dmSavedPeople:dmPeopleRows).filter((person) => dmVisibleLeadIds.has(person.lead_id) && dmCompletedLeadIds.has(person.lead_id) &&
-    matchesFinderSearch([person.full_name,person.title, person.lead_name, person.lead_website, person.email].filter(Boolean).join(' '), dmFinder.q)).sort((a,b)=>dmFinder.rows.findIndex(row=>row.leadId===a.lead_id)-dmFinder.rows.findIndex(row=>row.leadId===b.lead_id))
-
-  const runDecisionExport = async (format: 'xlsx' | 'pdf') => {
-    if (!db || dmExportLock.current || dmFinder.scanning) return
-    const session = { ...dmSession.current, leadIds: [...new Set(dmVisiblePeople.map(person=>person.lead_id))] }
-    if (!dmVisiblePeople.length || !session.leadIds.length) { flash('Scan websites to find people before exporting.'); return }
-    dmExportLock.current = true
-    setDmExportBusy(true)
-    try {
-      const result = await db.exports.write({ kind: 'people', format, limit: dmVisiblePeople.length,
-        delimiter: 'csv', fileName: `decision-makers.${format}`, leadIds: session.leadIds,
-        columns: ['Business name', 'Domain', 'Owner', 'Owner email', 'Email evidence', 'Source'],
-      })
-      if (!result || result.rows === 0) return
-      if (session.generation === dmSession.current.generation) {
-        dmSession.current = { generation: session.generation + 1, leadIds: [] }
-        setDmSessionLeads([])
-        setDmBlocker('All blockers')
-        setDmContactLimit(40)
-        dmFinder.reset()
-        void refreshPeople()
-        void refreshLists()
-      }
-      flash(`Saved ${result.rows} contact${result.rows === 1 ? '' : 's'} to ${result.fileName}. Ready for the next scan.`)
-    } catch (error) { flash(error instanceof Error ? error.message : 'The export could not be saved. Your scan is still available.') }
-    finally { dmExportLock.current = false; setDmExportBusy(false) }
-  }
-
-  const scanDecisionLeads = useCallback((ids:string[]) => {
-    if (!db || dmFinder.scanning) { flash('Stop the current owner scan before starting another.'); return }
-    const leadIds=[...new Set(ids)]
-    if (!leadIds.length) { flash('Choose a saved Maps search or select some leads first.'); return }
-    setImpOpen(false);setImpValue('');impText.current='';setDecisionImportSelection(null)
-    const generation=dmSession.current.generation+1
-    dmSession.current={generation,leadIds}
-    setDmSessionLeads([]);setDmContactLimit(40);setDmBlockerLimit(40);setDmBlocker('All blockers');dmFinder.reset()
-    void (async()=>{
+  const runFinderImport = useCallback((page: 'email' | 'phone', lines: string[]): void => {
+    if (!db || !lines.length) return
+    setImpOpen(false); setImpValue(''); impText.current = ''
+    void (async () => {
       try {
-        await refreshPeople()
-        if(dmSession.current.generation!==generation)return
-        dmFinder.scanImported(leadIds)
-        flash(`${leadIds.length} lead${leadIds.length===1?'':'s'} selected for owner email lookup, including businesses without a website.`)
-      }catch(error){flash(error instanceof Error?error.message:'The selected leads could not be loaded.')}
+        const result = await db.imports.websites(lines, {enqueue:false})
+        await Promise.all([refreshLists(), reload(), page === 'email' ? email.refresh() : refreshPhone()])
+        ;(page === 'email' ? emailFinder : phoneFinder).scanImported(result.leadIds)
+        flash(`${result.leadIds.length} websites selected for ${page} lookup.`)
+      } catch(error) { flash(error instanceof Error ? error.message : 'The sites could not be imported.') }
     })()
-  },[db,dmFinder,refreshPeople,flash])
-
-  const runFinderImport = useCallback(
-    (page: 'email' | 'phone' | 'dm', lines: string[]): void => {
-      if (!db || !lines.length) return
-      if (page === 'dm' && dmFinder.scanning) { flash('Stop the current owner scan before importing another list.'); return }
-      setImpOpen(false)
-      setImpValue('')
-      impText.current = ''
-      const dmGeneration = page === 'dm' ? dmSession.current.generation + 1 : null
-      if (dmGeneration !== null) {
-        dmSession.current = { generation: dmGeneration, leadIds: [] }
-        setDmSessionLeads([])
-        setDmContactLimit(40)
-        setDmBlockerLimit(40)
-        setDmBlocker('All blockers')
-        dmFinder.reset()
-      }
-      void (async () => {
-        try {
-          // This finder queues its own targeted job. Do not also crawl every field in the background.
-          const result = await db.imports.websites(lines,{enqueue:false})
-          if (dmGeneration !== null) {
-            if (dmGeneration !== dmSession.current.generation) return
-            dmSession.current = { generation: dmGeneration, leadIds: [...new Set(result.leadIds)] }
-          }
-          const field = document.querySelector<HTMLTextAreaElement>('[data-imptext="1"]')
-          if (field) field.value = ''
-          // Refresh the lead snapshot and the active finder in parallel. The old sequential
-          // chain made a one-site lookup wait for five independent database reads before its
-          // worker could even start.
-          await Promise.all([
-            refreshLists(),
-            // Refresh workspace previews alongside the explicit imported-site scope.
-            reload(),
-            page === 'email' ? email.refresh() : Promise.resolve(),
-            page === 'phone' ? refreshPhone() : Promise.resolve(),
-            page === 'dm' ? refreshPeople() : Promise.resolve(),
-          ])
-          if (dmGeneration !== null && dmGeneration !== dmSession.current.generation) return
-          const finder = page === 'email' ? emailFinder : page === 'phone' ? phoneFinder : dmFinder
-          finder.scanImported(result.leadIds)
-          flash(`${result.leadIds.length} website${result.leadIds.length === 1 ? '' : 's'} selected for ${page === 'email' ? 'email' : page === 'phone' ? 'phone' : 'decision maker'} lookup.`)
-        } catch (error) {
-          flash(error instanceof Error ? error.message : 'The sites could not be imported.')
-        }
-      })()
-    },
-    [db, refreshLists, reload, email, refreshPhone, refreshPeople, emailFinder, phoneFinder, dmFinder, flash],
-  )
+  }, [db, refreshLists, reload, email, refreshPhone, emailFinder, phoneFinder, flash])
   runFinderImportRef.current = runFinderImport
 
   /**
@@ -3228,24 +2751,6 @@ export function useAppValues() {
    * It is built here rather than inside the values object because two keys describe it — the rows
    * themselves and the count the footer states — and the count has to be the rows' own length.
    */
-  const dmBlockerRows = (() => {
-    const withPeople = new Set(dmPeople.rows.map((person) => person.lead_id))
-    const blocked = dmSessionLeads.filter((lead) => !withPeople.has(lead.id))
-    return blocked
-      .map((lead) => {
-        const blocker = !lead.website ? 'No website' : lead.last_scanned_at ? 'No people listed' : 'Pending'
-        return {
-          name: lead.name,
-          domain: hostOf(lead.website) || 'No website found',
-          blocker,
-          isNoWebsite: blocker === 'No website' ? '1' : '',
-          isNoPeople: blocker === 'No people listed' ? '1' : '',
-          isPending: blocker === 'Pending' ? '1' : '',
-        }
-      })
-      .filter((row) => dmBlocker === 'All blockers' || row.blocker === dmBlocker)
-      .slice(0, dmBlockerLimit)
-  })()
 
   // The main process sends this compact, live workspace snapshot with each AI request. It gives
   // MamaLead Assist useful answers about the current account without exposing the local database or
@@ -3256,12 +2761,7 @@ export function useAppValues() {
     leadsWithEmail: dashboard?.withEmail ?? ledgerWithEmail,
     leadsWithPhone: dashboard?.withPhone ?? ledgerWithPhone,
     leadsWithSocialProfiles: dashboard?.withSocial ?? ledgerWithSocial,
-    namedDecisionMakers: dashboard?.decisionMakerPeople ?? people.rows.length,
-    missingDecisionMakers: people.funnel?.missing ?? 0,
-    decisionMakerSearchesRemaining: decisionAllowance?.remaining ?? null,
-    decisionMakerSearchesLimit: decisionAllowance?.limit ?? null,
-    decisionMakerPeriodEndsAt: decisionAllowance?.renewsAt ?? null,
-    decisionMakerAccessStatus: decisionAllowance?.status ?? null,
+
     leadsReadyToExport: dashboard?.exportReady ?? 0,
     mapsRuns: runStats.runs,
     placesCaptured: runStats.places,
@@ -3306,10 +2806,10 @@ export function useAppValues() {
     activeTab: stab,
     activeView: view,
     lifetimeCheckoutPending: lifetimeCheckoutUntil > Date.now(),
-    decisionPrompt,
+
     licenseNextStep,
     startLifetimeCheckoutWatch,
-    startDecisionCheckoutWatch,
+
     clearLicenseNextStep: () => setLicenseNextStep(''),
     chEmails: chEmails ? '1' : '0',
     chLinkedin: chLinkedin ? '1' : '0',
@@ -3324,7 +2824,6 @@ export function useAppValues() {
       setImpOpen(false)
       setImpValue('')
       impText.current = ''
-      setDecisionImportSelection(null)
       social.closeImport()
     },
     decMax: () => setMaxResults((current) => Math.max(5, current - 5)),
@@ -3411,7 +2910,7 @@ export function useAppValues() {
       ? `${found} of ${Math.max(found, snapshot.target || found)} mapped`
       : `0 of ${Math.max(1, maxResults)} mapped`,
     goDashboard: () => go('dashboard'),
-    goDm: () => go('dm'),
+
     goEmail: () => go('email'),
     goLeads: () => go('leads'),
     goLists: () => go('lists'),
@@ -3473,7 +2972,7 @@ export function useAppValues() {
         return
       }
       if (siteLines.length) {
-        if (view === 'email' || view === 'phone' || view === 'dm') runFinderImportRef.current(view, siteLines)
+        if (view === 'email' || view === 'phone') runFinderImportRef.current(view, siteLines)
         else runWebsiteScanRef.current(siteLines)
       }
       if (profileLines.length) runSocialImportRef.current(profileLines)
@@ -3481,7 +2980,7 @@ export function useAppValues() {
     impOpen,
     incMax: () => setMaxResults((current) => Math.min(200, current + 5)),
     isDashboard: view === 'dashboard',
-    isDm: view === 'dm',
+
     isEmail: view === 'email',
     isLeads: view === 'leads',
     isLists: view === 'lists',
@@ -3548,7 +3047,6 @@ export function useAppValues() {
       const row = leadToLedger(lead)
       const found = email.rows.find((entry) => entry.name === lead.name)
       const socials = social.rows.find((entry) => entry.name === lead.name)
-      const person = people.rows.find((entry) => entry.lead_name === lead.name)
       // The address cell is drawn over two lines: street first, then town and postcode.
       const segments = (lead.address || '').split(',').map((part) => part.trim()).filter(Boolean)
       const postcodeAt = segments.findIndex((part) => /^[A-Z]{1,2}\d/i.test(part))
@@ -3576,11 +3074,7 @@ export function useAppValues() {
         // The socials cell: one chip per profile the site published, or the design's own "none".
         socials: (socials?.profiles ?? []).map((profile) => ({ short: profile.short })),
         noSocials: !(socials?.profiles ?? []).length,
-        // The decision column names the person the match found for this lead, or says there is
-        // none. A platform name is not a decision, so it is the people table that answers here.
-        decision: person ? person.title || 'Named contact' : 'No DM',
-        decisionBg: person ? '#DDE3D6' : '#EAEAE8',
-        decisionColor: person ? '#1C1C1C' : '#4A4F4B',
+
       }
     }),
     mapsShowing: Math.min(mapsMatches.length, mapsLimit),
@@ -4036,90 +3530,6 @@ export function useAppValues() {
     queueEmail: () => void queueEnrichment('email'),
     queuePhone: () => void queueEnrichment('phone'),
     queueSocial: () => void queueEnrichment('social'),
-    queueDecisionMakers: () => dmFinder.scanImported(dmSession.current.leadIds),
-    // Retain saved API settings for compatibility. Owner scans now use MamaLead Chrome.
-    deepKeySet: deepKey || deepKeyFromEnvironment ? '1' : '0',
-    deepKeyLabel: deepKey ? describeDeepKey(deepKey) : deepKeyFromEnvironment ? 'Set by this machine' : 'Not set',
-    deepKeyDraft,
-    deepKeyNote: deepKeyCheck
-      ? deepKeyCheck.note
-      : deepKeyFromEnvironment
-        ? 'Set by this machine’s environment. Saving one here takes over from it.'
-        : deepKey
-          ? 'Press Test to check it against the account.'
-          : 'Optional API credential. Decision Makers uses MamaLead Chrome and does not need this key.',
-    onDeepKeyInput: (event: React.InputEvent<HTMLInputElement>) => setDeepKeyDraft(event.currentTarget.value),
-    saveDeepKey: () => {
-      const saved = storeDeepKey(deepKeyDraft)
-      setDeepKey(saved)
-      setDeepKeyDraft('')
-      flash(saved ? 'DataForSEO key saved on this machine.' : 'DataForSEO key removed.')
-    },
-    testDeepKey: () => {
-      const candidate = deepKeyDraft.trim() || deepKey
-      if (!candidate) {
-        flash('Enter a DataForSEO key first.')
-        return
-      }
-      setDeepKeyTesting(true)
-      void window.desktop?.deep
-        ?.check(candidate)
-        .then((result) => {
-          setDeepKeyCheck(result)
-          flash(result.note)
-        })
-        .catch(() => flash('The key could not be checked.'))
-        .finally(() => setDeepKeyTesting(false))
-    },
-    deepKeyTesting: deepKeyTesting ? '1' : '0',
-    leadsAngelLabel: leadsAngelConfigured ? `Ready${leadsAngelExpiresOn ? ` · expires ${leadsAngelExpiresOn}` : ''}` : 'Not imported',
-    importLeadsAngelZip: () => {
-      void window.desktop?.emailValidity?.importLeadsAngelZip().then((result) => {
-        setLeadsAngelConfigured(result.configured)
-        setLeadsAngelExpiresOn(result.expiresOn)
-        if (result.configured) flash('LeadsAngel SMTP license imported securely.')
-      }).catch((error) => flash(error instanceof Error ? error.message : 'LeadsAngel ZIP could not be imported.'))
-    },
-    removeLeadsAngel: () => {
-      void window.desktop?.emailValidity?.removeLeadsAngel().then(() => {
-        setLeadsAngelConfigured(false)
-        setLeadsAngelExpiresOn(null)
-        flash('Saved LeadsAngel license removed.')
-      }).catch((error) => flash(error instanceof Error ? error.message : 'LeadsAngel license could not be removed.'))
-    },
-    dmLeadLimit: Math.min(deepLeadLimit, Math.max(1, dmSessionLeads.length)),
-    dmLeadLimitMax: Math.max(1, dmSessionLeads.length),
-    dmLeadAvailable: dmSessionLeads.length,
-    dmSelectedLabel: dmSessionLeads.length
-      ? `${Math.min(deepLeadLimit, dmSessionLeads.length)} of ${dmSessionLeads.length} imported websites selected`
-      : 'No captured leads yet',
-    onDmLeadLimitInput: (event: React.ChangeEvent<HTMLInputElement>) => {
-      const parsed = Number.parseInt(event.currentTarget.value, 10)
-      if (!Number.isFinite(parsed)) return
-      setDeepLeadLimit(Math.max(1, Math.min(50, parsed)))
-    },
-    deepRun: () => {
-      const bridge = typeof window === 'undefined' ? undefined : window.desktop?.deep
-      if (!bridge?.run) {
-        flash('The deep pass is only available in the desktop app.')
-        return
-      }
-      const selectedLeadIds = dmSessionLeads.slice(0, Math.max(1, Math.min(deepLeadLimit, dmSessionLeads.length))).map((lead) => lead.id)
-      if (!selectedLeadIds.length) {
-        flash('Import websites into Decision Makers first, then choose how many to enrich.')
-        return
-      }
-      void bridge
-        .run(selectedLeadIds)
-        .then((result) => {
-          if (result.error) {
-            if (!showDecisionPassPrompt(result.error)) flash(result.error)
-            return
-          }
-          flash(`${result.queued} selected lead${result.queued === 1 ? '' : 's'} queued — finding owners and matching their published emails.`)
-        })
-        .catch(() => flash('The deep pass could not be queued.'))
-    },
     runImport,
     ...dashboardValues,
     ...billingValues,
@@ -4165,129 +3575,10 @@ export function useAppValues() {
       if (!missing) return 'Every lead on file has a number or a site that cannot be read for one.'
       return `${canFill} of the ${missing} missing leads have a website to scrape.`
     })(),
-    // Decision Makers. The cards are the people actually found, and the funnel counts how many
-    // leads reached each step of the match.
-    dmMatched: dmPeople.funnel?.matched ?? 0,
-    dmNamed: dmPeople.rows.length,
-    dmMissing: dmPeople.funnel?.missing ?? 0,
-    dmCoveragePct: dmPeople.funnel?.total ? Math.round(((dmPeople.funnel.matched ?? 0) / dmPeople.funnel.total) * 100) : 0,
-    // A person can only be named once their company page was read, so the leads with a LinkedIn
-    // profile are the population the match works from.
-    dmPeopleListed: dmPeople.funnel?.withLinkedin ?? 0,
-    dmRows: dmVisiblePeople.slice(0, dmContactLimit).map(person=>({id:person.id,leadId:person.lead_id,name:person.full_name,lead:person.lead_name,domain:hostOf(person.lead_website),email:person.email,emailEvidence:person.email_evidence,source:person.source})),
-    dmTotal: dmPeople.funnel?.total ?? 0,
-    dmWithLinkedin: dmPeople.funnel?.withLinkedin ?? 0,
-    dmWithWebsite: dmPeople.funnel?.withWebsite ?? 0,
-    dmShowingLabel: dmFinder.q.trim()?`${dmVisiblePeople.length} matching saved owner contacts.`:dmSessionLeads.length ? `${Math.min(dmVisiblePeople.length, dmContactLimit)} of ${dmVisiblePeople.length} matching contacts from the current scan.` : 'Import websites to start a new scan, or search your saved owners above.',
-    dmShowing: dmVisiblePeople.length,
-    dmShowAllLabel: `Show all ${dmVisiblePeople.length.toLocaleString('en-GB')}`,
-    // Only offered while there are more named contacts than the grid is drawing.
-    dmMoreContactsOn: dmVisiblePeople.length > dmContactLimit ? '1' : '',
-    showAllDmContacts: () => setDmContactLimit((current) => current + 40),
-    // The seniority mix: the roles the named contacts actually carry, most common first. A title
-    // the design never listed is still a real title, so it is grouped rather than dropped.
-    dmSeniority: (() => {
-      const counts = new Map<string, number>()
-      for (const person of dmPeople.rows) {
-        const title = person.title.trim() || 'Role not stated'
-        counts.set(title, (counts.get(title) ?? 0) + 1)
-      }
-      return Array.from(counts, ([role, count]) => ({ role, count: String(count) }))
-        .sort((a, b) => Number(b.count) - Number(a.count))
-        .slice(0, 6)
-    })(),
-    dmSeniorityNote: `Titles across the ${dmPeople.rows.length} match${dmPeople.rows.length === 1 ? '' : 'es'}.`,
-    /**
-     * The five stages a lead must clear, with what each one cost.
-     *
-     * The counts are the funnel's own, and the loss at each stage is the difference between it and
-     * the stage above — which is why the last one reads as the leads still pending rather than as a
-     * number chosen to make the row add up. The bars are each stage's share of the leads scraped.
-     */
-    dmStages: (() => {
-      const total = dmPeople.funnel?.total ?? 0
-      const withWebsite = dmPeople.funnel?.withWebsite ?? 0
-      const read = dmSessionLeads.filter((lead) => lead.last_scanned_at).length
-      const listed = dmPeople.funnel?.named ?? 0
-      const matched = dmPeople.funnel?.matched ?? 0
-      const share = (count: number) => `${total ? Math.round((count / total) * 100) : 0}%`
-      return [
-        { count: String(total), label: 'Websites imported', loss: '', width: share(total) },
-        { count: String(withWebsite), label: 'Have a website', loss: `−${total - withWebsite} no website`, width: share(withWebsite) },
-        { count: String(read), label: 'Websites read', loss: `${Math.max(0, withWebsite - read)} awaiting scan`, width: share(read) },
-        { count: String(listed), label: 'Websites with named people', loss: `${Math.max(0, read - listed)} without a published name`, width: share(listed) },
-        { count: String(matched), label: 'Named decision maker matched', loss: `−${Math.max(0, listed - matched)} still pending`, width: share(matched) },
-      ]
-    })(),
-    /** The lead-level answer to "why not this one": what blocked each lead that has no contact. */
-    dmBlockers: dmBlockerRows,
-    dmBlockersShowing: dmBlockerRows.length,
-    dmBlockerShowAllLabel: `Show all ${(dmPeople.funnel?.missing ?? 0).toLocaleString('en-GB')}`,
-    // Only offered while there is more of the blocked list than the page is drawing.
-    dmBlockerMoreOn: (dmPeople.funnel?.missing ?? 0) > dmBlockerRows.length ? '1' : '',
-    showAllDmBlockers: () => setDmBlockerLimit((current) => current + 40),
-    dmBlockerNote: `${(dmPeople.funnel?.missing ?? 0).toLocaleString('en-GB')} leads with no named contact, grouped by what blocked them.`,
-    dmBlockerFilter: (event: React.ChangeEvent<HTMLSelectElement>) => setDmBlocker(event.currentTarget.value),
-    // Suggested contacts. These are leads, not facts, so they sit apart from the confirmed people
-    // and each one carries the evidence it came from.
-    dmSuggestions: dmSuggestions.map((suggestion) => ({
-      id: suggestion.id,
-      ini: initialsOf(suggestion.full_name),
-      name: suggestion.full_name,
-      title: suggestion.title || `Suggested from ${suggestion.source === 'email' ? 'an email address' : suggestion.source === 'linkedin' ? 'a company page' : 'the site'}`,
-      lead: suggestion.lead_name,
-      evidence: suggestion.evidence,
-      confirm: () => void confirmSuggestion(suggestion.id),
-      dismiss: () => void dismissSuggestion(suggestion.id),
-    })),
-    // The suggestion cards the new design draws: a decision is offered on a pending card and its
-    // outcome on a resolved one, which is what puts Confirm/Dismiss and Undo on different cards.
-    dmSugRows: dmSuggestions.map((suggestion) => {
-      const state = suggestion.status === 'dismissed' ? 'dismissed' : 'pending'
-      return {
-        state,
-        initials: initialsOf(suggestion.full_name),
-        name: suggestion.full_name,
-        role: suggestion.title || 'Role not stated',
-        lead: suggestion.lead_name,
-        source:
-          suggestion.evidence ||
-          (suggestion.source === 'email'
-            ? 'Read from a named address on the site'
-            : suggestion.source === 'linkedin'
-              ? 'Read from the company’s LinkedIn page'
-              : 'Read from the site'),
-        pending: state === 'pending' ? '1' : '',
-        resolved: state === 'dismissed' ? '1' : '',
-        outcome: state === 'dismissed' ? 'Dismissed' : 'Confirmed',
-        confirm: () => void confirmSuggestion(suggestion.id),
-        dismiss: () => void dismissSuggestion(suggestion.id),
-        undo: () => void restoreSuggestion(suggestion.id),
-      }
-    }),
-    // The badge counts what still needs a decision: a card that has been dealt with carries its
-    // outcome and an Undo, so counting it as "awaiting review" would be a lie about the list.
-    dmSugBadge: (() => {
-      const waiting = dmSuggestions.filter((suggestion) => suggestion.status !== 'dismissed').length
-      return `${waiting} awaiting review`
-    })(),
-    dmSugEmpty: dmSuggestions.length ? '0' : '1',
     // The three finder pages: one scan object each, built above from the page's own data.
     fEmail: { ...emailFinder, rows: emailTableRows, count: emailFinder.count, rowsCount: emailFinder.rowsCount },
     fPhone: {...phoneFinder,rows:phoneTableRows},
-    fDm: dmFinder,
-    exportDmExcel: () => void runDecisionExport('xlsx'),
-    exportDmPdf: () => void runDecisionExport('pdf'),
-    dmExportDisabled: dmExportBusy || dmFinder.scanning || dmVisiblePeople.length === 0,
-    dmExportBusy,
-    dmSuggestionEmpty: dmSuggestions.length === 0 ? '1' : '0',
-    dmSuggestionHint: dmSuggestions.length
-      ? ''
-      : 'Nothing suggested yet. Look for suggestions reads the addresses and company pages already on file, then lists the names it can infer so you can confirm or dismiss each one.',
-    dmSuggestionNote: dmSuggestions.length
-      ? `${dmSuggestions.length} name${dmSuggestions.length === 1 ? '' : 's'} inferred from what is on file. Confirm one to move it into the named contacts above.`
-      : 'Names inferred from addresses and company pages, kept apart from confirmed contacts until you check them.',
-    buildSuggestions: () => void buildSuggestions(),
+
     websiteLookup,
     // Website Lookup. The page reports what the last import did and previews the leads it made.
     startWebsiteLookup: () => void runImportText(pastedLines(impValue)),
@@ -4449,11 +3740,10 @@ export function useAppValues() {
     // it was opened from: a paste of domains everywhere, a paste of profile URLs on Social
     // Profiles, where the label and the preview then say what each line will become.
     openImp: () => {
-      if (view === 'dm' && dmFinder.scanning) { flash('Stop the current owner scan before importing another list.'); return }
+
       if (view === 'website') websiteLookup.clearError()
       setImpValue('')
       impText.current = ''
-      setDecisionImportSelection(null)
       setImpOpen(true)
       if (view === 'social') social.openImport()
     },
@@ -4549,11 +3839,7 @@ export function useAppValues() {
     selectAllMaps: () => setMapsSelected(mapsSelected.length===mapsMatches.length ? [] : mapsMatches.map(lead=>lead.id)),
     sendMapsTo: (target:string) => {
       const selected=mapsMatches.filter(lead=>mapsSelected.includes(lead.id))
-      if(target==='dm'){
-        if(!selected.length){flash('Select businesses to find their owner emails.');return}
-        if(dmFinder.scanning){flash('Stop the current owner scan before importing another list.');return}
-        go(target);setDecisionImportSelection({label:'Selected Google Maps leads',leads:selected.map(({id,name,website})=>({id,name,website}))});setImpValue('');impText.current='';setImpOpen(true);return
-      }
+      if(!['email','phone','social'].includes(target)) return
       const websites=[...new Set(selected.map(lead=>lead.website).filter(Boolean))]
       if(!websites.length){flash('Select businesses with a website to scan.');return}
       go(target);fillWebsiteImport(websites,'selected Maps leads')
@@ -4563,18 +3849,7 @@ export function useAppValues() {
       const result = await db.leads.list({runId:id,limit:1600})
       return [...new Set(result.rows.map(row=>row.website).filter(Boolean))]
     },
-    importSavedRunLeads: async (id:string): Promise<Pick<StoredLead,'id'|'name'|'website'>[]> => {
-      if(!id || !db)throw new Error('Saved Maps results are not available in this window.')
-      const rows:StoredLead[]=[]
-      for(let offset=0;;){
-        const result=await db.leads.list({runId:id,limit:500,offset})
-        rows.push(...result.rows);offset+=result.rows.length
-        if(!result.rows.length || offset>=result.total)break
-      }
-      return [...new Map(rows.map(({id,name,website})=>[id,{id,name,website}])).values()]
-    },
-    decisionImportSelection,
-    scanDecisionLeads,
+
     chooseWebsiteCsv,
     reportsOpen,
     openReports: () => { setMapsPrompt(null); setReportsOpen(true); void refreshReports() },
@@ -4584,7 +3859,6 @@ export function useAppValues() {
     refreshReports: () => void refreshReports(),
     reportCounts: [
       {label:'Total saved leads',value:dashboard?.total ?? 0},
-      {label:'Decision Makers found',value:dashboard?.decisionMakerPeople ?? 0},
       {label:'Maps searches',value:runStats.runs},
       {label:'Leads with a website',value:dashboard?.withWebsite ?? 0},
       {label:'Leads with email',value:dashboard?.withEmail ?? 0},
@@ -4666,7 +3940,7 @@ export function useAppValues() {
       const [first, second] = ranked
       const noun = (count: number) => `${count} lead${count === 1 ? '' : 's'}`
       if (!second) return `${first.label} is the only platform on file, on ${noun(first.count)}.`
-      return `${first.label} leads with ${noun(first.count)}, ahead of ${second.label} on ${noun(second.count)}. A profile is a way in, not a decision maker — the people are on the Decision Makers page.`
+      return `${first.label} leads with ${noun(first.count)}, ahead of ${second.label} on ${noun(second.count)}.`
     })(),
     socialState: social.state,
     refreshEmail: email.refresh,

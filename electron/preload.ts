@@ -82,23 +82,6 @@ const local = {
     remove: (id: string) => call('db:social:delete', { id }),
   },
 
-  people: {
-    list: (leadIds?: string[]) => call('db:people:list', { leadIds }),
-    ledger: () => call('db:people:ledger'),
-    funnel: () => call('db:people:funnel'),
-    candidates: (includeDismissed?: boolean) => call('db:people:candidates', { includeDismissed }),
-    candidateTotals: () => call('db:people:candidateTotals'),
-    /** Builds suggestions from what is already on file; no pages are visited. */
-    buildSuggestions: () => call<{ suggested: number }>('db:people:buildSuggestions'),
-    confirm: (id: string) => call<{ confirmed: boolean }>('db:people:confirm', { id }),
-    dismiss: (id: string) => call<{ dismissed: boolean }>('db:people:dismiss', { id }),
-    /** Puts a dismissed suggestion back in the queue; a confirmed one cannot be undone. */
-    restore: (id: string) => call<{ restored: boolean }>('db:people:restore', { id }),
-    add: (input: { leadId: string; fullName: string; title?: string; email?: string; phone?: string; linkedinUrl?: string }) =>
-      call<{ id: string }>('db:people:add', input),
-    remove: (id: string) => call('db:people:delete', { id }),
-  },
-
   lists: {
     list: () => call('db:lists:list'),
     create: (name: string) => call<{ id: string }>('db:lists:create', { name }),
@@ -109,7 +92,7 @@ const local = {
   },
 
   jobs: {
-    queue: (kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website', leadIds: string[]) =>
+    queue: (kind: 'email' | 'phone' | 'social' | 'website', leadIds: string[]) =>
       call<{ jobId: string; queued: number }>('db:jobs:queue', { kind, leadIds }),
     cancel: (jobId: string) => call<{ cancelled: boolean }>('db:jobs:cancel', { jobId }),
     totals: () => call('db:jobs:totals'),
@@ -199,7 +182,7 @@ const local = {
 
 export interface EnrichmentProgress {
   jobId: string
-  kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
+  kind: 'email' | 'phone' | 'social' | 'website'
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'
   processed: number
   total: number
@@ -220,13 +203,7 @@ const enrichment = {
 }
 
 const desktop = {
-  ownerBrowser: {
-    status: () => ipcRenderer.invoke('owner-browser:status'),
-    open: () => ipcRenderer.invoke('owner-browser:open'),
-    connect: () => ipcRenderer.invoke('owner-browser:connect'),
-    signIn: () => ipcRenderer.invoke('owner-browser:sign-in'),
-    onStatus: (listener: (status: import('./enrichment/google-browser').OwnerBrowserStatus) => void): Unsubscribe => subscribe('owner-browser:status',listener),
-  },
+
   chooseWebsiteCsv: () => call<{ name: string; content: string; bytes: number } | null>('imports:chooseWebsiteCsv'),
   getInfo: (): Promise<{ version: string; platform: string; isPackaged: boolean; electron: string }> =>
     ipcRenderer.invoke('app:info'),
@@ -234,12 +211,9 @@ const desktop = {
     status: () => call('billing:status'),
       claimReturnHandoff: () => call('billing:claim-return-handoff'),
       onReturnHandoff: (listener: () => void): Unsubscribe => subscribe('billing:return-handoff', listener),
-    claimDecisionSubscribeHandoff: () => call('billing:claim-decision-subscribe-handoff'),
-    onDecisionSubscribeHandoff: (listener: () => void): Unsubscribe => subscribe('billing:decision-subscribe-handoff', listener),
-    onDecisionUsage: (listener: (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => void): Unsubscribe =>
-      subscribe('billing:decision-usage', listener),
+
     requestTrial: (email: string, replaceExisting = false) => call('billing:request-trial', { email, replaceExisting }),
-    checkout: (product: 'lifetime' | 'decisionMaker', email: string) => call('billing:checkout', { product, email }),
+    checkout: (product: 'lifetime', email: string) => call('billing:checkout', { product, email }),
     activate: (licenseKey: string) => call('billing:activate', licenseKey),
     portal: () => call('billing:portal'),
     invoices: () => call('billing:invoices'),
@@ -355,22 +329,7 @@ const desktop = {
   },
   local,
   enrichment,
-  /**
-   * The deep pass: the paid search for a lead's decision makers.
-   *
-   * The key belongs to the window, so it is handed over rather than stored: `key` tells the main
-   * process which one to use for this session, `check` presses it against the account, and `run`
-   * queues one search per lead.
-   */
-  deep: {
-    key: (key: string): Promise<{ saved: boolean; fromEnvironment: boolean }> => ipcRenderer.invoke('deep:key', { key }),
-    /** Whether a key is in effect, and whether it came from this machine's environment. */
-    status: (): Promise<{ saved: boolean; fromEnvironment: boolean }> => ipcRenderer.invoke('deep:status'),
-    check: (key?: string): Promise<{ ok: boolean; balance: number | null; note: string }> =>
-      ipcRenderer.invoke('deep:check', { key }),
-    run: (leadIds?: string[]): Promise<{ queued: number; error: string | null }> =>
-      ipcRenderer.invoke('deep:run', { leadIds }),
-  },
+
 }
 
 contextBridge.exposeInMainWorld('desktop', desktop)

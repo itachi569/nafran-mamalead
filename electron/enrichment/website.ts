@@ -12,7 +12,7 @@ import { isBusinessOwner, ownerEmail } from './owner-contact'
 import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, stripContactCodeExamples } from './email-extractor'
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
 import {compareEmailContacts,emailContactPriority} from '../email-ranking'
-import {searchPublicSources} from './public-search'
+
 
 export interface FoundEmail {
   value: string
@@ -778,167 +778,10 @@ export class WebsiteEnricher {
   private browser: Browser | null = null
 
   /** A normal Google web search; challenges are reported rather than bypassed. */
-  async searchPublicWeb(query: string, signal?: AbortSignal): Promise<{title:string;description:string;url:string}[]> {
-    if (signal?.aborted) throw new DOMException('Enrichment cancelled','AbortError')
-    const direct=await searchPublicSources(query,signal).catch(error=>{if(signal?.aborted)throw error;return []})
-    if(direct.length)return direct
-    const browser=await this.launch()
-    if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
-    const page=await browser.newPage()
-    const stop=()=>{void page.close().catch(()=>undefined)}
-    signal?.addEventListener('abort',stop,{once:true})
-    try {
-      const url=new URL('https://www.google.com/search');url.searchParams.set('q',query);url.searchParams.set('num','10')
-      await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:6000})
-      await page.waitForFunction(()=>Boolean(document.querySelector('a h3')),{},{timeout:1000}).catch(()=>undefined)
-      if (/\/sorry\//i.test(page.url()) || /unusual traffic|verify (?:that )?you are (?:a )?human/i.test(await page.locator('body').innerText())) throw new Error('Google requires a browser check. Try the search again later.')
-      return await page.evaluate(()=>Array.from(document.querySelectorAll<HTMLAnchorElement>('a')).filter(a=>a.querySelector('h3')).map(a=>{
-        let url=a.href
-        try { const target=new URL(url);if(/(?:^|\.)google\.[a-z.]+$/i.test(target.hostname) && target.pathname==='/url')url=target.searchParams.get('q') || target.searchParams.get('url') || url } catch { /* Ignore malformed result links below. */ }
-        return {title:a.querySelector('h3')?.textContent?.trim() ?? '',description:a.parentElement?.parentElement?.textContent?.slice(0,2200) ?? '',url}
-      }).filter(hit=>/^https?:\/\//i.test(hit.url) && !/(?:^|\.)google\.[a-z.]+$/i.test(new URL(hit.url).hostname)))
-    } finally { signal?.removeEventListener('abort',stop); await page.close().catch(()=>undefined) }
-  }
+  
 
   /** Follow the site's own team/about links; one credit still covers one website. */
-  async inspectPeople(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
-    if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-    const findings: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], pagesRead: [], error: null }
-    let origin: URL
-    try { origin = new URL(website) } catch { return { ...findings, error: 'Invalid website address.' } }
-    const host = origin.hostname.replace(/^www\./i, '')
-    const pageKey=(raw:string)=>{const url=new URL(raw);url.hostname=url.hostname.replace(/^www\./i,'');url.hash='';url.pathname=url.pathname.replace(/\/$/,'')||'/';return url.href}
-    const pending = [{url:origin.href,rank:100}]
-    const visited = new Set<string>()
-    const visiblePeople = new Set<string>()
-    const currentOwners = new Set<string>()
-    const shortOwners=new Map<string,string>()
-    const teamCards=new Map<string,{fullName:string;page:string}>()
-    const nameKey=(name:string)=>name.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 18_000)
-    const onAbort = () => controller.abort()
-    signal?.addEventListener('abort', onAbort, { once: true })
-    try {
-      while (pending.length && visited.size < 8 && !controller.signal.aborted) {
-        const url = pending.shift()!.url
-        if (visited.has(pageKey(url))) continue
-        visited.add(pageKey(url))
-        try {
-          const corporatePage=visited.size===1 || /(?:^|\/)(?:investors?|investor-relations|leadership|management-team|board-of-directors)(?:\/|$)/i.test(new URL(url).pathname)
-          const readPage=async(target:string,timeout:number):Promise<{pageUrl:string;html:string}|{error:Error;retryAlias:boolean}>=>{
-            try{
-              const response=await fetch(target,{redirect:'follow',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(timeout)]),headers:{accept:'text/html,application/xhtml+xml','user-agent':'MamaLead contact scanner/1.4'}})
-              if(!response.ok){void response.body?.cancel().catch(()=>{});return {error:new Error(`Website returned HTTP ${response.status}.`),retryAlias:response.status>=500}}
-              const pageUrl=response.url||target
-              if(new URL(pageUrl).hostname.replace(/^www\./i,'')!==host){void response.body?.cancel().catch(()=>{});return {error:new Error('Website redirected to a different host.'),retryAlias:true}}
-              return {pageUrl,html:(await response.text()).slice(0,2_000_000)}
-            }catch(error){return {error:error instanceof Error?error:new Error('Website could not be read.'),retryAlias:true}}
-          }
-          let page=await readPage(url,corporatePage?8500:4500)
-          // Some sites serve only one public www/apex alias reliably. Retry the initial root
-          // once on transport/server failure, sharing the same business key and 18 s deadline.
-          if('error' in page && page.retryAlias && visited.size===1 && !controller.signal.aborted){
-            const alternate=new URL(url);alternate.hostname=alternate.hostname.startsWith('www.')?alternate.hostname.slice(4):'www.'+alternate.hostname
-            page=await readPage(alternate.href,4500)
-          }
-          if('error' in page)throw page.error
-          const {pageUrl,html}=page
-          const found = contactFindingsFromHtml(html, pageUrl)
-          const visibleText=readableHtml(stripContactCodeExamples(html)).toLowerCase()
-          const currentIdentityPage=/(?:^|[/_-])(?:about|team|people|leadership|management|staff)(?:[/_.-]|$)/i.test(new URL(pageUrl).pathname)
-          if(currentIdentityPage || pageKey(pageUrl)===pageKey(origin.href))for(const name of shortOwnerSignaturesFromHtml(html))shortOwners.set(nameKey(name),pageUrl)
-          for(const fullName of namedTeamCardsFromHtml(html))teamCards.set(nameKey(fullName),{fullName,page:pageUrl})
-          findings.pagesRead.push(pageUrl)
-          findings.addresses = [...new Set([...(findings.addresses ?? []), ...(found.addresses ?? [])])]
-          findings.emails.push(...found.emails)
-          findings.phones.push(...found.phones)
-          findings.socials.push(...found.socials)
-          for (const person of found.people.filter(person=>!isBusinessOwner(person.title)||(ownerNameOutsideTestimonials(html,person.fullName) && ownerBelongsToBusiness(html,website,person.fullName,pageUrl)))) {
-            const name=person.fullName.toLowerCase()
-            if(visibleText.includes(name)){visiblePeople.add(name);if(currentIdentityPage && isBusinessOwner(person.title))currentOwners.add(name)}
-            const existing = findings.people.find((saved) => saved.fullName.toLowerCase() === person.fullName.toLowerCase())
-            if (!existing) findings.people.push(person)
-            else {
-              if ((!existing.email && person.email) || (!existing.phone && person.phone)) existing.evidence=person.evidence
-              for (const field of ['title', 'email', 'phone', 'linkedinUrl'] as const) if ((!existing[field] || field==='title' && (person.title.includes(existing.title) || isBusinessOwner(person.title) && !isBusinessOwner(existing.title))) && person[field]) existing[field] = person[field]
-            }
-          }
-          const links = siteLinksFromHtml(html)
-            .map((link) => {
-              try {
-                const target = new URL(link.href, pageUrl)
-                const label = link.label
-                if(target.searchParams.has('country') || target.searchParams.has('lang'))return null
-                const pathMatch = /(?:^|[/_-])(?:team|people|leadership|management|staff|lawyers|attorneys|professionals|profile|bio|board-of-directors|management-team)(?:[/_.-]|$)/i.test(target.pathname)
-                const aboutMatch = /(?:^|[/_-])(?:about|company|story|our-story)(?:[/_.-]|$)/i.test(target.pathname)
-                const contactMatch=/(?:^|[/_-])contact(?:[/_.-]|$)/i.test(target.pathname)
-                const locationMatch=/(?:^|[/_-])(?:locations|offices)(?:[/_.-]|$)/i.test(target.pathname)
-                const investorMatch=/^\/(?:investors?|investor-relations)\/?$/i.test(target.pathname)
-                const labelMatch = /^(?:(?:meet|about) (?:our |the )?|our )?(?:team(?: page)?|people|leadership|management|staff|about us|contact us)$/i.test(label)
-                const personLink = /team|people|lawyers|attorneys|professionals/i.test(new URL(pageUrl).pathname) && found.people.some(person=>person.fullName.toLowerCase()===label.toLowerCase())
-                const editorial=(/\b(?:stories|story|tips|lessons|guide|how|success|inspiring|entrepreneurs)\b/i.test(label) || /(?:founder|success|customer|client)[-_]stories\b/i.test(target.pathname)) && !/\b(?:our|company)\s+(?:founder|owner|story)\b/i.test(label)
-                const ownerLink = !editorial && (/\b(?:founder|owner)\b/i.test(label) || findings.people.some(person=>isBusinessOwner(person.title) && person.fullName.toLowerCase()===label.toLowerCase()) || /(?:^|[/_-])(?:founder|owner)(?:[/_.-]|$)/i.test(target.pathname))
-                if (/\/(?:videos?|blog|news|practice-areas)\//i.test(target.pathname) && !ownerLink) return null
-                const founderStoryIndex=/^\/blog\/?$/i.test(target.pathname) && !findings.people.some(person=>isBusinessOwner(person.title))
-                return { target, rank: personLink ? 11 : pathMatch || labelMatch ? 10 : aboutMatch ? 9 : contactMatch ? 8 : investorMatch ? 7 : ownerLink ? 6 : locationMatch ? 2 : founderStoryIndex ? 1 : 0 }
-              } catch { return null }
-            }).filter((link): link is { target: URL; rank: number } => Boolean(link?.rank))
-            .sort((a, b) => b.rank - a.rank)
-          for (const { target, rank } of links) {
-            try {
-              target.hash = ''
-              if (!/^https?:$/.test(target.protocol) || target.hostname.replace(/^www\./i, '') !== host || visited.has(pageKey(target.href))) continue
-              const queued=pending.find(item=>pageKey(item.url)===pageKey(target.href))
-              if(queued){queued.rank=Math.max(queued.rank,rank);continue}
-              pending.push({url:target.href,rank})
-            } catch { /* Ignore malformed links. */ }
-          }
-          pending.sort((a,b)=>b.rank-a.rank)
-          if(findings.people.some(person=>isBusinessOwner(person.title)))for(let index=pending.length-1;index>=0;index--)if(pending[index].rank<2)pending.splice(index,1)
-          pending.splice(24)
-        } catch (error) {
-          if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
-          if (!findings.pagesRead.length) findings.error = error instanceof Error ? error.message : 'Website could not be read.'
-        }
-      }
-      if (findings.pagesRead.length) findings.error = null
-      findings.emails=Array.from(new Map(findings.emails.map(item=>[item.value,item])).values())
-      findings.phones=Array.from(new Map(findings.phones.map(item=>[item.value,item])).values())
-      findings.socials=Array.from(new Map(findings.socials.map(item=>[item.profileUrl,item])).values())
-      findings.addresses=uniqueAddresses(findings.addresses ?? [])
-      // A first-name signature supplies the ownership claim. The team card supplies the full
-      // identity; a marketing/job title alone never promotes somebody to owner. Resolve only
-      // after all fetched team cards are known, so an ambiguous shared first name is rejected.
-      for(const [shortName,declarationPage] of shortOwners){
-        const matches=[...teamCards.values()].filter(person=>nameKey(person.fullName.split(/\s+/)[0])===shortName)
-        if(matches.length!==1)continue
-        const {fullName,page}=matches[0],key=fullName.toLowerCase()
-        let person=findings.people.find(item=>item.fullName.toLowerCase()===key)
-        if(!person){person={fullName,title:'Co-founder',evidence:page,email:'',phone:'',linkedinUrl:''};findings.people.push(person)}
-        else if(!isBusinessOwner(person.title)){person.title='Co-founder';person.evidence=page}
-        person.identityEvidence=[...new Set([...(person.identityEvidence??[]),declarationPage,page])]
-        visiblePeople.add(key);currentOwners.add(key)
-      }
-      const namedPeople = [...findings.people]
-      findings.supersededOwnerNames=currentOwners.size?namedPeople.filter(person=>isBusinessOwner(person.title) && !visiblePeople.has(person.fullName.toLowerCase())).map(person=>person.fullName):[]
-      findings.people = namedPeople.filter(person=>isBusinessOwner(person.title) && (!currentOwners.size || visiblePeople.has(person.fullName.toLowerCase()))).map(person=>{
-        let email=ownerEmail(person.fullName,person.email ?? '')
-        let evidence=person.evidence
-        if (!email) {
-          const published=findings.emails.filter(item=>ownerEmail(person.fullName,item.value) && namedPeople.filter(other=>ownerEmail(other.fullName,item.value)).length===1)
-          const unique=Array.from(new Map(published.map(item=>[item.value,item])).values())
-          if (unique.length===1) { email=unique[0].value; evidence=unique[0].page }
-        }
-        return {...person,email,evidence,phone:'',linkedinUrl:''}
-      })
-      findings.addresses=[]
-      findings.emails=[]
-      findings.phones=[]
-      findings.socials=[]
-    } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort) }
-    return findings
-  }
+  
 
   private async launch(): Promise<Browser> {
     // Headed runs are slower but far less likely to be served a challenge by a small business
@@ -1096,7 +939,7 @@ export class WebsiteEnricher {
     return result
   }
 
-  /** Fast email, phone and decision-maker pass over the server HTML of a site. */
+  /** Fast contact pass over the server HTML of a site. */
   async inspectContactFast(website: string, signal?: AbortSignal, mainEmailOnly=false): Promise<WebsiteFindings> {
     const result: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], addresses: [], pagesRead: [], error: null }
     let origin: URL

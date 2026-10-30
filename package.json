@@ -1,7 +1,7 @@
 {
   "name": "nafran-leads-scraper",
   "private": true,
-  "version": "1.4.18",
+  "version": "1.4.19",
   "description": "Local-first Google Maps lead scraper and enrichment desktop app.",
   "author": {
     "name": "Nafran Leads",
@@ -15,10 +15,9 @@
     "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "tsc -b && vite build",
-    "build:electron": "tsc -p electron/tsconfig.json && node scripts/electron-cjs.mjs && node scripts/copy-electron-assets.mjs && node scripts/write-update-config.mjs",
+    "build:electron": "node scripts/clean-electron-build.mjs && tsc -p electron/tsconfig.json && node scripts/electron-cjs.mjs && node scripts/copy-electron-assets.mjs && node scripts/write-update-config.mjs",
     "typecheck": "tsc -b --pretty false && tsc -p electron/tsconfig.json --noEmit",
     "db:test": "npm run build:electron && node scripts/test-database.cjs",
-    "deep:test": "npm run build:electron && node scripts/test-deep-pass.cjs",
     "packaging:test": "node scripts/verify-packaging-config.cjs",
     "updates:test": "node scripts/verify-updates.cjs",
     "leads:scale:test": "npm run build && node scripts/verify-2000-leads.cjs",
@@ -26,7 +25,6 @@
     "billing:dev": "node --env-file=.secrets/stripe-test.env billing-server/server.mjs",
     "billing:test": "node scripts/verify-billing-server.mjs",
     "verify": "node scripts/verify-all.mjs",
-    "verify:dataforseo-runtime": "npm run build && node scripts/verify-dataforseo-runtime.cjs",
     "debug": "node scripts/dev-debug.mjs",
     "preview": "vite preview",
     "desktop": "npm run build && electron .",
@@ -40,7 +38,8 @@
     "package:store:preflight": "cross-env MAMALEAD_STORE_IDENTITY_NAME=MamaLead.Preflight MAMALEAD_STORE_PUBLISHER=CN=MamaLeadPreflight MAMALEAD_STORE_PUBLISHER_DISPLAY_NAME=MamaLead npm run package:store",
     "package:mac": "npm run build && node scripts/prepare-playwright-browser.mjs && electron-builder --config electron-builder.config.cjs --mac",
     "package:linux": "npm run build && node scripts/prepare-playwright-browser.mjs && electron-builder --config electron-builder.config.cjs --linux",
-    "release:signing:check": "node scripts/verify-release-signing.cjs"
+    "release:signing:check": "node scripts/verify-release-signing.cjs",
+    "decision-removal:test": "npm run build && node scripts/verify-decision-removal.cjs"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",

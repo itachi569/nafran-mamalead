@@ -9,14 +9,14 @@ import { join } from 'node:path'
 import ExcelJS from 'exceljs'
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
 import type { Repository } from '../db/repository'
-import { isBusinessOwner, sourcedOwnerEmail } from '../enrichment/owner-contact'
+
 import {compareEmailContacts} from '../email-ranking'
 
 const logoAsset = join(__dirname, 'assets', 'mamalead-original.jpeg')
 const headerLogoAsset = join(__dirname, 'assets', 'mamalead-logo.png')
 const watermarkAsset = join(__dirname, 'assets', 'mamalead-watermark.png')
 
-export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles' | 'people' | 'website'
+export type ExportKind = 'leads' | 'runs' | 'invoices' | 'profiles' | 'website'
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf'
 
 export interface ExportRequest {
@@ -82,7 +82,7 @@ const LEAD_COLUMNS: Record<string, ColumnReader> = {
   'Review count': (row) => text(row.review_count),
   Socials: (row) => text(row.socials),
   Score: (row) => text(row.score),
-  'Decision maker': (row) => text(row.decision_maker),  Source: (row) => text(row.provider),
+    Source: (row) => text(row.provider),
   'Saved date': (row) => shortDate(row.captured_at),
 }
 
@@ -146,6 +146,7 @@ function rowsFor(
   workspaceId: string,
   request: ExportRequest,
 ): { columns: Record<string, ColumnReader>; rows: Record<string, unknown>[] } {
+  if (!['leads','runs','invoices','profiles','website'].includes(request.kind)) throw new Error('This export module is no longer available.')
   if (request.kind === 'runs') {
     return { columns: RUN_COLUMNS, rows: repository.listRuns(workspaceId, Math.max(1, request.limit)) as unknown as Record<string, unknown>[] }
   }
@@ -182,24 +183,6 @@ function rowsFor(
     }, rows: rows as unknown as Record<string,unknown>[] }
   }
 
-  if (request.kind === 'people') {
-    const ids = [...new Set(request.leadIds ?? [])]
-    const leads = new Map(ids.map((id) => [id, repository.getLead(workspaceId, id)]))
-    const rows = repository.decisionMakerLedger(workspaceId).filter(person=>leads.has(person.lead_id) && isBusinessOwner(person.title))
-      .filter((person) => leads.get(String(person.lead_id)))
-      .map((person) => {
-        const lead = leads.get(String(person.lead_id))!
-        return { ...person, name: lead.name, website: lead.website }
-      })
-    return { columns: {
-      'Business name': (row) => text(row.name), Domain: LEAD_COLUMNS.Domain,
-      Owner: (row) => text(row.full_name),
-      'Owner email': (row) => sourcedOwnerEmail(text(row.full_name),text(row.email),text(row.email_evidence),text(row.source)),
-      'Email evidence': (row) => row.email ? row.email_evidence==='search-index' ? 'Search index; live page unavailable' : row.email_evidence==='personal-page' ? 'Published personal website' : 'Published page' : '',
-      Source: (row) => text(row.source),
-    }, rows }
-  }
-
   const rows = [] as ReturnType<Repository['listLeads']>['rows']
   const wanted = Math.max(0, request.limit)
   // Explicit selections must not fall back to the first N rows in the whole database.
@@ -228,7 +211,7 @@ function rowsFor(
     const allPhones=Array.from(new Map(phoneValues.map(value=>[value.replace(/\D/g,''),value])).values())
     const emails = (repository.listContacts(workspaceId, 'email', [lead.id]) as { value: string; score: number | null;source?:string }[]).sort(compareEmailContacts).slice(0,1)
     const socials = repository.listSocialProfiles(workspaceId, [lead.id]) as { platform: string }[]
-    const people = repository.listDecisionMakers(workspaceId, [lead.id]) as { full_name: string }[]
+
     const best = emails[0]
     return {
       ...lead,
@@ -236,7 +219,7 @@ function rowsFor(
       best_email: best?.value ?? '',
       all_emails:numberedEmails(emails.map(item=>item.value)),
       socials: socials.map((social) => social.platform).join(', '),
-      decision_maker: people[0]?.full_name ?? '',
+
     }
   })
   return { columns: LEAD_COLUMNS, rows: enriched }
@@ -283,7 +266,7 @@ export function buildExport(
 }
 
 function exportTitle(kind: ExportKind): string {
-  return kind === 'website' ? 'Website Lookup' : kind === 'people' ? 'Decision Makers' : kind === 'profiles' ? 'Social Profiles' : kind === 'runs' ? 'Run History' : kind === 'invoices' ? 'Invoices' : 'Leads'
+  return kind === 'website' ? 'Website Lookup' : kind === 'profiles' ? 'Social Profiles' : kind === 'runs' ? 'Run History' : kind === 'invoices' ? 'Invoices' : 'Leads'
 }
 
 async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> {
@@ -411,8 +394,7 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
   const headerLogo = await pdf.embedPng(readFileSync(headerLogoAsset))
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
-  // The full Decision Makers ledger has 13 columns; use a wider landscape sheet.
-  const wideTable = (kind === 'people' && table.columns.length > 9) || (kind === 'website' && table.columns.length >= 7)
+  const wideTable = (kind === 'website' && table.columns.length >= 7)
   const width = wideTable ? 1191 : 842
   const height = wideTable ? 842 : 595
   const margin = 34
@@ -420,13 +402,7 @@ async function buildPdf(table: ExportTable, kind: ExportKind): Promise<Buffer> {
   const title = exportTitle(kind)
   const weights = table.columns.map((column) => {
     if (kind === 'website') return ({'Business name':1.8,Website:1.8,Emails:2.2,'Phone numbers':1.8,'Business address':2.2,'Social links':2.2,Sources:2.4,Status:1.1,Error:1.8} as Record<string,number>)[column] ?? 1.5
-    if (kind === 'people') {
-      if (column === 'Business address' || column === 'Published social links') return 2.2
-      if (column === 'Business name' || column === 'Decision maker' || column === 'Business emails') return 1.7
-      if (column === 'Email' || column === 'LinkedIn' || column === 'Source') return 1.6
-      if (column === 'Saved date') return 1.3
-      return 1.4
-    }
+
     if (column === 'Email' || column === 'Emails') return 2.2
     if (column === 'Profile URL') return 3.2
     if (column === 'Business name' || column === 'Address' || column === 'Description') return 1.8

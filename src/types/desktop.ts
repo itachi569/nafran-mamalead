@@ -176,29 +176,6 @@ export interface PhoneSummary {
   areas: { code: string; count: number }[]
 }
 
-export interface DecisionMakerRow {
-  source: string
-  email_evidence: 'page' | 'search-index' | 'personal-page'
-  id: string
-  lead_id: string
-  full_name: string
-  title: string
-  email: string
-  phone: string
-  linkedin_url: string
-  created_at: string
-  lead_name: string
-  lead_website: string
-  lead_area: string
-  lead_address: string
-  lead_phone: string
-  business_emails: string
-  business_phones: string
-  published_socials: string
-  /** When a finder last read this lead's own site; null when it never has. */
-  last_scanned_at: string | null
-}
-
 /** A lead created by a website import, with what the enrichment pass has filled in so far. */
 export interface ImportedLead {
   enrichment_status: string | null
@@ -213,28 +190,6 @@ export interface ImportedLead {
 }
 
 /** A suggested person, still awaiting confirmation. */
-export interface CandidateRow {
-  id: string
-  lead_id: string
-  full_name: string
-  title: string
-  source: 'email' | 'linkedin' | 'page' | 'schema'
-  evidence: string
-  email: string
-  linkedin_url: string
-  status: string
-  created_at: string
-  lead_name: string
-}
-
-export interface DecisionMakerFunnel {
-  total: number
-  withWebsite: number
-  withLinkedin: number
-  matched: number
-  named: number
-  missing: number
-}
 
 /** The figures the dashboard reports, all derived from the tables it summarises. */
 export interface DashboardTotals {
@@ -244,8 +199,7 @@ export interface DashboardTotals {
   withEmail: number
   withSocial: number
   withContact: number
-  decisionMakers: number
-  decisionMakerPeople: number
+
   enriched: number
   exportReady: number
   noEmail: number
@@ -339,31 +293,7 @@ export interface LocalApi {
     ) => Promise<unknown>
     remove: (id: string) => Promise<unknown>
   }
-  people: {
-    list: (leadIds?: string[]) => Promise<Record<string, unknown>[]>
-    /** Every named contact with the lead it belongs to. */
-    ledger: () => Promise<DecisionMakerRow[]>
-    /** How many leads reached each step of the match funnel. */
-    funnel: () => Promise<DecisionMakerFunnel>
-    /** Suggestions awaiting a decision; dismissed ones are excluded unless asked for. */
-    candidates: (includeDismissed?: boolean) => Promise<CandidateRow[]>
-    candidateTotals: () => Promise<{ suggested: number; dismissed: number }>
-    /** Builds suggestions from what is already on file, without visiting any page. */
-    buildSuggestions: () => Promise<{ suggested: number }>
-    confirm: (id: string) => Promise<{ confirmed: boolean }>
-    dismiss: (id: string) => Promise<{ dismissed: boolean }>
-    /** Puts a dismissed suggestion back in the queue. */
-    restore: (id: string) => Promise<{ restored: boolean }>
-    add: (input: {
-      leadId: string
-      fullName: string
-      title?: string
-      email?: string
-      phone?: string
-      linkedinUrl?: string
-    }) => Promise<{ id: string }>
-    remove: (id: string) => Promise<unknown>
-  }
+
   lists: {
     list: () => Promise<StoredList[]>
     create: (name: string) => Promise<{ id: string }>
@@ -374,7 +304,7 @@ export interface LocalApi {
   }
   jobs: {
     queue: (
-      kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep',
+      kind: 'email' | 'phone' | 'social' | 'website',
       leadIds: string[],
     ) => Promise<{ jobId: string; queued: number }>
     cancel: (jobId: string) => Promise<{ cancelled: boolean }>
@@ -492,7 +422,7 @@ export interface EnrichmentJobStatus {
 
 export interface EnrichmentProgress {
   jobId: string
-  kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
+  kind: 'email' | 'phone' | 'social' | 'website'
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'
   processed: number
   total: number
@@ -517,13 +447,7 @@ export interface EmailValidityProgress {
 export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean;savedSession?:boolean}
 
 export interface DesktopApi {
-  ownerBrowser: {
-    status: () => Promise<OwnerBrowserStatus>
-    open: () => Promise<OwnerBrowserStatus>
-    connect: () => Promise<OwnerBrowserStatus>
-    signIn: () => Promise<OwnerBrowserStatus>
-    onStatus: (listener:(status:OwnerBrowserStatus)=>void) => () => void
-  }
+
   chooseWebsiteCsv: () => Promise<{ name: string; content: string; bytes: number } | null>
   billing: {
     status: () => Promise<{
@@ -544,13 +468,12 @@ export interface DesktopApi {
       hasCustomer?: boolean
       license?: { active: boolean; kind?: 'trial' | 'lifetime' | 'decision'; email?: string; last4?: string; activatedAt?: string | null; expiresAt?: string | null }
     }>
-    claimDecisionSubscribeHandoff: () => Promise<boolean>
+
     claimReturnHandoff: () => Promise<boolean>
     onReturnHandoff: (listener: () => void) => () => void
-    onDecisionSubscribeHandoff: (listener: () => void) => () => void
-    onDecisionUsage: (listener: (usage: { used: number; remaining: number; renewsAt: string; periodId: string }) => void) => () => void
+
     requestTrial: (email: string, replaceExisting?: boolean) => Promise<{ emailSent: boolean; message: string }>
-    checkout: (product: 'lifetime' | 'decisionMaker', email: string) => Promise<{ opened: boolean }>
+    checkout: (product: 'lifetime', email: string) => Promise<{ opened: boolean }>
     activate: (licenseKey: string) => Promise<{ active: boolean; kind?: 'trial' | 'lifetime' | 'decision'; email?: string; last4?: string; activatedAt?: string | null }>
     portal: () => Promise<{ opened: boolean }>
     invoices: () => Promise<{ id: string; number: string; issued: string; total: number; currency: string; status: string; url: string }[]>
@@ -656,16 +579,7 @@ export interface DesktopApi {
    * The credential is the window's own — entered in Settings and handed over for the session — so
    * the main process never keeps a copy of it.
    */
-  deep: {
-    /** Tells the main process which key to use for this session. Never written to disk there. */
-    key: (key: string) => Promise<{ saved: boolean; fromEnvironment: boolean }>
-    /** Whether a key is in effect, and whether this machine's environment supplied it. */
-    status: () => Promise<{ saved: boolean; fromEnvironment: boolean }>
-    /** Presses a key against the account, which costs nothing, and reports what it says. */
-    check: (key?: string) => Promise<{ ok: boolean; balance: number | null; note: string }>
-    /** Queues the owner search followed by a depth-10 email search for each supplied lead. */
-    run: (leadIds?: string[]) => Promise<{ queued: number; error: string | null }>
-  }
+
 }
 
 export type UpdateStatus = {

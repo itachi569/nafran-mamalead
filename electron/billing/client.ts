@@ -41,7 +41,7 @@ export class LicenseAccessError extends Error {
   }
 }
 
-type LicensedFeature = 'lifetime' | 'decisionMaker'
+type LicensedFeature = 'lifetime'
 const LICENSE_STATUS_TTL_MS = 15_000
 let verifiedLicense: { status: BillingStatus; expiresAt: number } | null = null
 let pendingLicenseCheck: Promise<BillingStatus> | null = null
@@ -151,27 +151,16 @@ export async function requireActiveLicense(feature: LicensedFeature = 'lifetime'
       pendingLicenseCheck ??= request<BillingStatus>('/v1/status', 'GET', undefined, await installationToken())
         .finally(() => { pendingLicenseCheck = null })
       status = await pendingLicenseCheck
-      const entitled = (status.coreLicenseActive ?? (status.license?.active && status.license.kind !== 'decision')) ||
-        (status.decisionKeyActive ?? (status.license?.active && status.license.kind === 'decision'))
+      const entitled = status.coreLicenseActive ?? Boolean(status.license?.active && status.license.kind !== 'decision')
       const trialExpiry = status.trial?.active && status.trial.expiresAt ? Date.parse(status.trial.expiresAt) : Infinity
       verifiedLicense = status.connected && entitled && status.license?.active
         ? { status, expiresAt: Math.min(Date.now() + LICENSE_STATUS_TTL_MS, trialExpiry) }
         : null
     }
     const coreActive = status.coreLicenseActive ?? Boolean(status.license?.active && status.license.kind !== 'decision')
-    const decisionKeyActive = status.decisionKeyActive ?? Boolean(status.license?.active && status.license.kind === 'decision')
-    const entitlement = feature === 'decisionMaker'
-      ? (coreActive && status.lifetime?.active || decisionKeyActive)
-      : coreActive && (status.lifetime?.active || status.trial?.active)
-    if (feature === 'decisionMaker' && !entitlement && status.trial?.active) {
-      throw new LicenseAccessError('Decision Makers access needs a separate 30-day pass. Open Settings â†’ Usage to buy 1,000 searches for Rs 1,000.')
-    }
-    if (!status.connected || !entitlement || (feature === 'lifetime' && status.trial?.active && status.trial.expiresAt && Date.parse(status.trial.expiresAt) <= Date.now())) {
-      throw new LicenseAccessError(feature === 'decisionMaker' ? 'Activate a Decision Makers or lifetime key in Settings â†’ Account before using this feature.' : 'Activate an active 1-day trial or lifetime MamaLead license in Settings â†’ Account before using this feature.')
-    }
-    if (feature === 'decisionMaker' && !(status.decisionMaker?.active && status.decisionMaker.monthlyRemaining > 0 && status.decisionMaker.available !== false && status.decisionMaker.currency === 'pkr' && status.decisionMaker.amount === 100000 &&
-      status.decisionMaker.periodDays === 30 && status.decisionMaker.monthlyLimit === 1000)) {
-      throw new LicenseAccessError('Decision Makers access needs a new 30-day pass. Open Settings â†’ Usage to buy 1,000 searches for Rs 1,000.')
+    const entitlement = coreActive && (status.lifetime?.active || status.trial?.active)
+    if (feature !== 'lifetime' || !status.connected || !entitlement || (status.trial?.active && status.trial.expiresAt && Date.parse(status.trial.expiresAt) <= Date.now())) {
+      throw new LicenseAccessError('Activate an active 1-day trial or lifetime MamaLead license in Settings → Account before using this feature.')
     }
   } catch (error) {
     if (error instanceof LicenseAccessError) throw error
@@ -199,8 +188,9 @@ export async function billingSettleMaps(reservationId: string, captured: number)
   return request('/v1/maps/settle', 'POST', { reservationId, captured }, await installationToken())
 }
 
-export async function billingCheckout(product: 'lifetime' | 'decisionMaker', email: string): Promise<string> {
-  if (product === 'decisionMaker' || !email.trim()) {
+export async function billingCheckout(product: 'lifetime', email: string): Promise<string> {
+  if (product !== 'lifetime') throw new Error('This product is no longer available in this app.')
+  if (!email.trim()) {
     const result = await request<{ url: string }>('/v1/checkout', 'POST', { product }, await installationToken())
     return result.url
   }
@@ -208,10 +198,6 @@ export async function billingCheckout(product: 'lifetime' | 'decisionMaker', ema
   if (address.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) throw new Error('Enter a valid email address for your lifetime key.')
   const result = await request<{ url: string }>('/v1/checkout', 'POST', { product, email: address }, await installationToken())
   return result.url
-}
-
-export async function billingConsumeDecisionMaker(leadId: string): Promise<{ used: number; remaining: number; renewsAt: string; periodId: string }> {
-  return request('/v1/decision-maker/consume', 'POST', { leadId }, await installationToken())
 }
 
 export async function billingRequestTrial(email: string, replaceExisting = false): Promise<{ emailSent: boolean; message: string }> {

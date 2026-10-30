@@ -1,6 +1,6 @@
 // The scan behind the three finder pages.
 //
-// Email Finder, Phone Finder and Decision Makers share one shape in the design: a pinned bar with
+// Email Finder and Phone Finder share one shape in the design: a pinned bar with
 // a search box, a state filter, an action, Import, Refresh and History; then — once the action has
 // been run — a coverage card whose rings fill as the pass reports, and a results card that lists
 // only the sites the scan has reached, with Show all leads to go back to the whole list.
@@ -14,7 +14,7 @@ import { localDb } from '../lib/local'
 import { savedSearchScore, searchSavedRows } from './saved-search'
 import type { EnrichmentJobStatus } from '../types/desktop'
 
-export type FinderKind = 'email' | 'phone' | 'decision-maker'
+export type FinderKind = 'email' | 'phone'
 
 /** One address, number or name a scan turned up, with the page it came off. */
 export interface FinderItem {
@@ -119,7 +119,7 @@ export interface FinderScan<Row = FinderSourceRow> {
 export interface FinderScanSource<Row extends FinderSourceRow = FinderSourceRow> {
   /** Every row the page holds, in view order. */
   rows: Row[]
-  historyScope: 'email'|'phone'|'dm'
+  historyScope: 'email'|'phone'
   /** An import stays isolated until the user searches the saved workspace. */
   defaultScopeIds?: string[]
   /**
@@ -317,7 +317,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
         setRunning(false)
         return
       }
-      // An imported site needs a real people pass before the Decision Makers result can settle.
+      // An imported site needs a completed scan before its results can settle.
       setRunning(true)
       active.current = true
       void current.queue(uniqueIds).then(async (result) => {
@@ -451,7 +451,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     () =>
       revealed.map((row) => {
         const position = scopeIds?.indexOf(row.leadId) ?? -1
-        const tracked = source.historyScope === 'dm' && scanOn && position >= 0
+        const tracked = scanOn && position >= 0
         const attempted = tracked ? position < progress.processed : row.scanned
         const checking = running && (tracked ? position === progress.processed : !row.scanned)
         return ({
@@ -483,10 +483,7 @@ export function useFinderScan<Row extends FinderSourceRow>(source: FinderScanSou
     return counts.map((savedRing) => {
       const ring={...savedRing}
       // A previous saved email must not inflate this new scan's coverage before it is checked.
-      if(scanOn && source.historyScope==='dm'){
-        if(ring.name==='Owner email found')ring.count=population.filter(row=>progress.outcomes[row.leadId]?.status==='found').length
-        if(ring.name==='Owner identified')ring.count=population.filter(row=>{const outcome=progress.outcomes[row.leadId];return outcome && outcome.status!=='error' && row.items.length>0}).length
-      }
+
       const pct = Math.min(100, Math.max(0, Math.round((ring.count / denominator) * 100)))
       const arc = (Math.min(100, pct) / 100) * CIRCUMFERENCE
       return {

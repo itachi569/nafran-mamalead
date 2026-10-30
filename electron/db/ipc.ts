@@ -40,17 +40,6 @@ export const LOCAL_CHANNELS = [
   'db:social:upsert',
   'db:social:update',
   'db:social:delete',
-  'db:people:list',
-  'db:people:ledger',
-  'db:people:funnel',
-  'db:people:candidates',
-  'db:people:candidateTotals',
-  'db:people:buildSuggestions',
-  'db:people:confirm',
-  'db:people:dismiss',
-  'db:people:restore',
-  'db:people:add',
-  'db:people:delete',
   'db:lists:list',
   'db:lists:create',
   'db:lists:delete',
@@ -163,24 +152,6 @@ export function registerLocalDatabase(
       return { ok: true }
     },
 
-    'db:people:list': (_repo, _workspace, payload: { leadIds?: string[] } = {}) =>
-      repository.listDecisionMakers(workspace.id, payload.leadIds),
-    'db:people:ledger': () => repository.decisionMakerLedger(workspace.id),
-    'db:people:funnel': () => repository.decisionMakerFunnel(workspace.id),
-    'db:people:candidates': (_repo, _workspace, payload: { includeDismissed?: boolean } = {}) =>
-      repository.listCandidates(workspace.id, payload.includeDismissed),
-    'db:people:candidateTotals': () => repository.candidateTotals(workspace.id),
-    'db:people:buildSuggestions': () => repository.buildSuggestions(workspace.id),
-    'db:people:confirm': (_repo, _workspace, payload: { id: string }) => repository.confirmCandidate(workspace.id, payload.id),
-    'db:people:dismiss': (_repo, _workspace, payload: { id: string }) => repository.dismissCandidate(workspace.id, payload.id),
-    'db:people:restore': (_repo, _workspace, payload: { id: string }) => repository.restoreCandidate(workspace.id, payload.id),
-    'db:people:add': (_repo, _workspace, payload: { leadId: string; fullName: string; title?: string; email?: string; phone?: string; linkedinUrl?: string }) =>
-      repository.addDecisionMaker({ ...payload, workspaceId: workspace.id }),
-    'db:people:delete': (_repo, _workspace, payload: { id: string }) => {
-      repository.deleteDecisionMaker(payload.id)
-      return { ok: true }
-    },
-
     'db:lists:list': () => repository.listLists(workspace.id),
     'db:lists:create': (_repo, _workspace, payload: { name: string }) => repository.createList(workspace.id, payload.name),
     'db:lists:delete': (_repo, _workspace, payload: { id: string }) => {
@@ -195,7 +166,7 @@ export function registerLocalDatabase(
     },
     'db:lists:members': (_repo, _workspace, payload: { listId: string }) => repository.listMembers(payload.listId),
 
-    'db:jobs:queue': (_repo, _workspace, payload: { kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website'; leadIds: string[] }) =>
+    'db:jobs:queue': (_repo, _workspace, payload: { kind: 'email' | 'phone' | 'social' | 'website'; leadIds: string[] }) =>
       repository.queueJob(workspace.id, payload.kind, payload.leadIds),
     'db:jobs:cancel': (_repo, _workspace, payload: { jobId: string }) => {
       repository.cancelJob(payload.jobId)
@@ -261,7 +232,7 @@ export function registerLocalDatabase(
       repository.recordExport({ ...payload, workspaceId: workspace.id }),
     // The only handler that reaches the file system, so it is the only one that needs the window
     // its save dialog should hang off.
-    'db:exports:write': async (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'people' | 'website'; lookupJobId?: string; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) => {
+    'db:exports:write': async (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'website'; lookupJobId?: string; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) => {
       try {
         const result=await writeExport(BrowserWindow.fromWebContents(event.sender),repo,current,payload)
         if(result)event.sender.send('notifications:export-saved',{...result,eventId:randomUUID(),kind:payload.kind})

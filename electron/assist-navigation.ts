@@ -2,7 +2,7 @@
 export const assistDestinations = {
   dashboard: {label:'Dashboard',view:'dashboard'}, maps: {label:'Google Maps',view:'maps'},
   social: {label:'Social Profiles',view:'social'}, email: {label:'Email Finder',view:'email'},
-  phone: {label:'Phone Finder',view:'phone'}, dm: {label:'Decision Makers',view:'dm'},
+  phone: {label:'Phone Finder',view:'phone'},
   website: {label:'Website Lookup',view:'website'}, leads: {label:'All Leads',view:'leads'},
   lists: {label:'Saved Lists',view:'lists'}, runs: {label:'Run History',view:'runs'},
   reports: {label:'Reports',view:'dashboard'}, settings: {label:'Settings & Billing',view:'settings'},
@@ -15,9 +15,8 @@ function topics(text:string):AssistDestination[] {
   const result:AssistDestination[]=[]
   const add=(key:AssistDestination,pattern:RegExp)=>{if(pattern.test(text))result.push(key)}
   add('reports',/\breports?\b|\binsights?\b|رپورٹ|تقارير|informe|rapport/i)
-  add('dm',/decision\s*makers?|\b(?:owner|founder|malik)\b|مالک|بانی/i)
   add('social',/\bsocial\b|facebook|instagram|linkedin|tiktok|youtube|سوشل/i)
-  if(!result.includes('dm'))add('email',/\be-?mails?\b|\bgmail\b|ای\s*میل/i)
+  add('email',/\be-?mails?\b|\bgmail\b|ای\s*میل/i)
   add('phone',/\bphone\b|\btelephone\b|\bnumber\b|\bmobil[eo]\b|فون|نمبر/i)
   add('website',/website\s*lookup|site\s*lookup/i)
   add('maps',/google\s*maps?|\bmaps?\b|نقشہ/i)
@@ -34,6 +33,7 @@ function topics(text:string):AssistDestination[] {
 }
 
 export function assistShortcuts(question:string,answer:string,currentPage:string):AssistDestination[] {
+  if(/decision[ -]?makers?|owner.{0,30}(?:email|gmail)|(?:email|gmail).{0,30}owner/i.test(question))return []
   const requested=topics(question),described=topics(answer)
   // Explicit user topics take priority over incidental module names in the explanation.
   if(requested.includes('reports'))return ['reports']

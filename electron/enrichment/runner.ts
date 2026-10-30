@@ -11,12 +11,12 @@ import { LicenseAccessError } from '../billing/client'
 import { type Repository } from '../db/repository'
 import { WebsiteEnricher } from './website'
 import { DEFAULT_LOOKUP_FIELDS, emptyLookupRow, lookupOptions, lookupRowFromFindings } from './website-lookup'
-import { findOwnerContact } from './owner-search'
+
 import {compareEmailContacts} from '../email-ranking'
 
-export type JobKind = 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep'
+export type JobKind = 'email' | 'phone' | 'social' | 'website'
 
-const JOB_KINDS: JobKind[] = ['email', 'phone', 'social', 'decision-maker', 'website', 'deep']
+const JOB_KINDS: JobKind[] = ['email', 'phone', 'social', 'website']
 
 export interface EnrichmentProgress {
   jobId: string
@@ -35,17 +35,7 @@ export interface EnrichmentProgress {
 export interface EnrichmentOptions {
   onProgress?: (progress: EnrichmentProgress) => void
   authorize?: (kind: JobKind, fresh: boolean) => Promise<void>
-  consumeDecisionLead?: (leadId: string) => Promise<void>
-  /**
-   * The DataForSEO credential, handed over by the window for as long as this worker lives.
-   *
-   * It is a function rather than a value because the key can be changed while the app is open, and
-   * a deep pass should use the key the user has now rather than the one read at launch. Nothing here
-   * writes it: the main process holds it in memory only, so there is no file of it to leak.
-   */
-  deepKey?: () => string
-  ownerSearch?: (query:string,signal:AbortSignal,progress:(message:string)=>void,remainingMs?:number) => Promise<{hits:import('./dataforseo').OrganicSearchHit[];error:string|null;waitingMs?:number}>
-  prepareOwnerSearch?: (signal:AbortSignal,progress:(message:string)=>void) => Promise<void>
+
 }
 
 // Keep a small gap between sites so a multi-lead pass stays polite without adding a visible pause
@@ -113,7 +103,8 @@ export class EnrichmentRunner {
         if (job.id === this.foregroundJobId) this.foregroundJobId = ''
         this.stoppedJobId = ''
         try {
-          const kind = (JOB_KINDS.includes(job.kind as JobKind) ? job.kind : 'website') as JobKind
+          if (!JOB_KINDS.includes(job.kind as JobKind)) { this.repository.markJob(job.id,'failed',0,'This scan module is no longer available.'); continue }
+          const kind = job.kind as JobKind
           let total = 0
           try { total = new Set(JSON.parse(job.lead_ids) as string[]).size } catch { /* runJob reports malformed input */ }
           this.emit({jobId:job.id,kind,status:'running',processed:0,total,found:0,failed:0,leadName:'',message:'Preparing website scan…'})
@@ -221,12 +212,6 @@ export class EnrichmentRunner {
     let processed = 0
     let failed = 0
     let searchFailure: string | null = null
-
-    // Every owner action shares adaptive source discovery and the Stop/progress lifecycle.
-    if (kind === 'decision-maker' || kind === 'deep') {
-      await this.runOwnerJob(job, leadIds, signal,kind)
-      return
-    }
 
     for (const leadId of leadIds) {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
@@ -375,57 +360,6 @@ export class EnrichmentRunner {
       leadName: '',
       message: searchFailure ? `Scan finished · ${processed} of ${leadIds.length} websites checked; ${failed} could not finish. ${searchFailure}` : `Enrichment finished · ${found} details found across ${processed} leads`,
     })
-  }
-
-  /** Shared by every owner entry point; one company consumes one credit, not one per query. */
-  private async runOwnerJob(job:{id:string;workspace_id:string},leadIds:string[],signal:AbortSignal,kind:JobKind):Promise<void>{
-    let processed=0,found=0,failed=0
-    const outcomes:NonNullable<EnrichmentProgress['outcomes']>={}
-    const progress=(leadName:string,message:string,status:EnrichmentProgress['status']='running')=>this.emit({jobId:job.id,kind,status,processed,total:leadIds.length,found,failed,leadName,message,outcomes:{...outcomes}})
-    // Browser setup and user sign-in happen before any company credit is consumed.
-    await waitForAbort(Promise.resolve(this.options.prepareOwnerSearch?.(signal,message=>progress('',message))),signal)
-    for(const leadId of leadIds){
-      signal.throwIfAborted()
-      await waitForAbort(Promise.resolve(this.options.authorize?.(kind,false)),signal)
-      const lead=this.repository.getLead(job.workspace_id,leadId)
-      if(!lead){processed++;failed++;outcomes[leadId]={status:'error',searches:0,error:'Saved business no longer exists.'};progress('','Skipped a missing business.');continue}
-      try{
-        await waitForAbort(Promise.resolve(this.options.consumeDecisionLead?.(leadId)),signal)
-        let lookupPhase:'owner'|'email'='owner'
-        const result=await waitForAbort(findOwnerContact(lead,{key:this.options.deepKey?.(),signal,
-          // Interactive Google checks have their own deadline. Normal pages still return immediately.
-          timeoutMs:this.options.ownerSearch?12*60*1000:undefined,
-          search:this.options.ownerSearch?(query,abort,remainingMs)=>this.options.ownerSearch!(query,abort,message=>progress(lead.name,message),remainingMs):undefined,
-          onSources:(step,checked,total)=>progress(lead.name,`${step?'Search '+step:'Website check'} · checking published ${lookupPhase==='email'?'owner email':'owner identity'} sources · ${checked} of ${total} pages checked…`),
-          onStep:(step,_query,retrying,phase)=>{lookupPhase=phase ?? 'owner';progress(lead.name,retrying?`Search ${step} · reconnecting to Google after a temporary error. Retrying this query once…`:phase==='email'?`Search ${step} · matching owner email to published sources…`:`Search ${step} · finding ${lead.name}'s founder and email…`)}}),signal)
-        signal.throwIfAborted()
-        if(result.error){failed++;outcomes[leadId]={status:'error',searches:result.searches,error:result.error}}
-        else {
-          // A successful fresh scan replaces its previous automatically sourced results, so an
-          // old email cannot be presented as something the current searches just found.
-          this.db.transaction(()=>{
-            this.db.run("delete from decision_makers where workspace_id=? and lead_id=? and (source like 'http%' or source='website')",[job.workspace_id,leadId])
-            for(const person of result.people)this.repository.addDecisionMaker({workspaceId:job.workspace_id,leadId,fullName:person.fullName,title:person.title,email:person.email,emailEvidence:person.emailEvidence,replaceEmail:true,phone:'',linkedinUrl:'',source:person.evidence})
-          })
-          const count=result.people.filter(person=>person.email).length;found+=count
-          outcomes[leadId]={status:count?'found':'not-published',searches:result.searches}
-          this.repository.markLeadScanned(leadId)
-        }
-        processed++
-        progress(lead.name,result.error?`${lead.name} · ${result.error}`:`${lead.name} · ${outcomes[leadId].status==='found'?'Owner email found':'Not published'} · ${result.searches} search${result.searches===1?'':'es'}`)
-        // A closed/blocked browser affects the whole batch. Leave remaining rows unscanned and
-        // uncharged rather than repeating the same failure for every business.
-        if(this.options.ownerSearch && result.error && /MamaLead Chrome|Google (?:verification|results|sign-in)/i.test(result.error))break
-      }catch(error){
-        if(signal.aborted)throw new DOMException('Enrichment cancelled','AbortError')
-        if(error instanceof LicenseAccessError)throw error
-        processed++;failed++;outcomes[leadId]={status:'error',searches:0,error:error instanceof Error?error.message:'Owner search could not finish.'};progress(lead.name,outcomes[leadId].error!)
-      }
-      if(processed<leadIds.length)await waitForAbort(new Promise(resolve=>setTimeout(resolve,PACE_MS)),signal)
-    }
-    const error=failed?`${failed} business search${failed===1?'':'es'} could not finish. Retry the rows marked Search failed.`:null
-    this.repository.markJob(job.id,error?'failed':'done',found,error)
-    progress('',error || `Owner scan finished · ${found} published owner emails found across ${processed} leads.`,error?'failed':'done')
   }
 
   private currentProgress(jobId: string, kind: JobKind): Omit<EnrichmentProgress,'at'> {

@@ -1,7 +1,7 @@
 export const NOTIFICATIONS_STORAGE_KEY = 'nafran.notifications'
 export const MAX_NOTIFICATIONS = 200
 export type NotificationKind = 'scrape' | 'import' | 'warn' | 'export' | 'billing' | 'system'
-export type NotificationView = 'maps' | 'social' | 'email' | 'phone' | 'dm' | 'website' | 'settings' | 'runs'
+export type NotificationView = 'maps' | 'social' | 'email' | 'phone' | 'website' | 'settings' | 'runs'
 export type NotificationAction = { type: 'view'; view: NotificationView; runId?: string; tab?: 'plan' | 'acct' | 'inv'; focus?: 'results' | 'search' | 'updates' } | { type: 'reveal-export'; path: string }
 export interface AppNotification {
   id: string; title: string; body: string; at: string; level: 'info' | 'success' | 'error'; unread: boolean
@@ -24,7 +24,7 @@ export function defaultNotificationAction(item: AppNotification): NotificationAc
   if (/export/i.test(item.title)) return undefined // Legacy paths were not captured as trusted export actions.
   if (/licen[cs]e|payment|billing|allowance|key sent|decision.*ready/i.test(item.title)) return {type:'view',view:'settings',tab:/key sent|activat/i.test(item.title)?'acct':'plan'}
   if (item.runId || /maps|scrape/i.test(item.title)) return {type:'view',view:'maps',runId:item.runId,focus:item.level==='error'?'search':'results'}
-  if (/decision|people/i.test(item.title)) return {type:'view',view:'dm'}
+  if (/decision|owner email|owner scan|people/i.test(item.title)) return undefined
   if (/email/i.test(item.title)) return {type:'view',view:'email'}
   if (/phone/i.test(item.title)) return {type:'view',view:'phone'}
   if (/social|profiles/i.test(item.title)) return {type:'view',view:'social'}
@@ -37,7 +37,7 @@ function safeAction(value: unknown): NotificationAction | undefined {
   if (!value || typeof value!=='object') return undefined
   const action=value as Record<string,unknown>
   if(action.type==='reveal-export' && typeof action.path==='string' && action.path.length<4096)return {type:'reveal-export',path:action.path}
-  if(action.type==='view' && ['maps','social','email','phone','dm','website','settings','runs'].includes(String(action.view)))return {
+  if(action.type==='view' && ['maps','social','email','phone','website','settings','runs'].includes(String(action.view)))return {
     type:'view',view:action.view as NotificationView,
     ...(typeof action.runId==='string'?{runId:action.runId}:{}),
     ...(['plan','acct','inv'].includes(String(action.tab))?{tab:action.tab as 'plan'|'acct'|'inv'}:{}),

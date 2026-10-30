@@ -11,13 +11,11 @@ import { normaliseQuery, type StartRunRequest } from './scraper/types'
 import { closeDatabase, openDatabase } from './db'
 import { registerLocalDatabase } from './db/ipc'
 import { EnrichmentRunner } from './enrichment/runner'
-import { GoogleOwnerBrowser } from './enrichment/google-browser'
-import { checkKey } from './enrichment/dataforseo'
-import { isUsableEmail, isUsablePerson } from './enrichment/website'
-import { readApifyCredential, readDataForSeoCredential, readMailVerifierCredential } from './runtime-config'
+import { isUsableEmail } from './enrichment/website'
+import { readApifyCredential, readMailVerifierCredential } from './runtime-config'
 import { askAssist, type AssistChatRequest } from './assist'
 import { readLeadsAngelBundle, verifyEmailAddressesWithLeadsAngel, type LeadsAngelCredentials } from './leadsangel'
-import { billingAssistStatus, billingActivate, billingCheckout, billingConsumeDecisionMaker, billingHeartbeatMaps, billingInvoices, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
+import { billingAssistStatus, billingActivate, billingCheckout, billingHeartbeatMaps, billingInvoices, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
 import {
   DEFAULT_APIFY_EMAIL_ACTOR,
   parseApifyEmailResult,
@@ -30,53 +28,31 @@ import {
 } from './email-verifier'
 
 const devUrl = process.env.VITE_DEV_SERVER_URL
-const decisionSubscribeLink = 'mamalead://subscribe/decision-makers'
+
 const billingReturnLink = 'mamalead://billing'
 let pendingBillingReturn = process.argv.includes(billingReturnLink)
-let pendingDecisionSubscribe = process.argv.includes(decisionSubscribeLink)
+
 const ownsInstance = app.requestSingleInstanceLock()
 if (!ownsInstance) app.quit()
 if (ownsInstance) {
   const receiveSubscribeLink = (url: string) => {
-    if (url !== decisionSubscribeLink && url !== billingReturnLink) return
-    if (url === billingReturnLink) pendingBillingReturn = true
-    else pendingDecisionSubscribe = true
+    if (url !== billingReturnLink) return
+    pendingBillingReturn = true
     const window = BrowserWindow.getAllWindows()[0]
     if (!window) return
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()
-    window.webContents.send(url === billingReturnLink ? 'billing:return-handoff' : 'billing:decision-subscribe-handoff')
+    window.webContents.send('billing:return-handoff')
   }
   app.on('second-instance', (_event, args) => {
-    if (args.includes(decisionSubscribeLink)) receiveSubscribeLink(decisionSubscribeLink)
     if (args.includes(billingReturnLink)) receiveSubscribeLink(billingReturnLink)
   })
   app.on('open-url', (event, url) => { event.preventDefault(); receiveSubscribeLink(url) })
 }
 const runner = new ScrapeRunner()
 let enricher: EnrichmentRunner | null = null
-const ownerBrowser = new GoogleOwnerBrowser(join(app.getPath('userData'),'owner-google-chrome'),status=>broadcast('owner-browser:status',status))
-ipcMain.handle('owner-browser:status',()=>ownerBrowser.status())
-ipcMain.handle('owner-browser:open',()=>ownerBrowser.open())
-ipcMain.handle('owner-browser:connect',()=>ownerBrowser.connect())
-ipcMain.handle('owner-browser:sign-in',()=>ownerBrowser.signIn())
 
-/**
- * The DataForSEO credential, held in memory for as long as the app is open.
- *
- * It reaches the main process only when the window hands it over, it is never written to a file,
- * and it goes when the app closes. That way the half of the app that talks to a paid service cannot
- * leak a key it does not keep — the copy that survives a restart is the user's own, in their own
- * settings.
- *
- * A machine that would rather supply it from the environment can: DATAFORSEO_API_KEY is read once
- * at launch, or DATAFORSEO_API_KEY_FILE can point at a host-mounted secret file. Anything the user
- * saves in Settings takes over from there for the current session.
- */
-const runtimeCredential = readDataForSeoCredential()
-let deepApiKey = runtimeCredential.value
-let deepKeyFromEnvironment = runtimeCredential.fromEnvironment
 const mailVerifierCredential = readMailVerifierCredential()
 let mailVerifierApiKey = mailVerifierCredential.value
 let mailVerifierFromEnvironment = mailVerifierCredential.fromEnvironment
@@ -458,14 +434,10 @@ ipcMain.handle('billing:claim-return-handoff', () => {
   pendingBillingReturn = false
   return pending
 })
-ipcMain.handle('billing:claim-decision-subscribe-handoff', () => {
-  const claimed = pendingDecisionSubscribe
-  pendingDecisionSubscribe = false
-  return claimed
-})
+
 ipcMain.handle('billing:request-trial', (_event, payload: { email: string; replaceExisting?: boolean } | string) =>
   billingRequestTrial(typeof payload === 'string' ? payload : payload.email, typeof payload === 'string' ? false : payload.replaceExisting === true))
-ipcMain.handle('billing:checkout', async (_event, payload: { product: 'lifetime' | 'decisionMaker'; email: string }) => {
+ipcMain.handle('billing:checkout', async (_event, payload: { product: 'lifetime'; email: string }) => {
   const url = stripePage(await billingCheckout(payload.product, payload.email), ['checkout.stripe.com'])
   await shell.openExternal(url)
   return { opened: true }
@@ -987,7 +959,6 @@ ipcMain.handle('scraper:runWithGoogle', async (_event, request: StartRunRequest)
   return startRun({ ...request, query })
 })
 
-
 ipcMain.handle('scraper:stop', () => runner.stop())
 
 ipcMain.handle('scraper:googleStatus', async () => {
@@ -1062,7 +1033,8 @@ ipcMain.handle('enrichment:prioritize', async (_event, payload: { jobId?: string
     'select kind from enrichment_jobs where workspace_id = ? and id = ?', [db.ensureWorkspace().id, payload.jobId],
   ) : null
   if (payload.jobId && !job) throw new Error('The requested scan job was not found.')
-  await requireActiveLicense(job?.kind === 'decision-maker' || job?.kind === 'deep' ? 'decisionMaker' : 'lifetime')
+  if (job && !['email', 'phone', 'social', 'website'].includes(job.kind)) throw new Error('This scan module is no longer available.')
+  await requireActiveLicense('lifetime')
   void enricher?.prioritize(payload.jobId)
   return { started: true }
 })
@@ -1070,53 +1042,6 @@ ipcMain.handle('enrichment:prioritize', async (_event, payload: { jobId?: string
 ipcMain.handle('enrichment:stop', (_event, payload: { jobId?: string } = {}) => {
   enricher?.stop(payload.jobId)
   return { stopped: true }
-})
-
-/**
- * Takes the DataForSEO credential from the window, and checks it if asked.
- *
- * The window is where the key lives — the user types it in Settings — so this end only ever holds it
- * for the session. `check` is what the Settings row presses to find out whether the key works and
- * what is left on the account, using an endpoint that costs nothing.
- */
-ipcMain.handle('deep:key', (_event, payload: { key?: string } = {}) => {
-  const next = String(payload.key ?? '').trim()
-  deepApiKey = next
-  // A key saved in the app is the user's current answer, so it takes over from the environment's.
-  if (next) deepKeyFromEnvironment = false
-  return { saved: Boolean(deepApiKey), fromEnvironment: deepKeyFromEnvironment }
-})
-
-ipcMain.handle('deep:status', () => ({
-  saved: Boolean(deepApiKey),
-  fromEnvironment: deepKeyFromEnvironment,
-}))
-
-ipcMain.handle('deep:check', async (_event, payload: { key?: string } = {}) => {
-  const key = (payload.key ?? deepApiKey).trim()
-  return checkKey(key)
-})
-
-/**
- * Queues the two-step owner/email pass over the leads supplied by the Decision Makers page.
- *
- * The worker uses MamaLead Chrome for an owner/email query and, only when needed, a named query.
- * The existing license and company credit checks still apply; no search API key is required.
- */
-ipcMain.handle('deep:run', async (_event, payload: { leadIds?: string[] } = {}) => {
-  try { await requireActiveLicense('decisionMaker') }
-  catch (error) { return { queued: 0, error: error instanceof Error ? error.message : 'A license is required.' } }
-  try {
-    const { db, repository } = openDatabase()
-    const workspace = db.ensureWorkspace()
-    const leadIds = payload.leadIds?.length ? payload.leadIds : repository.leadsNeedingContact(workspace.id, 'email').map((lead) => lead.id)
-    if (!leadIds.length) return { queued: 0, error: 'Every lead already has a contact on file.' }
-    const { queued } = repository.queueJob(workspace.id, 'deep', leadIds)
-    void enricher?.drain()
-    return { queued, error: null }
-  } catch (error) {
-    return { queued: 0, error: error instanceof Error ? error.message : 'The pass could not be queued.' }
-  }
 })
 
 /**
@@ -1171,13 +1096,10 @@ if (ownsInstance) app.whenReady().then(() => {
   // page render can already read saved leads.
   const { db, repository } = openDatabase()
   // Clear anything an earlier version stored that is not really a contact: an address from a
-  // footer or a form widget, and a "person" that is a button or a service heading.
+  // footer or a form widget.
   repository.pruneNoisyContacts(isUsableEmail)
-  repository.pruneNoisyPeople(isUsablePerson)
-  // A suggestion has to be a person: drop the company pages an earlier pass offered as contacts.
   // `ensureWorkspace` returns the same single local workspace the IPC layer goes on to use.
   const workspaceId = db.ensureWorkspace().id
-  repository.pruneNoisyCandidates(isUsablePerson, workspaceId)
   // A previous Electron process may have stopped while an enrichment job was running. Recover
   // those durable rows before the first window can queue a new foreground scan.
   repository.requeueInterruptedJobs(workspaceId)
@@ -1187,11 +1109,13 @@ if (ownsInstance) app.whenReady().then(() => {
   }, async (channel, payload) => {
     if (channel === 'db:jobs:queue') {
       const kind = (payload as { kind?: string } | undefined)?.kind
-      await requireActiveLicense(kind === 'decision-maker' || kind === 'deep' ? 'decisionMaker' : 'lifetime')
+      if (!kind || !['email', 'phone', 'social', 'website'].includes(kind)) throw new Error('This scan module is no longer available.')
+      await requireActiveLicense('lifetime')
     } else if (channel === 'db:lookup:start') {
       await requireActiveLicense('lifetime')
     } else if (channel === 'db:imports:websites' || channel === 'db:exports:write') {
-      try { await requireActiveLicense('lifetime') } catch { await requireActiveLicense('decisionMaker') }
+      if (channel === 'db:exports:write' && !['leads', 'runs', 'invoices', 'profiles', 'website'].includes(String((payload as { kind?: string })?.kind))) throw new Error('This export module is no longer available.')
+      await requireActiveLicense('lifetime')
     } else if (channel === 'db:imports:social') {
       await requireActiveLicense()
     }
@@ -1199,16 +1123,9 @@ if (ownsInstance) app.whenReady().then(() => {
 
   enricher = new EnrichmentRunner(db, repository, {
     onProgress: (progress) => broadcast('enrichment:progress', progress),
-    authorize: (kind, fresh) => requireActiveLicense(kind === 'deep' || kind === 'decision-maker' ? 'decisionMaker' : 'lifetime', fresh),
-    consumeDecisionLead: async (leadId) => {
-      const usage = await billingConsumeDecisionMaker(leadId)
-      broadcast('billing:decision-usage', usage)
-    },
-    // The window owns the DataForSEO credential: it is entered in Settings, it is read back from
-    // there, and it is handed over for as long as the app is open. Nothing here writes it down.
-    deepKey: () => deepApiKey,
-    prepareOwnerSearch: (signal,progress)=>ownerBrowser.prepare(signal,progress),
-    ownerSearch: (query,signal,progress,remainingMs)=>ownerBrowser.search(query,signal,progress,remainingMs),
+    authorize: (_kind, fresh) => requireActiveLicense('lifetime', fresh),
+
+
   })
   // Resume durable enrichment work after a restart. The runner prioritises fresh one-site scans,
   // so a saved queue cannot make a domain import look frozen while the window is open.
@@ -1226,17 +1143,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-let closingOwnerBrowser=false
-app.on('before-quit',event=>{
-  if(closingOwnerBrowser || (!ownerBrowser.status().open && ownerBrowser.status().phase!=='opening'))return
-  event.preventDefault();closingOwnerBrowser=true;enricher?.stop()
-  void ownerBrowser.close().finally(()=>app.quit())
-})
-
 app.on('will-quit', () => {
   updates.dispose()
   enricher?.stop()
-  void ownerBrowser.close()
   // The app's own browser is a browser of its own, so it outlives the app unless it is closed here.
   // A window armed for a run counts: the run it was waiting for is not going to happen now.
   void armedBrowser?.close().catch(() => undefined)

@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { currentPeriod, nowIso, type LocalDatabase } from './local-db'
 import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFields, type WebsiteLookupRow } from '../enrichment/website-lookup'
-import { isBusinessOwner, sourcedOwnerEmail, ownerIdentityKey } from '../enrichment/owner-contact'
+
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
 import {compareEmailContacts} from '../email-ranking'
 
@@ -131,94 +131,9 @@ export interface ImportedLead {
   has_social: number
 }
 
-export interface DecisionMakerRow {  id: string
-  source: string
-  email_evidence: 'page' | 'search-index' | 'personal-page'
-  lead_id: string
-  full_name: string
-  title: string
-  email: string
-  phone: string
-  linkedin_url: string
-  created_at: string
-  lead_name: string
-  lead_website: string
-  lead_area: string
-  lead_address: string
-  lead_phone: string
-  business_emails: string
-  business_phones: string
-  published_socials: string
-}
-
 /** How many leads got as far as a social page, and how many produced a person. */
-export interface DecisionMakerFunnel {
-  total: number
-  withWebsite: number
-  withLinkedin: number
-  matched: number
-  named: number
-  missing: number
-}
 
 /** A suggested person, still awaiting confirmation. */
-export interface CandidateRow {
-  id: string
-  lead_id: string
-  full_name: string
-  title: string
-  source: 'email' | 'linkedin' | 'page' | 'schema'
-  evidence: string
-  email: string
-  linkedin_url: string
-  status: string
-  created_at: string
-  lead_name: string
-}
-
-/**
- * The person's name inside a LinkedIn profile URL, when there is one.
- *
- * A profile slug is the person's own name followed by whatever they do:
- * `/in/dr-rabia-hayat-dermatologist-in-lahore-158a68221` is Dr Rabia Hayat. Anything that reads
- * as a role, a place or LinkedIn's own id is dropped, and a slug left with no name returns null
- * so the lead is suggested as a page to read rather than as a person.
- */
-export function personNameFromLinkedIn(url: string): string | null {
-  const slug = url.match(/\/in\/([^/?#]+)/i)?.[1]
-  if (!slug) return null
-
-  const parts = slug
-    .toLowerCase()
-    .split('-')
-    .filter(Boolean)
-    // LinkedIn appends a hex id; a trailing run of digits and letters is not a name.
-    .filter((part) => !/^[0-9a-f]{6,}$/.test(part) && !/^\d+$/.test(part))
-
-  const stop =
-    /^(dr|drr|mr|mrs|ms|miss|prof|professor|dermatologist|physiotherapist|physiotherapy|therapist|therapy|dentist|dental|doctor|specialist|consultant|manager|director|owner|founder|clinic|care|health|home|service|services|in|at|and|the|of|for|company|group|centre|center|lahore|karachi|islamabad|manchester|london|uk|pk|scotland|england)$/
-  const name = []
-  for (const part of parts) {
-    // Honorifics are kept, because they are how the person is addressed.
-    if (/^(dr|prof|professor)$/.test(part)) {
-      name.push(part === 'professor' ? 'Professor' : part === 'prof' ? 'Prof' : 'Dr')
-      continue
-    }
-    if (stop.test(part)) break
-    if (!/^[a-z]{2,}$/.test(part)) break
-    name.push(part)
-    if (name.filter((entry) => !/^(Dr|Prof|Professor)$/.test(entry)).length >= 2) break
-  }
-
-  const words = name.filter((entry) => !/^(Dr|Prof|Professor)$/.test(entry))
-  if (!words.length || words.length > 2) return null
-  const formatted = name.map((part) => (/^(Dr|Prof|Professor)$/.test(part) ? part : part.charAt(0).toUpperCase() + part.slice(1)))
-  return formatted.join(' ')
-}
-
-/** Mailboxes that belong to a role rather than to a person. */
-const ROLE_MAILBOX =
-  /^(info|hello|hi|contact|enquiries|enquiry|admin|office|reception|team|support|help|bookings|booking|sales|mail|email|clinic|practice|care|accounts|billing|noreply|no-reply|donotreply|webmaster|postmaster|jobs|careers|press|marketing|hr)$/
 
 /**
  * Words that turn a local part into a desk rather than a person. "reception.arndaledental" is two
@@ -234,21 +149,6 @@ const WORKPLACE_WORD =
  * `reception.arndaledental@` is a desk. Only shapes that clearly name somebody are accepted,
  * because this is a suggestion rather than a fact.
  */
-export function personNameFromEmail(address: string, options?: { allowPublicMailbox?: boolean }): string | null {
-  const [rawLocal = '', domain = ''] = address.toLowerCase().split('@')
-  if (!rawLocal || ROLE_MAILBOX.test(rawLocal)) return null
-  // A website pass only trusts the business's own domain: a gmail address on a page does not say
-  // the person works there. A search snippet is already somebody else's claim, so the deep pass
-  // asks for public mailboxes too and leaves the judgement to the person confirming it.
-  const publicMailbox = /(gmail|yahoo|hotmail|outlook|icloud|aol|live|msn)\./.test(domain)
-  if (!domain || (publicMailbox && !options?.allowPublicMailbox)) return null
-
-  const parts = rawLocal.split(/[._-]/).filter(Boolean)
-  if (!parts.length || parts.length > 2) return null
-  const usable = parts.every((part) => /^[a-z]{2,}$/.test(part) && !WORKPLACE_WORD.test(part))
-  if (!usable) return null
-  return parts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
-}
 
 /**
  * Reduces whatever was pasted to a bare host: a full URL, a bare domain and a line with a path
@@ -481,8 +381,7 @@ export interface DashboardTotals {
   withEmail: number
   withSocial: number
   withContact: number
-  decisionMakers: number
-  decisionMakerPeople: number
+
   enriched: number
   exportReady: number
   noEmail: number
@@ -725,13 +624,6 @@ export class Repository {
     return this.db.one<StoredLead>('select * from leads where workspace_id = ? and id = ?', [workspaceId, id])
   }
 
-  /**
-   * Records that a lead's own site has now been read.
-   *
-   * The Email, Phone and Decision Makers pages report what a scan has covered, and "has this been
-   * read" outlives the pass that read it — a scan finished yesterday still counts — so it is kept
-   * on the lead rather than in the page's memory.
-   */
   fillLeadAddress(leadId: string, addresses: string[]): void {
     const address=Array.from(new Set(addresses)).join(' | ')
     if(address) this.db.run("update leads set address = ? where id = ? and (address is null or trim(address) = '')", [address, leadId])
@@ -771,10 +663,6 @@ export class Repository {
     const withContact = count(`select count(*) as n from leads l where ${scope}
       and (l.phone <> '' or exists (select 1 from lead_contacts c where c.lead_id = l.id)
         or exists (select 1 from social_profiles s where s.lead_id = l.id))`)
-    const decisionMakers = count(`select count(*) as n from leads l where ${scope}
-      and exists (select 1 from decision_makers d where d.lead_id = l.id)`)
-    const decisionMakerPeople = count(`select count(*) as n from decision_makers d
-      join leads l on l.id = d.lead_id where ${scope} and trim(d.full_name) <> ''`)
 
     // "Enriched" is a lead with more than the Maps listing: a website plus something found on it.
     const enriched = count(
@@ -823,8 +711,7 @@ export class Repository {
       withEmail,
       withSocial,
       withContact,
-      decisionMakers,
-      decisionMakerPeople,
+
       enriched,
       exportReady,
       noEmail: Math.max(0, withWebsite - withEmail),
@@ -963,49 +850,10 @@ export class Repository {
     }
   }
 
-  // ---------------------------------------------------------------- decision makers
-
   /**
    * Named contacts, each with the lead it belongs to. A lead can carry several, so the lead is
    * joined in rather than looked up per row.
    */
-  decisionMakerLedger(workspaceId: string): DecisionMakerRow[] {
-    return this.db.query<DecisionMakerRow>(
-        `select d.id, d.lead_id, d.full_name, d.title, d.email, d.email_evidence, d.phone, d.linkedin_url, d.source, d.created_at,
-              l.name as lead_name, l.website as lead_website, l.area as lead_area, l.last_scanned_at,
-              l.address as lead_address, l.phone as lead_phone,
-              coalesce((select group_concat(c.value, char(10)) from lead_contacts c where c.lead_id=l.id and c.kind='email'), '') as business_emails,
-              coalesce((select group_concat(c.value, char(10)) from lead_contacts c where c.lead_id=l.id and c.kind='phone'), '') as business_phones,
-              coalesce((select group_concat(s.profile_url, char(10)) from social_profiles s where s.lead_id=l.id), '') as published_socials
-       from decision_makers d
-       join leads l on l.id = d.lead_id
-       where d.workspace_id = ?
-       order by d.created_at desc`,
-      [workspaceId],
-    ).filter(person=>isBusinessOwner(person.title)).map(person=>({...person,email:sourcedOwnerEmail(person.full_name,person.email,person.email_evidence,person.source)}))
-  }
-
-  /**
-   * The funnel behind the decision-maker page: how many leads have a website at all, how many
-   * of those publish a LinkedIn company page, and how many ended with a named person.
-   */
-  decisionMakerFunnel(workspaceId: string): DecisionMakerFunnel {
-    const total = this.db.one<{ n: number }>('select count(*) as n from leads where workspace_id = ?', [workspaceId])?.n ?? 0
-    const withWebsite =
-      this.db.one<{ n: number }>("select count(*) as n from leads where workspace_id = ? and website <> ''", [workspaceId])?.n ?? 0
-    const withLinkedin =
-      this.db.one<{ n: number }>(
-        `select count(distinct lead_id) as n from social_profiles
-         where workspace_id = ? and platform = 'linkedin'`,
-        [workspaceId],
-      )?.n ?? 0
-    const matched =
-      this.db.one<{ n: number }>('select count(distinct lead_id) as n from decision_makers where workspace_id = ?', [workspaceId])?.n ?? 0
-    const named =
-      this.db.one<{ n: number }>('select count(*) as n from decision_makers where workspace_id = ?', [workspaceId])?.n ?? 0
-
-    return { total, withWebsite, withLinkedin, matched, named, missing: Math.max(0, total - matched) }
-  }
 
   listContacts(workspaceId: string, kind: 'email' | 'phone' | 'social', leadIds?: string[]): Record<string, unknown>[] {
     if (leadIds && !leadIds.length) return []
@@ -1303,91 +1151,10 @@ export class Repository {
     })
   }
 
-  // ---------------------------------------------------------------- decision makers
-
-  listDecisionMakers(workspaceId: string, leadIds?: string[]): Record<string, unknown>[] {
-    if (leadIds && !leadIds.length) return []
-    const filter = leadIds ? `and lead_id in (${leadIds.map(() => '?').join(',')})` : ''
-    return this.db.query(
-      `select * from decision_makers where workspace_id = ? ${filter} order by created_at desc`,
-      leadIds ? [workspaceId, ...leadIds] : [workspaceId],
-    )
-  }
-
-  addDecisionMaker(input: {
-    workspaceId: string
-    leadId: string
-    fullName: string
-    title?: string
-    email?: string
-    phone?: string
-    linkedinUrl?: string
-    source?: string
-    replaceEmail?: boolean
-    emailEvidence?: 'page' | 'search-index' | 'personal-page'
-  }): { id: string } {
-    const lead = this.db.one<{ workspace_id: string }>('select workspace_id from leads where id = ?', [input.leadId])
-    const workspaceId = lead?.workspace_id ?? input.workspaceId
-    const fullName = input.fullName.trim().replace(/\s+/g, ' ')
-    const existing = this.db.one<{ id: string }>(
-      'select id from decision_makers where workspace_id = ? and lead_id = ? and lower(trim(full_name)) = lower(?) limit 1',
-      [workspaceId, input.leadId, fullName],
-    ) ?? this.db.query<{id:string;full_name:string}>('select id,full_name from decision_makers where workspace_id=? and lead_id=?',[workspaceId,input.leadId]).find(person=>Boolean(ownerIdentityKey(fullName)) && ownerIdentityKey(person.full_name)===ownerIdentityKey(fullName))
-    if (existing) {
-      // Re-scans enrich the same contact without duplicating it or erasing published details.
-      this.db.run(
-        `update decision_makers set full_name = ?, title = coalesce(nullif(?, ''), title),
-         email = case when ? then ? else coalesce(nullif(?, ''), email) end, phone = coalesce(nullif(?, ''), phone),
-         linkedin_url = coalesce(nullif(?, ''), linkedin_url), source = coalesce(nullif(?, ''), source),
-         email_evidence = case when ? then ? else email_evidence end
-         where id = ?`,
-        [fullName, input.title ?? '', input.replaceEmail ? 1 : 0, input.email ?? '', input.email ?? '', input.phone ?? '', input.linkedinUrl ?? '', input.source ?? '', input.replaceEmail || input.email ? 1 : 0, input.emailEvidence ?? 'page', existing.id],
-      )
-      return { id: existing.id }
-    }
-    const id = randomUUID()
-    this.db.run(
-      `insert into decision_makers (id, lead_id, workspace_id, full_name, title, email, phone, linkedin_url, source, created_at, email_evidence)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        input.leadId,
-        workspaceId,
-        fullName,
-        input.title ?? '',
-        input.email ?? '',
-        input.phone ?? '',
-        input.linkedinUrl ?? '',
-        input.source ?? 'website',
-        nowIso(),
-        input.emailEvidence ?? 'page',
-      ],
-    )
-    return { id }
-  }
-
-  deleteDecisionMaker(id: string): void {
-    this.db.run('delete from decision_makers where id = ?', [id])
-  }
-
   /**
    * Removes named contacts whose name reads as a button or a service rather than a person. The
    * worker refuses them now, and this clears any stored before it did.
    */
-  pruneNoisyPeople(isUsable: (name: string, title: string) => boolean, leadId?: string): { removed: number } {
-    const rows = this.db.query<{ id: string; full_name: string; title: string }>(
-      'select id, full_name, title from decision_makers' + (leadId ? ' where lead_id=?' : ''), leadId ? [leadId] : [],
-    )
-    let removed = 0
-    for (const row of rows) {
-      if (isUsable(row.full_name, row.title)) continue
-      this.db.run('delete from decision_makers where id = ?', [row.id])
-      removed += 1
-    }
-    return { removed }
-  }
-
-  // ---------------------------------------------------------------- decision maker suggestions
 
   /**
    * Drops suggestions that are not people. An earlier pass turned every LinkedIn URL on a site
@@ -1395,191 +1162,15 @@ export class Repository {
    * evidence is a `/company/` URL, and the "name" is the page's slug. A suggestion has to be a
    * person, so anything whose evidence points at a company page is removed once.
    */
-  pruneNoisyCandidates(isUsable: (name: string, title: string) => boolean, workspaceId: string): { removed: number } {
-    const rows = this.db.query<{ id: string; full_name: string; title: string; evidence: string }>(
-      `select id, full_name, title, evidence from decision_maker_candidates
-       where workspace_id = ? and status <> 'confirmed'`,
-      [workspaceId],
-    )
-    let removed = 0
-    for (const row of rows) {
-      const isCompanyPage = /linkedin\.com\/company\//i.test(row.evidence ?? '')
-      if (!isCompanyPage && isUsable(row.full_name, row.title)) continue
-      this.db.run('delete from decision_maker_candidates where id = ?', [row.id])
-      removed += 1
-    }
-    return { removed }
-  }
 
   /**
    * Records a suggestion. A name already suggested for the same lead from the same source is
    * left alone; a name the user dismissed stays dismissed.
    */
-  suggestPerson(input: {
-    workspaceId: string
-    leadId: string
-    fullName: string
-    title?: string
-    source: 'email' | 'linkedin' | 'page' | 'schema'
-    evidence?: string
-    email?: string
-    linkedinUrl?: string
-  }): { id: string; created: boolean } {
-    const name = input.fullName.replace(/\s+/g, ' ').trim()
-    if (!name) return { id: '', created: false }
-    const existing = this.db.one<{ id: string }>(
-      'select id from decision_maker_candidates where lead_id = ? and full_name = ? and source = ?',
-      [input.leadId, name, input.source],
-    )
-    if (existing) return { id: existing.id, created: false }
-
-    const id = randomUUID()
-    this.db.run(
-      `insert into decision_maker_candidates
-         (id, workspace_id, lead_id, full_name, title, source, evidence, email, linkedin_url, status, created_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'suggested', ?)`,
-      [
-        id,
-        input.workspaceId,
-        input.leadId,
-        name,
-        input.title ?? '',
-        input.source,
-        input.evidence ?? '',
-        input.email ?? '',
-        input.linkedinUrl ?? '',
-        nowIso(),
-      ],
-    )
-    return { id, created: true }
-  }
-
-  /**
-   * Builds suggestions from what is already on file, without visiting a single page: an address
-   * whose local part is a person's name, and a lead carrying a LinkedIn company page.
-   */
-  buildSuggestions(workspaceId: string): { suggested: number } {
-    let suggested = 0
-    const leads = this.db.query<{ id: string; name: string; website: string }>(
-      "select id, name, website from leads where workspace_id = ? and website <> ''",
-      [workspaceId],
-    )
-
-    for (const lead of leads) {
-      const emails = this.db.query<{ value: string; score: number | null }>(
-        "select value, score from lead_contacts where lead_id = ? and kind = 'email'",
-        [lead.id],
-      )
-      for (const row of emails) {
-        const name = personNameFromEmail(row.value)
-        if (!name) continue
-        const result = this.suggestPerson({
-          workspaceId,
-          leadId: lead.id,
-          fullName: name,
-          source: 'email',
-          evidence: `derived from ${row.value}`,
-          email: row.value,
-        })
-        if (result.created) suggested += 1
-      }
-
-      // A LinkedIn profile URL carries the person's name in its slug, which is far better
-      // evidence than the business name. Only profiles ("/in/") name a person; a company page
-      // ("/company/") names the business and is recorded as somewhere to look instead.
-      const profiles = this.db.query<{ profile_url: string }>(
-        "select profile_url from social_profiles where lead_id = ? and platform = 'linkedin'",
-        [lead.id],
-      )
-      for (const profile of profiles) {
-        // Only a profile page names a person. A company page is somewhere to look, so it is
-        // recorded with the business name and a note rather than passed off as a contact.
-        const fromProfile = personNameFromLinkedIn(profile.profile_url)
-        const isProfile = /\/in\//i.test(profile.profile_url)
-        const result = this.suggestPerson({
-          workspaceId,
-          leadId: lead.id,
-          fullName: fromProfile ?? lead.name,
-          title: fromProfile ? '' : 'Read the LinkedIn page',
-          source: 'linkedin',
-          evidence: profile.profile_url,
-          linkedinUrl: isProfile ? profile.profile_url : '',
-        })
-        if (result.created) suggested += 1
-      }
-    }
-    return { suggested }
-  }
 
   /** Suggestions still awaiting a decision, newest first, with the lead they belong to. */
-  listCandidates(workspaceId: string, includeDismissed = false): CandidateRow[] {
-    const filter = includeDismissed ? '' : "and c.status = 'suggested'"
-    return this.db.query<CandidateRow>(
-      `select c.id, c.lead_id, c.full_name, c.title, c.source, c.evidence, c.email, c.linkedin_url,
-              c.status, c.created_at, l.name as lead_name
-       from decision_maker_candidates c
-       join leads l on l.id = c.lead_id
-       where c.workspace_id = ? ${filter}
-       order by c.created_at desc
-       limit 200`,
-      [workspaceId],
-    )
-  }
-
-  candidateTotals(workspaceId: string): { suggested: number; dismissed: number } {
-    const rows = this.db.query<{ status: string; n: number }>(
-      'select status, count(*) as n from decision_maker_candidates where workspace_id = ? group by status',
-      [workspaceId],
-    )
-    const totals = { suggested: 0, dismissed: 0 }
-    for (const row of rows) {
-      if (row.status === 'suggested') totals.suggested = row.n
-      if (row.status === 'dismissed') totals.dismissed = row.n
-    }
-    return totals
-  }
 
   /** Promotes a suggestion to a confirmed person, which is the only way a row gets in there. */
-  confirmCandidate(workspaceId: string, id: string): { confirmed: boolean } {
-    const candidate = this.db.one<CandidateRow>(
-      'select * from decision_maker_candidates where workspace_id = ? and id = ?',
-      [workspaceId, id],
-    )
-    if (!candidate) return { confirmed: false }
-    this.addDecisionMaker({
-      workspaceId,
-      leadId: candidate.lead_id,
-      fullName: candidate.full_name,
-      title: candidate.title,
-      email: candidate.email,
-      linkedinUrl: candidate.linkedin_url,
-      // The confirmation is the user's, so the source says so rather than claiming the site said it.
-      source: `confirmed from ${candidate.source}`,
-    })
-    this.db.run('delete from decision_maker_candidates where id = ?', [id])
-    return { confirmed: true }
-  }
-
-  dismissCandidate(workspaceId: string, id: string): { dismissed: boolean } {
-    const result = this.db.prepare(
-      "update decision_maker_candidates set status = 'dismissed' where workspace_id = ? and id = ?",
-    ).run(workspaceId, id)
-    return { dismissed: result > 0 }
-  }
-
-  /**
-   * Puts a dismissed suggestion back in the queue.
-   *
-   * A confirmation deletes its candidate, so it cannot be undone from that side; a dismissal only
-   * changes the status, which is why this one can be. The card says as much by offering Undo only
-   * on the dismissed outcome.
-   */
-  restoreCandidate(workspaceId: string, id: string): { restored: boolean } {
-    const result = this.db.prepare(
-      "update decision_maker_candidates set status = 'suggested' where workspace_id = ? and id = ?",
-    ).run(workspaceId, id)
-    return { restored: result > 0 }
-  }
 
   // ---------------------------------------------------------------- lists
 
@@ -1666,7 +1257,8 @@ export class Repository {
 
   // ---------------------------------------------------------------- enrichment jobs
 
-  queueJob(workspaceId: string, kind: 'email' | 'phone' | 'social' | 'decision-maker' | 'website' | 'deep', leadIds: string[], options: Record<string, unknown> = {}): { jobId: string; queued: number } {
+  queueJob(workspaceId: string, kind: 'email' | 'phone' | 'social' | 'website', leadIds: string[], options: Record<string, unknown> = {}): { jobId: string; queued: number } {
+    if (!['email', 'phone', 'social', 'website'].includes(kind)) throw new Error('This scan module is no longer available.')
     leadIds = [...new Set(leadIds.filter(id => typeof id === 'string' && id.trim()))]
     if (!leadIds.length) return { jobId: '', queued: 0 }
     const id = randomUUID()

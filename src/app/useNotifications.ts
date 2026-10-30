@@ -41,5 +41,5 @@ export function useNotifications(enabled:boolean) {
     commit(items);removed.current=null;window.clearTimeout(timer.current);setToast(null)
   },[commit])
   const find=useCallback((id:string)=>current.current.find(item=>item.id===id),[])
-  return {notifications,notify,markRead,toggleRead,markAllRead,remove,undo,toast,find}
+  return {notifications:notifications.filter(item=>!/decision[ -]?maker|owner email|owner scan/i.test(item.title)),notify,markRead,toggleRead,markAllRead,remove,undo,toast,find}
 }
