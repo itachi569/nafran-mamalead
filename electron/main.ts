@@ -499,7 +499,7 @@ ipcMain.handle('notifications:show', (event, payload: { title?: string; body?: s
   const title = String(payload.title ?? 'MamaLead').trim().slice(0, 120) || 'MamaLead'
   const body = String(payload.body ?? '').trim().slice(0, 500)
   if (!body) return { shown: false }
-  const notification=new Notification({title,body,icon:join(__dirname,'export','assets','mamalead-logo.png')})
+  const notification=new Notification({title,body})
   notification.on('click',()=>{
     const win=BrowserWindow.fromWebContents(event.sender)
     if(!win || win.isDestroyed())return
