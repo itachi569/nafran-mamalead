@@ -109,7 +109,16 @@ try {
       await page.locator('[data-soclist] a[data-social-profile-link*="auditclinic"]').waitFor()
     } else if (view !== 'website') {
       const expected = view === 'email' ? 'hello@audit.fixture.test' : '+922112345678'
-      await page.locator(`[data-fres="${view}"]`).locator('xpath=ancestor::section[1]').getByText(expected, { exact: false }).first().waitFor({ timeout: 30000 })
+      const results = view === 'email' ? page.locator('[data-flistcard="email"]') : page.locator(`[data-fres="${view}"]`).locator('xpath=ancestor::section[1]')
+      await results.getByText(expected, { exact: false }).first().waitFor({ timeout: 30000 })
+      if (view === 'email') {
+        await page.locator('[data-finder-progress="email"]').getByText('Scan complete', {exact:true}).waitFor()
+        assert.equal(await page.getByRole('heading', {name:'Emails found', exact:true}).count(), 0, 'No duplicate email-result card')
+        assert.ok(await results.getByRole('button', {name:'Check email validity', exact:true}).isEnabled())
+        assert.ok(await results.getByRole('button', {name:'Export', exact:true}).isEnabled())
+        await page.waitForFunction(() => {const r=document.querySelector('[data-flistcard="email"]').getBoundingClientRect();return r.top>=0 && r.top<innerHeight*.7})
+        console.log('PASS email import uses one main result list with validity/export and scrolls to that list')
+      }
     }
     console.log(`PASS ${view} website import and published results`)
   }

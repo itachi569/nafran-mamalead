@@ -1493,65 +1493,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                   ) : null}
                 </div>
-                {shows(V.fEmail.scanOn) ? (
-                  <>
-                  <FinderScanProgress kind="email" scan={V.fEmail}/>
-                  <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                    <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
-                      <h2 data-fres="email" style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Emails found</h2>
-                      <button type="button" className="email-validity-check" data-email-validity="1" data-email-validity-scan="1" disabled={!V.emailCanVerifyResults} onClick={V.verifyEmailValidity}>{V.emailValidityBusy==='1'?V.emailValidityLabel:'Check email validity'}</button>
-                      {shows(V.fEmail.scanDone) ? (
-                        <>
-                        <button type="button" onClick={V.fEmail.exportScan} data-run="1" style={{display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 18px", marginLeft: "auto", border: "0", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)", animation: "lsPanelIn .35s cubic-bezier(.22,1,.36,1) both"}}>
-                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M12 4v10"></path>
-                            <path d="M8 10.5l4 4 4-4"></path>
-                            <path d="M4.5 18.5h15"></path>
-                          </svg>
-                          Export
-                        </button>
-                        </>
-                      ) : null}
-                    </div>
-                    <ul style={{listStyle: "none", margin: "14px 0 0", padding: "0", display: "flex", flexDirection: "column"}}>
-                      {(V.fEmail.rows ?? []).map((w, __iw) => (
-                        <Fragment key={__iw}>
-                          <li data-scanrow={w.pill} style={{display: "grid", gridTemplateColumns: "minmax(140px,220px) minmax(0,1fr) auto", alignItems: "center", gap: "14px", padding: "13px 10px", borderTop: "1px solid #E4E5E2", borderRadius: "12px", transition: "background .6s linear", animation: "lsPanelIn .45s cubic-bezier(.22,1,.36,1) both"}}>
-                            <span style={{minWidth: "0"}}>
-                              <span style={{display: "block", fontSize: "10.5px", fontWeight: "600", letterSpacing: ".08em", color: "#4A4F4B"}}>NEW</span>
-                              <span style={{display: "block", marginTop: "2px", fontSize: "14px", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{w.domain}</span>
-                            </span>
-                            <span style={{display: "flex", flexWrap: "wrap", gap: "6px", minWidth: "0"}}>
-                              {shows(w.scanning) ? (
-                                <>
-                                <span style={{display: "inline-flex", alignItems: "center", gap: "7px", fontSize: "12.5px", color: "#4A4F4B"}}>
-                                  <span aria-hidden="true" style={{width: "11px", height: "11px", borderRadius: "999px", border: "1.5px solid rgba(28,28,28,.2)", borderTopColor: "#1C1C1C", animation: "lsSpin .8s linear infinite"}}></span>
-                                  {w.scanLabel}
-                                </span>
-                                </>
-                              ) : null}
-                              {(w.items ?? []).map((it, __iit) => (
-                                <Fragment key={__iit}>
-                                  <span style={{display: "inline-flex", flexDirection: "column", gap: "1px", maxWidth: "100%", padding: "6px 11px", borderRadius: "12px", background: "#EAEAE8", animation: "lsPanelIn .4s cubic-bezier(.22,1,.36,1) both"}}>
-                                    <span style={{fontSize: "13px", fontWeight: "500", overflowWrap: "anywhere"}}>{it.t}</span>
-                                    <span style={{fontSize: "11px", color: "#5A5F5C"}}>{it.k}</span>
-                                  </span>
-                                </Fragment>
-                              ))}
-                              {shows(w.none) ? (
-                                <>
-                                <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Nothing published on this site</span>
-                                </>
-                              ) : null}
-                            </span>
-                            <span data-impst={w.pill} style={{padding: "5px 11px", borderRadius: "999px", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap"}}>{w.status}</span>
-                          </li>
-                        </Fragment>
-                      ))}
-                    </ul>
-                  </section>
-                  </>
-                ) : null}
+                {shows(V.fEmail.scanOn) ? <FinderScanProgress kind="email" scan={V.fEmail}/> : null}
                 <section data-card="1" style={{padding: "24px", borderRadius: "22px", background: "linear-gradient(160deg,#E9EDE4 0%,#CBD8BC 100%)", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
                     <div>
