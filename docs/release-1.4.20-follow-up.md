@@ -1,0 +1,9 @@
+# 1.4.20 release follow-up
+
+Social Profiles validation exposed an additional connection issue: Electron's Node runtime abandoned the site's IPv4 addresses after roughly 250 ms each while its IPv6 routes were unavailable. The request failed before the crawler's six-second request deadline. The app now allows at least one second per address attempt, retaining IPv4/IPv6 fallback, certificate validation, request cancellation and the sixteen-second site budget. See [Node's socket connection documentation](https://nodejs.org/api/net.html#socketconnectoptions-connectlistener).
+
+After the fix, a real scan of Venus Aesthetics, Corecare Aesthetics and NurSkin completed in 3.8 seconds in the development app: three processed, zero errors, seven published profiles. NurSkin did not publish a genuine social profile in the checked pages; hidden injected spam remains excluded. This is a measured sample, not a speed or coverage guarantee for arbitrary websites.
+
+New notifications now appear in the app's upper-right corner with the MamaLead icon/name, title, message and related-page action. Two notices can appear at once. They close after eight seconds, pause while hovered or keyboard-focused, and can be dismissed without deleting their saved unread record. Opening a notice marks it read. Saved history is not replayed as new popups after restart. The existing notification preference and Windows notifications remain available.
+
+The notification regression suite checks native bridge availability, persisted read/unread history, deletion, upper-right placement, OS-display failure fallback, hover pause, automatic dismissal and navigation. The fifty-site controlled social test checks concurrent completion, explicit failure/empty states, Stop and retrying only failed sites. A new signed artifact must include these changes; the earlier draft `v1.4.20-windows` must not be published.

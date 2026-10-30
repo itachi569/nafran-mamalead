@@ -25,11 +25,15 @@ try{
   await app.evaluate(({shell},{billing,live})=>{
     shell.openExternal=async()=>{}
     const original=globalThis.fetch,attempts=new Map()
+    globalThis.socialNetworkErrors=[]
     globalThis.fetch=async(input,init)=>{
       const url=new URL(String(input))
       if(url.origin==='https://api.mamalead.com')return original(billing+url.pathname+url.search,init)
       if(url.hostname==='127.0.0.1')return original(input,init)
-      if(live&&['venusaesthetics.pk','corecareaesthetics.pk','nurskinclinic.com'].includes(url.hostname.replace(/^www\./,'')))return original(input,init)
+      if(live&&['venusaesthetics.pk','corecareaesthetics.pk','nurskinclinic.com'].includes(url.hostname.replace(/^www\./,''))){
+        const started=Date.now()
+        try{return await original(input,init)}catch(error){globalThis.socialNetworkErrors.push({url:url.href,ms:Date.now()-started,message:error.message,cause:error.cause?.message,code:error.cause?.code,errors:error.cause?.errors?.map(e=>({code:e.code,message:e.message}))});throw error}
+      }
       if(url.hostname.endsWith('.fixture.test')){
         const n=Number(url.hostname.match(/^site(\d+)/)?.[1] || '0');attempts.set(n,(attempts.get(n)||0)+1)
         await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,n===0?4200:100);init.signal.addEventListener('abort',()=>{clearTimeout(timer);reject(init.signal.reason)},{once:true})})
@@ -74,6 +78,7 @@ try{
     assert.equal(await page.locator('[data-soclist] [data-social-profile-link]').count(),48)
     assert.equal(await page.locator('[data-soclist]').getByText('No profiles published',{exact:true}).count(),1)
   }else{
+    console.log(JSON.stringify({networkErrors:await app.evaluate(()=>globalThis.socialNetworkErrors)}))
     assert.equal(progress.failed,0,JSON.stringify(progress))
     assert.ok(await page.locator('[data-social-profile-link*="corecareaesthetics"]').count())
     assert.ok(await page.locator('[data-social-profile-link*="venusaestheticspk"]').count())

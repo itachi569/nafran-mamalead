@@ -1,6 +1,11 @@
 import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { getDefaultAutoSelectFamilyAttemptTimeout, setDefaultAutoSelectFamilyAttemptTimeout } from 'node:net'
+
+// A 250ms address attempt can reject a reachable overseas website before the
+// request's own timeout. Keep IPv4/IPv6 fallback, allowing one second per address.
+setDefaultAutoSelectFamilyAttemptTimeout(Math.max(1000, getDefaultAutoSelectFamilyAttemptTimeout()))
 
 // Windows toast headers use this identity, not the notification's title. Keep it
 // aligned with the installer shortcut while preserving existing local data paths.

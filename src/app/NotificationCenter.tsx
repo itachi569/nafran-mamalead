@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AppValues } from './useAppValues'
 import { defaultNotificationAction, notificationClock, notificationGroups, notificationKind, type AppNotification, type NotificationKind } from './notification-model'
 import './notification-center.css'
+import mamaLeadIcon from '../../build/mamalead-icon.png'
 
 function NoteIcon({kind}:{kind:NotificationKind}) {
   return <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -68,8 +69,39 @@ export function NotificationCenter({V}:{V:AppValues}) {
   </section>
 }
 
+function NotificationPopup({item,V}:{item:AppNotification;V:AppValues}) {
+  const [hovered,setHovered]=useState(false),[focused,setFocused]=useState(false),[error,setError]=useState('')
+  const dismiss=V.notificationCenter.dismissPopup
+  useEffect(()=>{
+    if(hovered || focused || error)return
+    const timer=window.setTimeout(()=>dismiss(item.id),8000)
+    return()=>window.clearTimeout(timer)
+  },[dismiss,item.id,hovered,focused,error])
+  const open=async()=>{
+    const failure=await V.openNotification(item.id)
+    if(failure){setError(failure);return}
+    V.notificationCenter.markRead(item.id);dismiss(item.id)
+  }
+  return <article className="nt-popup" data-notification-popup={item.id} data-level={item.level}
+    onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}
+    onFocusCapture={()=>setFocused(true)} onBlurCapture={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setFocused(false)}}>
+    <div className="nt-popup-brand"><span><img src={mamaLeadIcon} alt="" width="20" height="20"/>MamaLead</span><span>Just now</span></div>
+    <button type="button" className="nt-popup-close" aria-label={`Dismiss notification: ${item.title}`} onClick={()=>dismiss(item.id)}>×</button>
+    <button type="button" className="nt-popup-open" onClick={()=>void open()}>
+      <span className="nt-popup-symbol"><NoteIcon kind={notificationKind(item)}/></span>
+      <span className="nt-popup-content"><strong>{item.title}</strong><span>{item.body}</span><small>{actionLabel(item) || 'Mark as read'} <span aria-hidden="true">↗</span></small></span>
+    </button>
+    {error&&<p className="nt-popup-error" role="alert">{error}</p>}
+  </article>
+}
+
 export function NotificationToast({V}:{V:AppValues}) {
-  const toast=V.notificationCenter.toast
-  if(!toast)return null
-  return <div role="status" className="nt-toast" data-notifications-toast="1"><span>{toast.message}</span>{toast.undo&&<button type="button" onClick={V.notificationCenter.undo}>Undo</button>}</div>
+  const {toast,popups,dismissPopups}=V.notificationCenter
+  useEffect(()=>{if(V.notificationsOpen && popups.length)dismissPopups()},[V.notificationsOpen,popups.length,dismissPopups])
+  return <>
+    {!V.notificationsOpen&&<div className="nt-popup-stack" data-notifications-toast="popups" aria-live="polite" aria-relevant="additions" aria-label="New notifications">
+      {popups.map(item=><NotificationPopup key={item.id} item={item} V={V}/>)}
+    </div>}
+    {toast&&<div role="status" className="nt-toast" data-notifications-toast="1"><span>{toast.message}</span>{toast.undo&&<button type="button" onClick={V.notificationCenter.undo}>Undo</button>}</div>}
+  </>
 }

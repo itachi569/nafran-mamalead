@@ -6,11 +6,15 @@ export function useNotifications(enabled:boolean) {
   const current=useRef(notifications),nativeEnabled=useRef(enabled)
   nativeEnabled.current=enabled
   const [toast,setToast]=useState<{message:string;undo:boolean}|null>(null)
+  const [popups,setPopups]=useState<AppNotification[]>([])
+  const dismissPopup=useCallback((id:string)=>setPopups(items=>items.filter(item=>item.id!==id)),[])
+  const dismissPopups=useCallback(()=>setPopups([]),[])
   const removed=useRef<{item:AppNotification;index:number}|null>(null)
   const timer=useRef<number|undefined>(undefined)
   useEffect(()=>()=>window.clearTimeout(timer.current),[])
   const commit=useCallback((items:AppNotification[])=>{
     current.current=items;setNotifications(items)
+    setPopups(visible=>visible.filter(popup=>items.some(item=>item.id===popup.id && item.unread)))
     try {window.localStorage.setItem(NOTIFICATIONS_STORAGE_KEY,JSON.stringify(items))}catch{/* The in-memory history still works if storage is full. */}
   },[])
   const feedback=useCallback((message:string,undo=false)=>{
@@ -23,7 +27,10 @@ export function useNotifications(enabled:boolean) {
     details={...details,eventKey:groupKey || undefined}
     const item:AppNotification={id:crypto.randomUUID(),title,body,level,runId,at:new Date().toISOString(),unread:true,...details,chips:details.chips?.slice(0,4)}
     commit([item,...current.current].slice(0,MAX_NOTIFICATIONS))
-    if(nativeEnabled.current)void window.desktop?.notifications?.show(title,body,item.id).catch(()=>undefined)
+    if(nativeEnabled.current){
+      setPopups(items=>[item,...items].slice(0,2))
+      void window.desktop?.notifications?.show(title,body,item.id).catch(()=>undefined)
+    }
     return item.id
   },[commit])
   const markRead=useCallback((id:string)=>commit(current.current.map(item=>item.id===id?{...item,unread:false}:item)),[commit])
@@ -43,5 +50,5 @@ export function useNotifications(enabled:boolean) {
     commit(items);removed.current=null;window.clearTimeout(timer.current);setToast(null)
   },[commit])
   const find=useCallback((id:string)=>current.current.find(item=>item.id===id),[])
-  return {notifications:notifications.filter(item=>!/decision[ -]?maker|owner email|owner scan/i.test(item.title)),notify,markRead,toggleRead,markAllRead,remove,undo,toast,find}
+  return {notifications:notifications.filter(item=>!/decision[ -]?maker|owner email|owner scan/i.test(item.title)),notify,markRead,toggleRead,markAllRead,remove,undo,toast,find,popups,dismissPopup,dismissPopups}
 }

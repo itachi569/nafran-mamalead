@@ -850,7 +850,7 @@ export class WebsiteEnricher {
         }catch(error){
           if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
           const cause=error instanceof Error?(error as Error & {cause?:{code?:string}}).cause?.code || '':''
-          const timedOut=combined.aborted || (error instanceof Error && /timeout|timed.?out/i.test(error.name+' '+error.message))
+          const timedOut=combined.aborted || /TIMEDOUT|TIMEOUT/.test(cause) || (error instanceof Error && /timeout|timed.?out/i.test(error.name+' '+error.message))
           const certificate=/CERT|TLS|SSL/.test(cause)
           if(home&&!own)homeFailure=certificate?`${origin.host} has a certificate problem. The website owner needs to fix it.`:timedOut?`${origin.host} took too long to respond. Retry this website.`:`${origin.host} could not be reached. Retry this website or check its address.`
           retry=!certificate
