@@ -97,10 +97,16 @@ function parseBulkKeywords(raw: string): { terms: string[]; supplied: number; du
   return { terms, supplied: supplied.length, duplicates: supplied.length - terms.length }
 }
 
+// Reuse ICU formatters: constructing one for every saved run on every click blocks rendering.
+const shortDateFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' })
+const shortTimeFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' })
+const notificationDateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const localTimeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone || 'System time zone'
+
 function notificationTime(at: string): string {
   const date = new Date(at)
   if (Number.isNaN(date.getTime())) return ''
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+  return notificationDateFormat.format(date)
 }
 
 // Contact completeness, in the same spirit as the reference's score column: a lead with a
@@ -157,7 +163,7 @@ const BROWSER_PATHS: { label: string; path: string }[] = [
 /** "2 Sep" — the form the reference uses in the saved column. */
 function shortDate(iso: string): string {  const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  return shortDateFormat.format(date)
 }
 
 /** Measured extent of the pins drawn in the coverage panel, never a claimed scraper limit. */
@@ -183,7 +189,7 @@ function pinSpread(leads: Lead[]): string {
 function shortDateTime(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
-  return `${shortDate(iso)}, ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+  return `${shortDate(iso)}, ${shortTimeFormat.format(date)}`
 }
 
 /** The terms a run was given. Stored as JSON, and an unreadable row is one with no terms. */
@@ -708,7 +714,7 @@ export function useAppValues() {
 
   const go = useCallback((next: string) => {
     setView(Object.hasOwn(VIEW_NAMES, next) ? next : 'dashboard')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }, [])
 
   const openNotification=useCallback(async (id:string):Promise<string|null>=>{
@@ -2033,8 +2039,10 @@ export function useAppValues() {
     buildTimeline()
     mountLottie()
     releaseDetachedAnimations()
-    paintTheme(dark)
   })
+
+  // The dark-theme observer skins changed/new nodes; only a theme switch needs a full pass.
+  useEffect(() => { paintTheme(dark) }, [dark])
 
   useEffect(() => {
     const onResize = () => layout()
@@ -2531,7 +2539,7 @@ export function useAppValues() {
       const now = new Date()
       const start = new Date(now.getFullYear(), now.getMonth(), 1)
       const end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-      const format = (date: Date) => date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+      const format = (date: Date) => shortDateFormat.format(date)
       return `${format(start)} – ${format(end)}`
     })(),
     planSummary: 'Maps runs and lookup counts below are tracked on this device this month.',
@@ -2775,7 +2783,7 @@ export function useAppValues() {
     showAccessPrompt,
     workspaceName: /^(Nafran Leads|Local workspace)$/i.test(workspaceName) ? "MamaLead" : workspaceName,
     workspaceMembers,
-    localTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'System time zone',
+    localTimeZone,
     localDataPath: store?.path || 'Local database path unavailable',
     globalQuery,
     globalOpen,
@@ -3639,7 +3647,7 @@ export function useAppValues() {
         const skipped = Number(batch.skipped ?? 0)
         const socialImport = batch.kind === 'social'
         return {
-          when: `${shortDate(entry.at)} ${new Date(entry.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+          when: `${shortDate(entry.at)} ${shortTimeFormat.format(new Date(entry.at))}`,
           keywords: socialImport ? 'Social profile import' : 'Website import',
           summary: `${source} supplied · ${added} added · ${skipped} skipped`,
           isDone: true, isFailed: false, isCancelled: false,
@@ -3665,7 +3673,7 @@ export function useAppValues() {
         height: `${Math.max(6, Math.round(((perPass || 1) / tallest) * 100 * (1 - index * 0.08)))}%`,
       }))
       return {
-        when: `${shortDate(run.started_at)} ${new Date(run.started_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+        when: `${shortDate(run.started_at)} ${shortTimeFormat.format(new Date(run.started_at))}`,
         keywords: keywords.length ? keywords.join(', ') : 'No keywords recorded',
         summary: `${run.provider === 'chromium-maps' ? 'Google Maps' : run.provider} · ${run.location || 'no location'} · ${found} · ${formatDuration(run.duration_ms ?? 0)} · ${keywords.length} keyword pass${keywords.length === 1 ? '' : 'es'}${run.error ? ` · ${run.error}` : ''}`,
         isDone: run.status === 'done',

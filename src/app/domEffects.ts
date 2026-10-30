@@ -49,13 +49,20 @@ function gridColumns(selector: string, narrow: boolean, wide: string): void {
   if (element) element.style.gridTemplateColumns = narrow ? 'minmax(0,1fr)' : wide
 }
 
-function fitRows(headSelector: string, configs: RowConfig[]): void {
+function measureRows(headSelector: string, configs: RowConfig[]) {
   const head = document.querySelector<HTMLElement>(headSelector)
   const block = head?.closest<HTMLElement>('[data-rowsblock]')
   if (!head || !block) return
   const list = head.nextElementSibling as HTMLElement | null
   if (!list) return
-  const pick = configs.find((config) => list.clientWidth >= config.fixed + config.gaps * 10 + config.flex * config.min)
+  const width = list.clientWidth
+  const pick = configs.find((config) => width >= config.fixed + config.gaps * 10 + config.flex * config.min)
+  return { head, block, pick }
+}
+
+function fitRows(measurement: ReturnType<typeof measureRows>): void {
+  if (!measurement) return
+  const { head, block, pick } = measurement
   block.querySelectorAll<HTMLElement>('[data-rowgrid]').forEach((row) => {
     row.style.display = pick ? 'grid' : 'flex'
     if (pick) row.style.gridTemplateColumns = pick.tpl
@@ -81,7 +88,6 @@ export function layout(): void {
   const width = window.innerWidth
   const narrow = width < 940
   shell.style.gridTemplateColumns = narrow ? 'minmax(0,1fr)' : '262px minmax(0,1fr)'
-  side.style.position = !narrow && window.innerHeight >= side.scrollHeight + 40 ? 'sticky' : 'static'
 
   gridColumns('[data-hero]', width < 1080, 'minmax(0,1.7fr) minmax(0,1fr)')
   gridColumns('[data-setup]', width < 780, 'minmax(0,1.05fr) minmax(0,1fr)')
@@ -100,13 +106,16 @@ export function layout(): void {
     if (group) group.style.alignItems = wide ? 'stretch' : 'start'
   }
 
+  // Read all geometry together before changing rows. Interleaving each table's reads and
+  // writes forced the browser to lay out thousands of cells repeatedly on every click.
+  const sideHeight = side.scrollHeight
   const reach = document.querySelector<HTMLElement>('[data-reach]')
-  if (reach) reach.style.gridTemplateColumns = reach.clientWidth < 460 ? 'minmax(0,1fr)' : 'minmax(0,1fr) minmax(0,1.05fr)'
-
-  fitRows('[data-mailhead]', MAIL_ROWS)
-  fitRows('[data-phhead]', PHONE_ROWS)
-  fitRows('[data-rowhead]', LEAD_ROWS)
-  fitRows('[data-sochead]', SOCIAL_ROWS)
+  const reachWidth = reach?.clientWidth
+  const tables = [measureRows('[data-mailhead]', MAIL_ROWS), measureRows('[data-phhead]', PHONE_ROWS),
+    measureRows('[data-rowhead]', LEAD_ROWS), measureRows('[data-sochead]', SOCIAL_ROWS)]
+  side.style.position = !narrow && window.innerHeight >= sideHeight + 40 ? 'sticky' : 'static'
+  if (reach && reachWidth !== undefined) reach.style.gridTemplateColumns = reachWidth < 460 ? 'minmax(0,1fr)' : 'minmax(0,1fr) minmax(0,1.05fr)'
+  tables.forEach(fitRows)
 
   const status = document.querySelector<HTMLElement>('[data-status]')
   if (status) status.style.display = 'flex'

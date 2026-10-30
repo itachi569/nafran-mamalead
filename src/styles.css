@@ -257,3 +257,16 @@ body[data-theme="dark"] [data-theme-btn][data-on="1"] [data-tkn]{background:#C8D
 /* The chosen browser is always readable; "Use bundled" only matters once one has been chosen. */
 [data-clearbrowser]{opacity:0;pointer-events:none;transition:opacity .4s linear}
 [data-clearbrowser][data-on="y"]{opacity:1;pointer-events:auto}
+
+/* Keep long saved-contact tables responsive without hiding records from search or exports.
+   Chromium lays out offscreen row contents when they approach the viewport. */
+@supports (content-visibility: auto) {
+  [data-rowsblock] li[data-rowgrid]:nth-child(n + 21) {
+    content-visibility: auto;
+    contain-intrinsic-block-size: auto 58px;
+  }
+}
+[data-rowsblock] li[data-rowgrid]:nth-child(n + 20) { animation: none !important; }
+
+/* Search matches must paint immediately when the result card moves under the search bar. */
+[data-searching="true"] [data-rowsblock] li[data-rowgrid] { content-visibility: visible; }
