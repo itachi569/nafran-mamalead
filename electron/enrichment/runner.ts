@@ -1,11 +1,11 @@
 // Processes queued enrichment jobs.
 //
-// A job names a kind of contact and a set of leads. The runner takes them one at a time, reads
+// A job names a kind of contact and a set of leads. The runner reads
 // each lead's own website, and writes what it finds into the local database, so the Email Finder
 // and Social Profiles pages fill in without anybody pasting an address by hand.
 //
-// It is deliberately sequential and paced: this is other people's websites, and a desktop app
-// hammering them in parallel would be both rude and more likely to be blocked.
+// Social batches read at most three independent sites at once. Other passes remain sequential;
+// requests within each site are bounded and paced.
 import type { LocalDatabase } from '../db/local-db'
 import { LicenseAccessError } from '../billing/client'
 import { type Repository } from '../db/repository'
@@ -33,6 +33,7 @@ export interface EnrichmentProgress {
   message: string
   at: string
   outcomes?: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}>
+  activeLeadIds?: string[]
 }
 
 export interface EnrichmentOptions {
@@ -74,6 +75,7 @@ export class EnrichmentRunner {
   private activeProgress: EnrichmentProgress | null = null
   private stoppedJobId = ''
   private outcomes: NonNullable<EnrichmentProgress['outcomes']> = {}
+  private activeLeadIds = new Set<string>()
 
   constructor(
     private readonly db: LocalDatabase,
@@ -108,6 +110,7 @@ export class EnrichmentRunner {
         if (job.id === this.foregroundJobId) this.foregroundJobId = ''
         this.stoppedJobId = ''
         this.outcomes = {}
+        this.activeLeadIds.clear()
         try { this.activeRunId=JSON.parse(job.options || '{}').runId || '' } catch { this.activeRunId='' }
         try {
           if (!JOB_KINDS.includes(job.kind as JobKind)) { this.repository.markJob(job.id,'failed',0,'This scan module is no longer available.'); continue }
@@ -197,8 +200,10 @@ export class EnrichmentRunner {
 
   private async runJob(
     job: { id: string; workspace_id: string; kind: string; lead_ids: string; options?: string },
-    signal: AbortSignal,
+    parentSignal: AbortSignal,
   ): Promise<void> {
+    const jobController = new AbortController()
+    const signal = AbortSignal.any([parentSignal, jobController.signal])
     const kind = (JOB_KINDS.includes(job.kind as JobKind) ? job.kind : 'website') as JobKind
     const lookup = lookupOptions(job.options)
     const isLookup = kind === 'website' && lookup.source === 'website-lookup'
@@ -220,7 +225,7 @@ export class EnrichmentRunner {
     let failed = 0
     let searchFailure: string | null = null
 
-    for (const leadId of leadIds) {
+    const processLead = async (leadId: string): Promise<void> => {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
       await waitForAbort(Promise.resolve(this.options.authorize?.(kind, false)),signal)
       const lead = this.repository.getLead(job.workspace_id, leadId)
@@ -230,7 +235,7 @@ export class EnrichmentRunner {
         searchFailure = 'Some saved businesses have no website to scan.'
         this.outcomes[leadId] = {status:'error',searches:0,error:'No website is saved for this business.'}
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead?.name || '',message:'Skipped a business without a website.'})
-        continue
+        return
       }
 
       let siteFailure: string | null = null
@@ -238,7 +243,7 @@ export class EnrichmentRunner {
 
       const directoryError = directoryScanError(lead.website)
       if (directoryError) throw new Error(directoryError)
-      const beforeFound = found
+      this.activeLeadIds.add(leadId)
       if (isLookup) this.repository.saveWebsiteLookupRow(job.id,{...emptyLookupRow(lead),status:'running'})
       this.emit({
         jobId: job.id,
@@ -295,9 +300,10 @@ export class EnrichmentRunner {
         failed += 1
         searchFailure = findings.error
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead.name,message:findings.error})
-        continue
+        return
       }
 
+      const beforeFound = found
       if (kind !== 'website' || fields.address) this.repository.fillLeadAddress(leadId, findings.addresses ?? [])
       // Email and website jobs both fill addresses; social fills profiles; phone fills numbers.
       if (kind === 'email' || (kind === 'website' && fields.email)) {
@@ -364,6 +370,24 @@ export class EnrichmentRunner {
       if (processed < leadIds.length) await waitForAbort(new Promise(resolve=>setTimeout(resolve,PACE_MS)),signal)
     }
 
+    // A slow or unavailable website occupies one slot, never the entire submitted list. Wait for
+    // all active slots on Stop/license failure so a previous job cannot write into a new job.
+    let cursor = 0
+    let fatal: unknown
+    const worker = async () => {
+      try {
+        while (cursor < leadIds.length && !signal.aborted) {
+          const leadId = leadIds[cursor++]
+          try { await processLead(leadId) } finally { this.activeLeadIds.delete(leadId) }
+        }
+      } catch (error) {
+        if (!jobController.signal.aborted) fatal = error
+        jobController.abort()
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(kind === 'social' ? 3 : 1,leadIds.length)},worker))
+    if (fatal) throw fatal
+
     if (signal.aborted) throw new DOMException('Enrichment cancelled','AbortError')
     this.repository.markJob(job.id, searchFailure ? 'failed' : 'done', found, searchFailure)
     this.emit({
@@ -384,7 +408,7 @@ export class EnrichmentRunner {
   }
 
   private emit(progress: Omit<EnrichmentProgress, 'at' | 'failed'> & {failed?:number}): void {
-    const complete: EnrichmentProgress = {...progress,runId:progress.jobId ? this.activeRunId : undefined,outcomes:{...this.outcomes},failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
+    const complete: EnrichmentProgress = {...progress,runId:progress.jobId ? this.activeRunId : undefined,outcomes:{...this.outcomes},activeLeadIds:[...this.activeLeadIds].filter(id=>!this.outcomes[id]),failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
     if (progress.jobId) {
       this.activeProgress = complete
       this.repository.saveJobProgress(progress.jobId,complete)

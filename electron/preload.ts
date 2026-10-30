@@ -185,6 +185,8 @@ const local = {
 }
 
 export interface EnrichmentProgress {
+  activeLeadIds?: string[]
+  outcomes?: Record<string,{status:'found'|'not-published'|'error';searches:number;error?:string}>
   jobId: string
   kind: 'email' | 'phone' | 'social' | 'website'
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'idle'

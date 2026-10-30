@@ -108,7 +108,7 @@ export function socialLinksFromHtml(html: string, baseHref: string): FoundSocial
   if(own)add(own.profileUrl)
   // Platform feeds contain other people's accounts and corporate footer links. Only the
   // supplied account and explicit owner metadata are evidence on a platform page.
-  if(!platformPage)for(const link of siteLinksFromHtml(html))add(link.href)
+  if(!platformPage)for(const link of siteLinksFromHtml(html, true))add(link.href)
   const collectUrls=(value:unknown):void=>{
     if(typeof value==='string'){
       const text=decodeHtml(value.replace(/\\\//g,'/'))
@@ -223,9 +223,13 @@ function uniqueAddresses(addresses: string[]): string[] {
 }
 
 /** Parse real navigation anchors, including unquoted HTML attributes, without reading script templates. */
-function siteLinksFromHtml(html: string): { href: string; label: string }[] {
+function siteLinksFromHtml(html: string, visibleOnly = false): { href: string; label: string }[] {
   const links: {href:string;label:string}[]=[]
   const visit=(node:DefaultTreeAdapterMap['node']):void=>{
+    if (visibleOnly && 'tagName' in node) {
+      const style = node.attrs.find(item => item.name === 'style')?.value || ''
+      if (node.attrs.some(item => item.name === 'hidden') || /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|(?:width|height)\s*:\s*0(?:px)?\s*(?:;|$))/i.test(style)) return
+    }
     if ('tagName' in node && node.tagName==='a') {
       const attr=(name:string)=>node.attrs.find(item=>item.name===name)?.value ?? ''
       if(attr('href'))links.push({href:attr('href'),label:readableHtml(serialize(node)).replace(/\s+/g,' ').trim() || attr('aria-label') || attr('title')})
@@ -803,8 +807,8 @@ export class WebsiteEnricher {
   }
 
   /**
-   * Homepage plus two linked Contact/About pages, with parallel HTTP reads and an eight-second
-   * total budget. Social platform feeds are never traversed as if they were business websites.
+   * Homepage plus two linked Contact/About pages. Transient failures get one retry within a
+   * sixteen-second site budget; successful pages survive failures on optional pages.
    */
   async inspectSocialFast(website: string, signal?: AbortSignal): Promise<WebsiteFindings> {
     const findings: WebsiteFindings = { emails: [], phones: [], socials: [], people: [], pagesRead: [], error: null }
@@ -818,24 +822,50 @@ export class WebsiteEnricher {
 
     if(!/^https?:$/.test(origin.protocol))return {...findings,error:'Enter an HTTP or HTTPS website URL.'}
     if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
-    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),8_000)
+    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),16_000)
     const combined=AbortSignal.any([budget.signal,...(signal?[signal]:[])])
     const found=new Map<string,FoundSocial>(),own=canonicalSocialProfile(origin.href)
     if(own)found.set(socialProfileIdentity(own),{...own,page:origin.href})
-    const read=async(url:string,home=false):Promise<{url:string;html:string}|null>=>{
-      try{
-        const response=await fetch(url,{redirect:'follow',signal:AbortSignal.any([combined,AbortSignal.timeout(home&&own?2500:3500)]),headers:{accept:'text/html,application/xhtml+xml','user-agent':'MamaLead contact scanner/1.5'}})
-        if(!response.ok||Number(response.headers.get('content-length')??0)>2_000_000){await response.body?.cancel();if(home&&!own)findings.error=`${origin.host} returned HTTP ${response.status}.`;return null}
-        const final=response.url||url,reader=response.body?.getReader();if(!reader)return null
-        const decoder=new TextDecoder();let html='',bytes=0
-        try{while(true){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.length;if(bytes>2_000_000)break;html+=decoder.decode(chunk.value,{stream:true})}}finally{await reader.cancel()}
-        findings.pagesRead.push(final)
-        return {url:final,html:html+decoder.decode()}
-      }catch(error){if(home&&!own)findings.error=error instanceof Error?error.message:'The website could not be read.';return null}
+    let homeFailure = ''
+    const read=async(raw:string,home=false):Promise<{url:string;html:string}|null>=>{
+      let url = raw
+      for (let attempt=0; attempt<(home&&!own?2:1) && !combined.aborted; attempt++) {
+        let retry = false
+        try{
+          const response=await fetch(url,{redirect:'follow',signal:AbortSignal.any([combined,AbortSignal.timeout(home?(own?2500:6000):4000)]),headers:{accept:'text/html,application/xhtml+xml','user-agent':'MamaLead contact scanner/1.5'}})
+          if(!response.ok){
+            await response.body?.cancel()
+            if(home&&!own)homeFailure=`${origin.host} could not be read (HTTP ${response.status}). Retry this website.`
+            // Do not repeat denied/challenged requests. Retry temporary server errors only.
+            retry=[408,500,502,503,504].includes(response.status)
+            if (!retry) return null
+          }else{
+            const final=response.url||url,reader=response.body?.getReader();if(!reader)return null
+            const decoder=new TextDecoder();let html='',bytes=0
+            // Keep the useful first part even on large homepages instead of discarding the site.
+            try{while(true){const chunk=await reader.read();if(chunk.done)break;const take=chunk.value.subarray(0,2_000_000-bytes);bytes+=take.length;html+=decoder.decode(take,{stream:true});if(bytes>=2_000_000)break}}finally{await reader.cancel().catch(()=>undefined)}
+            findings.pagesRead.push(final)
+            return {url:final,html:html+decoder.decode()}
+          }
+        }catch(error){
+          if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
+          const cause=error instanceof Error?(error as Error & {cause?:{code?:string}}).cause?.code || '':''
+          const timedOut=combined.aborted || (error instanceof Error && /timeout|timed.?out/i.test(error.name+' '+error.message))
+          const certificate=/CERT|TLS|SSL/.test(cause)
+          if(home&&!own)homeFailure=certificate?`${origin.host} has a certificate problem. The website owner needs to fix it.`:timedOut?`${origin.host} took too long to respond. Retry this website.`:`${origin.host} could not be reached. Retry this website or check its address.`
+          retry=!certificate
+          // An old Maps HTTP URL may fail while the site's HTTPS endpoint is healthy.
+          if(home && url.startsWith('http://'))url=url.replace(/^http:/,'https:')
+        }
+        if (!retry || combined.aborted) break
+      }
+      return null
     }
     const collect=(page:{url:string;html:string})=>{for(const social of socialLinksFromHtml(page.html,page.url)){const canonical=canonicalSocialProfile(social.profileUrl);if(canonical)found.set(socialProfileIdentity(canonical),social)}}
     try {
-      const home=await read(origin.href,true)
+      let home=await read(origin.href,true)
+      // Maps sometimes saves a discontinued location URL; the homepage can still publish profiles.
+      if(!home&&!own&&!combined.aborted&&(origin.pathname!=='/'||origin.search))home=await read(new URL('/',origin).href)
       if(home){
         collect(home)
         if(!socialPlatformOf(home.url)){
@@ -853,6 +883,7 @@ export class WebsiteEnricher {
       }
       if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
       findings.socials=[...found.values()]
+      findings.error = !home && !own ? homeFailure || `${origin.host} could not be read. Retry this website.` : null
     } finally {
       clearTimeout(timer);budget.abort()
     }

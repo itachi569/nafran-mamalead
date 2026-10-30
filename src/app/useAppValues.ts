@@ -374,6 +374,8 @@ export function useAppValues() {
     leadIds: string[]
     /** Which of those sites the pass has finished reading. */
     scannedIds: string[]
+    activeLeadIds?: string[]
+    outcomes?: EnrichmentProgress['outcomes']
     /** The site being read right now, as the worker names it. */
     activeName: string
     /** How many profiles the pass has filed so far. */
@@ -1746,13 +1748,14 @@ export function useAppValues() {
     let cancelled=false
     let timer:number|undefined
     let lastProcessed=-1
-    const apply=(progress:Pick<EnrichmentProgress,'status'|'processed'|'found'|'failed'|'leadName'|'message'>)=>{
+    const apply=(progress:Pick<EnrichmentProgress,'status'|'processed'|'found'|'failed'|'leadName'|'message'|'outcomes'|'activeLeadIds'>)=>{
       if(cancelled)return
       const finished=['done','failed','cancelled'].includes(progress.status)
       setScan(current=>({...current,
         phase:finished?'done':'scanning',stopping:finished?false:current.stopping,
         stopped:progress.status==='cancelled',failed:progress.failed ?? 0,
-        scannedIds:current.leadIds.slice(0,progress.processed),found:progress.found,
+        scannedIds:progress.outcomes ? current.leadIds.filter(id=>Boolean(progress.outcomes?.[id])) : current.leadIds.slice(0,progress.processed),found:progress.found,
+        outcomes:progress.outcomes,activeLeadIds:finished?[]:progress.activeLeadIds,
         activeName:finished?'':progress.leadName,message:progress.message,
       }))
       if(progress.processed!==lastProcessed || finished){lastProcessed=progress.processed;social.refresh();void reload()}
@@ -3313,21 +3316,23 @@ export function useAppValues() {
         // Before the worker names a site, its position is all that is known: the one being read is
         // the first that has not been read yet.
         const isActive =
-          scan.phase === 'scanning' && (index === activeIndex || (activeIndex < 0 && index === scan.scannedIds.length))
+          scan.phase === 'scanning' && (scan.activeLeadIds ? scan.activeLeadIds.includes(leadId) : (index === activeIndex || (activeIndex < 0 && index === scan.scannedIds.length)))
         const isDone = scanned.has(leadId ?? '')
+        const outcome = scan.outcomes?.[leadId]
+        const scanError = outcome?.status === 'error' ? outcome.error || 'This website could not be read.' : scan.outcomes ? '' : row?.scanError || ''
         const host = url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/+$/, '')
         return {
           phase: isActive ? 'scanning' : isDone ? 'done' : 'wait',
           name: row?.name ?? host,
           domain: row?.domain || host,
           scanning: isActive ? '1' : '',
-          scanLabel: isActive ? 'Scanning…' : row?.scanError || '',
+          scanLabel: isActive ? 'Scanning…' : scanError,
           profiles: (row?.profiles ?? []).map((profile) => ({ tag: profile.short, url: profile.url })),
           // The panel's chips carry the platform's label as the tooltip; the table's carry the URL.
           chips: (row?.profiles ?? []).map((profile) => ({ t: profile.short, k: profile.label, url: profile.url })),
-          none: !isActive && !row?.scanError && isDone && row?.noProfiles ? '1' : '',
-          pill: isActive ? 'scanning' : row?.scanError ? 'failed' : isDone ? 'done' : 'pending',
-          status: isActive ? 'Scanning' : row?.scanError ? 'Failed — retry scan' : isDone ? 'Done' : scan.stopped ? 'Not scanned' : 'Waiting',
+          none: !isActive && !scanError && isDone && !row?.profiles.length ? '1' : '',
+          pill: isActive ? 'scanning' : scanError ? 'failed' : isDone ? 'done' : 'pending',
+          status: isActive ? 'Scanning' : scanError ? 'Failed — retry scan' : isDone ? (outcome?.status === 'not-published' ? 'No profiles published' : 'Done') : scan.stopped ? 'Not scanned' : 'Waiting',
         }
       })
     })(),
@@ -4073,6 +4078,8 @@ export function useAppValues() {
         percent:Math.floor(100*scan.scannedIds.length/Math.max(1,scan.leadIds.length || scan.urls.length)),
         current:scan.activeName,message:scan.message || 'Checking selected websites for published social profiles…'},
       rings:[],stop:cancelScan,refresh:social.refresh,exit:exitScan,
+      retryCount:Object.values(scan.outcomes ?? {}).filter(outcome=>outcome.status==='error').length,
+      retry:()=>runWebsiteScan(scan.urls.filter((_,index)=>scan.outcomes?.[scan.leadIds[index]]?.status==='error')),
     },
     covScanning: scan.phase === 'scanning',
     covResult: scan.phase === 'done' || scan.phase === 'covered',
