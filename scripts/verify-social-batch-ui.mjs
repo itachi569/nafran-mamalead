@@ -87,7 +87,8 @@ try{
   const results=db.prepare('select l.website,s.platform,s.profile_url from leads l left join social_profiles s on s.lead_id=l.id order by l.website').all()
   console.log(JSON.stringify({mode:live?'live three reported sites':'50 controlled sites',packaged,elapsedMs:Date.now()-start,processed:progress.processed,failed:progress.failed,found:job.found,...(live?{results}:{})}))
   assert.deepEqual(errors,[])
-  await page.locator('[data-soclist]').screenshot({path:join(directory,'social-results.png')})
+  // Capture the document without competing with the app's completion scroll.
+  await page.screenshot({path:join(directory,'social-results.png'),fullPage:true,animations:'disabled'})
   if(!live){
     await app.evaluate(()=>{globalThis.socialTestAllowRetry=true})
     await page.getByRole('button',{name:'Retry 1 failed business',exact:true}).click()
