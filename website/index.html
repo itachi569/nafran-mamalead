@@ -58,6 +58,17 @@
   .hero-offer{max-width:1010px;margin:0 auto;text-align:center}
   .hero-offer h1{margin:24px auto 0;font-size:clamp(38px,5.3vw,70px);line-height:1.07;letter-spacing:-.045em;font-weight:700;animation:rise .9s ease both}
   .hero-offer h1 span{display:block;color:#35472d}
+  .hero-price-context{display:flex;align-items:center;gap:16px;width:fit-content;max-width:100%;margin:22px auto 0;padding:14px 20px;border:1px solid #fff;border-radius:20px;background:#f4f7edeb;box-shadow:0 12px 30px -24px #35472d80;text-align:left;color:#42473f}
+  .offer-lock{display:grid;place-items:center;flex-shrink:0;width:42px;height:42px;border-radius:13px;background:#1c1c1c;color:#c8d5bb}
+  .offer-comparison small{display:block;font-size:10px;font-weight:700;letter-spacing:.13em;margin-bottom:5px;color:#35472d}
+  .offer-comparison span{font-size:14px}.offer-comparison strong{color:#1c1c1c}
+  .hero-price-context .offer-saving{border-left:1px dashed #a8b49c;border-radius:0;background:none;display:block;padding:0 0 0 16px;font-size:24px;line-height:1.1;white-space:nowrap}
+  .hero-price-context .offer-saving small{display:block;font-size:10px;letter-spacing:.12em;margin-top:4px;text-align:center}
+  @media(max-width:440px){.hero-price-context{padding:12px;gap:10px}.offer-comparison small{font-size:9px}.offer-comparison span{font-size:12px}.hero-price-context .offer-saving{font-size:21px;padding-left:10px}.offer-lock{width:35px;height:39px}}
+  .hero-price-context s,.plan-offer s{text-decoration-thickness:2px;text-decoration-color:currentColor}
+  .offer-saving{display:inline-flex;padding:7px 13px;border-radius:999px;background:#c8d5bb;color:#1c1c1c;font-size:13px;font-weight:700}
+  .plan-offer{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:20px;color:#d4dacd;font-size:16px}
+  .pricing-lifetime .plan-offer+h3{margin-top:12px}
   .hero-offer .hero-description{max-width:660px;margin:20px auto 0;font-size:17px;line-height:1.65;color:#343b30}
   .hero-benefits{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:25px 0 0;padding:0;list-style:none}
   .hero-benefits li{display:inline-flex;align-items:center;gap:9px;padding:10px 16px 10px 10px;border:1px solid #fff;border-radius:999px;background:rgba(255,255,255,.75);font-size:14px;color:#1c1c1c}
@@ -110,15 +121,16 @@
     </sc-if>
     <div style="position: relative; max-width: 1180px; margin: 0 auto; padding: 0 24px; text-align: center;">
       <div class="hero-offer">
-        <span class="latest-eyebrow">MAMALEAD FOR WINDOWS · LIFETIME ACCESS</span>
-        <h1>Google Maps leads.<span>Rs 10,000. For life.</span></h1>
-        <p class="hero-description">Find businesses and their published emails, phone numbers and social profiles. Keep your leads on your PC and export them to PDF or Excel.</p>
+        <span class="latest-eyebrow">GOOGLE MAPS LEADS · MAMALEAD FOR WINDOWS</span>
+        <h1>Lock in Rs 10,000.<span>Keep it for life.</span></h1>
+        <div class="hero-price-context"><span class="offer-lock" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></span><div class="offer-comparison"><small>LIFETIME PRICE LOCK · LAUNCH OFFER</small><span>Regular <s>Rs 20,000</s> · <strong>Save Rs 10,000</strong></span></div><span class="offer-saving">50%<small>OFF</small></span></div>
+        <p class="hero-description">Collect Google Maps leads and find published business emails, phone numbers and social profiles. Keep your results on your PC and export them to PDF or Excel.</p>
         <ul class="hero-benefits" aria-label="Lifetime benefits"><li>Pay once</li><li>Unlimited Maps leads</li><li>No monthly subscription</li></ul>
         <div class="hero-actions">
-          <a class="hero-buy" href="#pricing"><strong>Rs 10,000</strong><span>Get Lifetime Access</span><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
+          <a class="hero-buy" href="#pricing"><strong>Rs 10,000</strong><span>Lock In Lifetime</span><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></a>
           <a class="hero-trial" href="#download">Start free 1-day trial <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 4v12m-5-5 5 5 5-5M5 20h14"/></svg></a>
         </div>
-        <p class="hero-payment-note">One-time payment in PKR · Purchase securely inside the app</p>
+        <p class="hero-payment-note">The launch price is yours to keep. Pay once. No monthly bill.</p>
         <div class="hero-trial-note"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></svg><div><strong>Try it before you buy</strong><span>Free for 24 hours · Up to 300 Maps leads · No card needed</span></div></div>
         <a class="hero-explore" href="#modules">Explore the app <span aria-hidden="true">↗</span></a>
       </div>
@@ -132,9 +144,9 @@
   </section>
 
   <section id="pricing" data-screen-label="Pricing" class="pricing-section">
- <div class="pricing-intro"><span class="latest-eyebrow">CHOOSE YOUR ACCESS</span><h2>One payment.<br>A lifetime of leads.</h2><p>Download MamaLead for Windows, then activate your plan in the app.</p></div>
+ <div class="pricing-intro"><span class="latest-eyebrow">CHOOSE YOUR ACCESS</span><h2>Lifetime access.<br>Half the price.</h2><p>Regular price Rs 20,000. Get Lifetime access for Rs 10,000 with our launch offer. Download MamaLead for Windows, then activate your plan in the app.</p></div>
  <div class="pricing-grid">
-  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS</span><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Core desktop features for life, on up to two machines. No recurring payment for Lifetime.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Buy now in Settings &amp; Billing and pay through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p></div><a href="#download" class="pricing-action">Download app to buy Lifetime</a></article>
+  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on up to two machines. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Buy now in Settings &amp; Billing and pay through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p></div><a href="#download" class="pricing-action">Get Lifetime for Rs 10,000</a></article>
   <article class="pricing-card"><span class="plan-label">1-DAY TRIAL</span><h3>Free</h3><p class="plan-summary">Explore the core features for 24 hours from activation. One trial per email and one machine.</p><ul><li>300 Google Maps leads total across keywords</li><li>Website emails, phone numbers and social profiles</li><li>Website Lookup with your selected contact fields</li><li>All Leads, Saved Lists and Run History</li><li>Branded PDF and Excel exports</li><li>Saved lead data stays on your computer</li></ul><div class="plan-next"><strong>Start with your email</strong><p>Request a trial key in Settings &amp; Billing → Usage. Enter the emailed key in Account; your 24 hours start when you activate.</p></div><a href="#download" class="pricing-action">Download app to start trial</a></article>
  </div><p class="pricing-note">Email validity is optional and requires a configured, authorised verification provider. Public website availability and provider limits still apply. See your plan and Maps usage in Settings &amp; Billing.</p>
 </section>
