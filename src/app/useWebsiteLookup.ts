@@ -33,7 +33,7 @@ export function useWebsiteLookup(db: LocalApi | null, allowed: () => boolean, on
     const request=generation.current, job=currentJob.current
     loading.current=true
     try {
-      const next=await db.lookup.get(job || undefined)
+      const next=await db.lookup.get(active.current.has(job) && !completed.current.has(job) ? job : undefined)
       if (!alive.current || request!==generation.current) return
       setSession(next)
       if (next) {

@@ -1643,6 +1643,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             <span data-col="dom" title={r.domain} style={{minWidth: "138px", fontSize: "12.5px", color: "#4A4F4B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{r.domain}</span>
                             <span data-email-addresses="1" style={{display:'flex',flexDirection:'column',gap:'7px',minWidth:0,fontSize:'12.5px',color:'#4A4F4B',overflowWrap:'anywhere'}}>
                               {r.emailDetails.length?r.emailDetails.map(address=><a key={address.value} href={'mailto:'+address.value} title={address.page?`Published on ${address.page}`:address.value} data-email-address={address.value} style={{color:'inherit',textDecoration:'none',lineHeight:1.5}}>{address.value}</a>):r.primary}
+                              {r.emailDetails[0]?.validationMessage && <details data-email-verdict-details="1" style={{fontSize:12,lineHeight:1.5}}><summary style={{cursor:'pointer'}}>Verification details</summary><span>{r.emailDetails[0].validationMessage}</span></details>}
                             </span>
                             <span style={{minWidth: "148px"}}>
                               {shows(V.isTone(r.tone, 'high')) ? (

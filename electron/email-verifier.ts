@@ -3,7 +3,7 @@ const APIFY_API_URL = 'https://api.apify.com/v2/actors'
 export const DEFAULT_APIFY_EMAIL_ACTOR = 'apivault_labs/email-deliverability-checker'
 
 export type EmailValidityStatus = 'valid' | 'invalid' | 'risky' | 'unknown'
-export type EmailValidityProvider = 'apify' | 'leadsangel' | 'mailverifier'
+export type EmailValidityProvider = 'apify' | 'leadsangel' | 'mailverifier' | 'local'
 
 export type EmailValidityResult = {
   email: string
@@ -75,9 +75,9 @@ export function parseMailVerifierResponse(email: string, payload: MailVerifierPa
   const response = cleanMessage(payload.response)
   const fallback = cleanMessage(payload.message)
   const message = response || fallback || 'MailVerifier did not return a verification result.'
-  const normalized = message.toLowerCase()
+  const normalized = `${cleanMessage(payload.status)} ${message}`.toLowerCase()
 
-  if (/\binvalid\b|not[ -]?valid|undeliverable|does not exist|bad mailbox|hard bounce/.test(normalized)) {
+  if (/\binvalid\b|not[ -]?valid|not[ -]?deliverable|undeliverable|does not exist|bad mailbox|hard bounce|no[ _-]?mx|does not accept|mailbox (?:disabled|unavailable)/.test(normalized)) {
     return { email, status: 'invalid', verified: false, score: 0, message, provider: 'mailverifier' }
   }
   if (/\brisk(?:y)?\b|catch[ -]?all|accept[ -]?all|disposable|spam trap|role[ -]?based|greylist/.test(normalized)) {
@@ -115,7 +115,9 @@ export function parseApifyEmailResult(email: string, value: unknown): EmailValid
   const score = numberScore(source)
 
   let result: EmailValidityStatus = 'unknown'
-  if (['valid', 'deliverable', 'accepted', 'found'].includes(status)) result = 'valid'
+  const riskFlags=['disposable','isDisposable','isCatchAll','catchAll','catch_all','role','isRole','isRoleBased'].filter(key=>source[key]===true)
+  if (riskFlags.length) result = 'risky'
+  else if (['valid', 'deliverable', 'accepted', 'found'].includes(status)) result = 'valid'
   else if (['invalid', 'undeliverable', 'rejected', 'not_found', 'no_mx'].includes(status)) result = 'invalid'
   else if (['risky', 'catch_all', 'catch_all_guess', 'disposable', 'role_based'].includes(status)) result = 'risky'
   else if (mailboxStatus === 'accepted' || source.mailboxExists === true) result = 'valid'
@@ -126,8 +128,8 @@ export function parseApifyEmailResult(email: string, value: unknown): EmailValid
     email,
     status: result,
     verified: result === 'valid',
-    score: score ?? (result === 'valid' ? 95 : result === 'invalid' ? 0 : result === 'risky' ? 35 : null),
-    message,
+    score: result === 'risky' ? Math.min(score ?? 35,35) : score ?? (result === 'valid' ? 95 : result === 'invalid' ? 0 : null),
+    message: riskFlags.length ? `Provider risk flags: ${riskFlags.join(', ')}. This address is not treated as verified.` : message,
     provider: 'apify',
   }
 }

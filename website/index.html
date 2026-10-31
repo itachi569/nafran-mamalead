@@ -441,7 +441,7 @@
 
   <section id="latest" aria-labelledby="latest-heading" style="max-width:1180px;margin:0 auto;padding:0 24px 28px">
     <div style="padding:clamp(24px,3vw,36px);border-radius:26px;background:#e4ebdd">
-      <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.22</p>
+      <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.23</p>
       <h2 id="latest-heading" class="latest-heading">Find the right business contacts. Keep every step clear.</h2>
       <div class="latest-feature-grid">
         <article><h3>Automatic updates, your choice</h3><p>Turn on background downloads in Account. Get a new-release notice, follow progress and restart when you are ready. Your leads and settings stay on this PC.</p></article><article><h3>Short answers. Straight to the page.</h3><p>MamaLead Assist keeps replies concise and adds the relevant page name below the answer. Click it to open a module, Reports or App updates.</p></article><article><h3>Read a notification with one click</h3><p>New scan, export and update notices pop up in the top-right corner. Click to open the related page and mark the notice read, or review it later in Notifications. All/Unread, Mark all read and delete with Undo remain available.</p></article><article><h3>Your Maps limit stays in place</h3><p>Set one total for the run across keywords and areas. Request 40 and collect at most 40. If fewer results are available, the search finishes with those results.</p></article>
@@ -562,7 +562,7 @@
             <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" onClick="{{ onDownloadClick }}" style="display: inline-flex; align-items: center; gap: 11px; padding: 17px 30px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 15px; font-weight: 500; white-space: nowrap; box-shadow: 0 16px 34px -16px rgba(28,28,28,.7);">Download for Windows</a>
           </div>
           <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.6; color: #42473F;"><strong>Step 1 · Download</strong><br>Save the Windows installer to your computer.</p>
-          <p style="margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: #42473F;"><strong>Step 2 · Install and get started</strong><br>Open the installer, choose your install folder, and launch MamaLead. The app will guide you through getting started.</p>
+          <p style="margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: #42473F;"><strong>Step 2 · Install and activate</strong><br>Open the installer, choose your install folder, and launch MamaLead. On first launch, Settings &amp; Billing → Account opens so you can paste your emailed license key.</p>
         </div>
         <div style="flex: 1 1 320px; min-width: 0; padding: 24px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06);">
           <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7.5 3v5.5c0 4.4-3.1 7.6-7.5 8.5-4.4-.9-7.5-4.1-7.5-8.5V6.5z"></path><path d="M12 9v4M12 16h.01"></path></svg></span>About the SmartScreen warning</div>
@@ -786,7 +786,7 @@ const MODULES = [
       "Reads published email links, supported email obfuscation and structured website data; checks displayed contact pages when the initial read finds no email.",
       "Search saved records by company, website or email while typing. The current import stays separate until you choose a different saved search.",
       "Choose Verify found emails On or Off on the Email Finder page before scanning; your choice is remembered. The website-import dialog stays focused on the URL or file list. With Off, Check email validity remains available beside the results.",
-      "Validity checks cover the import or filtered search currently on screen when an authorised provider is configured. Show all leads deliberately widens the list; checking one imported company does not start checks for your other saved companies.",
+      "Validity checks cover the import or filtered search currently on screen. Local checks flag address typos and domains that cannot accept mail before using provider credits. An authorised provider is needed for mailbox verification; DNS alone never marks an address Valid.",
       "See Checking X/Y and a progress message while validity runs. Stop checking keeps completed results; remaining or failed addresses can be checked on the next pass. Emails already carrying a result are skipped in a normal check.",
       "Filter the current list by Valid, Invalid, Risky, Unknown or Not checked. Each status stays distinct, and the filter works with your typed search. When LeadsAngel is configured and Unknown results are present, Recheck Unknown checks those addresses again. A result is not a delivery guarantee.",
       "The Cascade and Confidence mix summarise the saved workspace. The scan's Email Coverage shows which website pages supplied its emails; live search brings matching address rows directly under the search bar.",
@@ -889,7 +889,7 @@ const MODULES = [
       "See processed, remaining and error counts, alongside the website currently being read. Results come into view automatically after the scan.",
       "Each website keeps its own Found, No public details or Retry needed status and source pages. Expand the page count to open the public pages that were read.",
       "Retry failed checks just the unsuccessful websites; Rescan all reads the current list again when no failures remain. Existing saved websites are reused without creating duplicate leads.",
-      "When emails are selected, choose optional validity before scanning or check found emails from the results. The choice applies to this scan, rather than old saved companies.",
+      "See how many websites are new, reused or unreadable and not saved. A failed retry keeps its own result and error after restarting. Email validity controls live only in Email Finder.",
       "Results belong to the current website list and survive an app restart. Export the current scan or selected rows as PDF or Excel."
     ],
     "shots": [
@@ -1033,7 +1033,7 @@ const FAQS = [
   ],
   [
     "Can I find emails without checking validity?",
-    "Yes. On the Email Finder page, leave Verify found emails Off to find published emails only. Turn it On before scanning for an automatic check, or use Check email validity beside the scan results or Addresses table later. This choice is remembered and is not repeated inside Email Finder's website-import dialog. Email validity controls are available only in Email Finder. An authorised verification provider is required."
+    "Yes. On the Email Finder page, leave Verify found emails Off to find published emails only. Turn it On before scanning for an automatic check, or use Check email validity beside the results later. This choice is remembered and stays out of the website-import dialog. Local checks flag typos and unusable domains; an authorised verification provider is required to check mailbox deliverability."
   ],
   [
     "Will email validity check my whole saved database?",
@@ -1093,7 +1093,7 @@ const FAQS = [
   ],
   [
     "Do I need an API key?",
-    "No personal AI-provider key is needed for MamaLead Assist. Google Maps and public website reads use the app workflows. Email validity requires an authorised verification provider to be configured; the app shows its availability. After installation, open Settings & Billing to request or activate the access your chosen feature requires."
+    "No personal AI-provider key is needed for MamaLead Assist. Google Maps and public website reads use the app workflows. Basic email format, typo and domain checks run locally; mailbox verification needs an authorised provider. On first launch, MamaLead opens Settings & Billing → Account so you can activate your emailed key."
   ],
   [
     "Do I need to press Enter to search saved results?",

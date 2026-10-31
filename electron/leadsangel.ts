@@ -48,7 +48,8 @@ export function parseLeadsAngelResult(email: string, value: unknown): EmailValid
   const score = data.score === null || data.score === undefined || !Number.isFinite(rawScore)
     ? null : Math.max(0, Math.min(100, Math.round(rawScore)))
   let verdict: EmailValidityResult['status'] = 'unknown'
-  if (status === 'safe' || status === 'valid' || status === 'deliverable') verdict = 'valid'
+  if (['disposable','isDisposable','isCatchAll','catchAll','catch_all','role','isRole','isRoleBased'].some(key=>data[key]===true) || /disposable|catch[ _-]?all|accept[ _-]?all|role(?:[ _-]?based)?/.test(reason)) verdict = 'risky'
+  else if (status === 'safe' || status === 'valid' || status === 'deliverable') verdict = 'valid'
   else if (status === 'risky' || status === 'catch_all' || status === 'accept_all') verdict = 'risky'
   // Preserve this explicit provider verdict; an inconclusive SMTP 550 stays Unknown.
   else if (status === 'invalid' && reason === 'rcpt_rejected_550') verdict = 'invalid'
@@ -58,8 +59,8 @@ export function parseLeadsAngelResult(email: string, value: unknown): EmailValid
     email: email.trim().toLowerCase(),
     status: verdict,
     verified: verdict === 'valid',
-    score,
-    message: `LeadsAngel SMTP: ${reason ? reason.replace(/_/g, ' ') : status || 'inconclusive'}`,
+    score: verdict==='risky'?Math.min(score ?? 35,35):score,
+    message: `LeadsAngel SMTP: ${verdict==='risky'?'risky — ':''}${reason ? reason.replace(/_/g, ' ') : verdict==='risky'?'disposable, catch-all or role-mailbox flag':status || 'inconclusive'}`,
     provider: 'leadsangel',
   }
 }

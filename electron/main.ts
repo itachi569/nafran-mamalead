@@ -1,3 +1,4 @@
+import {precheckEmail,isRoleEmail} from './email-precheck'
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
@@ -588,8 +589,8 @@ ipcMain.handle(
     setEmailValidityProgress({ state: 'running', message: 'Preparing email validity check…', total: 0, checked: 0, failed: 0, pending: 0, retries: 0, batchSize: 0 })
     try {
     const leadsAngel = leadsAngelCredentials
-    if (payload.recheckUnknown && !leadsAngel) throw new Error('Import the LeadsAngel ZIP in Settings → Account to recheck Unknown emails.')
-    const provider: EmailValidityProvider | null = payload.recheckUnknown
+
+    const provider: EmailValidityProvider = payload.recheckUnknown && leadsAngel
       ? 'leadsangel'
       : mockEmailVerifierRequests > 0
       ? 'apify'
@@ -599,8 +600,7 @@ ipcMain.handle(
         ? 'apify'
         : mailVerifierApiKey
           ? 'mailverifier'
-          : null
-    if (!provider) throw new Error('Email verification is not configured. Import a LeadsAngel ZIP in Settings → Account.')
+          : 'local'
     const { db, repository } = openDatabase()
     const workspace = db.ensureWorkspace()
     const contactIds = new Set((payload.contactIds ?? []).map(String))
@@ -608,9 +608,10 @@ ipcMain.handle(
       id: string
       value: string
       validation_status?: string | null
+      validation_provider?: string | null
     }[]
     const scoped = all.filter((row) => !contactIds.size || contactIds.has(String(row.id)))
-    const selected = scoped.filter((row) => payload.recheckUnknown ? row.validation_status === 'unknown' : payload.force || !row.validation_status)
+    const selected = scoped.filter((row) => payload.recheckUnknown ? row.validation_status === 'unknown' : payload.force || !row.validation_status || row.validation_status==='unknown'&&row.validation_provider==='local')
     const skipped = scoped.length - selected.length
     const byAddress = new Map<string, typeof selected>()
     for (const row of selected) {
@@ -645,16 +646,34 @@ ipcMain.handle(
     const savedAddresses=new Set<string>()
     const save = (rows: typeof selected, result: EmailValidityResult) => {
       const key=result.email.trim().toLowerCase();if(savedAddresses.has(key))return
+      if(isRoleEmail(result.email))result={...result,message:result.message+' · Role / shared business mailbox.'}
       for (const row of rows) repository.updateEmailValidation(row.id, result)
       savedAddresses.add(key)
       summary.checked += 1
       summary.updated += rows.length
       summary[result.status] += 1
     }
-    if (queue.length) {
+    const pendingQueue:typeof queue=[]
+    if(mockEmailVerifierRequests>0)pendingQueue.push(...queue)
+    else {
+      let cursor=0
+      await Promise.all(Array.from({length:Math.min(6,queue.length)},async()=>{
+        while(cursor<queue.length && !emailValidityController!.signal.aborted){
+          const entry=queue[cursor++], [address,rows]=entry
+          let result:EmailValidityResult|null
+          try { result=await precheckEmail(address,emailValidityController!.signal) }
+          catch(error){if(emailValidityController!.signal.aborted)break;throw error}
+          if(result)save(rows,result)
+          else if(provider==='local')save(rows,{email:address,status:'unknown',verified:false,score:null,provider:'local',message:'Domain accepts mail; mailbox deliverability was not checked. Configure a verification provider in Settings → Account.'})
+          else pendingQueue.push(entry)
+          setEmailValidityProgress({checked:summary.checked,pending:queue.length-summary.checked,message:'Checking email domains before paid mailbox verification…'})
+        }
+      }))
+    }
+    if (pendingQueue.length && !emailValidityController.signal.aborted) {
       if (mockEmailVerifierRequests > 0) {
         mockEmailVerifierRequests -= 1
-        for (const [address, rows] of queue) {
+        for (const [address, rows] of pendingQueue) {
           if (mockEmailVerifierDelayMs) await new Promise((resolve) => setTimeout(resolve, mockEmailVerifierDelayMs))
           if (emailValidityController.signal.aborted) break
           const mockResult = parseApifyEmailResult(address, mockEmailVerifierUnknown ? {
@@ -679,7 +698,7 @@ ipcMain.handle(
         mockEmailVerifierUnknown = false
       } else if (provider === 'leadsangel' && leadsAngel) {
         const outcome = await runEmailVerificationBatches(
-          queue.map(([address]) => address),
+          pendingQueue.map(([address]) => address),
           async (batch, signal) => {
             await requireActiveLicense('lifetime', false)
             return verifyEmailAddressesWithLeadsAngel(leadsAngel,batch,signal,
@@ -697,17 +716,17 @@ ipcMain.handle(
               if (rows) save(rows, result)
             },
             onProgress: (progress) => setEmailValidityProgress({
-              ...progress,
+              ...progress, total:queue.length,
               checked:summary.checked,
               pending:Math.max(0,queue.length-summary.checked-progress.failed),
-              message: `LeadsAngel SMTP: ${summary.checked} of ${progress.total} checked · ${progress.failed} need retry.`,
+              message: `LeadsAngel SMTP: ${summary.checked} of ${queue.length} checked · ${progress.failed} need retry.`,
             }),
           },
         )
         summary.failed = outcome.failed.length
       } else if (provider === 'apify') {
         const outcome = await runEmailVerificationBatches(
-          queue.map(([address]) => address),
+          pendingQueue.map(([address]) => address),
           async (batch, signal) => {
             await requireActiveLicense('lifetime', false)
             return verifyEmailAddressesWithApify(
@@ -723,16 +742,18 @@ ipcMain.handle(
               }
             },
             onProgress: (progress) => setEmailValidityProgress({
-              ...progress,
+              ...progress, total:queue.length,
+              checked:summary.checked,
+              pending:Math.max(0,queue.length-summary.checked-progress.failed),
               message: progress.batchSize
-                ? `Checking ${progress.checked} of ${progress.total} emails · batch of ${progress.batchSize} · ${progress.retries} retries…`
-                : `Checked ${progress.checked} of ${progress.total} emails · ${progress.failed} need retry.`,
+                ? `Checking ${summary.checked} of ${queue.length} emails · batch of ${progress.batchSize} · ${progress.retries} retries…`
+                : `Checked ${summary.checked} of ${queue.length} emails · ${progress.failed} need retry.`,
             }),
           },
         )
         summary.failed = outcome.failed.length
       } else {
-        for (const [address, rows] of queue) {
+        for (const [address, rows] of pendingQueue) {
           if (emailValidityController.signal.aborted) break
           await requireActiveLicense('lifetime', false)
           let result: EmailValidityResult

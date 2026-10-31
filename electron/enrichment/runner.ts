@@ -9,6 +9,8 @@
 import type { LocalDatabase } from '../db/local-db'
 import { LicenseAccessError } from '../billing/client'
 import { type Repository } from '../db/repository'
+import {plural} from '../plural'
+import {primarySocialProfiles} from '../social-profile'
 import { userError } from '../user-errors'
 import { directoryScanError } from './source-policy'
 import { WebsiteEnricher } from './website'
@@ -287,12 +289,11 @@ export class EnrichmentRunner {
           else siteFailure=userError(error)
         } finally { renderedSignal.removeEventListener('abort',closeRendered);await this.enricher.close() }
       }
-      // Social scans deliberately stay on the bounded HTTP path. Falling back to Chromium after a
-      // 403/timeout brings back the long modal that this foreground pass is meant to avoid; the
-      // result is still durable and the user can retry a site that does not expose server HTML.
+      // Social reads have a shared deadline, including one public-page rendering attempt for
+      // 403/503 responses. Do not start another long fallback after that deadline.
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
       if (findings.canonicalWebsite) this.repository.saveCanonicalWebsite(leadId, findings.canonicalWebsite)
-      findings.socials = findings.socials.filter((profile,index,all)=>all.findIndex(item=>item.platform===profile.platform)===index)
+      findings.socials = primarySocialProfiles(findings.socials,lead.website,findings.businessName || lead.name)
       findings.emails.sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
       findings.emails=findings.emails.slice(0,1)
       if (siteFailure) findings.error = siteFailure
@@ -411,7 +412,7 @@ export class EnrichmentRunner {
       found,
       failed,
       leadName: '',
-      message: searchFailure ? `Scan finished · ${processed} of ${leadIds.length} websites checked; ${failed} could not finish. ${searchFailure}` : `Enrichment finished · ${found} details found across ${processed} leads`,
+      message: searchFailure ? `Scan finished · ${processed} of ${leadIds.length} websites checked; ${failed} could not finish. ${searchFailure}` : `Enrichment finished · ${plural(found,'detail')} found across ${plural(processed,'lead')}`,
     })
   }
 

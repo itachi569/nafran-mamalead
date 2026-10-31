@@ -17,6 +17,7 @@ try {
  let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null
  await page.route('https://api.mamalead.com/**',async route=>{
   const req=route.request(), path=new URL(req.url()).pathname, body=req.postDataJSON()
+  if(path==='/v1/download')return route.fulfill({headers:{'content-type':'application/octet-stream','content-disposition':'attachment; filename="MamaLead Setup QA.exe"'},body:'QA download fixture — not an executable'})
   if(path==='/v1/installations'){registrations++;return route.fulfill({json:{token:'t'.repeat(43)}})}
   assert.equal(req.headers().authorization,'Bearer '+'t'.repeat(43))
   if(path==='/v1/status')return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?'paid@example.test':null,purchaseError,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})
@@ -44,6 +45,12 @@ try {
  await dialog.getByText('Your license key has been emailed to you',{exact:true}).waitFor()
  assert.equal(trialCalls,2);assert.equal(registrations,1)
  assert.match(await dialog.getByRole('link',{name:'Download for Windows'}).getAttribute('href'),/v1\/download/)
+ const downloadEvent=page.waitForEvent('download')
+ await dialog.getByRole('link',{name:'Download for Windows'}).click()
+ const download=await downloadEvent
+ assert.equal(download.suggestedFilename(),'MamaLead Setup QA.exe')
+ assert.equal(await download.failure(),null)
+ assert.ok(await dialog.getByText('Your license key has been emailed to you',{exact:true}).isVisible(),'download preserves the activation instructions')
  const out=resolve('screenshots/qa-1.4.22/website');mkdirSync(out,{recursive:true})
  await page.screenshot({path:out+'/trial-key-sent.png'})
  await dialog.getByRole('button',{name:'Use a different email'}).click()

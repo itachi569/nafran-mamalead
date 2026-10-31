@@ -501,7 +501,7 @@ export interface DesktopApi {
     status: () => Promise<{
       configured: boolean
       fromEnvironment: boolean
-      provider: 'apify' | 'leadsangel' | 'mailverifier' | null
+      provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local' | null
       leadsAngelConfigured: boolean
       leadsAngelExpiresOn: string | null
       progress: EmailValidityProgress
@@ -512,7 +512,7 @@ export interface DesktopApi {
     onProgress: (listener: (progress: EmailValidityProgress) => void) => () => void
     verify: (input?: { leadIds?: string[]; contactIds?: string[]; force?: boolean; recheckUnknown?: boolean }) => Promise<{
       configured: boolean
-      provider: 'apify' | 'leadsangel' | 'mailverifier'
+      provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local'
       checked: number
       updated: number
       valid: number

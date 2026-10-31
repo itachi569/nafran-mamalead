@@ -1,5 +1,31 @@
 import { cleanWebsiteUrl } from '../website-domain'
 import { userError } from '../user-errors'
+import {chromeUserAgent} from '../scraper/browser'
+
+/** Read a public page once in Chromium; login/CAPTCHA/access-denied pages remain failures. */
+async function readRenderedPage(url:string,signal:AbortSignal):Promise<{url:string;html:string}> {
+  const {chromium}=await import('playwright')
+  const browser=await chromium.launch({headless:true,timeout:5000})
+  const close=()=>{void browser.close().catch(()=>undefined)}
+  signal.addEventListener('abort',close,{once:true})
+  try{
+    if(signal.aborted)throw signal.reason
+    const context=await browser.newContext({userAgent:chromeUserAgent(),locale:'en-US'})
+    const host=new URL(url).hostname.replace(/^www\./,'')
+    await context.route('**/*',route=>{
+      const req=route.request(),target=new URL(req.url())
+      if(req.isNavigationRequest() && (target.protocol!=='https:'&&target.protocol!=='http:' || target.hostname.replace(/^www\./,'')!==host))return route.abort()
+      return route.continue()
+    })
+    const page=await context.newPage(),response=await page.goto(url,{waitUntil:'commit',timeout:6000})
+    if(!response?.ok())throw new Error(`${host} could not be read (HTTP ${response?.status() ?? 'unknown'}).`)
+    // Some public pages keep third-party scripts pending after the useful HTML has arrived.
+    await page.waitForLoadState('domcontentloaded',{timeout:2500}).catch(()=>undefined)
+    const html=await page.content()
+    if(/<title[^>]*>[^<]*(?:just a moment|access denied|verify you are human|attention required)/i.test(html))throw new Error('The website requires a browser security check. Open its website and retry later.')
+    return {url:page.url(),html:html.slice(0,2_000_000)}
+  }finally{signal.removeEventListener('abort',close);await browser.close().catch(()=>undefined)}
+}
 
 export function websiteVariants(raw: string): string[] {
   const initial = new URL(cleanWebsiteUrl(raw) || raw)
@@ -12,7 +38,7 @@ export function websiteVariants(raw: string): string[] {
 }
 
 /** Bounded same-site reads. HTTPS first, no challenge bypass or TLS downgrade. */
-export async function readWebsitePage(raw: string, options: { signal: AbortSignal; home?: boolean; timeoutMs?: number; maxBytes?: number }): Promise<{url:string;html:string}> {
+export async function readWebsitePage(raw: string, options: { signal: AbortSignal; home?: boolean; timeoutMs?: number; maxBytes?: number; renderFallback?:boolean }): Promise<{url:string;html:string}> {
   const initial = new URL(cleanWebsiteUrl(raw) || raw)
   const host = initial.hostname.replace(/^www\./i, '')
   const variants = options.home ? websiteVariants(initial.href) : [initial.href]
@@ -29,7 +55,7 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
       const signal = AbortSignal.any([options.signal, deadline])
       try {
         for (let redirects = 0; redirects < 5; redirects++) {
-          const response = await fetch(url, { redirect:'manual', signal, headers:{accept:'text/html,application/xhtml+xml,application/xml,text/plain','user-agent':'MamaLead contact scanner/1.5'} })
+          const response = await fetch(url, { redirect:'manual', signal, headers:{accept:'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8','accept-language':'en-US,en;q=0.9','user-agent':chromeUserAgent()} })
           if (response.status >= 300 && response.status < 400) {
             const next = new URL(response.headers.get('location') || '', url)
             await response.body?.cancel()
@@ -38,6 +64,9 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
           }
           if (!response.ok) {
             await response.body?.cancel()
+            if(options.renderFallback && options.home && index===0 && [403,503].includes(response.status)){
+              try{return await readRenderedPage(url,AbortSignal.any([options.signal,AbortSignal.timeout(10_000)]))}catch(error){if(options.signal.aborted)throw options.signal.reason;throw Object.assign(new Error(userError(error)),{stopVariants:true})}
+            }
             const error = new Error(`${initial.host} could not be read (HTTP ${response.status}). Retry this website.`)
             if ([401,403,429].includes(response.status)) throw Object.assign(error,{stopVariants:true})
             throw error

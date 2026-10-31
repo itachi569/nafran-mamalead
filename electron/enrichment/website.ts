@@ -12,6 +12,7 @@ import { isBusinessOwner, ownerEmail } from './owner-contact'
 import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, stripContactCodeExamples } from './email-extractor'
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
 import { readWebsitePage } from './http-page'
+import {resolvePublishedShareLinks} from './social-redirects'
 import { userError } from '../user-errors'
 import {compareEmailContacts,emailContactPriority} from '../email-ranking'
 
@@ -111,7 +112,7 @@ export function socialLinksFromHtml(html: string, baseHref: string): FoundSocial
   if(own)add(own.profileUrl)
   // Platform feeds contain other people's accounts and corporate footer links. Only the
   // supplied account and explicit owner metadata are evidence on a platform page.
-  if(!platformPage)for(const link of siteLinksFromHtml(html, true))add(link.href)
+  if(!platformPage)for(const link of siteLinksFromHtml(html, true))if(!link.credit)add(link.href)
   const collectUrls=(value:unknown):void=>{
     if(typeof value==='string'){
       const text=decodeHtml(value.replace(/\\\//g,'/'))
@@ -226,8 +227,8 @@ function uniqueAddresses(addresses: string[]): string[] {
 }
 
 /** Parse real navigation anchors, including unquoted HTML attributes, without reading script templates. */
-function siteLinksFromHtml(html: string, visibleOnly = false): { href: string; label: string }[] {
-  const links: {href:string;label:string}[]=[]
+function siteLinksFromHtml(html: string, visibleOnly = false): { href: string; label: string; credit?:boolean }[] {
+  const links: {href:string;label:string;credit?:boolean}[]=[]
   const visit=(node:DefaultTreeAdapterMap['node']):void=>{
     if (visibleOnly && 'tagName' in node) {
       const style = node.attrs.find(item => item.name === 'style')?.value || ''
@@ -235,7 +236,11 @@ function siteLinksFromHtml(html: string, visibleOnly = false): { href: string; l
     }
     if ('tagName' in node && node.tagName==='a') {
       const attr=(name:string)=>node.attrs.find(item=>item.name===name)?.value ?? ''
-      if(attr('href'))links.push({href:attr('href'),label:readableHtml(serialize(node)).replace(/\s+/g,' ').trim() || attr('aria-label') || attr('title')})
+      const label=readableHtml(serialize(node)).replace(/\s+/g,' ').trim() || attr('aria-label') || attr('title')
+      const siblings=node.parentNode?.childNodes ?? [],at=siblings.indexOf(node)
+      const preceding=siblings.slice(Math.max(0,at-2),at).map(n=>'value' in n?n.value:'childNodes' in n?serialize(n):'').join(' ')
+      const credit=/(?:designed|developed|powered|made|built|website|site)\s+(?:with|by)\s*[:–-]?\s*$/i.test(readableHtml(preceding).slice(-140).trim()) || /(?:designed|developed|powered|made|built)\s+(?:with|by)\b/i.test(label)
+      if(attr('href'))links.push({href:attr('href'),label,credit})
     }
     if('childNodes' in node)node.childNodes.forEach(visit)
   }
@@ -294,7 +299,7 @@ export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<Web
     ...Array.from(html.matchAll(/mailto:([^"'\s?<>]+)/gi), (match) => decodeHtml(match[1])),
     ...(text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? []),
     ...extractPublishedEmails(text),
-  ]).map((value) => ({ value, score: scoreEmail(value, siteHost), page: pageUrl }))
+  ]).map((value) => ({ value, score: text.toLowerCase().includes(value) || html.toLowerCase().includes('mailto:'+value) ? scoreEmail(value, siteHost) : Math.min(35,scoreEmail(value,siteHost)), page: pageUrl }))
 
   const phones = publishedPhonesFromHtml(html,pageUrl)
 
@@ -832,7 +837,7 @@ export class WebsiteEnricher {
     let homeFailure = ''
     const read=async(raw:string,home=false):Promise<{url:string;html:string}|null>=>{
       try {
-        const page=await readWebsitePage(raw,{signal:combined,home,timeoutMs:home?5000:4000})
+        const page=await readWebsitePage(raw,{signal:combined,home,renderFallback:home&&!own,timeoutMs:home?5000:4000})
         findings.pagesRead.push(page.url)
         if(home){findings.canonicalWebsite=page.url;origin=new URL(page.url);homeFailure=''}
         return page
@@ -842,7 +847,8 @@ export class WebsiteEnricher {
         return null
       }
     }
-    const collect=(page:{url:string;html:string})=>{for(const social of socialLinksFromHtml(page.html,page.url)){const canonical=canonicalSocialProfile(social.profileUrl);if(canonical)found.set(socialProfileIdentity(canonical),social)}}
+    const readSocialPages:{url:string;html:string}[]=[]
+    const collect=(page:{url:string;html:string})=>{readSocialPages.push(page);for(const social of socialLinksFromHtml(page.html,page.url)){const canonical=canonicalSocialProfile(social.profileUrl);if(canonical)found.set(socialProfileIdentity(canonical),social)}}
     try {
       let home=await read(origin.href,true)
       // Maps sometimes saves a discontinued location URL; the homepage can still publish profiles.
@@ -863,6 +869,10 @@ export class WebsiteEnricher {
         }
       }
       if (signal?.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
+      if(home && !combined.aborted){
+        const resolved=await Promise.all(readSocialPages.map(async page=>(await resolvePublishedShareLinks(page.html,page.url,combined)).map(social=>({...social,page:page.url}))))
+        for(const social of resolved.flat())found.set(socialProfileIdentity(social),social)
+      }
       findings.socials=[...found.values()]
       findings.error = !home && !own ? homeFailure || `${origin.host} could not be read. Retry this website.` : null
     } finally {
@@ -884,7 +894,7 @@ export class WebsiteEnricher {
     const read=async(raw:string):Promise<string>=>{
       const home=raw===website||raw===origin.href
       try {
-        const page=await readWebsitePage(raw,{signal:combined,home,timeoutMs:3500,maxBytes:1_500_000})
+        const page=await readWebsitePage(raw,{signal:combined,home,renderFallback:home,timeoutMs:3500,maxBytes:1_500_000})
         resolved.set(raw,page.url)
         if(home){result.canonicalWebsite=page.url;origin=new URL(page.url)}
         return page.html
@@ -961,7 +971,7 @@ export class WebsiteEnricher {
     let homeFailure=''
     const read = async (url: string, home=false): Promise<string> => {
       try {
-        const page=await readWebsitePage(url,{signal:combined,home,timeoutMs:5000})
+        const page=await readWebsitePage(url,{signal:combined,home,renderFallback:home,timeoutMs:5000})
         resolved.set(url,page.url)
         if(home){result.canonicalWebsite=page.url;origin=new URL(page.url)}
         return page.html
@@ -980,7 +990,7 @@ export class WebsiteEnricher {
     }
     const mapRank=(url:string) => /page|contact|static/i.test(url) ? 3 : /post|tag|category|product/i.test(url) ? 0 : 1
     const pageKey=(raw:string) => { const url=new URL(raw);return url.host.replace(/^www\./i,'')+url.pathname.replace(/\/$/,'')+url.search }
-    const queue=[origin.href]; const seen=new Set<string>()
+    const queue=[origin.href]; const seen=new Set<string>(),socialPages:{url:string;html:string}[]=[]
     const append=(raw:string) => { const url=sameSite(raw); if(url && !seen.has(pageKey(url)) && !queue.some(saved=>pageKey(saved)===pageKey(url)) && queue.length<12){queue.push(url);queue.sort((a,b)=>a===origin.href?-1:b===origin.href?1:contactRank(b)-contactRank(a))} }
     try {
       const home=Promise.resolve(homeHtml)
@@ -1017,6 +1027,7 @@ export class WebsiteEnricher {
         const html=url===origin.href ? await home : await read(url).catch(()=>''); if(!html)continue
         const pageUrl=resolved.get(url) || url
         const found=contactFindingsFromHtml(html,pageUrl);result.pagesRead.push(pageUrl)
+        if(contactRank(url)!==1)socialPages.push({url:pageUrl,html})
         if (!result.businessName && found.businessName) result.businessName=found.businessName
         if(contactRank(url)===1) {
           const siteHost=origin.hostname.replace(/^www\./i,'').toLowerCase(),brand=siteHost.split('.')[0]
@@ -1035,6 +1046,10 @@ export class WebsiteEnricher {
       for(const email of result.emails){const prior=emails.get(email.value);if(!prior||compareEmailContacts({...email,source:email.page},{...prior,source:prior.page})<0)emails.set(email.value,email)}
       result.emails=[...emails.values()].sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
       if(mainEmailOnly)result.emails=result.emails.slice(0,1)
+      if(!mainEmailOnly&&!combined.aborted){
+        const resolved=await Promise.all(socialPages.map(async page=>(await resolvePublishedShareLinks(page.html,page.url,combined)).map(social=>({...social,page:page.url}))))
+        result.socials.push(...resolved.flat())
+      }
       result.phones=Array.from(new Map(result.phones.map(v=>[v.value,v])).values())
       result.addresses=uniqueAddresses(result.addresses ?? [])
       if(!result.pagesRead.length) result.error='The website could not be read. Try again or check its URL.'

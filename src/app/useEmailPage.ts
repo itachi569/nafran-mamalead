@@ -63,7 +63,7 @@ export interface EmailPage {
 
 export interface EmailValiditySummary {
   configured: boolean
-  provider: 'apify' | 'leadsangel' | 'mailverifier'
+  provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local'
   checked: number
   updated: number
   valid: number

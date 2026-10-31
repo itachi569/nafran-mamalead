@@ -1,3 +1,4 @@
+import {plural} from '../../electron/plural'
 import { localDate } from '../../electron/local-date'
 import { coveragePins } from './coverage-pins'
 import {userError} from '../../electron/user-errors'
@@ -668,7 +669,7 @@ export function useAppValues() {
       if(progress.kind==='website' && progress.status==='done')return
       const view=progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
       const label=view==='email'?'Email scan':view==='phone'?'Phone scan':view==='social'?'Social profile scan':'Website scan'
-      notify(label+(progress.status==='failed'?' failed':progress.failed?' finished with '+progress.failed+' issues':' finished'),progress.message ? userError(progress.message) : 'Review the scan results in the app.',progress.failed||progress.status==='failed'?'error':'success',progress.runId,{kind:progress.failed||progress.status==='failed'?'warn':'import',chips:[progress.processed+' sites',progress.found+' details found'],action:{type:'view',view},actionLabel:'Open '+(view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:progress.runId?'enrichment:'+progress.kind:'enrichment:'+(progress.jobId || progress.at)})
+      notify(label+(progress.status==='failed'?' failed':progress.failed?' finished with '+progress.failed+' issues':' finished'),progress.message ? userError(progress.message) : 'Review the scan results in the app.',progress.failed||progress.status==='failed'?'error':'success',progress.runId,{kind:progress.failed||progress.status==='failed'?'warn':'import',chips:[plural(progress.processed,'site'),plural(progress.found,'detail')+' found'],action:{type:'view',view},actionLabel:'Open '+(view==='email'?'Email Finder':view==='phone'?'Phone Finder':view==='social'?'profiles':'Website Lookup'),eventKey:progress.runId?'enrichment:'+progress.kind:'enrichment:'+(progress.jobId || progress.at)})
     })
   }, [notify])
 
@@ -1393,7 +1394,7 @@ export function useAppValues() {
     }
   }, [db, refreshPhone, range])
 
-  const websiteLookup = useWebsiteLookup(db, () => { if (!featureAccessAllowed()) { showAccessPrompt(); return false }; return true }, session => { void refreshLists(); email.refresh(); social.refresh(); reload(); const failed=session.rows.filter(row=>row.status==='failed').length; notify(failed?'Website lookup needs attention':'Website lookup finished',session.rows.length+' websites scanned'+(failed?' · '+failed+' need a retry':'. Review the published business contacts.'),failed?'info':'success',undefined,{kind:failed?'warn':'import',chips:[session.rows.length+' sites',session.rows.filter(row=>row.emails.length || row.phones.length || row.socials.length || row.address).length+' with details'],action:{type:'view',view:'website'},actionLabel:'Open Website Lookup',eventKey:'enrichment:'+session.jobId+':'+session.status}) })
+  const websiteLookup = useWebsiteLookup(db, () => { if (!featureAccessAllowed()) { showAccessPrompt(); return false }; return true }, session => { void refreshLists(); email.refresh(); social.refresh(); reload(); const failed=session.rows.filter(row=>row.status==='failed').length; notify(failed?'Website lookup needs attention':'Website lookup finished',plural(session.rows.length,'website')+' scanned'+(failed?' · '+failed+(failed===1?' needs':' need')+' a retry':'. Review the published business contacts.'),failed?'info':'success',undefined,{kind:failed?'warn':'import',chips:[plural(session.rows.length,'site'),session.rows.filter(row=>row.emails.length || row.phones.length || row.socials.length || row.address).length+' with details'],action:{type:'view',view:'website'},actionLabel:'Open Website Lookup',eventKey:'enrichment:'+session.jobId+':'+session.status}) })
 
   const refreshReports = useCallback(async () => {
     const historyRequest=++runsRequest.current
@@ -3642,9 +3643,9 @@ export function useAppValues() {
         return {
           when: `${shortDate(entry.at)} ${shortTimeFormat.format(new Date(entry.at))}`,
           keywords: socialImport ? 'Social profile import' : 'Website import',
-          summary: socialImport ? `${source} supplied · ${added} added · ${skipped} skipped` : `${source} websites · ${added} new · ${Number(batch.reused ?? skipped)} reused${batch.job_id ? ` · ${batch.scan_found} with results · ${batch.scan_empty} without published contacts · ${batch.scan_failed} failed` : ''}`,
+          summary: socialImport ? `${source} supplied · ${added} added · ${skipped} skipped` : batch.legacy_counts ? `${plural(source,'website')} · Legacy import: detailed outcome counts unavailable` : `${plural(source,'website')} · ${added} new · ${Number(batch.reused ?? skipped)} reused · ${Number(batch.discarded ?? 0)} not saved${batch.job_id ? ` · ${batch.scan_found} with results · ${batch.scan_empty} without published contacts · ${batch.scan_failed} failed` : ''}`,
           isDone: !['failed','stopped','running','queued'].includes(String(batch.scan_status)), isFailed: batch.scan_status==='failed', isCancelled: ['stopped','running','queued'].includes(String(batch.scan_status)),
-          done: batch.job_id ? Number(batch.scan_failed)>0 ? 'Completed with errors' : 'Completed' : 'Imported', failed: 'Scan failed', cancelled: batch.scan_status==='stopped' ? 'Stopped by you' : batch.scan_status==='queued' ? 'Queued' : 'Scanning',
+          done: batch.job_id ? Number(batch.scan_failed)>0 ? 'Completed with errors' : 'Completed' : batch.legacy_counts ? 'Legacy import' : 'Imported', failed: 'Scan failed', cancelled: batch.scan_status==='stopped' ? 'Stopped by you' : batch.scan_status==='queued' ? 'Queued' : 'Scanning',
           bars: [{ height: `${Math.max(6, Math.round((added / Math.max(1, source)) * 100))}%` }],
           actionLabel: socialImport ? 'Open Social' : 'Open Lookup',
           open: () => go(socialImport ? 'social' : 'website'),

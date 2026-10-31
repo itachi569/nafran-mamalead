@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto'
 import { currentPeriod, nowIso, type LocalDatabase } from './local-db'
 import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFields, type WebsiteLookupRow } from '../enrichment/website-lookup'
 
-import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
+import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity, primarySocialProfiles } from '../social-profile'
 import {compareEmailContacts} from '../email-ranking'
 
 // ---------------------------------------------------------------- scraper
@@ -394,7 +394,7 @@ export interface DashboardTotals {
 export function scoreLead(lead: LeadInput): number { return contactQuality(lead) }
 
 export class Repository {
-  constructor(private readonly db: LocalDatabase) { this.repairDataQuality() }
+  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality() }
 
   recomputeLeadScore(id?:string): void {
     const rows=this.db.query<StoredLead>(`select l.*,
@@ -452,6 +452,42 @@ export class Repository {
   saveCanonicalWebsite(leadId:string,url:string):void {
     const clean=cleanWebsiteUrl(url)
     if(clean&&!directoryScanError(clean)){this.db.run('update leads set website=? where id=?',[clean,leadId]);this.recomputeLeadScore(leadId)}
+  }
+
+  /** Archive untouched failed import placeholders, never Maps records or user-edited contacts. */
+  private repairImportQuality(): void {
+    const migration='quality-1.4.23'
+    const dataObject=(raw:string):Record<string,any>=>{try{return JSON.parse(raw||'{}') || {}}catch{return {}}}
+    if(this.db.one('select name from app_data_migrations where name=?',[migration]))return
+    this.db.transaction(()=>{
+      const jobs=this.db.query<{id:string;workspace_id:string;kind:string;lead_ids:string;options:string;status:string;error:string|null;created_at:string}>("select * from enrichment_jobs order by created_at desc,rowid desc")
+      for(const lead of this.db.query<StoredLead & {workspace_id:string}>("select * from leads where provider='import'")){
+        if(lead.run_id || lead.bookmarked || lead.last_scanned_at || lead.phone || lead.address || lead.category || lead.place_ref)continue
+        const original=this.db.one<{original_json:string}>("select original_json from data_quality_repairs where table_name='leads' and row_id=? order by repaired_at desc limit 1",[lead.id])
+        const website=lead.website || (original?JSON.parse(original.original_json).website:'')
+        if(!website || lead.name!==websiteDomain(website))continue
+        if(['lead_contacts','social_profiles','decision_makers','list_items','scrape_run_leads'].some(table=>this.db.one(`select 1 from ${table} where lead_id=? limit 1`,[lead.id])))continue
+        const related=jobs.filter(job=>{try{return JSON.parse(job.lead_ids).includes(lead.id)}catch{return false}})
+        if(!related.length || related.some(job=>['queued','running'].includes(job.status) || ['found','not-published'].includes(dataObject(job.options).progress?.outcomes?.[lead.id]?.status)))continue
+        const options=dataObject(related[0].options),outcome=options.progress?.outcomes?.[lead.id]
+        if(outcome?.status!=='error' && related[0].status!=='failed' && !directoryScanError(website))continue
+        const snapshots=this.db.query<{job_id:string;lead_id:string;position:number;data:string;status:string;error:string}>('select * from website_lookup_rows where lead_id=?',[lead.id])
+        if(snapshots.some(row=>{try{return JSON.parse(row.data).sources?.length>0 || row.status==='done'}catch{return true}}))continue
+        this.archiveQuality('leads',lead as unknown as Record<string,unknown>,'Unreadable legacy import placeholder; recoverable archive')
+        for(const job of related){
+          const row=snapshots.find(row=>row.job_id===job.id) ?? {job_id:job.id,lead_id:lead.id,position:JSON.parse(job.lead_ids).indexOf(lead.id),data:JSON.stringify(emptyLookupRow({...lead,website})),status:'failed',error:dataObject(job.options).progress?.outcomes?.[lead.id]?.error || job.error || 'This website could not be read.'}
+          this.archiveQuality('website_lookup_rows',{...row,id:row.job_id+':'+row.lead_id},'Preserve discarded legacy scan result')
+          const data=dataObject(job.options)
+          data.failedImportRows=[...(data.failedImportRows ?? []).filter((r:{row:WebsiteLookupRow})=>r.row.leadId!==lead.id),{position:row.position,row:{...JSON.parse(row.data),website,status:'failed',error:row.error||job.error||'This website could not be read.'}}]
+          data.discarded=data.failedImportRows.length
+          if(data.addedLeadIds?.includes(lead.id))data.added=Math.max(0,(data.added ?? 0)-1)
+          this.archiveQuality('enrichment_jobs',job,'Legacy import counts / discarded result')
+          job.options=JSON.stringify(data);this.db.run('update enrichment_jobs set options=? where id=?',[job.options,job.id])
+        }
+        this.db.run('delete from leads where id=?',[lead.id])
+      }
+      this.db.run('insert into app_data_migrations values (?,?)',[migration,nowIso()])
+    })
   }
 
   // ---------------------------------------------------------------- plan
@@ -1067,7 +1103,7 @@ export class Repository {
       verified: boolean
       score: number | null
       message: string
-      provider: 'apify' | 'leadsangel' | 'mailverifier'
+      provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local'
     },
   ): void {
     const at = nowIso()
@@ -1142,8 +1178,17 @@ export class Repository {
     if(input.platform!=='other'&&(!canonical||canonical.platform!==input.platform))throw new Error('Use a direct social account or channel URL, not a post, video, share or login link.')
     if(canonical)input={...input,profileUrl:canonical.profileUrl,handle:canonical.handle}
     const at = nowIso()
-    const alternatives=this.db.query<{id:string;profile_url:string}>('select id,profile_url from social_profiles where lead_id=? and platform=? order by discovered_at,id',[input.leadId,input.platform])
-    if(input.platform!=='other'&&alternatives.length&&!alternatives.some(row=>socialProfileKey(input.platform,row.profile_url)===socialProfileKey(input.platform,input.profileUrl??'')))return {id:alternatives[0].id}
+    const alternatives=this.db.query<{id:string;profile_url:string;source:string}>('select id,profile_url,source from social_profiles where lead_id=? and platform=? order by discovered_at,id',[input.leadId,input.platform])
+    if(input.platform!=='other'&&alternatives.length&&!alternatives.some(row=>socialProfileKey(input.platform,row.profile_url)===socialProfileKey(input.platform,input.profileUrl??''))){
+      const prior=alternatives[0],lead=this.db.one<{website:string;name:string}>('select website,name from leads where id=?',[input.leadId])
+      const candidates=alternatives.map(row=>canonicalSocialProfile(row.profile_url)).filter((p):p is NonNullable<typeof p>=>Boolean(p))
+      const best=canonical&&primarySocialProfiles([...candidates,canonical],lead?.website??'',lead?.name??'')[0]
+      // A new published brand match can repair an earlier weak scrape. Keep manually chosen accounts.
+      if(!canonical||best!==canonical||alternatives.some(row=>row.source==='manual'))return {id:prior.id}
+      this.db.run('update social_profiles set handle=?,profile_url=?,source=?,followers=?,verified=?,checked_at=?,updated_at=? where id=?',[canonical.handle,canonical.profileUrl,input.source??'website',input.followers??null,input.verified?1:0,at,at,prior.id])
+      this.recomputeLeadScore(input.leadId)
+      return {id:prior.id}
+    }
     const existing = this.db.query<{id:string;profile_url:string}>(
       'select id,profile_url from social_profiles where lead_id = ? and platform = ?',
       [input.leadId,input.platform],
@@ -1595,6 +1640,7 @@ export class Repository {
       const saved = this.db.one<{position:number;data:string;status:string;error:string}>('select position,data,status,error from website_lookup_rows where job_id = ? and lead_id = ?',[jobId,leadId])
       const snapshot = saved ? {...JSON.parse(saved.data),status:saved.status,error:saved.error} : emptyLookupRow(lead)
       options.failedImportRows = [...(options.failedImportRows ?? []).filter((item:{row:WebsiteLookupRow})=>item.row.leadId!==leadId),{position:saved?.position ?? 0,row:snapshot}]
+      options.discarded=options.failedImportRows.length
       if (typeof options.added==='number') options.added=Math.max(0,options.added-1)
       this.db.run('update enrichment_jobs set options = ? where id = ?',[JSON.stringify(options),jobId])
       this.db.run('delete from leads where id = ? and workspace_id = ?',[leadId,job.workspace_id])
@@ -1841,11 +1887,11 @@ export class Repository {
     return this.db.query<Record<string,unknown>>('select * from import_batches where workspace_id = ? order by created_at desc limit ?', [workspaceId,limit]).map(batch=>{
       if (batch.kind !== 'websites') return batch
       const job=this.db.one<{id:string;status:string;error:string|null;options:string}>("select id,status,error,options from enrichment_jobs where workspace_id = ? and json_extract(options,'$.batchId') = ? order by created_at desc, rowid desc limit 1",[workspaceId,batch.id])
-      if (!job) return batch
+      if (!job) return {...batch,legacy_counts:true}
       const options=JSON.parse(job.options || '{}'), outcomes=Object.values(options.progress?.outcomes || {}) as {status:string}[]
-      const discarded=options.failedImportRows?.length ?? 0
+      const discarded=options.discarded ?? options.failedImportRows?.length ?? 0
       return {...batch,added:Math.max(0,Number(batch.added)-discarded),reused:Number(batch.skipped),job_id:job.id,
-        scan_status:job.error==='Cancelled by user'?'stopped':job.status,
+        legacy_counts:!options.progress?.outcomes, scan_status:job.error==='Cancelled by user'?'stopped':job.status,
         scan_found:outcomes.filter(item=>item.status==='found').length,
         scan_empty:outcomes.filter(item=>item.status==='not-published').length,
         scan_failed:outcomes.filter(item=>item.status==='error').length,
