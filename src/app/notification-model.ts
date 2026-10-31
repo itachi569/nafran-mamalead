@@ -3,7 +3,7 @@ export const NOTIFICATIONS_STORAGE_KEY = 'nafran.notifications'
 export const MAX_NOTIFICATIONS = 200
 export type NotificationKind = 'scrape' | 'import' | 'warn' | 'export' | 'billing' | 'system'
 export type NotificationView = 'maps' | 'social' | 'email' | 'phone' | 'website' | 'settings' | 'runs'
-export type NotificationAction = { type: 'view'; view: NotificationView; runId?: string; tab?: 'plan' | 'acct' | 'inv'; focus?: 'results' | 'search' | 'updates' } | { type: 'reveal-export'; path: string }
+export type NotificationAction = { type: 'view'; view: NotificationView; runId?: string; tab?: 'plan' | 'acct' | 'inv'; focus?: 'results' | 'search' | 'updates' | 'support' } | { type: 'reveal-export'; path: string }
 export interface AppNotification {
   id: string; title: string; body: string; at: string; level: 'info' | 'success' | 'error'; unread: boolean
   runId?: string; kind?: NotificationKind; chips?: string[]; action?: NotificationAction; actionLabel?: string; eventKey?: string
@@ -43,7 +43,7 @@ function safeAction(value: unknown): NotificationAction | undefined {
     type:'view',view:action.view as NotificationView,
     ...(typeof action.runId==='string'?{runId:action.runId}:{}),
     ...(['plan','acct','inv'].includes(String(action.tab))?{tab:action.tab as 'plan'|'acct'|'inv'}:{}),
-    ...(['search','results','updates'].includes(String(action.focus))?{focus:action.focus as 'search'|'results'|'updates'}:{}),
+    ...(['search','results','updates','support'].includes(String(action.focus))?{focus:action.focus as 'search'|'results'|'updates'|'support'}:{}),
   }
   return undefined
 }

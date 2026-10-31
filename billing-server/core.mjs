@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import { buildLicenseEmail } from './license-email.mjs'
 import { createAssistService } from './assist.mjs'
 import { billingPage as page } from './payment-page.mjs'
+import {sendSupport,supportConfig} from './support.mjs'
+import {SupportError} from './support-contract.mjs'
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -580,7 +582,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
 
   const assist = createAssistService({ env, store, ErrorType: HttpError })
 
-  async function handle({ method, url: rawUrl, authorization, deviceId: rawDeviceId, devicePlatform: rawDevicePlatform, stripeSignature, readBody = async () => '' }) {
+  async function handle({ method, url: rawUrl, authorization, deviceId: rawDeviceId, devicePlatform: rawDevicePlatform, stripeSignature, ip = '', readBody = async () => '' }) {
     try {
       const url = new URL(rawUrl, publicUrl)
       const deviceId = rawDeviceId && /^[a-f0-9]{64}$/.test(rawDeviceId) ? rawDeviceId : null
@@ -645,6 +647,13 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
         const row = await installation(authorization, deviceId, devicePlatform)
+        if(method==='GET' && url.pathname==='/v1/support/config')return json(200,supportConfig(env,store))
+        if(method==='POST' && url.pathname==='/v1/support'){
+          const raw=await readBody()
+          if(Buffer.byteLength(raw)>32768)throw new SupportError(413,'Message is too long.')
+          let input;try{input=JSON.parse(raw)}catch{throw new SupportError(400,'Invalid support message.')}
+          return json(200,await sendSupport({env,store,installation:row,input,ip,fetcher:stripeFetch}))
+        }
         if (method === 'GET' && url.pathname === '/v1/assist/status') return json(200, assist.configuration())
         if (method === 'POST' && url.pathname === '/v1/assist/chat') {
           const payload = await jsonBody(readBody)
@@ -904,6 +913,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       throw new HttpError(404, 'Endpoint not found.')
     } catch (error) {
+      if(error instanceof SupportError){const result=json(error.status,{error:error.status===429?'rate_limited':error.status===503?'support_unavailable':'validation',message:error.message,field:error.field,retryAfterSeconds:error.retryAfterSeconds});if(error.retryAfterSeconds)result.headers['retry-after']=String(error.retryAfterSeconds);return result}
       return json(error instanceof HttpError ? error.status : 500, { error: error instanceof HttpError ? error.message : 'Billing server error.' })
     }
   }

@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { normalizeOwnerEmail, validOwnerPasswordHash, verifyOwnerPassword } from './owner-password.mjs'
+import {supportApi} from './support-api.mjs'
 
 // Owner API with read-only views and an optional narrow Lifetime cancellation bridge.
 // Never returns token_hash / key_hash / full license keys, and never sends email.
@@ -38,7 +39,7 @@ function respond(status, body, headers = {}) {
   }
 }
 
-export function createAdminHandler({ env = process.env, store, fetch: outbound = fetch, probeBlob = null, cancelLifetime = null }) {
+export function createAdminHandler({ env = process.env, store, fetch: outbound = fetch, probeBlob = null, cancelLifetime = null, supportWriter = null }) {
   const ownerHash = /^[0-9a-f]{64}$/i.test(env.ADMIN_TOKEN_SHA256 ?? '') ? Buffer.from(env.ADMIN_TOKEN_SHA256, 'hex') : null
   const tokenLoginEnabled = Boolean(ownerHash && env.ADMIN_ALLOW_TOKEN_LOGIN !== '0')
   const ownerEmail = normalizeOwnerEmail(env.ADMIN_OWNER_EMAIL)
@@ -194,6 +195,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     add('installer', 'Private installer', ['blob', 'local-file'].includes(inst.storage) ? (inst.ready ? 'ok' : 'warn') : inst.storage === 'local-url' ? 'warn' : 'missing', inst.detail)
     add('email', 'License email delivery', emailConfig().provider === 'resend' ? 'ok' : 'missing',
       emailConfig().provider === 'resend' ? 'Resend key and sender address are set.' : 'Not configured. License keys are shown once on the purchase return page.')
+    add('support', 'Support inbox', supportWriter && env.SUPPORT_INBOX && env.RESEND_API_KEY ? 'ok' : 'missing', 'Tickets are saved by billing. Replies require the loopback writer, SUPPORT_INBOX and Resend configuration.')
     return checks
   }
 
@@ -328,9 +330,9 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     }
   }
 
-  async function body(readBody) {
+  async function body(readBody,limit=4096) {
     const raw = await readBody()
-    if (raw.length > 4096) throw new AdminError(413, 'Request is too large.')
+    if (Buffer.byteLength(raw) > limit) throw new AdminError(413, 'Request is too large.')
     try { return raw ? JSON.parse(raw) : {} } catch { throw new AdminError(400, 'Invalid JSON.') }
   }
 
@@ -361,6 +363,10 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         throw new AdminError(401, 'Owner sign-in required.')
       }
       if (method !== 'GET' && csrf !== '1') throw new AdminError(403, 'Missing admin request header.')
+      if(path==='/admin/api/support'||path.startsWith('/admin/api/support/')){
+        try{return respond(200,await supportApi({method,url,store,writer:supportWriter,body:()=>body(readBody,16384),email,actor:bearer?'owner-token':ownerEmail||'owner',cap}))}
+        catch(e){throw new AdminError([400,404,405,409,413,429,502,503].includes(e.status)?e.status:503,[400,404,405,409,413,429,502,503].includes(e.status)?e.message:'Support is temporarily unavailable.')}
+      }
 
       if (method === 'POST' && path === '/admin/api/licenses/cancel') {
         if (!cancelLifetime) throw new AdminError(503, 'Lifetime cancellation is not configured on this server.')

@@ -46,6 +46,32 @@ const LICENSE_STATUS_TTL_MS = 15_000
 let verifiedLicense: { status: BillingStatus; expiresAt: number } | null = null
 let pendingLicenseCheck: Promise<BillingStatus> | null = null
 let machineIdentity: { id: string; label: string } | null = null
+let supportBillingCache:BillingStatus|null=null
+export const cachedSupportBilling=()=>supportBillingCache
+
+/** Support keeps structured validation/rate errors and retries the same message ID. */
+export async function billingSupportRequest(path:string,body?:unknown,signal?:AbortSignal):Promise<any> {
+  const base=billingUrl();if(!base)throw new Error('Support is not configured.')
+  signal?.throwIfAborted()
+  const token=await new Promise<string>((resolve,reject)=>{
+    const abort=()=>reject(new Error('Cancelled'))
+    signal?.addEventListener('abort',abort,{once:true})
+    installationToken().then(resolve,reject).finally(()=>signal?.removeEventListener('abort',abort))
+    if(signal?.aborted)abort()
+  }),device=deviceIdentity()
+  for(let attempt=0;attempt<(body?2:1);attempt++){
+    signal?.throwIfAborted()
+    try{
+      const response=await fetch(new URL(path,base),{method:body?'POST':'GET',redirect:'error',headers:{authorization:`Bearer ${token}`,'content-type':'application/json','x-nafran-device-id':device.id,'x-nafran-device-platform':device.label},body:body?JSON.stringify(body):undefined,signal:AbortSignal.any([AbortSignal.timeout(15000),...(signal?[signal]:[])])})
+      const result=await response.json().catch(()=>({message:'Support returned an incomplete response.'}))
+      if(response.ok)return result
+      const error=Object.assign(new Error(result.message || result.error || 'Support is temporarily unavailable.'),{status:response.status,field:result.field,retryAfterSeconds:result.retryAfterSeconds})
+      if(![502,503,504].includes(response.status)||attempt===1||!body)throw error
+    }catch(error){if(signal?.aborted)throw error;const status=(error as {status?:number}).status;if(attempt===1||!body||(status&&! [502,503,504].includes(status)))throw error}
+    await new Promise<void>((resolve,reject)=>{const end=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort)};const abort=()=>{end();reject(new Error('Cancelled'))};const timer=setTimeout(()=>{end();resolve()},1500);signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort()})
+  }
+  throw new Error('Support is temporarily unavailable.')
+}
 
 function deviceIdentity(): { id: string; label: string } {
   if (machineIdentity) return machineIdentity
@@ -150,7 +176,9 @@ async function installationToken(): Promise<string> {
 export async function billingStatus(): Promise<BillingStatus> {
   try {
     if (!billingUrl()) return { configured: false, connected: false, message: 'Billing server URL is not configured for this build.' }
-    return await request<BillingStatus>('/v1/status', 'GET', undefined, await installationToken())
+    const status=await request<BillingStatus>('/v1/status', 'GET', undefined, await installationToken())
+    supportBillingCache=status
+    return status
   } catch (error) {
     return { configured: true, connected: false, message: error instanceof Error ? error.message : 'Billing server is unavailable.' }
   }

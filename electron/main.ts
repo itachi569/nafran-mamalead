@@ -1,4 +1,5 @@
 import {precheckEmail,isRoleEmail} from './email-precheck'
+import {registerSupportIpc} from './support-ipc'
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
@@ -62,6 +63,7 @@ const apifyCredential = readApifyCredential()
 let apifyApiToken = apifyCredential.value
 let apifyFromEnvironment = apifyCredential.fromEnvironment
 let leadsAngelCredentials: LeadsAngelCredentials | null = null
+registerSupportIpc(()=>{const {db}=openDatabase();return {counts:{leads:db.prepare('select count(*) as n from leads').get<{n:number}>()?.n||0,runs:db.prepare('select count(*) as n from scrape_runs').get<{n:number}>()?.n||0},emailValidityProvider:leadsAngelCredentials?'leadsangel':apifyApiToken?'apify':mailVerifierApiKey?'mailverifier':null}})
 let mockEmailVerifierRequests = 0
 let mockEmailVerifierDelayMs = 0
 let mockEmailVerifierUnknown = false

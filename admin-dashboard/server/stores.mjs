@@ -3,6 +3,7 @@
 // last_seen_at and billing_downloads come from the updated billing server; both are optional.
 
 const LIMIT = 2000
+import {createSupportReads} from './support-reads.mjs'
 const INSTALL_COLS = 'id, customer_id, lifetime_session_id, decision_subscription_id, pending_lifetime_session_id, pending_decision_session_id, license_id, license_slot, created_at'
 const LICENSE_COLS = 'id, installation_id, key_last4, email, created_at, sent_at, revoked_at, activated_at'
 
@@ -17,6 +18,7 @@ export async function createSqliteAdminStore(path) {
   const hasSeen = () => installationColumns().has('last_seen_at')
   return {
     kind: 'sqlite',
+    ...createSupportReads(async(sql,args)=>all(sql,...args)),
     ping: async () => { all('select 1 from installations limit 1'); all('select 1 from licenses limit 1') },
     seenTracking: async () => hasSeen(),
     installations: async () => {
@@ -68,6 +70,7 @@ export async function createNeonAdminStore(databaseUrl) {
   const optional = async (query) => { try { return (await query())[0] ?? null } catch { return null } }
   return {
     kind: 'neon',
+    ...createSupportReads((text,args)=>sql.query(text,args),'neon'),
     ping: async () => { await sql`select 1 from billing_installations limit 1`; await sql`select 1 from billing_licenses limit 1` },
     seenTracking: hasSeen,
     installations: async () => {

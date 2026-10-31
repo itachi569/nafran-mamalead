@@ -44,3 +44,7 @@ Deployment rollback copies are at
 `/home/ahmed/deploy-staging/admin-cancellation-20261021/rollback/`.
 Restoring the previous server/UI files and restarting both services removes
 the feature. It does not undo any licence cancellations already recorded.
+
+## Support inbox
+
+MamaLead 1.4.24 adds the Support tab: filtered tickets, unread counts, replies, notes and status history. The admin database remains read-only; writes use the authenticated loopback billing writer and its existing private key file. Configure `SUPPORT_INBOX`, `EMAIL_FROM` and `RESEND_API_KEY` in billing; `SUPPORT_REPLY_FROM` and `SUPPORT_SIGNATURE` are optional. Full licence keys are never included. Customer replies arrive in the support mailbox; there is no inbound-email synchronization. See [contact-support rollout and verification](../docs/contact-support.md).

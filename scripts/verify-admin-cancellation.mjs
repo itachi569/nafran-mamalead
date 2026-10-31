@@ -6,9 +6,9 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 const directory = mkdtempSync(join(tmpdir(), 'mamalead-admin-audit-'))
-copyFileSync(resolve('billing-server/admin-licenses.mjs'), join(directory, 'admin.mjs'))
+for(const file of ['admin-licenses.mjs','admin-support.mjs','support-contract.mjs','support-email.mjs'])copyFileSync(resolve('billing-server/'+file),join(directory,file))
 writeFileSync(join(directory, '.admin-license-key'), 'a'.repeat(64))
-const { createLicenseAdminServer } = await import(pathToFileURL(join(directory, 'admin.mjs')))
+const { createLicenseAdminServer } = await import(pathToFileURL(join(directory, 'admin-licenses.mjs')))
 const db = new DatabaseSync(':memory:')
 db.exec("create table licenses (id text primary key, key_last4 text, revoked_at text); insert into licenses values ('fixture-license','1234',null); insert into licenses values ('untouched','5678',null)")
 const server = createLicenseAdminServer(db)

@@ -15,6 +15,8 @@ const routes = {
   return: '/return',
   installations: '/v1/installations',
   status: '/v1/status',
+  support: '/v1/support',
+  supportConfig: '/v1/support/config',
   trial: '/v1/trial',
   checkout: '/v1/checkout',
   portal: '/v1/portal',
@@ -49,6 +51,7 @@ export function createCloudFunction({ env = process.env, storeFactory = createNe
         deviceId: request.headers.get('x-nafran-device-id'),
         devicePlatform: request.headers.get('x-nafran-device-platform'),
         stripeSignature: request.headers.get('stripe-signature'),
+        ip: (request.headers.get('x-vercel-forwarded-for') || request.headers.get('x-forwarded-for') || '').split(',')[0].trim(),
         readBody: () => request.text(),
       })
       return new Response(result.body, { status: result.status, headers: result.headers })

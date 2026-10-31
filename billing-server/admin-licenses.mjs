@@ -2,16 +2,19 @@
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { timingSafeEqual, randomUUID } from 'node:crypto'
+import {createAdminSupport} from './admin-support.mjs'
+import {SupportError} from './support-contract.mjs'
 
-export function createLicenseAdminServer(db) {
+export function createLicenseAdminServer(db, options = {}) {
   let key
-  try { key = readFileSync(new URL('./.admin-license-key', import.meta.url), 'utf8').trim() }
+  try { key = readFileSync(options.keyFile || new URL('./.admin-license-key', import.meta.url), 'utf8').trim() }
   catch (error) { if (error.code === 'ENOENT') return null; throw error }
   if (!/^[a-f0-9]{64}$/.test(key)) throw new Error('Invalid private admin licence credential.')
   db.exec(`create table if not exists admin_license_actions (
     id text primary key, license_id text not null, action text not null,
     actor text not null, reason text not null, created_at text not null
   )`)
+  const support=createAdminSupport(db,options)
   return createServer(async (req, res) => {
     const reply = (status, value) => {
       res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
@@ -21,6 +24,11 @@ export function createLicenseAdminServer(db) {
       const supplied = Buffer.from(String(req.headers.authorization ?? ''))
       const expected = Buffer.from(`Bearer ${key}`)
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(401, { error: 'Unauthorized.' })
+      if(req.method==='POST'&&req.url?.startsWith('/support/')){
+        let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>16384)return reply(413,{error:'Request too large.'})}
+        let input;try{input=JSON.parse(raw)}catch{return reply(400,{error:'Invalid JSON.'})}
+        try{return reply(200,await support(req.url.slice('/support/'.length),input))}catch(e){return reply(e instanceof SupportError?e.status:503,{error:e instanceof SupportError?e.message:'Support is temporarily unavailable.'})}
+      }
       if (req.method !== 'POST' || req.url !== '/licenses/cancel') return reply(404, { error: 'Not found.' })
       let raw = ''
       for await (const chunk of req) {

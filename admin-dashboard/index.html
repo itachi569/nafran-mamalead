@@ -19,6 +19,7 @@
   button, input { font-family: inherit; }
   button:disabled { opacity: .55; cursor: default; }
   :focus-visible { outline: 2px solid #6F8462; outline-offset: 2px; }
+.support-admin{background:#fff;border-radius:28px;padding:26px;min-width:0}.support-admin h2{margin:0;font-size:26px;font-weight:500}.support-admin h3{font-size:17px}.support-admin p{line-height:1.6}.support-heading,.support-filters,.support-pager,.support-overview{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.support-heading{justify-content:space-between}.support-heading p,.support-muted{color:#56604f;font-size:13px}.support-admin button,.support-confirm button{font:inherit;cursor:pointer;border:0;border-radius:20px;background:#eaeae8;color:#1c1c1c;padding:10px 15px;min-height:40px}.support-admin .support-primary,.support-confirm .support-primary{background:#1c1c1c;color:white}.support-filters{margin:16px 0}.support-filters label{font-size:12px;display:grid;gap:5px}.support-admin select,.support-admin input:not([type=checkbox]),.support-admin textarea{font:inherit;background:#f7f8f5;color:#1c1c1c;border:1px solid #ced5c8;border-radius:12px;padding:10px;max-width:100%}.support-check{display:flex!important;align-items:center;gap:8px}.support-table-wrap{overflow:auto}.support-table{width:100%;border-collapse:collapse;font-size:13px}.support-table th{text-align:left;font-weight:500;color:#56604f;padding:14px 10px;border-bottom:1px solid #ced5c8}.support-table td{padding:16px 10px;border-bottom:1px solid #eaeae8;vertical-align:top}.support-table small,.support-thread small{display:block;color:#56604f;line-height:1.5;margin-top:5px}.support-table td:nth-child(2){min-width:220px;max-width:330px;overflow-wrap:anywhere}.support-table td:first-child{white-space:nowrap}.support-pill{padding:5px 9px;border-radius:12px;background:#e6eddf}.support-pager{margin-top:18px;justify-content:flex-end}.support-pager span{margin-right:auto}.support-empty,.support-loading{padding:24px;background:#f3f5f0;border-radius:14px}.support-detail-grid{display:grid;grid-template-columns:3fr 2fr;gap:24px}.support-context{background:#f3f5f0;border-radius:18px;padding:18px;font-size:13px}.support-message{white-space:pre-wrap;overflow-wrap:anywhere}.support-diagnostics pre{white-space:pre-wrap;font-size:12px;overflow-wrap:anywhere}.support-thread{display:grid;gap:10px}.support-thread article{padding:18px;border-radius:14px;background:#f3f5f0}.support-compose{display:grid;gap:12px;align-content:start;margin-top:18px}.support-compose label{display:grid;gap:10px;font-size:14px}.support-compose span{font-size:12px;color:#56604f}.support-compose textarea{width:100%;resize:vertical}.support-error{padding:14px;background:#fbe9e5;color:#772b20;border-radius:12px}.support-notice{background:#f5efdc;padding:12px;border-radius:12px}.support-confirm-backdrop{position:fixed;inset:0;z-index:100;background:#1c211c88;display:grid;place-items:center;padding:20px}.support-confirm{background:#fff;border-radius:28px;padding:28px;max-width:600px;width:100%;max-height:85vh;overflow:auto}.support-overview{padding:20px 24px;border-radius:22px;border:0;background:#dce6d1;color:#1c1c1c;text-align:left;font:inherit;cursor:pointer}.support-overview span:last-child{margin-left:auto}.support-badge:empty{display:none}.support-badge{position:absolute;right:-3px;top:0;padding:2px 5px;background:#46613b;color:#fff;border-radius:10px;font-size:10px}@media(max-width:800px){.support-detail-grid{grid-template-columns:1fr}.support-admin{padding:18px}.support-filters input{width:140px}}
 </style>
 </helmet>
 <div style="min-height: 100vh; background: #EFEFEF; background-image: radial-gradient(50vw 40vh at 0% 0%, rgba(200,213,187,.45), transparent 62%), radial-gradient(44vw 40vh at 100% 100%, rgba(203,216,188,.35), transparent 62%);">
@@ -33,6 +34,7 @@
     <button type="button" aria-label="Licenses" title="Licenses" onClick="{{ nav.licenses.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.licenses.bg }}; color: {{ nav.licenses.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="12" r="3.5"></circle><path d="M11.5 12H21M18 12v3M21 12v2"></path></svg></button>
     <button type="button" aria-label="Installation slots" title="Installation slots" onClick="{{ nav.activations.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.activations.bg }}; color: {{ nav.activations.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M9 20h6M12 16v4"></path></svg></button>
     <button type="button" aria-label="Email delivery" title="Email delivery" onClick="{{ nav.email.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.email.bg }}; color: {{ nav.email.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"></rect><path d="m4 7 8 6 8-6"></path></svg></button>
+    <button type="button" aria-label="Support" title="Support" onClick="{{ nav.support.go }}" style="position:relative;width:46px;height:46px;border:0;border-radius:50%;cursor:pointer;background:{{ nav.support.bg }};color:{{ nav.support.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v13H9l-5 4z"></path><path d="M8 8h8M8 12h5"></path></svg><sc-if value="{{ supportBadge }}"><span class="support-badge">{{ supportBadge }}</span></sc-if></button>
     <button type="button" aria-label="Service health" title="Service health" onClick="{{ nav.health.go }}" style="width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; background: {{ nav.health.bg }}; color: {{ nav.health.fg }};"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6H21"></path></svg></button>
     <div style="margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 10px;">
       <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ false }}">
@@ -101,6 +103,7 @@
 
     <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
     <div style="display: flex; flex-direction: column; gap: 20px;">
+      <button class="support-overview" onClick="{{ nav.support.go }}"><strong>Support</strong><span>{{ support.countLabel }}</span><span>Open inbox ↗</span></button>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px;">
         <button type="button" onClick="{{ revenueCard.go }}" style="text-align: left; border: 0; cursor: pointer; color: #1C1C1C; padding: 20px 22px; border-radius: 26px; background: linear-gradient(150deg, #CBD8BC, #B3C4A2); display: flex; flex-direction: column; gap: 12px; min-height: 164px;">
           <span style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
@@ -342,6 +345,38 @@
       </div>
     </div>
     </sc-if>
+    <sc-if value="{{ isSupport }}">
+      <section class="support-admin" aria-label="Support inbox">
+        <header class="support-heading"><div><h2>Support inbox</h2><p>{{ support.countLabel }}</p></div><button onClick="{{ support.refresh }}" disabled="{{ support.busy }}">Refresh tickets</button></header>
+        <div class="support-filters">
+          <sc-for list="{{ support.chips }}" as="c"><button onClick="{{ c.go }}" style="background: {{ c.bg }}; color: {{ c.fg }};">{{ c.label }}</button></sc-for>
+          <label>Category<select value="{{ support.category }}" onChange="{{ support.onCategory }}"><option value="all">All categories</option><option value="licence">Licence</option><option value="bug">Bug</option><option value="feature">Feature request</option><option value="other">Other</option></select></label>
+          <label>From<input type="date" value="{{ support.from }}" onChange="{{ support.onFrom }}"></label><label>To<input type="date" value="{{ support.to }}" onChange="{{ support.onTo }}"></label>
+          <label class="support-check"><input type="checkbox" checked="{{ support.unread }}" onChange="{{ support.onUnread }}">Unread only</label>
+        </div>
+        <sc-if value="{{ support.error }}"><p role="alert" class="support-error">{{ support.error }}</p></sc-if>
+        <sc-if value="{{ support.busy }}"><p role="status" class="support-loading">Loading support tickets…</p></sc-if>
+        <sc-if value="{{ support.empty }}"><p class="support-empty">{{ support.empty }}</p></sc-if>
+        <div class="support-table-wrap"><table class="support-table"><thead><tr><th>Ticket</th><th>Subject / message</th><th>Category</th><th>From</th><th>Licence</th><th>App / OS</th><th>Last activity</th><th>Status</th></tr></thead><tbody>
+          <sc-for list="{{ support.rows }}" as="r"><tr><td><button onClick="{{ r.open }}"><span aria-label="{{ r.readLabel }}">{{ r.dot }}</span> {{ r.id }}</button></td><td><strong>{{ r.subject }}</strong><small>{{ r.preview }}</small></td><td>{{ r.category }}</td><td>{{ r.email }}<small>{{ r.name }}</small></td><td>{{ r.licence }}</td><td>{{ r.appVersion }}<small>{{ r.platform }}</small></td><td>{{ r.when }}</td><td><span class="support-pill">{{ r.status }}</span></td></tr></sc-for>
+        </tbody></table></div>
+        <footer class="support-pager"><span>{{ support.paging }}</span><button disabled="{{ support.noPrev }}" onClick="{{ support.prev }}">Previous</button><button disabled="{{ support.noNext }}" onClick="{{ support.next }}">Next</button></footer>
+      </section>
+      <sc-if value="{{ support.detail }}">
+        <section class="support-admin support-detail" aria-label="Ticket detail">
+          <header class="support-heading"><div><h2>{{ support.ticket.id }}</h2><p>{{ support.ticket.category }} · {{ support.ticket.when }} · {{ support.ticket.email }}</p></div><button onClick="{{ support.closeDetail }}">Close ticket view</button></header>
+          <div class="support-filters"><label>Status<select aria-label="Status" value="{{ support.ticket.status }}" disabled="{{ support.writeDisabled }}" onChange="{{ support.onStatus }}"><option value="open">Open</option><option value="replied">Replied</option><option value="closed">Closed</option></select></label><button onClick="{{ support.markUnread }}" disabled="{{ support.writeDisabled }}">Mark unread</button><span>{{ support.otherTickets }}</span></div>
+          <div class="support-detail-grid"><div><h3>{{ support.ticket.subject }}</h3><p class="support-message">{{ support.ticket.message }}</p><details class="support-diagnostics"><summary>Diagnostics</summary><pre>{{ support.diagnostics }}</pre></details></div><aside class="support-context"><h3>Licence &amp; installation</h3><p>{{ support.licenseInfo }}</p><p>{{ support.installationInfo }}</p><div class="support-filters"><button onClick="{{ support.goLicenses }}">Licenses</button><button onClick="{{ support.goSlots }}">Slots</button><button onClick="{{ support.goUsers }}">Users</button></div></aside></div>
+          <h3>Conversation &amp; activity</h3><p class="support-muted">Customer email replies arrive in your support mailbox. Add any follow-up here as an internal note.</p>
+          <div class="support-thread"><article><strong>Original message</strong><small>{{ support.ticket.when }}</small><p class="support-message">{{ support.ticket.message }}</p></article><sc-for list="{{ support.thread }}" as="r"><article style="background: {{ r.bg }};"><strong>{{ r.label }}</strong><small>{{ r.actor }} · {{ r.when }} · {{ r.emailStatus }}</small><p class="support-message">{{ r.body }}</p><sc-if value="{{ r.retry }}"><button onClick="{{ r.retry }}" disabled="{{ support.replyDisabled }}">Retry failed reply</button></sc-if></article></sc-for></div>
+          <sc-if value="{{ support.writeError }}"><p class="support-error" role="alert">{{ support.writeError }}</p></sc-if>
+          <sc-if value="{{ support.notConfigured }}"><p class="support-notice">Replies are not configured on this server. Tickets remain available to read.</p></sc-if>
+          <div class="support-detail-grid"><div class="support-compose"><label>Reply to {{ support.ticket.email }}<textarea value="{{ support.draft }}" onChange="{{ support.onDraft }}" maxlength="5000" rows="5" disabled="{{ support.replyDisabled }}"></textarea></label><span>{{ support.draftCount }} / 5,000</span><label class="support-check"><input type="checkbox" checked="{{ support.closeAfter }}" onChange="{{ support.onCloseAfter }}" disabled="{{ support.replyDisabled }}">Close after sending</label><button class="support-primary" onClick="{{ support.confirmReply }}" disabled="{{ support.sendDisabled }}">Review reply</button></div><div class="support-compose"><label>Internal note<textarea value="{{ support.note }}" onChange="{{ support.onNote }}" maxlength="2000" rows="5" disabled="{{ support.writeDisabled }}"></textarea></label><span>Only visible in this dashboard · {{ support.noteCount }} / 2,000</span><button onClick="{{ support.addNote }}" disabled="{{ support.noteDisabled }}">Add internal note</button></div></div>
+        </section>
+      </sc-if>
+      <sc-if value="{{ support.confirm }}"><div class="support-confirm-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="reply-confirm-title" class="support-confirm"><h2 id="reply-confirm-title">Send this reply?</h2><p>To {{ support.ticket.email }} · {{ support.ticket.id }}</p><p class="support-message">{{ support.confirmPreview }}</p><p>{{ support.confirmAction }}</p><div class="support-filters"><button onClick="{{ support.cancelReply }}" disabled="{{ support.sending }}">Keep editing</button><button class="support-primary" onClick="{{ support.sendReply }}" disabled="{{ support.sending }}">{{ support.sendLabel }}</button></div></section></div></sc-if>
+    </sc-if>
+
     <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
       <section aria-labelledby="detail-title" style="min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 18px;">
         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px;">
@@ -472,7 +507,7 @@ const HANDOFF_CHECKS = [
 const VIEWS = [
   { id: 'overview', label: 'Overview' }, { id: 'revenue', label: 'Revenue' }, { id: 'users', label: 'Users' },
   { id: 'purchases', label: 'Purchases' }, { id: 'licenses', label: 'Licenses' }, { id: 'activations', label: 'Slots' },
-  { id: 'email', label: 'Email' }, { id: 'health', label: 'Health' },
+  { id: 'support', label: 'Support' }, { id: 'email', label: 'Email' }, { id: 'health', label: 'Health' },
 ];
 const DAY = 86400000;
 const PKR = new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR', maximumFractionDigits: 0 });
@@ -481,7 +516,8 @@ class Component extends DCLogic {
   state = {
     view: 'overview', q: '', conn: 'loading', data: null, error: '',
     rev: { status: 'idle', data: null, message: '' },
-    filters: { revenue: 'all', users: 'all', purchases: 'all', licenses: 'all', activations: 'all', email: 'all', health: 'all' },
+    support: {status:'open',category:'all',from:'',to:'',unread:false,page:1,total:0,rows:[],counts:{open:0,unread:0},busy:false,error:'',detail:null,drafts:{},note:'',closeAfter:false,confirm:false,sending:false,writeError:''},
+    filters: { support:'open', revenue: 'all', users: 'all', purchases: 'all', licenses: 'all', activations: 'all', email: 'all', health: 'all' },
     width: typeof window === 'undefined' ? 1200 : window.innerWidth,
     loginToken: '', loginEmail: '', loginPassword: '', loginMethod: 'email', loginMethods: null,
     loginError: '', loginBusy: false, probing: false, verify: {}, verifying: null,
@@ -497,7 +533,7 @@ class Component extends DCLogic {
     this.load();
     if (!this.isFixture()) this.loadLoginMethods();
   }
-  componentWillUnmount() { window.removeEventListener('resize', this.onResize); window.clearInterval(this.activityTimer); }
+  componentWillUnmount() { window.removeEventListener('resize', this.onResize); window.clearInterval(this.activityTimer);window.clearTimeout(this.supportSearchTimer); }
   componentDidUpdate(prev) { if (prev.dataSource !== this.props.dataSource || prev.apiBase !== this.props.apiBase) this.load(); }
 
   isFixture() { return (this.props.dataSource ?? 'live') === 'fixture'; }
@@ -520,6 +556,81 @@ class Component extends DCLogic {
     return body;
   }
 
+  supportSet(patch, callback) { this.setState(s => ({support: {...s.support, ...patch}}), callback); }
+  supportGo(id, q = '') { this.setState({view:id,q}, () => {if(id==='support')this.supportLoad();}); window.scrollTo({top:0,behavior:'smooth'}); }
+  async supportBadge() {
+    try {const counts=this.isFixture()?this.supportFixtureCounts():await this.api('/admin/api/support/unread');this.supportSet({counts});}catch{}
+  }
+  supportFixtureRows() {
+    if(!this.supportSamples)this.supportSamples=Component.fixture().support;
+    return this.supportSamples;
+  }
+  supportFixtureCounts() {const rows=this.supportFixtureRows();return {open:rows.filter(r=>r.status==='open').length,replied:rows.filter(r=>r.status==='replied').length,closed:rows.filter(r=>r.status==='closed').length,unread:rows.filter(r=>r.unread).length};}
+  async supportLoad(page=this.state.support.page) {
+    const request=(this.supportRequest||0)+1;this.supportRequest=request;
+    this.supportSet({busy:true,error:'',page});
+    const s=this.state.support;
+    try {
+      let result;
+      if(this.isFixture()) {
+        const all=this.supportFixtureRows().filter(r=>(s.status==='all'||r.status===s.status)&&(s.category==='all'||r.category===s.category)&&(!s.unread||r.unread)&&(!s.from||r.created>=s.from)&&(!s.to||r.created.slice(0,10)<=s.to)&&JSON.stringify(r).toLowerCase().includes(this.state.q.toLowerCase()));
+        result={rows:all.slice((page-1)*25,page*25),total:all.length,page,pageSize:25,counts:this.supportFixtureCounts(),available:true};
+      } else result=await this.api('/admin/api/support?'+new URLSearchParams({status:s.status,category:s.category,from:s.from,to:s.to,unread:s.unread?'1':'0',q:this.state.q.slice(0,80),page:String(page),pageSize:'25'}));
+      if(request===this.supportRequest)this.supportSet({busy:false,rows:result.rows,total:result.total,counts:result.counts||s.counts,unavailable:result.available===false});
+    } catch(e) {if(request===this.supportRequest)this.supportSet({busy:false,error:e.message});if(e.kind==='unauthorized')this.load();}
+  }
+  supportFilter(patch){this.supportSet({...patch,page:1},()=>this.supportLoad(1));}
+  async supportOpen(id, markRead=true) {
+    this.supportSet({writeError:'',detailBusy:true});
+    try {
+      const detail=this.isFixture()?{ticket:this.supportFixtureRows().find(r=>r.id===id),thread:this.supportThreads?.[id]||[],license:{last4:'4F99',kind:'lifetime',slotsUsed:1,cap:2},installation:{id:'demo1234',platform:'win32',lastSeen:new Date().toISOString()},otherTickets:0,canWrite:true,canReply:true}:await this.api('/admin/api/support/'+id);
+      this.supportSet({detail,detailBusy:false},()=>document.querySelector('.support-detail')?.scrollIntoView({behavior:'smooth',block:'start'}));
+      if(markRead&&detail.ticket.unread&&detail.canWrite)await this.supportWrite('status',{read:true},id,false);
+    } catch(e){this.supportSet({detailBusy:false,error:e.message});}
+  }
+  async supportWrite(kind,payload,id=this.state.support.detail?.ticket.id,reloadDetail=true) {
+    if(this.supportWriting||!id)return;
+    this.supportWriting=true;this.supportSet({sending:true,writeError:''});
+    const action={...payload,clientActionId:payload.clientActionId||crypto.randomUUID()};
+    try {
+      if(this.isFixture()) {
+        const row=this.supportFixtureRows().find(r=>r.id===id);this.supportThreads??={};this.supportThreads[id]??=[];
+        if(action.read!==undefined)row.unread=!action.read;
+        if(action.status)row.status=action.status;
+        if(kind==='reply'){row.status=action.closeAfter?'closed':'replied';row.unread=false;}
+        this.supportThreads[id].push({id:action.clientActionId,kind,body:action.body||(action.read===true?'Marked read':action.read===false?'Marked unread':action.status),actor:'Fixture owner',created:new Date().toISOString(),emailStatus:kind==='reply'?'sent':null,clientActionId:action.clientActionId,toStatus:row.status});
+      } else await this.api('/admin/api/support/'+id+(kind==='reply'?'/reply':kind==='note'?'/notes':''),{method:kind==='status'?'PATCH':'POST',body:action});
+      if(kind==='reply'){const drafts={...this.state.support.drafts};delete drafts[id];this.supportSet({drafts,confirm:false,retryAction:null});}
+      if(kind==='note')this.supportSet({note:''});
+      await this.supportBadge();await this.supportLoad();
+      if(reloadDetail)await this.supportOpen(id,false);
+      return true;
+    } catch(e) {this.supportSet({writeError:e.message,retryAction:kind==='reply'?action:null});return false;}
+    finally {this.supportWriting=false;this.supportSet({sending:false});}
+  }
+  supportValues() {
+    const s=this.state.support,d=s.detail,t=d?.ticket||{},draft=s.drafts[t.id]||'',busy=s.sending;
+    const date=v=>v?new Date(v).toLocaleString():'—';
+    const setDraft=value=>this.supportSet({drafts:{...s.drafts,[t.id]:value},retryAction:null});
+    const context=(view,q)=>()=>this.supportGo(view,q||'');
+    return {...s,detail:Boolean(d),ticket:{...t,when:date(t.created)},countLabel:`${s.counts.open||0} open · ${s.counts.unread||0} unread`,
+      chips:['open','replied','closed','all'].map(id=>({label:id[0].toUpperCase()+id.slice(1),bg:s.status===id?'#1C1C1C':'#EAEAE8',fg:s.status===id?'#FFFFFF':'#1C1C1C',go:()=>this.supportFilter({status:id})})),
+      onCategory:e=>this.supportFilter({category:e.target.value}),onFrom:e=>this.supportFilter({from:e.target.value}),onTo:e=>this.supportFilter({to:e.target.value}),onUnread:e=>this.supportFilter({unread:e.target.checked}),
+      refresh:()=>{this.supportLoad();this.supportBadge();},rows:s.rows.map(r=>({...r,when:date(r.lastActivity),licence:r.licenseLast4?'•••• '+r.licenseLast4:'No licence',dot:r.unread?'●':'○',readLabel:r.unread?'Unread':'Read',open:()=>this.supportOpen(r.id)})),
+      empty:s.unavailable?'Support needs the billing-server update.':!s.busy&&!s.rows.length?'No tickets match these filters.':'',paging:s.total?`Showing ${(s.page-1)*25+1}–${Math.min(s.page*25,s.total)} of ${s.total}`:'0 tickets',noPrev:s.page<=1||s.busy,noNext:s.page*25>=s.total||s.busy,prev:()=>this.supportLoad(s.page-1),next:()=>this.supportLoad(s.page+1),
+      closeDetail:()=>this.supportSet({detail:null,confirm:false,writeError:''}),writeDisabled:busy||!d?.canWrite,replyDisabled:busy||!d?.canReply,notConfigured:d&&!d.canReply,
+      onStatus:async e=>{const old=t.status,status=e.target.value;this.supportSet({detail:{...d,ticket:{...t,status}}});if(!await this.supportWrite('status',{status}))this.supportSet({detail:d});},
+      markUnread:()=>this.supportWrite('status',{read:false}),otherTickets:`${d?.otherTickets||0} other tickets from this sender`,
+      diagnostics:t.meta?.lastErrors!==undefined?JSON.stringify(t.meta,null,2):'Diagnostics not attached.\n'+JSON.stringify(t.meta?.app||{},null,2),
+      licenseInfo:d?.license?`${d.license.kind} · •••• ${d.license.last4} · ${d.license.slotsUsed} of ${d.license.cap} slots · ${d.license.revokedAt?'Revoked':'Not revoked'}`:'No activated licence linked.',
+      installationInfo:d?.installation?`${d.installation.id} · ${d.installation.platform} · Last seen ${date(d.installation.lastSeen)}`:'Installation details unavailable.',
+      goLicenses:context('licenses',t.licenseLast4),goSlots:context('activations',t.licenseLast4),goUsers:context('users',t.installation),
+      thread:(d?.thread||[]).map(r=>({...r,when:date(r.created),label:r.kind==='note'?'Internal note':r.kind==='reply'?'Support reply':'Status update',body:r.body||`${r.fromStatus||''} → ${r.toStatus||''}`,bg:r.kind==='note'?'#F3ECD9':'#F3F5F0',retry:r.emailStatus==='failed'?()=>{setDraft(r.body);this.supportSet({retryAction:{body:r.body,clientActionId:r.clientActionId,closeAfter:r.toStatus==='closed'},closeAfter:r.toStatus==='closed',confirm:true});}:null})),
+      draft,draftCount:draft.length,onDraft:e=>setDraft(e.target.value),onCloseAfter:e=>this.supportSet({closeAfter:e.target.checked,retryAction:null}),sendDisabled:busy||!d?.canReply||!draft.trim(),
+      noteCount:s.note.length,onNote:e=>this.supportSet({note:e.target.value}),noteDisabled:busy||!d?.canWrite||!s.note.trim(),addNote:()=>this.supportWrite('note',{body:s.note}),
+      confirmReply:()=>this.supportSet({confirm:true}),cancelReply:()=>this.supportSet({confirm:false}),confirmPreview:draft.slice(0,600),confirmAction:s.closeAfter?'The ticket will be closed after sending.':'The ticket will be marked Replied.',sendLabel:busy?'Sending…':'Send reply',sendReply:()=>this.supportWrite('reply',s.retryAction||{body:draft,closeAfter:s.closeAfter})};
+  }
+
   async loadLoginMethods() {
     try {
       const methods = await this.api('/admin/api/auth-config');
@@ -529,6 +640,7 @@ class Component extends DCLogic {
 
   async load() {
     if (this.isFixture()) {
+      this.supportBadge();
       this.setState({ conn: 'fixture', data: Component.fixture(), rev: { status: 'ok', data: Component.fixtureRevenue(), message: '' }, error: '', verify: {} });
       return;
     }
@@ -537,11 +649,12 @@ class Component extends DCLogic {
       const [summary, purchases, licenses, activations, users] = await Promise.all(
         ['summary', 'purchases', 'licenses', 'activations', 'users'].map((p) => this.api(`/admin/api/${p}`)));
       this.setState({ conn: 'ok', data: { summary, purchases: purchases.rows, licenses: licenses.rows, activations: activations.rows, users: users.rows, checks: summary.checks } });
-      this.loadRevenue(false);
+      this.loadRevenue(false);this.supportBadge();if(this.state.view==='support')this.supportLoad();
     } catch (e) { this.setState({ conn: e.kind ?? 'error', error: e.message, data: null, rev: { status: 'idle', data: null, message: '' } }); }
   }
 
   async refreshActivity() {
+    this.supportBadge();
     try {
       const summary = await this.api('/admin/api/summary');
       this.setState((state) => state.conn === 'ok' && state.data ? { data: { ...state.data, summary } } : null);
@@ -641,6 +754,7 @@ class Component extends DCLogic {
     const seen = new Date(Date.now() - 2 * 3600000).toISOString();
     const email = 'b••••@example.test';
     return {
+      support:['open','replied','closed'].map((status,i)=>({id:['ML-S-DEMO01','ML-S-DEMO02','ML-S-DEMO03'][i],status,category:['bug','licence','feature'][i],subject:['Export needs a second try','Help activating my licence','An idea for saved searches'][i],message:'This is a sample support ticket for reviewing the inbox. No email will be sent.',preview:'This is a sample support ticket for reviewing the inbox.',email:'s••••@example.test',name:'Sample customer',created:at,lastActivity:seen,unread:i===0,licenseLast4:'4F99',licenseKind:'lifetime',appVersion:'1.4.24',platform:'win32',installation:'demo1234',meta:{app:{version:'1.4.24',platform:'win32'}}})),
       summary: {
         mode: 'test', cap: 2,
         counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, addons: 0, licenses: 1, revoked: 0, trials: 0, trialActivated: 0, trialActive: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
@@ -873,7 +987,7 @@ class Component extends DCLogic {
 
   detail() {
     const { view, data, conn, rev } = this.state;
-    if (view === 'overview') return { empty: { show: false } };
+    if (view === 'overview'||view === 'support') return { empty: { show: false } };
     const s = data?.summary;
     const mode = s?.mode;
     const cap = s?.cap ?? 2;
@@ -1090,10 +1204,10 @@ class Component extends DCLogic {
     const ownerName = this.props.ownerName ?? 'Nafran';
     const hour = new Date().getHours();
     const narrow = this.state.width < 760;
-    const go = (id) => () => { this.setState({ view: id }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+    const go = (id) => () => this.supportGo(id);
     const nav = {};
     VIEWS.forEach((v) => { const on = view === v.id; nav[v.id] = { go: go(v.id), bg: on ? '#1C1C1C' : 'transparent', fg: on ? '#C8D5BB' : '#1C1C1C' }; });
-    const navList = VIEWS.map((v) => ({ label: v.label, go: nav[v.id].go, bg: view === v.id ? '#1C1C1C' : 'transparent', fg: view === v.id ? '#FFFFFF' : '#1C1C1C' }));
+    const navList = VIEWS.map((v) => ({ label: v.label+(v.id==='support'&&this.state.support.counts.unread?' '+Math.min(99,this.state.support.counts.unread)+(this.state.support.counts.unread>99?'+':''):''), go: nav[v.id].go, bg: view === v.id ? '#1C1C1C' : 'transparent', fg: view === v.id ? '#FFFFFF' : '#1C1C1C' }));
     const mode = data?.summary?.mode;
     const banners = {
       loading: { tag: 'LOADING', text: 'Contacting the admin API…', bg: '#FFFFFF', fg: '#1C1C1C', tagBg: '#EFEFEF', tagFg: '#1C1C1C' },
@@ -1107,14 +1221,15 @@ class Component extends DCLogic {
     if (conn === 'ok' && mode === 'live') banner = { tag: 'LIVE KEY', text: 'A live Stripe key is configured. Lifetime cancellations affect real customer access. Payments and refunds are not changed by cancellation.', bg: '#F3ECD9', fg: '#3D300C', tagBg: '#5C4813', tagFg: '#FFFFFF' };
     return {
       wide: !narrow, narrow, nav, navList,
+      support:this.supportValues(),supportBadge:this.state.support.counts.unread>99?'99+':String(this.state.support.counts.unread||''),isSupport:view==='support'&&conn!=='unauthorized',
       ownerName, ownerInitial: ownerName.slice(0, 1).toUpperCase(),
       greeting: `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, ${ownerName}`,
-      q: this.state.q, onSearch: (e) => this.setState({ q: e.target.value }),
-      searchPlaceholder: { overview: 'Search emails, keys, installs…', revenue: 'Search email or charge id…', users: 'Search install id, key ending or email…', purchases: 'Search email, install or Stripe id…', licenses: 'Search key ending or email…', activations: 'Search key ending or install id…', email: 'Search email or key ending…', health: 'Search checks…' }[view],
+      q: this.state.q, onSearch: (e) => {this.setState({ q: e.target.value });if(this.state.view==='support'){clearTimeout(this.supportSearchTimer);this.supportSearchTimer=setTimeout(()=>this.supportLoad(1),300);}},
+      searchPlaceholder: { support:'Search ticket, email, device or licence last 4…', overview: 'Search emails, keys, installs…', revenue: 'Search email or charge id…', users: 'Search install id, key ending or email…', purchases: 'Search email, install or Stripe id…', licenses: 'Search key ending or email…', activations: 'Search key ending or install id…', email: 'Search email or key ending…', health: 'Search checks…' }[view],
       modeLabel: mode ? `STRIPE · ${mode === 'missing' ? 'NOT SET' : mode.toUpperCase()}` : 'NOT CONNECTED',
       modeShort: mode ? (mode === 'missing' ? 'NO STRIPE' : mode.toUpperCase()) : 'OFFLINE',
       modeDot: mode === 'test' ? '#8FA382' : mode === 'live' ? '#C9A646' : '#B9BEB6',
-      reload: () => this.load(),
+      reload: () => {this.load();if(this.state.view==='support')this.supportLoad();},
       banner: banner ? { show: true, retry: Boolean(banner.retry), ...banner } : { show: false },
       signedIn: conn === 'ok', onLogout: () => this.logout(),
       showLogin: conn === 'unauthorized',
@@ -1129,7 +1244,7 @@ class Component extends DCLogic {
       onToggleLoginMethod: () => this.setState((state) => ({ loginMethod: state.loginMethod === 'email' ? 'token' : 'email', loginError: '', loginPassword: '', loginToken: '' })),
       onLogin: (e) => this.login(e),
       isOverview: view === 'overview' && conn !== 'unauthorized',
-      isDetail: view !== 'overview' && conn !== 'unauthorized',
+      isDetail: view !== 'overview' && view !== 'support' && conn !== 'unauthorized',
       ...this.overview(nav),
       detail: this.detail(),
       cancellation: {

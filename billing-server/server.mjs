@@ -9,6 +9,8 @@ import { randomUUID } from 'node:crypto'
 import { createBillingHandler, HttpError } from './core.mjs'
 import { createLicenseAdminServer } from './admin-licenses.mjs'
 import { initializeOwnerLicenses, ownerLicense, activateOwnerLicense } from './owner-licenses.mjs'
+import {retrySupportDelivery} from './support.mjs'
+import {createSqliteSupportStore} from './support-store.mjs'
 
 export function createBillingServer(options = {}) {
   const env = { ...(options.env ?? process.env) }
@@ -111,6 +113,7 @@ export function createBillingServer(options = {}) {
   db.exec('create unique index if not exists installations_decision_license_slot on installations (decision_license_id, decision_license_slot) where decision_license_id is not null and decision_license_slot is not null')
   db.exec('create table if not exists assist_usage (bucket text primary key, used integer not null, expires_at integer)')
   const store = {
+    ...createSqliteSupportStore(db),
     reserveAssistUsage: async (buckets) => {
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -343,11 +346,12 @@ export function createBillingServer(options = {}) {
       deviceId: req.headers['x-nafran-device-id'],
       devicePlatform: req.headers['x-nafran-device-platform'],
       stripeSignature: req.headers['stripe-signature'],
+      ip: env.SUPPORT_TRUST_PROXY === '1' ? String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim() : req.socket.remoteAddress || '',
       readBody: async () => {
         let raw = ''
         for await (const chunk of req) {
           raw += chunk
-          if (raw.length > 16_384) throw new HttpError(413, 'Request is too large.')
+          if (Buffer.byteLength(raw) > (req.url?.split('?')[0] === '/v1/support' ? 32768 : 16384)) throw new HttpError(413, 'Request is too large.')
         }
         return raw
       },
@@ -356,7 +360,10 @@ export function createBillingServer(options = {}) {
     if (result.body instanceof ReadableStream) Readable.fromWeb(result.body).on('error', () => res.destroy()).pipe(res)
     else res.end(result.body)
   })
-  const licenseAdmin = createLicenseAdminServer(db)
+  let supportRetryBusy=false
+  const supportTimer=setInterval(async()=>{if(supportRetryBusy)return;supportRetryBusy=true;try{await retrySupportDelivery({env,store,fetcher:options.fetch})}catch{}finally{supportRetryBusy=false}},60000)
+  supportTimer.unref();server.once('close',()=>clearInterval(supportTimer))
+  const licenseAdmin = createLicenseAdminServer(db, {env, fetch: options.fetch})
   if (licenseAdmin) {
     server.once('listening', () => licenseAdmin.listen(38749, '127.0.0.1'))
     server.once('close', () => licenseAdmin.close())

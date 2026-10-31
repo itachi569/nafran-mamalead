@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createAdminHandler } from './admin-core.mjs'
 import { createSqliteAdminStore } from './stores.mjs'
 import { createLicenseWriter } from './license-writer.mjs'
+import {createSupportWriter} from './support-writer.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const files = {
@@ -67,9 +68,9 @@ function privateRuntimeEnv(base) {
   return env
 }
 
-export async function createAdminServer({ env = process.env, fetch: outbound, store } = {}) {
+export async function createAdminServer({ env = process.env, fetch: outbound, store, supportWriter = createSupportWriter() } = {}) {
   const adminStore = store ?? await createSqliteAdminStore(resolve(env.BILLING_DB_PATH ?? './billing-server/data/billing.db'))
-  const handler = createAdminHandler({ env, store: adminStore, fetch: outbound, cancelLifetime: createLicenseWriter() })
+  const handler = createAdminHandler({ env, store: adminStore, fetch: outbound, cancelLifetime: createLicenseWriter(), supportWriter })
   const server = createServer(async (req, res) => {
     const path = new URL(req.url, 'http://127.0.0.1').pathname
     if (req.method === 'GET' && files[path]) {
@@ -83,7 +84,7 @@ export async function createAdminServer({ env = process.env, fetch: outbound, st
       ip: req.socket.remoteAddress ?? 'local', secure: env.ADMIN_COOKIE_SECURE === '1',
       readBody: async () => {
         let raw = ''
-        for await (const chunk of req) { raw += chunk; if (raw.length > 4096) break }
+        for await (const chunk of req) { raw += chunk; if (Buffer.byteLength(raw) > 16384) break }
         return raw
       },
     })

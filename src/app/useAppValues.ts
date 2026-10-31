@@ -336,6 +336,7 @@ export function useAppValues() {
   const [firstAccountVisit] = useState(() => {
     try { return !!window.desktop && !localStorage.getItem('mamalead.maps.draft') && !localStorage.getItem('mamalead.onboarding.accountShown') } catch { return false }
   })
+  const [supportPreset,setSupportPreset]=useState<{category?:import('../../electron/support-data').SupportCategory;message?:string}|null>(null)
   const [view, setView] = useState(firstAccountVisit ? 'settings' : 'dashboard')
   useEffect(() => { if (firstAccountVisit) { try { localStorage.setItem('mamalead.onboarding.accountShown','1') } catch {} } }, [firstAccountVisit])
   useEffect(()=>{document.title='MamaLead — '+(VIEW_NAMES[view] || 'Dashboard')},[view])
@@ -728,6 +729,7 @@ export function useAppValues() {
         go(action.view)
         if(action.view==='settings'){
           setStab(action.tab || 'plan')
+          if(action.focus==='support')setSupportPreset({});
           if(action.focus==='updates')window.setTimeout(()=>document.getElementById('app-updates')?.scrollIntoView({behavior:'smooth',block:'center'}),180)
         }
         if(action.view==='maps') {
@@ -3733,6 +3735,11 @@ export function useAppValues() {
     pasteWebsiteClipboard,
     uploadWebsiteCsv,
     retryChat: (text:string)=>void say(text),
+    supportPreset,
+    supportPage:view==='settings'?'settings:'+stab:view,
+    openSupport:(preset:{category?:import('../../electron/support-data').SupportCategory;message?:string}={})=>{setChatOpen(false);setSupportPreset(preset)},
+    closeSupport:()=>setSupportPreset(null),
+    supportSent:(ticket:string)=>notify('Support message received','Ticket '+ticket+' saved. We’ll reply by email.','success',undefined,{kind:'system',action:{type:'view',view:'settings',tab:'acct',focus:'support'},actionLabel:'Contact support'}),
     openChat: () => { if (!featureAccessAllowed()) { showAccessPrompt(); return }; setChatOpen(true) },
     openExp: () => openExport('leads', view === 'maps' && (mapsWebsite !== 'any' || mapsQuery.trim()) ? 1 : 0),
     openExpAll: () => openExport('leads', 2),

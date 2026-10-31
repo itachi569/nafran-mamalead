@@ -6,6 +6,7 @@ import {MapCoveragePin} from './MapCoveragePin'
 // Every {{ value }} binding resolves against the object returned by useAppValues(), so a
 // missing or renamed binding fails the TypeScript build instead of silently rendering wrong.
 import { LeadDetails } from './LeadDetails'
+import {ContactSupportDialog} from './ContactSupportDialog'
 import { AssistText } from './AssistText'
 import { Fragment, type ReactElement } from 'react'
 import type { AppValues } from './useAppValues'
@@ -43,6 +44,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
   return (
     <>
       <WorkspaceDialogs V={V}/>
+      {V.supportPreset && <ContactSupportDialog page={V.supportPage} preset={V.supportPreset} onClose={V.closeSupport} onSent={V.supportSent}/>}
       {V.detailLeadId && <LeadDetails id={V.detailLeadId} onClose={V.closeLeadDetail}/>}
       <ScanReturn V={V}/>
       <NotificationToast V={V}/>
@@ -216,6 +218,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </span>
               <span aria-hidden="true" style={{fontSize: "13px", color: "#4A4F4B"}}>→</span>
             </button>
+            <button type="button" className="support-entry" onClick={()=>V.openSupport()}>Email support ↗</button>
           </aside>
           <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)", minWidth: "0"}}>
             <header style={{display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap"}}>
@@ -264,7 +267,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 <button type="button" aria-label="Dismiss trial and Lifetime notice" onClick={V.dismissPlanWelcome} style={{display: "grid", placeItems: "center", width: "30px", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: "#1C1C1C", fontSize: "22px", cursor: "pointer"}}>×</button>
               </section>
             ) : null}
-            <FeatureAccessBoundary showLock={Boolean(V.isMaps)} allowed={V.featureAccessAllowed} onBlocked={V.showAccessPrompt}>
+            <FeatureAccessBoundary showLock={Boolean(V.isMaps)} allowed={V.featureAccessAllowed} onBlocked={V.showAccessPrompt} onSupport={()=>V.openSupport({category:'licence'})}>
             {shows(V.isDashboard) ? (
               <>
               <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)"}}>
@@ -2710,7 +2713,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   ) : null}
                   {(V.msgs ?? []).map((m, __im) => (
                     <Fragment key={__im}>
-                      <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}><AssistText text={m.text}/>{m.retry && <button type="button" onClick={()=>V.retryChat(m.retry!)} style={{display:'block',marginTop:8,padding:'8px 14px',borderRadius:20}}>Retry answer</button>}</span>
+                      <span data-msg={m.who} style={{maxWidth: "84%", padding: "11px 14px", fontSize: "13.5px", lineHeight: "1.5"}}><AssistText text={m.text}/>{m.retry && <button type="button" onClick={()=>V.retryChat(m.retry!)} style={{display:'block',marginTop:8,padding:'8px 14px',borderRadius:20}}>Retry answer</button>}{m.retry && <button type="button" className="support-inline" onClick={()=>V.openSupport({category:'bug'})}>Contact support</button>}</span>
                       {m.who==='bot' && Boolean(m.actions?.length) && <div className="assist-shortcuts" aria-label="Open a related page">{m.actions!.map(key=><a key={key} href={`#${key}`} data-assist-destination={key} onClick={event=>{event.preventDefault();V.openAssistDestination(key)}}>{V.assistDestinations[key].label}<span aria-hidden="true">↗</span></a>)}</div>}
                     </Fragment>
                   ))}

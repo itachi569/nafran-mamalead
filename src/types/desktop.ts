@@ -453,6 +453,12 @@ export interface EmailValidityProgress {
 export type OwnerBrowserStatus = {phase:'closed'|'opening'|'ready'|'sign-in'|'connect'|'searching'|'verification'|'error';message:string;open:boolean;savedSession?:boolean}
 
 export interface DesktopApi {
+  support: {
+    send(payload:import('../../electron/support-data').SupportPayload):Promise<import('../../electron/support-data').SupportResult>
+    status():Promise<import('../../electron/support-data').SupportConfig>
+    cancel():Promise<unknown>
+    openMail(body:string):Promise<unknown>
+  }
 
   chooseWebsiteCsv: () => Promise<{ name: string; content: string; bytes: number } | null>
   readWebsiteFile: (name: string, bytes: Uint8Array) => Promise<{name:string;content:string;bytes:number}>

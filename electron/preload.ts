@@ -25,7 +25,7 @@ async function call<T>(channel: string, payload?: unknown): Promise<T> {
     throw new Error((result as { error: string }).error)
   }
   return result as T
-  } catch (error) { throw new Error(userError(error)) }
+  } catch (error) { const text=userError(error);ipcRenderer.send('support:recordError',text.slice(0,4000));throw new Error(text) }
 }
 
 const local = {
@@ -214,6 +214,12 @@ const desktop = {
   readWebsiteFile: (name: string, bytes: Uint8Array) => call<{name:string;content:string;bytes:number}>('imports:readWebsiteFile', {name,bytes}),
   getInfo: (): Promise<{ version: string; platform: string; isPackaged: boolean; electron: string }> =>
     ipcRenderer.invoke('app:info'),
+  support: {
+    send: (payload: import('./support-data').SupportPayload) => ipcRenderer.invoke('support:send',payload) as Promise<import('./support-data').SupportResult>,
+    status: () => call<import('./support-data').SupportConfig>('support:status'),
+    cancel: () => call('support:cancel'),
+    openMail: (body:string) => call('support:openMail',body),
+  },
   billing: {
     status: () => call('billing:status'),
       claimReturnHandoff: () => call('billing:claim-return-handoff'),

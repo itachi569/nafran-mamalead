@@ -3,6 +3,8 @@
   "version": 2,
   "functions": { "api/billing.mjs": { "maxDuration": 30 } },
   "rewrites": [
+    { "source": "/v1/support", "destination": "/api/billing?endpoint=support" },
+    { "source": "/v1/support/config", "destination": "/api/billing?endpoint=supportConfig" },
     { "source": "/", "destination": "/api/billing?endpoint=home" },
     { "source": "/health", "destination": "/api/billing?endpoint=health" },
     { "source": "/cancel", "destination": "/api/billing?endpoint=cancel" },
