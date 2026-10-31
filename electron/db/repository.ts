@@ -658,7 +658,7 @@ export class Repository {
    * The lead ledger. `has_email` and `has_social` are derived here with sub-selects so one query
    * answers everything the page's rows, filter chips and summary card need.
    */
-  listLeads(workspaceId: string, options: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string } = {}): { rows: StoredLead[]; total: number } {
+  listLeads(workspaceId: string, options: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string; sort?: 'newest' | 'score' | 'rating' | 'reviews' | 'name' } = {}): { rows: StoredLead[]; total: number } {
     const limit = Math.min(1000, Math.max(1, options.limit ?? 200))
     const offset = Math.max(0, options.offset ?? 0)
     const where = ['l.workspace_id = ?']
@@ -669,8 +669,14 @@ export class Repository {
     }
     const search = options.search?.trim().toLowerCase()
     if (search) {
-      where.push("(instr(lower(l.name), ?) > 0 or instr(lower(l.website), ?) > 0 or instr(lower(l.address), ?) > 0 or instr(lower(l.area), ?) > 0 or instr(lower(l.phone), ?) > 0)")
+      const digits = search.replace(/\D/g, '')
+      const phoneSearch = /^[+\d\s().-]+$/.test(search) && digits.length >= 7
+      const national = digits.startsWith('0') ? digits.slice(1) : digits
+      const phoneSql = (column: string) => `replace(replace(replace(replace(replace(replace(${column},' ',''),'-',''),'(',''),')',''),'+',''),'.','')`
+      const phoneMatch = phoneSearch ? ` or instr(${phoneSql('l.phone')}, ?) > 0 or exists(select 1 from lead_contacts c where c.lead_id=l.id and c.kind='phone' and instr(${phoneSql('c.value')}, ?) > 0)` : ''
+      where.push(`(instr(lower(l.name), ?) > 0 or instr(lower(l.website), ?) > 0 or instr(lower(l.address), ?) > 0 or instr(lower(l.area), ?) > 0 or instr(lower(l.phone), ?) > 0${phoneMatch})`)
       params.push(search, search, search, search, search)
+      if (phoneSearch) params.push(national, national)
     }
     const hasEmail = "exists (select 1 from lead_contacts c where c.lead_id = l.id and c.kind = 'email')"
     const hasSocial = 'exists (select 1 from social_profiles s where s.lead_id = l.id)'
@@ -680,6 +686,7 @@ export class Repository {
     if (options.filter === 'social') where.push(hasSocial)
     if (options.filter === 'missing') where.push(`not ${hasPhone} and not ${hasEmail} and not ${hasSocial}`)
     const predicate = where.join(' and ')
+    const order = ({newest:'l.captured_at desc',score:'l.score desc',rating:'l.rating desc',reviews:'l.review_count desc',name:'l.name collate nocase asc'} as const)[options.sort ?? 'newest'] ?? 'l.captured_at desc'
     const rows = this.db.query<StoredLead>(
       `select l.*,
               case when l.phone <> '' then l.phone else coalesce((select value from lead_contacts c where c.lead_id=l.id and c.kind='phone' order by coalesce(score,0) desc limit 1),'') end as phone,
@@ -688,7 +695,7 @@ export class Repository {
               (select count(*) from lead_contacts c where c.lead_id=l.id and c.kind='email' and c.validation_status='valid') as verified_email
        from leads l
        where ${predicate}
-       order by l.captured_at desc, l.id desc
+       order by ${order}, l.id desc
        limit ? offset ?`,
       [...params, limit, offset],
     )
@@ -1337,14 +1344,14 @@ export class Repository {
     return rows.map(row=>({...row,initials:this.db.query<{name:string}>('select l.name from leads l join list_items i on i.lead_id=l.id where i.list_id=? order by i.added_at,l.id limit 3',[row.id]).map(lead=>(lead.name.match(/[\p{L}\p{N}]+/gu)||[]).slice(0,2).map(word=>word[0].toUpperCase()).join('')).join(',')}))
   }
 
-  createList(workspaceId: string, name: string): { id: string } {
-    const trimmed = name.trim()
+  createList(workspaceId: string, name: string): { id: string; existed: boolean } {
+    const trimmed = name.trim().slice(0,80)
     if (!trimmed) throw new Error('A list name is required.')
     const existing = this.db.one<{ id: string }>('select id from lists where workspace_id = ? and name = ?', [
       workspaceId,
       trimmed,
     ])
-    if (existing) return { id: existing.id }
+    if (existing) return { id: existing.id, existed: true }
     const id = randomUUID()
     this.db.run('insert into lists (id, workspace_id, name, created_at) values (?, ?, ?, ?)', [
       id,
@@ -1352,7 +1359,48 @@ export class Repository {
       trimmed,
       nowIso(),
     ])
-    return { id }
+    return { id, existed: false }
+  }
+
+  renameList(workspaceId: string, id: string, name: string): { ok: boolean } {
+    const value = name.trim().slice(0,80)
+    if (!value) throw new Error('A list name is required.')
+    if (!this.db.one('select id from lists where id=? and workspace_id=?',[id,workspaceId])) throw new Error('List not found.')
+    if (this.db.one('select id from lists where workspace_id=? and name=? and id<>?',[workspaceId,value,id])) throw new Error('A list with that name already exists.')
+    this.db.run('update lists set name=? where id=? and workspace_id=?',[value,id,workspaceId])
+    return {ok:true}
+  }
+
+  updateLead(workspaceId: string, id: string, patch: Partial<Pick<StoredLead,'name'|'phone'|'website'|'address'|'category'>>): { ok: boolean } {
+    if (!this.getLead(workspaceId,id)) throw new Error('Lead not found.')
+    const columns = ['name','phone','website','address','category'] as const
+    const updates: string[] = [], values: string[] = []
+    for (const column of columns) if (patch[column] !== undefined) {
+      if (typeof patch[column] !== 'string') throw new Error('Enter text for lead details.')
+      const value=patch[column]!.trim().slice(0,column==='address'?2000:500)
+      if (column==='name' && !value) throw new Error('Business name is required.')
+      if (column==='website' && value && !cleanWebsiteUrl(value)) throw new Error('Enter a valid website URL.')
+      updates.push(`${column}=?`); values.push(column==='website' && value ? cleanWebsiteUrl(value)! : value)
+    }
+    if(updates.length) this.db.run(`update leads set ${updates.join(',')} where id=? and workspace_id=?`,[...values,id,workspaceId])
+    return {ok:true}
+  }
+
+  deleteLeads(workspaceId: string, ids: string[]): { deleted: number } {
+    if (!Array.isArray(ids) || ids.some(id=>typeof id!=='string') || ids.length>1000) throw new Error('Select up to 1,000 leads.')
+    return this.db.transaction(()=>{
+      let deleted=0
+      for(const id of new Set(ids)) {
+        if(this.db.one(`select j.id from enrichment_jobs j, json_each(j.lead_ids) x where j.workspace_id=? and j.status in ('queued','running') and x.value=?`,[workspaceId,id])) throw new Error('Stop the active scan before deleting its leads.')
+        deleted+=this.db.prepare('delete from leads where workspace_id=? and id=?').run(workspaceId,id)
+      }
+      return {deleted}
+    })
+  }
+
+  deleteRun(workspaceId: string, id: string): { deleted: number } {
+    if(this.db.one("select id from scrape_runs where workspace_id=? and id=? and status='running'",[workspaceId,id])) throw new Error('Stop this run before removing it.')
+    return {deleted:this.db.prepare('delete from scrape_runs where workspace_id=? and id=?').run(workspaceId,id)}
   }
 
   deleteList(id: string): void {
@@ -1598,7 +1646,11 @@ export class Repository {
 
   startWebsiteLookup(workspaceId: string, input: string[], selected: WebsiteLookupFields) {
     const fields = lookupFields(selected)
-    const domains = [...new Set(input.map(normaliseDomain).filter(Boolean))]
+    const lines=input.map(value=>value.trim()).filter(Boolean)
+    const invalid=lines.filter(value=>!normaliseDomain(value))
+    const valid=lines.map(normaliseDomain).filter(Boolean)
+    const domains = [...new Set(valid)]
+    const inputReport={invalidCount:invalid.length, discardedSamples:invalid.slice(0,5).map(value=>value.slice(0,120)), mergedCount:valid.length-domains.length}
     if (!domains.length) throw new Error('Add at least one valid website URL.')
     if (domains.length > 500) throw new Error('Scan up to 500 unique websites at a time. Split this list into smaller batches.')
     const active = this.db.one<{ id: string }>("select id from enrichment_jobs where workspace_id = ? and kind = 'website' and status in ('queued','running') and json_extract(options, '$.source') = 'website-lookup'", [workspaceId])
@@ -1606,7 +1658,7 @@ export class Repository {
     return this.db.transaction(() => {
       const imported = this.importWebsites(workspaceId, domains, false)
       if (!imported.leadIds.length) throw new Error('Use a business website. Social platforms and directory listings cannot be scanned here.')
-      const {jobId} = this.queueJob(workspaceId, 'website', imported.leadIds, {source:'website-lookup',fields,added:imported.added,reused:imported.skipped,batchId:imported.batchId,addedLeadIds:imported.addedLeadIds})
+      const {jobId} = this.queueJob(workspaceId, 'website', imported.leadIds, {source:'website-lookup',fields,...inputReport,added:imported.added,reused:imported.skipped,batchId:imported.batchId,addedLeadIds:imported.addedLeadIds})
       for (const [position,id] of imported.leadIds.entries()) {
         const lead = this.getLead(workspaceId,id)!
         this.db.run('insert into website_lookup_rows (job_id,lead_id,position,data) values (?,?,?,?)',[jobId,id,position,JSON.stringify(emptyLookupRow(lead))])

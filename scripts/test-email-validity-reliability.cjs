@@ -1,5 +1,19 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const {precheckEmail,isRoleEmail,isDisposableDomain}=require('../dist-electron/email-precheck.js')
+test('temporary inboxes and typos are rejected before DNS or paid provider work',async()=>{
+ const dns={resolveMx:async()=>{throw new Error('DNS must not be called')},cancel(){}}
+ for(const email of ['x@mailinator.com','a@guerrillamail.com','b@10minutemail.com','c@sub.yopmail.com']){
+  const r=await precheckEmail(email,undefined,dns);assert.equal(r.status,'risky');assert.match(r.message,/Disposable/);assert.equal(r.provider,'local')
+ }
+ for(const domain of ['yahooo.com','gmal.com','gmail.co','gmail.con','hotmal.com','outlok.com']){const r=await precheckEmail('a@'+domain,undefined,dns);assert.equal(r.status,'risky');assert.match(r.message,/Did you mean/)}
+ assert.equal(isDisposableDomain('mailinator.com.realbusiness.com'),false)
+ assert.equal(await precheckEmail('john@gmail.com',undefined,{resolveMx:async()=>[{exchange:'mx.gmail.com',priority:10}],cancel(){}}),null)
+})
+test('role addresses include regional variants, never ordinary personal names',()=>{
+ for(const name of ['dispatch','service','bookings','reservations','orders','marketing','accounts','hr','hello-austin','info.pk'])assert.equal(isRoleEmail(name+'@x.com'),true,name)
+ assert.equal(isRoleEmail('john.smith@x.com'),false)
+})
 const {
   EmailVerificationError,
   runEmailVerificationBatches,

@@ -249,8 +249,11 @@ export interface LocalApi {
   usage: () => Promise<UsageSummary>
   stats: () => Promise<LeadSummary>
   dashboard: (days?: 7 | 30 | null) => Promise<DashboardTotals>
+  onChanged: (listener: () => void) => () => void
   leads: {
-    list: (payload?: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }) => Promise<{ rows: StoredLead[]; total: number }>
+    list: (payload?: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string; sort?: 'newest' | 'score' | 'rating' | 'reviews' | 'name' }) => Promise<{ rows: StoredLead[]; total: number }>
+    remove: (ids: string[]) => Promise<{deleted:number}>
+    update: (id: string, patch: Partial<Pick<StoredLead,'name'|'phone'|'website'|'address'|'category'>>) => Promise<{ok:boolean}>
     get: (id: string) => Promise<StoredLead | null>
     summary: () => Promise<LeadSummary>
     bookmark: (id: string, bookmarked: boolean) => Promise<{ ok: boolean }>
@@ -261,6 +264,7 @@ export interface LocalApi {
     summary: () => Promise<PhoneSummary>
   }
   runs: {
+    remove: (id:string) => Promise<{deleted:number}>
     list: (limit?: number) => Promise<StoredRun[]>
     counts: () => Promise<{ runs: number; clean: number; failed: number; stopped: number; places: number; medianMs: number }>
   }
@@ -297,7 +301,8 @@ export interface LocalApi {
 
   lists: {
     list: () => Promise<StoredList[]>
-    create: (name: string) => Promise<{ id: string }>
+    rename: (id:string,name:string) => Promise<{ok:boolean}>
+    create: (name: string) => Promise<{ id: string; existed:boolean }>
     remove: (id: string) => Promise<unknown>
     add: (listId: string, leadIds: string[]) => Promise<{ added: number; skipped: number }>
     removeLead: (listId: string, leadId: string) => Promise<unknown>
@@ -508,7 +513,9 @@ export interface DesktopApi {
     status: () => Promise<{
       configured: boolean
       fromEnvironment: boolean
-      provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local' | null
+      provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local'
+      level: 'dns' | 'mailbox'
+      mode: 'dns-only' | 'provider'
       leadsAngelConfigured: boolean
       leadsAngelExpiresOn: string | null
       progress: EmailValidityProgress

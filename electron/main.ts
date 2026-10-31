@@ -562,9 +562,11 @@ ipcMain.handle('emailValidity:removeLeadsAngel', () => {
 })
 
 ipcMain.handle('emailValidity:status', () => ({
-  configured: Boolean(leadsAngelCredentials || apifyApiToken || mailVerifierApiKey),
+  configured: true,
+  level: leadsAngelCredentials || apifyApiToken || mailVerifierApiKey ? 'mailbox' : 'dns',
+  mode: leadsAngelCredentials || apifyApiToken || mailVerifierApiKey ? 'provider' : 'dns-only',
   fromEnvironment: leadsAngelCredentials ? false : apifyApiToken ? apifyFromEnvironment : mailVerifierFromEnvironment,
-  provider: leadsAngelCredentials ? 'leadsangel' : apifyApiToken ? 'apify' : mailVerifierApiKey ? 'mailverifier' : null,
+  provider: leadsAngelCredentials ? 'leadsangel' : apifyApiToken ? 'apify' : mailVerifierApiKey ? 'mailverifier' : 'local',
   leadsAngelConfigured: Boolean(leadsAngelCredentials),
   leadsAngelExpiresOn: leadsAngelCredentials?.expiresOn ?? null,
   progress: emailValidityProgress,

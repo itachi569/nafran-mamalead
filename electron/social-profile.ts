@@ -11,7 +11,7 @@ const hosts:Record<string,SocialPlatform>={
 export function socialPlatformOf(raw:string):SocialPlatform|null {try{const host=new URL(raw).hostname.toLowerCase();return hosts[host]??(/^[a-z]{2}\.linkedin\.com$/.test(host)?'linkedin':null)}catch{return null}}
 const reserved=new Set('login login.php logout signup sign-up signin sign-in register reg recover recovery help support about privacy policies policy terms legal business developers developer dialog plugins sharer sharer.php share share.php watch reel reels stories story.php photo photo.php photos permalink.php groups events marketplace gaming hashtag search pages home settings notifications friends account accounts api ajax rsrc ads creators results feed playlist embed shorts intent i intent.php t redirect oembed'.split(' '))
 const profileTabs=new Set('about reviews posts photos videos reels followers following mentions community featured tagged streams shorts live playlists'.split(' '))
-const serviceHandles=new Set('facebook instagram youtube twitter linkedin tiktok wix elementor wordpress wordpressdotcom godaddy shopify themeforest squarespace'.split(' '))
+const serviceHandles=new Set('facebook instagram whatsapp meta google youtube twitter x linkedin tiktok wix elementor wordpress wordpressdotcom godaddy shopify themeforest squarespace'.split(' '))
 for(const endpoint of 'tr lite r.php terms.php checkpoint consent policies_center privacy_center ad_campaign'.split(' '))reserved.add(endpoint)
 /** Only account/page/channel links. Content, navigation and share endpoints are not profiles. */
 export function canonicalSocialProfile(raw:string):CanonicalSocialProfile|null {

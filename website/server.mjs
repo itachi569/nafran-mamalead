@@ -34,7 +34,17 @@ const server = createServer(async (request, response) => {
     return
   }
 
-  const file = pathname === '/' ? 'index.html' : pathname.slice(1)
+  if (pathname === '/contact' || pathname === '/contact/') {
+    const query = new URL(request.url,'http://localhost').search
+    response.writeHead(301,{location:'/support'+query,'cache-control':'no-store'}).end()
+    return
+  }
+  const aliases={'/support':'support.html','/privacy':'privacy.html','/terms':'terms.html','/thank-you':'thank-you.html'}
+  if(pathname.endsWith('/') && aliases[pathname.slice(0,-1)]){
+    response.writeHead(301,{location:pathname.slice(0,-1)+new URL(request.url,'http://localhost').search,'cache-control':'no-store'}).end()
+    return
+  }
+  const file = pathname === '/' ? 'index.html' : aliases[pathname.replace(/\/$/,'')] || pathname.slice(1)
   if (file.includes('..') || !allowedFile.test(file)) {
     response.writeHead(404).end()
     return

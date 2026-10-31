@@ -22,6 +22,10 @@ export interface WebsiteLookupSession {
   fields: WebsiteLookupFields
   added: number
   reused: number
+  invalidCount?: number
+  discardedSamples?: string[]
+  mergedCount?: number
+  failedImports?: number
   discarded: number
   message: string
   rows: WebsiteLookupRow[]
@@ -35,7 +39,7 @@ export function lookupFields(value: unknown): WebsiteLookupFields {
   return fields
 }
 
-export function lookupOptions(raw?: string): { source?: string; fields?: WebsiteLookupFields; added?: number; reused?: number; discarded?: number; batchId?: string; addedLeadIds?: string[]; failedImportRows?: {position:number;row:WebsiteLookupRow}[] } {
+export function lookupOptions(raw?: string): { invalidCount?: number; discardedSamples?: string[]; mergedCount?: number; source?: string; fields?: WebsiteLookupFields; added?: number; reused?: number; discarded?: number; batchId?: string; addedLeadIds?: string[]; failedImportRows?: {position:number;row:WebsiteLookupRow}[] } {
   try { return JSON.parse(raw || '{}') } catch { return {} }
 }
 
@@ -62,7 +66,7 @@ export function readWebsiteLookup(db: LocalDatabase, workspaceId: string, jobId?
   if (job.status === 'failed') for (const row of rows) {
     if (row.status === 'queued' || row.status === 'running') { row.status = 'failed'; row.error = job.error || 'The scan stopped before this website was completed.' }
   }
-  return { jobId: job.id, status: job.status, startedAt: job.created_at, fields: lookupFields(options.fields), added: options.added ?? 0, reused: options.reused ?? 0, discarded: options.discarded ?? options.failedImportRows?.length ?? 0, message: job.error ?? '', rows }
+  return { jobId: job.id, status: job.status, startedAt: job.created_at, fields: lookupFields(options.fields), added: options.added ?? 0, reused: options.reused ?? 0, invalidCount:options.invalidCount ?? 0, discardedSamples:options.discardedSamples ?? [], mergedCount:options.mergedCount ?? 0, failedImports:options.discarded ?? options.failedImportRows?.length ?? 0, discarded: (options.invalidCount ?? 0)+(options.discarded ?? options.failedImportRows?.length ?? 0), message: job.error ?? '', rows }
 }
 
 /** Only selected public business fields are included. Owner records/credits are never involved. */

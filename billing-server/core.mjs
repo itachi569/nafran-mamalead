@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { buildLicenseEmail } from './license-email.mjs'
 import { createAssistService } from './assist.mjs'
 import { billingPage as page } from './payment-page.mjs'
-import {sendSupport,supportConfig} from './support.mjs'
+import {sendSupport,supportConfig,sendWebSupport,webSupportConfig} from './support.mjs'
 import {SupportError} from './support-contract.mjs'
 import {paymentDetails} from './payment-details.mjs'
 
@@ -657,6 +657,13 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         const purchasedInstallation = await store.byId(license.installation_id)
         if (!purchasedInstallation) throw new HttpError(401, 'This license key is invalid or revoked.')
         return json(200, await downloadLink(purchasedInstallation))
+      }
+      if(method==='GET' && url.pathname==='/v1/support/web/config')return json(200,webSupportConfig(env,store))
+      if(method==='POST' && url.pathname==='/v1/support/web'){
+        const raw=await readBody()
+        if(Buffer.byteLength(raw)>32768)throw new SupportError(413,'Message is too long.')
+        let input;try{input=JSON.parse(raw)}catch{throw new SupportError(400,'Invalid support message.')}
+        return json(200,await sendWebSupport({env,store,input,ip,fetcher:stripeFetch}))
       }
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
         const row = await installation(authorization, deviceId, devicePlatform)

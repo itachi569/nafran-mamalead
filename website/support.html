@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://mamalead.com/support">
+<meta property="og:title" content="Contact support — MamaLead">
+<meta property="og:description" content="Get help with your MamaLead licence, downloads or desktop app.">
+<meta property="og:url" content="https://mamalead.com/support">
+<meta property="og:type" content="website">
 <script src="./billing.js"></script>
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
@@ -170,7 +175,7 @@
             <sc-if value="{{ noTurnstile }}" hint-placeholder-val="{{ true }}">
               <div style="display: flex; align-items: center; gap: 10px; min-height: 65px; padding: 0 16px; border-radius: 12px; border: 1px dashed #C9D1C3; background: #FFFFFF; font-size: 12.5px; color: #576451;">
                 <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#576451" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7 3v5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9v-5z"></path></svg>
-                Messages are protected by request limits and duplicate detection.
+                {{ securityText }}
               </div>
             </sc-if>
           </fieldset>
@@ -241,8 +246,6 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;previewState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Live&quot;,&quot;Validation&quot;,&quot;Sending&quot;,&quot;Success&quot;,&quot;Rate limited&quot;,&quot;Error / offline&quot;,&quot;Captcha failed&quot;],&quot;default&quot;:&quot;Live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview a state&quot;}}">
 const SUPPORT_EMAIL = 'mamaleads997@gmail.com';
-// Public Cloudflare Turnstile site key (mamalead.com, www.mamalead.com). Empty = placeholder box, no captcha required.
-const TURNSTILE_SITE_KEY = '';
 const DRAFT_KEY = 'mamalead.web.support.draft';
 const TOPICS = { licence: 'Licence', bug: 'Bug', feature: 'Feature request', other: 'Other' };
 const EMPTY = { name: '', email: '', category: 'other', last4: '', subject: '', message: '', website: '' };
@@ -263,7 +266,7 @@ function validate(f) {
 }
 
 class Component extends DCLogic {
-  state = { f: { ...EMPTY }, id: '', touched: {}, submitted: false, status: 'idle', ticket: '', retryMin: 0, serverErr: null, token: '', copied: false };
+  state = { f: { ...EMPTY }, id: '', touched: {}, submitted: false, status: 'idle', ticket: '', retryMin: 0, serverErr: null, token: '', copied: false, siteKey: '', configLoading: true };
   summaryRef = React.createRef();
   turnstileRef = React.createRef();
 
@@ -278,7 +281,11 @@ class Component extends DCLogic {
     if (/^[A-Za-z0-9]{4}$/.test(last4)) f.last4 = last4.toUpperCase();
     this._lastF = f;
     this.setState({ f, id: (draft && draft.id) || uuid() });
-    if (TURNSTILE_SITE_KEY) this.loadTurnstile();
+    window.MamaLeadBilling.supportConfig().then(config => {
+      this.setState({ configLoading: false, siteKey: config.configured ? config.turnstileSiteKey || '' : '' }, () => {
+        if (this.state.siteKey) this.loadTurnstile();
+      });
+    }).catch(() => this.setState({ configLoading: false }));
   }
 
   componentDidUpdate() {
@@ -293,22 +300,23 @@ class Component extends DCLogic {
     const render = () => {
       if (!window.turnstile || !this.turnstileRef.current || this._tsId !== undefined) return;
       this._tsId = window.turnstile.render(this.turnstileRef.current, {
-        sitekey: TURNSTILE_SITE_KEY, theme: 'light', appearance: 'always',
+        sitekey: this.state.siteKey, action: 'mamalead_support', theme: 'light', appearance: 'always',
         callback: (token) => this.setState({ token, status: this.state.status === 'captcha' ? 'idle' : this.state.status }),
-        'expired-callback': () => this.setState({ token: '' }),
-        'error-callback': () => this.setState({ token: '' }),
+        'expired-callback': () => this.setState({ token: '', status: 'captcha' }),
+        'error-callback': () => this.setState({ token: '', status: 'captcha' }),
       });
     };
     if (window.turnstile) return setTimeout(render, 0);
     const s = document.createElement('script');
     s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
     s.async = true; s.defer = true; s.onload = () => setTimeout(render, 0);
+    s.onerror = () => this.setState({ siteKey: '', token: '', status: 'error' });
     document.head.appendChild(s);
   }
 
   resetTurnstile() {
-    if (window.turnstile && this._tsId !== undefined) window.turnstile.reset(this._tsId);
     this.setState({ token: '' });
+    if (window.turnstile && this._tsId !== undefined) window.turnstile.reset(this._tsId);
   }
 
   setField(k, v) {
@@ -333,7 +341,8 @@ class Component extends DCLogic {
       return;
     }
     if (s.f.website) return this.setState({ status: 'success', ticket: '' });
-    if (TURNSTILE_SITE_KEY && !s.token) return this.setState({ status: 'captcha' });
+    if (!s.siteKey) return this.setState({ status: 'error' });
+    if (!s.token) return this.setState({ status: 'captcha' });
     this._sending = true;
     this.setState({ status: 'sending' });
     const f = s.f;
@@ -349,6 +358,7 @@ class Component extends DCLogic {
       }
       this.setState({ status: 'error' });
     } catch (err) {
+      if (err.field === 'turnstileToken') return this.setState({ status: 'captcha' });
       if (err.status === 409) this.setState({id:uuid()});
       if (err.status === 400 || err.status === 413) return this.setState({ status: 'idle', serverErr: { field: err.field || '', message: err.message || 'Check the highlighted field.' } });
       if (err.status === 429) {
@@ -358,6 +368,7 @@ class Component extends DCLogic {
       this.setState({ status: 'error' });
     } finally {
       this._sending = false;
+      this.resetTurnstile();
     }
   }
 
@@ -389,8 +400,9 @@ class Component extends DCLogic {
       subject: mk('subject'), message: mk('message', { help: 'f-message-count' }), website: mk('website'),
     };
     const order = [['email', 'f-email'], ['last4', 'f-last4'], ['message', 'f-message']];
-    const summaryItems = submitted ? order.filter(([k]) => errs[k]).map(([k, id]) => ({ text: errs[k], href: '#' + id })) : [];
-    const valid = Object.keys(validate(f)).length === 0 && (!TURNSTILE_SITE_KEY || !!this.state.token);
+    const labels = {email:'Email',last4:'Licence key ending',message:'Message'};
+    const summaryItems = submitted ? order.filter(([k]) => errs[k]).map(([k, id]) => ({ text: labels[k] + ': ' + errs[k], href: '#' + id })) : [];
+    const valid = Object.keys(validate(f)).length === 0 && !!this.state.siteKey && !!this.state.token;
     const sending = status === 'sending';
     const bannerText = status === 'rate'
       ? `You've sent several messages recently. Please try again in ${retryMin} ${retryMin === 1 ? 'minute' : 'minutes'}, or email ${SUPPORT_EMAIL}.`
@@ -405,8 +417,9 @@ class Component extends DCLogic {
       count: f.message.length.toLocaleString('en-US'),
       summaryRef: this.summaryRef,
       turnstileRef: this.turnstileRef,
-      hasTurnstile: !!TURNSTILE_SITE_KEY,
-      noTurnstile: !TURNSTILE_SITE_KEY,
+      hasTurnstile: !!this.state.siteKey,
+      noTurnstile: !this.state.siteKey,
+      securityText: this.state.configLoading ? 'Loading the security check…' : 'The support form is temporarily unavailable. Please email ' + SUPPORT_EMAIL + '.',
       showSummary: summaryItems.length > 0,
       summaryItems,
       isForm: status !== 'success',
@@ -417,7 +430,7 @@ class Component extends DCLogic {
       bannerActions: status === 'error',
       mailtoHref: this.mailto(),
       btnLabel: sending ? 'Sending\u2026' : 'Send message \u2192',
-      btnAriaDisabled: String(sending || !valid),
+      btnAriaDisabled: String(sending || !this.state.siteKey || !this.state.token),
       btnBg: sending || !valid ? '#6E726C' : '#1C1C1C',
       btnCursor: sending ? 'progress' : 'pointer',
       liveText: sending ? 'Sending your message\u2026' : status === 'success' ? 'Message sent.' : '',

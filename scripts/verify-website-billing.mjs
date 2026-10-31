@@ -33,6 +33,8 @@ try {
  await page.goto(base,{waitUntil:'networkidle'})
  await page.locator('#top .hero-trial').click()
  const dialog=page.getByRole('dialog');await dialog.waitFor()
+ assert.equal(await dialog.getByRole('link',{name:'Already have a key? Download the app'}).count(),0)
+ assert.equal(await dialog.locator('a[href*="/v1/download"]').count(),0,'No download bypass before email delivery')
  await page.locator('#trial-email').fill('invalid')
  await dialog.getByRole('button',{name:'Send my trial key'}).click()
  assert.equal(trialCalls,0)

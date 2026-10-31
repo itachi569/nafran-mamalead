@@ -18,10 +18,10 @@ export function createSupportReads(query, dialect='sqlite') {
    if(opt.from)add('s.created_at>=?',opt.from+'T00:00:00.000Z')
    if(opt.to)add('s.created_at<?',new Date(Date.parse(opt.to)+DAY).toISOString())
    if(opt.unread)add('s.admin_read_at is null')
-   if(opt.q){const q=opt.q.toLowerCase(),escaped=q.replace(/[\\%_]/g,'\\$&');add(`(lower(s.email) like ? escape '\\' or lower(s.id) like ? escape '\\' or lower(s.subject) like ? escape '\\' or lower(s.license_last4)=? or (${q.length>=6?'1=1':'1=0'} and (lower(s.installation_id) like ? escape '\\' or lower(i.device_id) like ? escape '\\')))`,'%'+escaped+'%','%'+escaped+'%','%'+escaped+'%',q,escaped+'%',escaped+'%')}
+   if(opt.q){const q=opt.q.toLowerCase(),escaped=q.replace(/[\\%_]/g,'\\$&');add(`(lower(s.name) like ? escape '\\' or lower(s.email) like ? escape '\\' or lower(s.id) like ? escape '\\' or lower(s.subject) like ? escape '\\' or lower(s.license_last4)=? or (${q.length>=6?'1=1':'1=0'} and (lower(s.installation_id) like ? escape '\\' or lower(i.device_id) like ? escape '\\')))`,'%'+escaped+'%','%'+escaped+'%','%'+escaped+'%','%'+escaped+'%',q,escaped+'%',escaped+'%')}
    const where=clauses.length?'where '+clauses.join(' and '):'',base=`from billing_support_messages s left join ${installations} i on i.id=s.installation_id ${where}`
    const [total]=await run(`select count(*) as n ${base}`,args)
-   const rows=await run(`select ${columns.split(',').map(c=>'s.'+c).join(',')},i.device_platform,(select count(*) from billing_support_replies r where r.ticket_id=s.id and r.kind='reply') as replies ${base} order by s.${opt.sort==='created'?'created_at':'last_activity_at'} desc,s.id desc limit ? offset ?`,[...args,opt.pageSize,(opt.page-1)*opt.pageSize])
+   const rows=await run(`select ${columns.split(',').map(c=>'s.'+c).join(',')},i.device_platform,(select count(*) from billing_support_replies r where r.ticket_id=s.id and r.kind='reply') as replies ${base} order by ${opt.status==='all'?"case when s.status='open' then 0 else 1 end,":''} s.${opt.sort==='created'?'created_at':'last_activity_at'} desc,s.id desc limit ? offset ?`,[...args,opt.pageSize,(opt.page-1)*opt.pageSize])
    return {rows:rows.map(parse),total:Number(total.n),page:opt.page,pageSize:opt.pageSize,counts:await counts()}
   }),
   supportTicket:id=>safe(async()=>parse((await run(`select ${columns} from billing_support_messages where id=?`,[id]))[0])),

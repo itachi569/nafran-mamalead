@@ -188,7 +188,7 @@ export class ScrapeRunner {
         if (controller.signal.aborted) throw new DOMException('Scrape cancelled', 'AbortError')
         if (!collected.length) collected.push(...providerLeads.slice(0, runTarget))
         options.onLeads?.(collected)
-        emit('done', `Finished · ${collected.length} lead${collected.length === 1 ? '' : 's'} captured`, collected.length)
+        emit('done', collected.length ? `Finished · ${collected.length} lead${collected.length === 1 ? '' : 's'} captured` : 'No matching places for this query.', collected.length)
       } catch (caught) {
         status = statusFromError(caught)
         error = caught instanceof Error ? caught.message : String(caught)

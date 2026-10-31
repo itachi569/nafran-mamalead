@@ -29,6 +29,7 @@ async function call<T>(channel: string, payload?: unknown): Promise<T> {
 }
 
 const local = {
+  onChanged: (listener:()=>void) => subscribe('db:changed',listener),
   workspace: () => call('db:workspace'),
   usage: () => call('db:usage'),
   stats: () => call('db:stats'),
@@ -36,6 +37,8 @@ const local = {
 
   leads: {
     list: (payload?: { limit?: number; offset?: number }) => call('db:leads:list', payload ?? {}),
+    remove: (ids:string[]) => call('db:leads:delete',{ids}),
+    update: (id:string,patch:Record<string,string>) => call('db:leads:update',{id,patch}),
     get: (id: string) => call('db:leads:get', { id }),
     summary: () => call('db:leads:summary'),
     bookmark: (id: string, bookmarked: boolean) => call('db:leads:bookmark', { id, bookmarked }),
@@ -48,6 +51,7 @@ const local = {
   },
 
   runs: {
+    remove: (id:string) => call('db:runs:delete',{id}),
     list: (limit?: number) => call('db:runs:list', { limit }),
     counts: () => call('db:runs:counts'),
   },
@@ -87,7 +91,8 @@ const local = {
 
   lists: {
     list: () => call('db:lists:list'),
-    create: (name: string) => call<{ id: string }>('db:lists:create', { name }),
+    rename: (id:string,name:string) => call('db:lists:rename',{id,name}),
+    create: (name: string) => call<{ id: string; existed:boolean }>('db:lists:create', { name }),
     remove: (id: string) => call('db:lists:delete', { id }),
     add: (listId: string, leadIds: string[]) => call<{ added: number; skipped: number }>('db:lists:add', { listId, leadIds }),
     removeLead: (listId: string, leadId: string) => call('db:lists:remove', { listId, leadId }),
@@ -245,7 +250,9 @@ const desktop = {
     status: (): Promise<{
       configured: boolean
       fromEnvironment: boolean
-      provider: 'apify' | 'leadsangel' | 'mailverifier' | null
+      provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local'
+      level: 'dns' | 'mailbox'
+      mode: 'dns-only' | 'provider'
       leadsAngelConfigured: boolean
       leadsAngelExpiresOn: string | null
       progress: {

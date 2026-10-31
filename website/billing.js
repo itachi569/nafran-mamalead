@@ -47,13 +47,14 @@
   for (const type of ['pointerover', 'focusin', 'touchstart']) document.addEventListener(type, prepareCheckout, {passive:true});
   window.MamaLeadBilling = {
     status,
+    supportConfig: () => request('/v1/support/web/config'),
     async support(input) {
-      // Website visitors use the same authenticated, rate-limited ticket inbox as the app.
+      // Public support uses CAPTCHA and its own quotas, not a billing installation.
       const {licenseLast4, ...fields} = input;
       // A visitor's key suffix helps support find their purchase; it is not proof of access.
       if (/^[A-Za-z0-9]{4}$/.test(licenseLast4 || '')) fields.message += '\n\nLicence key ending (provided by visitor): ' + licenseLast4.toUpperCase();
-      return request('/v1/support', {...fields, page:'website', diagnostics:false,
-        meta:{app:{platform:'web'}}}, await identity());
+      return request('/v1/support/web', {...fields, page:'website', diagnostics:false,
+        meta:{app:{platform:'web'}}});
     },
     async trial(email, replaceExisting) {
       const credential = await identity();

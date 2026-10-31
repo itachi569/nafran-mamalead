@@ -1,3 +1,6 @@
+import {createPortal} from 'react-dom'
+import {ListRename} from './ListRename'
+import './data-management.css'
 import {MapCoveragePin} from './MapCoveragePin'
 // GENERATED FILE · do not edit by hand.
 // Source: .reference/markup.html (the MamaLead document bundled by the reference app).
@@ -44,6 +47,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
   return (
     <>
       <WorkspaceDialogs V={V}/>
+      {V.dataActions.pending && createPortal(<aside className="data-undo" role="status">{V.dataActions.pending}<button onClick={V.dataActions.undo}>Undo</button></aside>,document.body)}
       {V.supportPreset && <ContactSupportDialog page={V.supportPage} preset={V.supportPreset} onClose={V.closeSupport} onSent={V.supportSent}/>}
       {V.detailLeadId && <LeadDetails id={V.detailLeadId} onClose={V.closeLeadDetail}/>}
       <ScanReturn V={V}/>
@@ -260,7 +264,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               <section data-plan-welcome="1" aria-label="Trial and Lifetime access" style={{display: "flex", alignItems: "center", flexWrap: "wrap", gap: "12px", padding: "16px 18px", borderRadius: "18px", background: "#C8D5BB", color: "#1C1C1C"}}>
                 <div role="status" style={{flex: "1 1 260px"}}>
                   <strong style={{display: "block", fontSize: "14px", fontWeight: "600"}}>Welcome to MamaLead</strong>
-                  <p style={{margin: "4px 0 0", fontSize: "13px", lineHeight: "1.5"}}>Start your 1-day free trial or get Lifetime access in Settings &amp; Billing.</p>
+                  <p style={{margin: "4px 0 0", fontSize: "13px", lineHeight: "1.5"}}>Enter your emailed licence key in Settings &amp; Billing to start using MamaLead.</p>
                 </div>
                 <button type="button" data-plan-welcome-open="1" onClick={V.openWelcomeBilling} style={{border: "0", borderRadius: "999px", padding: "11px 17px", background: "#1C1C1C", color: "#F5F5F4", fontFamily: "inherit", fontSize: "13px", fontWeight: "600", cursor: "pointer"}}>Open Settings &amp; Billing</button>
                 <button type="button" aria-label="Dismiss trial and Lifetime notice" onClick={V.dismissPlanWelcome} style={{display: "grid", placeItems: "center", width: "30px", height: "30px", border: "0", borderRadius: "999px", background: "transparent", color: "#1C1C1C", fontSize: "22px", cursor: "pointer"}}>×</button>
@@ -2146,7 +2150,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px"}}>
                     <div>
                       <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Lead ledger</h2>
-                      <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Newest capture first, grouped by the day it was saved.</p>
+                      <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Search, sort and manage your saved business leads.</p>
                     </div>
                     <div style={{display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "190px", height: "42px", padding: "0 16px", marginLeft: "auto", borderRadius: "999px", background: "#EAEAE8"}}>
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#3A3D3B" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true" style={{flex: "none"}}>
@@ -2166,6 +2170,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       </Fragment>
                     ))}
                   </div>
+                  <div className="data-toolbar"><label>Sort by <select aria-label="Sort leads" value={V.leadSort} onChange={event=>V.setLeadSort(event.target.value as typeof V.leadSort)}><option value="newest">Newest</option><option value="score">Highest score</option><option value="rating">Highest rating</option><option value="reviews">Most reviews</option><option value="name">Business name</option></select></label><button onClick={()=>V.dataActions.selectPage(V.leadPageIds)} disabled={V.leadsLoading}>Select this page</button><span>{V.dataActions.selected.length} selected</span><button onClick={V.dataActions.removeSelected} disabled={!V.dataActions.selected.length || Boolean(V.dataActions.pending) || V.dataActions.busy}>Delete selected</button>{V.dataActions.selected.length>0 && <button onClick={V.dataActions.clear}>Clear selection</button>}</div>
                   <div style={{marginTop: "6px", overflowX: "auto"}}>
                     <div style={{minWidth: "660px"}}>
                       <div style={{display: "grid", gridTemplateColumns: "44px minmax(0,2fr) minmax(0,1.45fr) 104px 66px 88px", alignItems: "center", gap: "12px", padding: "14px 0 11px", borderBottom: "1px solid #DEDFDC"}}>
@@ -2192,7 +2197,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             {(day.rows ?? []).map((lc, __ilc) => (
                               <Fragment key={__ilc}>
                                 <li data-row="1" style={{display: "grid", gridTemplateColumns: "44px minmax(0,2fr) minmax(0,1.45fr) 104px 66px 88px", alignItems: "center", gap: "12px", padding: "14px 0", borderTop: "1px solid #E4E5E2", transition: "background .25s linear"}}>
-                                  <span aria-hidden="true" style={{display: "grid", placeItems: "center", width: "40px", height: "40px", borderRadius: "12px", background: "#C8D5BB", fontSize: "13px", fontWeight: "700"}}>{lc.ini}</span>
+                                  <input type="checkbox" aria-label={`Select ${lc.name}`} checked={V.dataActions.selected.includes(lc.id)} onChange={()=>V.dataActions.toggle(lc.id)}/>
                                   <span style={{minWidth: "0"}}>
                                     <button type="button" className="lead-detail-link" onClick={()=>V.openLeadDetail(lc.id)} title="View saved contact details">{lc.name}</button>
                                     <span style={{display: "block", marginTop: "3px", fontSize: "12.5px", color: "#5A5F5C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"}}>{lc.domain}</span>
@@ -2226,11 +2231,12 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     </div>
                   </div>
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px", marginTop: "18px", paddingTop: "16px", borderTop: "1px solid #E4E5E2"}}>
-                    <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Showing {V.leadsShowing} of {V.leadsOnFileTotal} {V.leadsResultLabel}</span>
+                    <span style={{fontSize: "12.5px", color: "#5A5F5C"}}>Showing {V.leadsShowing ? V.leadOffset+1 : 0}–{V.leadOffset+V.leadsShowing} of {V.leadsOnFileTotal} {V.leadsResultLabel}</span>
+                    {V.leadOffset>0 && <button className="data-action" disabled={V.leadsLoading} onClick={V.previousLeads}>Previous page</button>}
                     {shows(V.leadsMoreOn) ? (
                       <>
-                      <button type="button" data-more="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}} onClick={V.showMoreLeads}>
-                        Load 20 more{' '}
+                      <button type="button" data-more="1" disabled={V.leadsLoading} style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "40px", padding: "0 18px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}} onClick={V.showMoreLeads}>
+                        Next page{' '}
                         <span aria-hidden="true">↓</span>
                       </button>
                       </>
@@ -2268,8 +2274,8 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   <div style={{display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: "12px"}}>
                     <div>
                       <div style={{fontSize: "10.5px", fontWeight: "500", letterSpacing: ".16em", textTransform: "uppercase", color: "#555956"}}>Recent saved captures</div>
-                      <h2 style={{margin: "10px 0 0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>{V.pickCount} to sort through</h2>
-                      <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.lastRunLine}</p>
+                      <h2 style={{margin: "10px 0 0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>{V.pickCount}</h2>
+                      <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>{V.lastRunLine}</p>{V.pickPrevious && <button className="data-action" disabled={V.pickLoading} onClick={V.previousPicks}>Previous captures</button>}{V.pickMore && <button className="data-action" onClick={V.showMorePicks} disabled={V.pickLoading}>{V.pickLoading?'Loading…':'Show 50 more captures'}</button>}
                     </div>
                     <div style={{display: "flex", flexWrap: "wrap", gap: "8px"}}>
                       <button type="button" data-ghost="1" onClick={V.keepGood} style={{display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "9px", height: "40px", padding: "0 20px", border: "0", borderRadius: "999px", background: "#E5E5E5", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Bookmark 90+</button>
@@ -2326,7 +2332,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                             </button>
                           </Fragment>
                         ))}
-                        {V.newListVisible ? <input aria-label="New list name" value={V.newListName} onChange={V.onNewListName} maxLength={120} placeholder="Name your list" style={{width: "min(100%,240px)", height: "36px", padding: "0 14px", border: "1px solid #555956", borderRadius: "999px", background: "#252625", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px"}} /> : null}
+                        {V.newListVisible ? <input aria-label="New list name" value={V.newListName} onChange={V.onNewListName} maxLength={80} placeholder="Name your list" style={{width: "min(100%,240px)", height: "36px", padding: "0 14px", border: "1px solid #555956", borderRadius: "999px", background: "#252625", color: "#F0F0F0", fontFamily: "inherit", fontSize: "13px"}} /> : null}
                       </div>
                     </div>
                     <button type="button" onClick={V.saveToList} data-cta="1" style={{display: "inline-flex", alignItems: "center", gap: "9px", height: "46px", padding: "0 22px", border: "0", borderRadius: "999px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", cursor: "pointer", transition: "transform .3s cubic-bezier(.22,1,.36,1)"}}>
@@ -2365,7 +2371,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
                         </div>
                         <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginTop: "11px"}}>
-                          <span style={{fontSize: "12px", color: "#5A5F5C"}}>{l.updated}</span>
+                          <span style={{fontSize: "12px", color: "#5A5F5C"}}>{l.updated}</span><ListRename id={l.id} name={l.name}/>
                           <span aria-hidden="true" style={{fontSize: "13px", color: "#4A4F4B"}}>→</span>
                         </div>
                       </section>
@@ -2416,7 +2422,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                       <span style={{fontSize: "clamp(40px,4vw,54px)", lineHeight: ".9", fontWeight: "700", letterSpacing: "-.04em", backgroundImage: "radial-gradient(circle at 50% 50%,#1C1C1C 1.45px,transparent 1.55px)", backgroundSize: "3.2px 3.2px", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", WebkitTextFillColor: "transparent", animation: "lsPop .7s cubic-bezier(.22,1,.36,1) both"}}>{V.runPlaces}</span>
                       <span style={{marginLeft: "auto", padding: "5px 11px", borderRadius: "999px", background: "#F5F5F4", fontSize: "11.5px", fontWeight: "500"}}>{V.runPlacesBadge}</span>
                     </div>
-                    <div style={{fontSize: "13.5px", color: "#4A4F4B"}}>Places captured</div>
+                    <div style={{fontSize: "13.5px", color: "#4A4F4B"}}>Places found (incl. repeats)</div>
                     <div style={{display: "flex", gap: "4px"}}>
                       <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
                       <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
@@ -2513,6 +2519,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                                 <span style={{padding: "5px 12px", borderRadius: "999px", background: "#EAEAE8", color: "#4A4F4B", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap"}}>{r.cancelled}</span>
                                 </>
                               ) : null}
+                              {r.runId && <button className="data-action" disabled={Boolean(V.dataActions.pending) || V.dataActions.busy || r.cancelled==='Running'} onClick={()=>V.dataActions.removeRun(r.runId)}>Remove run</button>}
                               <button data-action="Re-run" data-goto="maps" data-rerun="1" type="button" data-ghost="1" style={{display: "inline-flex", alignItems: "center", gap: "7px", height: "36px", padding: "0 15px", border: "0", borderRadius: "999px", background: "#EAEAE8", color: "#1C1C1C", fontFamily: "inherit", fontSize: "12.5px", fontWeight: "500", cursor: "pointer", transition: "background .25s linear"}}>Re-run</button>
                             </div>
                           </li>

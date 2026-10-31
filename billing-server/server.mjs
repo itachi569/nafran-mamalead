@@ -320,6 +320,7 @@ export function createBillingServer(options = {}) {
   try { handler = createBillingHandler({ env, store, fetch: options.fetch, getBlob: options.getBlob, getLocalInstaller, hasLocalInstaller, sendEmail: options.sendEmail }) }
   catch (error) { db.close(); throw error }
   const allowedOrigins = new Set((env.BILLING_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean))
+  if(!env.RESEND_API_KEY || !env.EMAIL_FROM || !env.SUPPORT_INBOX)console.warn('Support email delivery is not configured: set RESEND_API_KEY, EMAIL_FROM and SUPPORT_INBOX. Saved tickets will remain queued.')
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin
     if (origin && !allowedOrigins.has(origin)) {
@@ -351,7 +352,7 @@ export function createBillingServer(options = {}) {
         let raw = ''
         for await (const chunk of req) {
           raw += chunk
-          if (Buffer.byteLength(raw) > (req.url?.split('?')[0] === '/v1/support' ? 32768 : 16384)) throw new HttpError(413, 'Request is too large.')
+          if (Buffer.byteLength(raw) > (['/v1/support','/v1/support/web'].includes(req.url?.split('?')[0]) ? 32768 : 16384)) throw new HttpError(413, 'Request is too large.')
         }
         return raw
       },

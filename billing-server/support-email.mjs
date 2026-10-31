@@ -8,6 +8,10 @@ export function buildSupportReplyEmail({ticket,body,signature}) {
  const text=`${body}\n\n${signature || 'MamaLead Support · mamalead.com'}\n\n— Original message —\n${ticket.message.slice(0,1000)}\n\nTicket ${ticket.id}`
  return {subject:`Re: ${ticket.subject} [${ticket.id}]`,text,html:html(text)}
 }
+export function buildSupportReceipt(ticket) {
+ const text=`We received your message.\n\nYour MamaLead support ticket is ${ticket.id}. Our team will reply to this email address. You can reply to this confirmation if you need to add anything.\n\nMamaLead Support · mamalead.com`
+ return {subject:`We received your message · ${ticket.id}`,text,html:html(text)}
+}
 export async function deliverSupportEmail(env,payload,id,fetcher=fetch) {
  if(!env.RESEND_API_KEY||!env.EMAIL_FROM||!env.SUPPORT_INBOX)return null
  const response=await fetcher('https://api.resend.com/emails',{method:'POST',redirect:'error',signal:AbortSignal.timeout(20000),headers:{authorization:`Bearer ${env.RESEND_API_KEY}`,'content-type':'application/json','idempotency-key':id},body:JSON.stringify(payload)})

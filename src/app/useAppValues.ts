@@ -1,3 +1,4 @@
+import {useDataActions} from './useDataActions'
 import {plural} from '../../electron/plural'
 import { localDate } from '../../electron/local-date'
 import { coveragePins } from './coverage-pins'
@@ -57,12 +58,11 @@ import { useSocialPage, type SocialPage } from './useSocialPage'
 
 type SimpleExportSelection = { title: string; summary: string; request: Parameters<NonNullable<ReturnType<typeof localDb>>['exports']['write']>[0] }
 
-const DEFAULT_KEEP = [true, true, true, true, false, false, false, false, false, false]
 const VIEWS_WITH_REAL_DATA = ['leads', 'lists', 'runs', 'settings']
 type ChatMessage = { who: string; text: string; actions?: AssistDestination[]; retry?:string }
 const INITIAL_CHAT_MESSAGES: ChatMessage[] = []
-/** How many leads one page of the ledger draws before its own "Load 20 more" is offered. */
-const LEDGER_PAGE = 200
+/** Bound the All Leads DOM while keeping every saved lead searchable. */
+const LEDGER_PAGE = 100
 const NOTIFICATIONS_ENABLED_KEY = 'nafran.notifications.enabled'
 const EMAIL_VERIFY_AFTER_SCAN_KEY = 'nafran.email.verifyAfterScan'
 const LIFETIME_CHECKOUT_PENDING_KEY = 'nafran.billing.lifetimeCheckoutUntil'
@@ -338,6 +338,8 @@ export function useAppValues() {
   })
   const [supportPreset,setSupportPreset]=useState<{category?:import('../../electron/support-data').SupportCategory;message?:string}|null>(null)
   const [view, setView] = useState(firstAccountVisit ? 'settings' : 'dashboard')
+  const activeView=useRef(view)
+  activeView.current=view
   useEffect(() => { if (firstAccountVisit) { try { localStorage.setItem('mamalead.onboarding.accountShown','1') } catch {} } }, [firstAccountVisit])
   useEffect(()=>{document.title='MamaLead — '+(VIEW_NAMES[view] || 'Dashboard')},[view])
   const restoreMapsDraft = useRef(!localStorage.getItem('mamalead.maps.draft'))
@@ -420,7 +422,6 @@ export function useAppValues() {
   const [billingJump, setBillingJump] = useState<{ target: 'trial' | 'lifetime' | 'license' } | null>(null)
   const clearBillingJump = useCallback(() => setBillingJump(null), [])
   const [featureBilling, setFeatureBilling] = useState<Awaited<ReturnType<NonNullable<Window['desktop']>['billing']['status']>> | null>(null)
-  const showAccessPrompt = useCallback(() => { setReportsOpen(false); setMapsPrompt('license') }, [])
   const featureAccessAllowed = useCallback(() => {
     if (!featureBilling?.connected) return false
     const status = featureBilling
@@ -467,7 +468,12 @@ export function useAppValues() {
   const [expMode, setExpMode] = useState('leads')
   const [expScope, setExpScope] = useState(0)
   const [expCols, setExpCols] = useState(() => EXP_MODES.leads.cols.map((column) => ({ label: column[0], on: column[1] })))
-  const [keep, setKeep] = useState<boolean[]>(DEFAULT_KEEP)
+  const [keep, setKeep] = useState<string[]>([])
+  const [pickRows,setPickRows]=useState<StoredLead[]>([])
+  const [pickLimit,setPickLimit]=useState(50)
+  const [pickTotal,setPickTotal]=useState(0)
+  const [pickLoading,setPickLoading]=useState(false)
+  const [dataRevision,setDataRevision]=useState(0)
   const [listTarget, setListTarget] = useState('')
   const [newListName, setNewListName] = useState('')
   const [leadFilter, setLeadFilter] = useState(0)
@@ -498,6 +504,11 @@ export function useAppValues() {
   const notificationCenter=useNotifications(swWarn)
   useEffect(()=>{if(notificationsOpen)notificationCenter.markSeen()},[notificationsOpen,notificationCenter.markSeen])
   const {notifications,notify,markRead:markNotificationRead,markAllRead:markNotificationsRead,remove:deleteNotification}=notificationCenter
+  const accessPromptAt=useRef(0)
+  const showAccessPrompt=useCallback(()=>{
+    setReportsOpen(false);setMapsPrompt(null);setView('settings');setStab('acct');setBillingJump({target:'license'})
+    if(Date.now()-accessPromptAt.current>700){accessPromptAt.current=Date.now();notify('Enter your license key first','Paste your emailed licence key in Account to activate MamaLead.','info',undefined,{kind:'billing',action:{type:'view',view:'settings',tab:'acct'},actionLabel:'Enter license key'})}
+  },[notify])
 
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     state: 'disabled',
@@ -560,13 +571,14 @@ export function useAppValues() {
     // A revoked/expired key can also be caught by the main-process authorization gate.
     if (/Activate an active 1-day trial or lifetime|Activate a Decision Makers or lifetime key/i.test(message)) {
       setReportsOpen(false)
-      setMapsPrompt('license')
+      showAccessPrompt()
       return
     }
     window.clearTimeout(toastTimer.current)
     setToast(message)
     toastTimer.current = window.setTimeout(() => setToast(''), 2800)
-  }, [])
+  }, [showAccessPrompt])
+  const dataActions=useDataActions(db,flash)
 
   useEffect(()=>{
     const bridge=window.desktop?.notifications
@@ -934,7 +946,7 @@ export function useAppValues() {
     if (snapshot.running) return
     // Open the choice immediately using the current UI entitlement. The main process still
     // verifies the licence before either kind of run, including revocations and trial limits.
-    if (!featureAccessAllowed()) { setMapsPrompt('license'); return }
+    if (!featureAccessAllowed()) { showAccessPrompt(); return }
     if (typeof useGoogle !== 'boolean') {
       if (!scraperSettings.sessionMode) { setMapsPrompt('google'); return }
       useGoogle = scraperSettings.sessionMode === 'google'
@@ -1274,6 +1286,8 @@ export function useAppValues() {
   const [leadPageTotal, setLeadPageTotal] = useState(0)
   const [leadPageLoading, setLeadPageLoading] = useState(false)
   const [leadPageError, setLeadPageError] = useState('')
+  const [leadOffset,setLeadOffset]=useState(0)
+  const [leadSort,setLeadSort]=useState<'newest'|'score'|'rating'|'reviews'|'name'>('newest')
   const leadPageGeneration = useRef(0)
   const [leadStats, setLeadStats] = useState<LeadSummary | null>(null)
   // How much of the run log the Run History page is drawing, which its own "Older runs" raises.
@@ -1350,7 +1364,7 @@ export function useAppValues() {
       if (historyRequest === runsRequest.current) {setRuns(history);setRunStats(counts)}
       setDashboard(totals)
       if (request === rangeRequest.current) setRangeDashboard(periodTotals ? { range, totals: periodTotals } : null)
-      void refreshPhone()
+      if(activeView.current==='phone')void refreshPhone()
       // Website Lookup: the batches and the leads they created, read in one call.
       void Promise.all([db.imports.ledger(), db.imports.list(5000)])
         .then(async ([ledger, batches]) => {
@@ -1413,6 +1427,17 @@ export function useAppValues() {
       setReportsLoading(false)
     }
   }, [db])
+
+  useEffect(()=>db?.onChanged(()=>{setDataRevision(value=>value+1);void refreshLists();void reload()}),[db,refreshLists,reload])
+  useEffect(()=>{
+    if(!db || view!=='lists')return
+    let alive=true;setPickLoading(true)
+    void Promise.all([db.lists.list(),db.leads.list({limit:50,offset:pickLimit-50})]).then(([items,page])=>{
+      if(!alive)return;setLists(items);setPickRows(page.rows);setPickTotal(page.total)
+      if(pickLimit>50 && pickLimit-50>=page.total)setPickLimit(Math.max(50,Math.ceil(page.total/50)*50))
+    }).catch(error=>{if(alive)flash(error.message)}).finally(()=>{if(alive)setPickLoading(false)})
+    return ()=>{alive=false}
+  },[db,view,pickLimit,dataRevision,snapshot.revision,flash])
 
   const refreshUsage = useCallback(async () => {
     if (!db) return
@@ -1480,7 +1505,7 @@ export function useAppValues() {
       flash('Enter a name for your new list first.')
       return
     }
-    const chosen = snapshot.leads.filter((_, index) => keep[index])
+    const chosen = keep.map(id=>({id}))
     if (!chosen.length) {
       flash('Bookmark a few leads first — nothing selected yet.')
       return
@@ -1490,7 +1515,8 @@ export function useAppValues() {
       return
     }
     try {
-      const { id } = existing ?? await db.lists.create(listName)
+      const created=existing ? {id:existing.id,existed:false} : await db.lists.create(listName)
+      const {id}=created
       const { added, skipped } = await db.lists.add(
         id,
         chosen.map((lead) => lead.id),
@@ -1499,14 +1525,14 @@ export function useAppValues() {
       setListTarget(id)
       setNewListName('')
       flash(
-        added === 0
+        created.existed ? 'List already exists, opened it.' : added === 0
           ? `${skipped} already in ${listName} — nothing new to add.`
           : `${added} ${added === 1 ? 'lead' : 'leads'} saved into ${listName}${skipped ? ` · ${skipped} already there` : ''}.`,
       )
     } catch (error) {
       flash(error instanceof Error ? error.message : 'The leads could not be saved.')
     }
-  }, [db, keep, listTarget, lists, newListName, snapshot.leads, refreshLists, flash])
+  }, [db, keep, listTarget, lists, newListName, refreshLists, flash])
 
   /** Queues an enrichment pass over the leads still missing the kind of contact asked for. */
   const queueEnrichment = useCallback(
@@ -2160,11 +2186,12 @@ export function useAppValues() {
     setLeadPageError('')
     setLeadPageLoading(true)
     const timer = window.setTimeout(() => {
-      void db.leads.list({ limit: LEDGER_PAGE, filter: LEAD_FILTER_KEYS[leadFilter], search: leadSearch.trim() })
+      void db.leads.list({ limit: LEDGER_PAGE, offset:leadOffset, sort:leadSort, filter: LEAD_FILTER_KEYS[leadFilter], search: leadSearch.trim() })
         .then((page) => {
           if (generation !== leadPageGeneration.current) return
           setLeadPage(page.rows)
           setLeadPageTotal(page.total)
+          if(!page.rows.length && page.total && leadOffset>=page.total)setLeadOffset(Math.floor((page.total-1)/LEDGER_PAGE)*LEDGER_PAGE)
         })
         .catch((error: unknown) => {
           if (generation === leadPageGeneration.current) setLeadPageError(error instanceof Error ? error.message : 'Could not load leads.')
@@ -2177,24 +2204,9 @@ export function useAppValues() {
       window.clearTimeout(timer)
       leadPageGeneration.current += 1
     }
-  }, [db, view, leadFilter, leadSearch, snapshot.revision])
+  }, [db, view, leadFilter, leadSearch, leadOffset,leadSort,dataRevision,snapshot.revision])
 
-  const showMoreLeadRows = useCallback(async () => {
-    if (!db || leadPageLoading || leadPage.length >= leadPageTotal) return
-    const generation = leadPageGeneration.current
-    setLeadPageLoading(true)
-    try {
-      const page = await db.leads.list({ limit: 20, offset: leadPage.length, filter: LEAD_FILTER_KEYS[leadFilter], search: leadSearch.trim() })
-      if (generation !== leadPageGeneration.current) return
-      setLeadPage((current) => [...current, ...page.rows])
-      setLeadPageTotal(page.total)
-      setLeadPageError('')
-    } catch (error) {
-      if (generation === leadPageGeneration.current) setLeadPageError(error instanceof Error ? error.message : 'Could not load more leads.')
-    } finally {
-      if (generation === leadPageGeneration.current) setLeadPageLoading(false)
-    }
-  }, [db, leadPageLoading, leadPage.length, leadPageTotal, leadFilter, leadSearch])
+  const showMoreLeadRows=()=>{if(!leadPageLoading && leadOffset+leadPage.length<leadPageTotal)setLeadOffset(value=>value+LEDGER_PAGE)}
 
   // Recent leads are kept for Maps and Saved Lists previews; All Leads uses its own database page.
   const ledger = useMemo<LedgerLead[]>(() => snapshot.leads.map(leadToLedger), [snapshot.leads])
@@ -2207,7 +2219,8 @@ export function useAppValues() {
   const ledgerWithSocial = ledgerWith((lead) => lead.hasSocial)
   const ledgerFrom = (source: LedgerLead['source']) => ledgerWith((lead) => lead.source === source)
 
-  const kept = ledger.filter((_, index) => keep[index]).length
+  const pickLedger=pickRows.map(storedToLedger)
+  const kept = keep.length
   const found = snapshot.found
   const keywordCount = keywords.length
 
@@ -2585,7 +2598,7 @@ export function useAppValues() {
       leadStats?.noContact ?? 0,
     ][index]),
     on: leadFilter === index ? '1' : '0',
-    pick: () => setLeadFilter(index),
+    pick: () => {setLeadOffset(0);setLeadFilter(index)},
   }))
 
   /**
@@ -2729,7 +2742,7 @@ export function useAppValues() {
     if(view==='email'){emailFinder.reset();void email.refresh()}
     if(view==='phone'){phoneFinder.reset();void refreshPhone()}
     if(view==='social'){if(scan.phase!=='scanning')exitScan();social.refresh()}
-    if(['leads','email','phone','social','dashboard'].includes(view))void refreshLists()
+    if(['email','phone','social','dashboard'].includes(view))void refreshLists()
   },[view])
   const phoneTableRows=phoneFinder.rows.map(row=>{
     if(!row.hasNumber && !row.items.length)return {...row,phone:row.scanning?'Scanning…':row.lookupOutcome?.status==='pending'?'Waiting to scan…':row.lookupOutcome?.status==='error'?'Not checked':row.lookupOutcome?.status==='skipped'?'No website to scan':row.lookupOutcome?.status==='not-published'?'No phone published':'Not scanned yet'}
@@ -2763,9 +2776,9 @@ export function useAppValues() {
   const leadDays = useMemo(() => {
     const days = new Map<string, LedgerLead[]>()
     for (const lead of visibleLedger) {
-      const list = days.get(lead.saved) ?? []
+      const list = days.get(leadSort==='newest'?lead.saved:'Sorted results') ?? []
       list.push(lead)
-      days.set(lead.saved, list)
+      days.set(leadSort==='newest'?lead.saved:'Sorted results', list)
     }
     return Array.from(days, ([label, rows]) => ({
       label,
@@ -2783,7 +2796,7 @@ export function useAppValues() {
         saved: lead.saved,
       })),
     }))
-  }, [visibleLedger])
+  }, [visibleLedger,leadSort])
 
   /**
    * The lead-level answer to "why not this one": what blocked each lead that has no contact.
@@ -2958,13 +2971,12 @@ export function useAppValues() {
     goPhone: () => go('phone'),
     goRuns: () => go('runs'),
     goSettings: () => go('settings'),
-    showPlanWelcome: showPlanWelcome && !planWelcomeDismissed,
+    showPlanWelcome: view==='dashboard' && showPlanWelcome && !planWelcomeDismissed,
     dismissPlanWelcome: () => setPlanWelcomeDismissed(true),
     openWelcomeBilling: () => {
       go('settings')
-      setStab('plan')
       setPlanWelcomeDismissed(true)
-      setBillingJump({target:'trial'})
+      setStab('acct');setBillingJump({target:'license'})
     },
     goSocial: () => go('social'),
     logout,
@@ -3039,8 +3051,8 @@ export function useAppValues() {
     isStub: Boolean(LABELS[view]) && VIEWS_WITH_REAL_DATA.indexOf(view) < 0,
     isTone: email.isTone,
     isWebsite: view === 'website',
-    keepGood: () => setKeep(ledger.map((row) => row.score >= 90)),
-    keepNone: () => setKeep(ledger.map(() => false)),
+    keepGood: () => setKeep(pickLedger.filter(row=>row.score>=90).map(row=>row.id)),
+    keepNone: () => setKeep([]),
     keptBadge: `${kept} BOOKMARKED`,
     keptCount: kept,
     keywords: keywords.map((label, index) => ({
@@ -3216,7 +3228,7 @@ export function useAppValues() {
     })(),
     leadDays,
     leadQuery: leadSearch,
-    onLeadInput: (event: React.InputEvent<HTMLInputElement>) => setLeadSearch(event.currentTarget.value),
+    onLeadInput: (event: React.InputEvent<HTMLInputElement>) => {setLeadOffset(0);setLeadSearch(event.currentTarget.value)},
     leadSearchPlaceholder: `Search ${storedLeadCount} lead${storedLeadCount === 1 ? '' : 's'}…`,
     // The permanent-store card: what the workspace actually holds, and where it came from. The
     // provider split is the database's own count, so the bar and the legend beside it agree.
@@ -3467,10 +3479,12 @@ export function useAppValues() {
     // The All Leads footer counts the rows on screen against everything on file, which is more
     // than one page of them. The rows are read from the grouped list, so the footer and the table
     // cannot disagree about how many leads the page is showing.
+    dataActions,leadSort,setLeadSort:(sort:typeof leadSort)=>{setLeadOffset(0);setLeadSort(sort)},
+    leadPageIds:leadPage.map(row=>row.id),leadOffset,previousLeads:()=>setLeadOffset(value=>Math.max(0,value-LEDGER_PAGE)),
     leadsShowing: leadDays.reduce((total, day) => total + day.rows.length, 0),
     leadsOnFileTotal: leadPageTotal,
     leadsResultLabel: leadFilter || leadSearch.trim() ? 'matching leads' : 'saved leads',
-    leadsMoreOn: leadPage.length < leadPageTotal ? '1' : '',
+    leadsMoreOn: leadOffset+leadPage.length < leadPageTotal ? '1' : '',
     leadsLoading: leadPageLoading,
     leadsLoadError: leadPage.length ? leadPageError : '',
     showMoreLeads: showMoreLeadRows,
@@ -3501,10 +3515,11 @@ export function useAppValues() {
     listTotals: `${lists.length} ${lists.length === 1 ? 'list' : 'lists'} · ${lists.reduce((sum, list) => sum + list.members, 0)} leads`,
     // The picks are what the last run brought back, which is a page of the ledger rather than the
     // whole workspace: a card each for hundreds of leads would be a scroll nobody finishes.
-    pickCount: `${Math.min(ledger.length, 50)} ${Math.min(ledger.length, 50) === 1 ? 'place' : 'places'}`,
+    pickCount: `${pickLimit>50 ? 'Captures '+(pickLimit-49)+'–'+Math.min(pickLimit,pickTotal) : 'Latest '+pickRows.length} of ${pickTotal} captures`,
+    pickMore:pickLimit<pickTotal,pickLoading,showMorePicks:()=>setPickLimit(value=>value+50),pickPrevious:pickLimit>50,previousPicks:()=>setPickLimit(value=>Math.max(50,value-50)),
     lastRunLine: 'Recent saved captures · Maps searches and website imports',
     /** The total the bookmark counter is out of: the picks the page is showing. */
-    pickTotalLabel: `of ${Math.min(ledger.length, 50)} bookmarked`,
+    pickTotalLabel: `bookmarked · ${pickTotal} on file`,
     savedLists: lists.map((list) => ({
       id: list.id,
       name: list.name,
@@ -3630,7 +3645,7 @@ export function useAppValues() {
     runMedianHalf: `:${formatDuration(runStats.medianMs).split(':')[1] ?? '00'}`,
     runMedianBadge: 'Median',
     runCleanNum: String(runStats.clean),
-    runCleanTotal: `/${runStats.clean+runStats.failed}`,
+    runCleanTotal: `/${runStats.runs}`,
     runCleanBadge: `${runStats.stopped} stopped · ${runStats.failed} failed`,
     runClean:
       runStats.runs === 0
@@ -3644,6 +3659,7 @@ export function useAppValues() {
         const skipped = Number(batch.skipped ?? 0)
         const socialImport = batch.kind === 'social'
         return {
+          runId:'',
           when: `${shortDate(entry.at)} ${shortTimeFormat.format(new Date(entry.at))}`,
           keywords: socialImport ? 'Social profile import' : 'Website import',
           summary: socialImport ? `${source} supplied · ${added} added · ${skipped} skipped` : batch.legacy_counts ? `${plural(source,'website')} · Legacy import: detailed outcome counts unavailable` : `${plural(source,'website')} · ${added} new · ${Number(batch.reused ?? skipped)} reused · ${Number(batch.discarded ?? 0)} not saved${batch.job_id ? ` · ${batch.scan_found} with results · ${batch.scan_empty} without published contacts · ${batch.scan_failed} failed` : ''}`,
@@ -3670,6 +3686,7 @@ export function useAppValues() {
         height: `${Math.max(6, Math.round(((perPass || 1) / tallest) * 100 * (1 - index * 0.08)))}%`,
       }))
       return {
+        runId:run.id,
         when: `${shortDate(run.started_at)} ${shortTimeFormat.format(new Date(run.started_at))}`,
         keywords: keywords.length ? keywords.join(', ') : 'No keywords recorded',
         summary: `${run.provider === 'chromium-maps' ? 'Google Maps' : run.provider} · ${run.location || 'no location'} · ${found} · ${formatDuration(run.duration_ms ?? 0)} · ${keywords.length} keyword pass${keywords.length === 1 ? '' : 'es'}${run.error ? ` · ${userError(run.error)}` : ''}`,
@@ -3768,7 +3785,7 @@ export function useAppValues() {
     p6: found >= 6 ? 'y' : 'n',
     p7: found >= 7 ? 'y' : 'n',
     p8: found >= 8 ? 'y' : 'n',
-    picks: ledger.slice(0, 50).map((row, index) => ({
+    picks: pickLedger.map((row) => ({
       ini: row.ini,
       name: row.name,
       domain: row.domain,
@@ -3780,12 +3797,10 @@ export function useAppValues() {
       he: row.hasEmail ? '1' : '0',
       hs: row.hasSocial ? '1' : '0',
       note: row.note,
-      on: keep[index] ? '1' : '0',
+      on: keep.includes(row.id) ? '1' : '0',
       toggle: () =>
         setKeep((current) => {
-          const next = [...current]
-          next[index] = !next[index]
-          return next
+          return current.includes(row.id)?current.filter(id=>id!==row.id):[...current,row.id]
         }),
     })),
     runBadge: snapshot.running ? 'RUNNING' : view==='runs' ? `${filteredTimeline.filter(item=>item.kind==='maps').length} MAPS SEARCHES · ${filteredTimeline.filter(item=>item.kind==='import').length} IMPORT BATCHES` : `${runStats.runs} MAPS SEARCHES`,

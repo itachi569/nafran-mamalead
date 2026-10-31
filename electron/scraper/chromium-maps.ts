@@ -3,6 +3,7 @@ import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './browse
 import { parseAddress } from './location'
 import { leadId, ScraperBlockedError, ScraperUnavailableError, type ProgressSink, type ScraperProvider } from './provider'
 import type { Lead, ScrapeQuery } from './types'
+import {mapsHasNoResults,mapsResultsRelevant} from './relevance'
 
 interface RawCard {
   href: string
@@ -103,6 +104,12 @@ export class ChromiumMapsProvider implements ScraperProvider {
         await this.detectBlock(page, page.url())
 
         const cards = await this.collectCards(page, query, sink, keyword, index, total, leads.length)
+        const panel = await page.locator('[role="main"]').first().innerText().catch(()=>page.locator('body').innerText())
+        if(mapsHasNoResults(panel) || (cards.length && !mapsResultsRelevant(keyword,query.location,cards))) {
+          sink({status:'running',keyword,keywordIndex:index,keywordTotal:total,found:leads.length,target:runTarget,message:'No matching places for this query.'})
+          continue
+        }
+        if(!cards.length && !(await page.locator(PLACE_HEADING).count())) continue
         sink({
           status: 'running',
           keyword,

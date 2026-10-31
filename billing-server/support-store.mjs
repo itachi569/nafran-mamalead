@@ -5,7 +5,7 @@ export const supportSchema = [
  id text primary key, client_message_id text not null unique, installation_id text not null,
  license_last4 text, license_kind text, name text, email text not null, category text not null,
  subject text not null, message text not null, message_hash text not null, page text,
- meta text not null default '{}', ip_hash text, email_status text not null default 'pending',
+ meta text not null default '{}', ip_hash text, email_status text not null default 'pending', receipt_status text not null default 'legacy', source text not null default 'app',
  status text not null default 'open', admin_read_at text, last_activity_at text not null,
  closed_at text, created_at text not null)`,
  `create table if not exists billing_support_replies (
@@ -18,17 +18,21 @@ export const supportSchema = [
  'create index if not exists support_ip on billing_support_messages(ip_hash,created_at)',
  'create index if not exists support_thread on billing_support_replies(ticket_id,created_at)'
 ]
-const columns='id,client_message_id,installation_id,license_last4,license_kind,name,email,category,subject,message,message_hash,page,meta,ip_hash,email_status,status,admin_read_at,last_activity_at,closed_at,created_at'
+const columns='id,client_message_id,installation_id,license_last4,license_kind,name,email,category,subject,message,message_hash,page,meta,ip_hash,email_status,receipt_status,source,status,admin_read_at,last_activity_at,closed_at,created_at'
 const threadColumns='id,ticket_id,kind,body,from_status,to_status,actor,email_status,resend_id,client_action_id,created_at'
 const parse=row=>row?{...row,meta:typeof row.meta==='string'?JSON.parse(row.meta):row.meta}:null
 const DAY=86400000
 function limits(row) {
  const now=Date.parse(row.created_at)
+ if(row.source==='website')return [['ip_hash',row.ip_hash,60000,1],['ip_hash',row.ip_hash,3600000,5],['email',row.email,3600000,3]].map(([column,value,ms,cap])=>({column,value,ms,cap,since:new Date(now-ms).toISOString()}))
  return [ ['installation_id',row.installation_id,60000,1],['installation_id',row.installation_id,3600000,5],['installation_id',row.installation_id,DAY,20],['email',row.email,DAY,10],...(row.ip_hash?[['ip_hash',row.ip_hash,DAY,30]]:[]) ].map(([column,value,ms,cap])=>({column,value,ms,cap,since:new Date(now-ms).toISOString()}))
 }
 function values(row){return columns.split(',').map(k=>k==='meta'?JSON.stringify(row.meta):row[k]??null)}
 export function createSqliteSupportStore(db) {
  for(const sql of supportSchema)db.exec(sql)
+ const existing=new Set(db.prepare('PRAGMA table_info(billing_support_messages)').all().map(c=>c.name))
+ if(!existing.has('receipt_status'))db.exec("ALTER TABLE billing_support_messages ADD COLUMN receipt_status text not null default 'legacy'")
+ if(!existing.has('source'))db.exec("ALTER TABLE billing_support_messages ADD COLUMN source text not null default 'app'")
  return {
   async reserveSupportMessage(row){
    db.exec('BEGIN IMMEDIATE')
@@ -42,14 +46,15 @@ export function createSqliteSupportStore(db) {
     db.prepare(`insert into billing_support_messages (${columns}) values (${columns.split(',').map(()=>'?').join(',')})`).run(...values(row));db.exec('COMMIT');return {row,duplicate:false}
    }catch(e){db.exec('ROLLBACK');throw e}
   },
-  async pendingSupportMessages(before){return db.prepare(`select ${columns} from billing_support_messages where email_status != 'sent' and created_at < ? order by created_at limit 10`).all(before).map(parse)},
+  async pendingSupportMessages(before){return db.prepare(`select ${columns} from billing_support_messages where (email_status != 'sent' or receipt_status in ('pending','failed')) and created_at < ? order by created_at limit 10`).all(before).map(parse)},
   async markSupportEmail(id,status){db.prepare('update billing_support_messages set email_status=? where id=?').run(status,id)},
+  async markSupportReceipt(id,status){db.prepare('update billing_support_messages set receipt_status=? where id=?').run(status,id)},
   async supportByClientId(id){return parse(db.prepare(`select ${columns} from billing_support_messages where client_message_id=?`).get(id))}
  }
 }
 export function createNeonSupportStore(sql) {
  let readyPromise
- const ready=()=>readyPromise??=(async()=>{for(const ddl of supportSchema)await sql.query(ddl)})().catch(e=>{readyPromise=null;throw e})
+ const ready=()=>readyPromise??=(async()=>{for(const ddl of supportSchema)await sql.query(ddl);await sql.query("ALTER TABLE billing_support_messages ADD COLUMN IF NOT EXISTS receipt_status text not null default 'legacy'");await sql.query("ALTER TABLE billing_support_messages ADD COLUMN IF NOT EXISTS source text not null default 'app'")})().catch(e=>{readyPromise=null;throw e})
  return {
   async reserveSupportMessage(row){
    await ready()
@@ -68,8 +73,9 @@ export function createNeonSupportStore(sql) {
    if(wait)return {retryAfterSeconds:wait}
    throw new SupportError(409,'Please retry your message; a new request ID is needed.')
   },
-  async pendingSupportMessages(before){await ready();return (await sql.query(`select ${columns} from billing_support_messages where email_status != 'sent' and created_at < $1 order by created_at limit 10`,[before])).map(parse)},
+  async pendingSupportMessages(before){await ready();return (await sql.query(`select ${columns} from billing_support_messages where (email_status != 'sent' or receipt_status in ('pending','failed')) and created_at < $1 order by created_at limit 10`,[before])).map(parse)},
   async markSupportEmail(id,status){await ready();await sql`update billing_support_messages set email_status=${status} where id=${id}`},
+  async markSupportReceipt(id,status){await ready();await sql`update billing_support_messages set receipt_status=${status} where id=${id}`},
   async supportByClientId(id){await ready();return parse((await sql.query(`select ${columns} from billing_support_messages where client_message_id=$1`,[id]))[0])}
  }
 }

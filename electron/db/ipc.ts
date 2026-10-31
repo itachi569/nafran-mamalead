@@ -18,6 +18,10 @@ export type LocalResult<T> = T | LocalError
 
 /** Names of the invokable operations, used to type the preload bridge. */
 export const LOCAL_CHANNELS = [
+  'db:leads:delete',
+  'db:leads:update',
+  'db:runs:delete',
+  'db:lists:rename',
   'db:workspace',
   'db:usage',
   'db:stats',
@@ -111,8 +115,12 @@ export function registerLocalDatabase(
     'db:dashboard': (_repo, _workspace, payload: { days?: 7 | 30 | null } = {}) =>
       repository.dashboard(workspace.id, payload.days === 7 || payload.days === 30 ? payload.days : null),
 
-    'db:leads:list': (_repo, _workspace, payload: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string } = {}) =>
+    'db:leads:list': (_repo, _workspace, payload: { limit?: number; offset?: number; filter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string; sort?: 'newest' | 'score' | 'rating' | 'reviews' | 'name' } = {}) =>
       repository.listLeads(workspace.id, payload),
+    'db:leads:delete': (_repo,ws,payload) => repository.deleteLeads(ws,payload.ids),
+    'db:leads:update': (_repo,ws,payload) => repository.updateLead(ws,payload.id,payload.patch),
+    'db:runs:delete': (_repo,ws,payload) => repository.deleteRun(ws,payload.id),
+    'db:lists:rename': (_repo,ws,payload) => repository.renameList(ws,payload.id,payload.name),
     'db:leads:get': (_repo, _workspace, payload: { id: string }) => repository.getLead(workspace.id, payload.id),
     'db:leads:summary': () => repository.leadSummary(workspace.id),
     'db:leads:bookmark': (_repo, _workspace, payload: { id: string; bookmarked: boolean }) => {
@@ -234,7 +242,7 @@ export function registerLocalDatabase(
       repository.recordExport({ ...payload, workspaceId: workspace.id }),
     // The only handler that reaches the file system, so it is the only one that needs the window
     // its save dialog should hang off.
-    'db:exports:write': async (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'website'; lookupJobId?: string; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string }, event) => {
+    'db:exports:write': async (repo, current, payload: { kind: 'leads' | 'runs' | 'invoices' | 'profiles' | 'website'; lookupJobId?: string; limit: number; delimiter: string; columns: string[]; fileName: string; format?: 'csv' | 'xlsx' | 'pdf'; leadIds?: string[]; leadFilter?: 'all' | 'phone' | 'email' | 'social' | 'missing'; search?: string; runId?: string; sort?: 'newest' | 'score' | 'rating' | 'reviews' | 'name' }, event) => {
       try {
         const result=await writeExport(BrowserWindow.fromWebContents(event.sender),repo,current,payload)
         if(result)event.sender.send('notifications:export-saved',{...result,eventId:randomUUID(),kind:payload.kind})
@@ -255,7 +263,11 @@ export function registerLocalDatabase(
         await authorize?.(channel, payload)
         // Success is the bare value and failure is { error }, which is unambiguous because no
         // handler ever returns an object with only an `error` key.
-        return await handlers[channel](repository, workspace.id, payload, event)
+        const result = await handlers[channel](repository, workspace.id, payload, event)
+        if (/^db:(lists:(create|delete|rename|add|remove)|leads:(update|delete|bookmark)|runs:delete)$/.test(channel)) {
+          for(const window of BrowserWindow.getAllWindows()) if(!window.isDestroyed()) window.webContents.send('db:changed')
+        }
+        return result
       } catch (error) {
         return { error: error instanceof Error ? error.message : String(error) }
       }

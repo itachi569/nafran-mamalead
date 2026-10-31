@@ -5,7 +5,7 @@ export function createAdminSupport(db,{env=process.env,fetch:fetcher=fetch}={}) 
  const active=new Map()
  const configured=()=>Boolean(env.RESEND_API_KEY&&env.EMAIL_FROM&&env.SUPPORT_INBOX)
  async function perform(kind,input) {
-  if(kind==='config')return {configured:configured()}
+  if(kind==='config')return {configured:configured(),emailConfigured:configured()}
   const p=validateSupportAction(kind,input),actor=String(input.actor || 'owner-token').slice(0,254)
   const ticket=db.prepare('select id,email,subject,message,status from billing_support_messages where id=?').get(p.id)
   if(!ticket)throw new SupportError(404,'Support ticket not found.')

@@ -680,8 +680,15 @@ function cleanEmails(values: string[]): string[] {
  * be judged by the same rule that decides whether to store it.
  */
 export function isUsableEmail(value: string): boolean {
+  value=value.trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(value)) return false
   if (EMAIL_NOISE.test(value)) return false
+  const [local,domain]=value.split('@')
+  if (/^(?:test|yourcompany|domain|mysite|website)\.com$/.test(domain) || /^example\./.test(domain)) return false
+  if (/^(?:yourname|your\.name|username|someone|name|email|user|abc|xyz)$/.test(local)) return false
+  // Sample names in free-mail/demo templates; do not discard real named company contacts.
+  if (/^(?:john\.?doe|jane\.?doe|test)$/.test(local) && /^(?:gmail|yahoo|hotmail|outlook|company|email)\.com$/.test(domain)) return false
+  if (domain==='company.com' && /^(?:info|contact|hello|sales|support)$/.test(local)) return false
   // Obfuscated addresses and asset filenames occasionally look like mailboxes.
   return !/\.(png|jpe?g|gif|svg|webp|css|js)$/i.test(value)
 }

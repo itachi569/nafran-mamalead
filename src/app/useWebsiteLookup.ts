@@ -76,7 +76,7 @@ export function useWebsiteLookup(db: LocalApi | null, allowed: () => boolean, on
     lock.current=true;setPreparing(true);generation.current++
     try {
       savePendingImport('lookup-page', all.slice(WEBSITE_IMPORT_LIMIT))
-      const next=await db.lookup.start(sites,options)
+      const next=await db.lookup.start(all.length>WEBSITE_IMPORT_LIMIT ? sites : (lines ?? input.split(/\r?\n/)),options)
       if (!alive.current) return false
       currentJob.current=next.jobId;active.current.add(next.jobId);finishCallbacks.current.set(next.jobId,callbacks.current.onFinished);setSession(next);setSelected([]);setInput(all.slice(WEBSITE_IMPORT_LIMIT).join('\n'))
       void window.desktop?.enrichment.prioritize(next.jobId).catch(err=>{if(alive.current){setError(err instanceof Error ? err.message : 'The scan could not start.');void refresh()}})

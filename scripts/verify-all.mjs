@@ -22,7 +22,7 @@ const SUITES = [
 // The suites that launch the built app themselves, on a throwaway copy of the data folder. They
 // need no debug port and are what covers the pages the design drives: the Social Profiles page,
 // the three finder pages and their scan, and every page that states a figure about the workspace.
-const SELF_LAUNCHING = ['verify-social-page.cjs', 'verify-finder-scan.cjs', 'verify-data-pages.cjs', 'verify-2000-leads.cjs', 'verify-local-settings-phone.cjs', 'verify-updates.cjs', 'test-social-import.cjs', 'test-database.cjs']
+const SELF_LAUNCHING = ['verify-social-page.cjs', 'verify-finder-scan.cjs', 'verify-data-pages.cjs', 'verify-2000-leads.cjs', 'verify-local-settings-phone.cjs', 'verify-updates.cjs', 'test-social-import.cjs', 'test-email-extraction.cjs', 'test-website-retry.cjs', 'test-email-validity-reliability.cjs', 'test-database.cjs','test-app-sections.cjs','test-maps-relevance.cjs','verify-app-sections.cjs']
 
 // The app has to be listening before the first suite connects.
 const port = 9222

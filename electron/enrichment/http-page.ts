@@ -1,6 +1,7 @@
 import { cleanWebsiteUrl } from '../website-domain'
 import { userError } from '../user-errors'
 import {chromeUserAgent} from '../scraper/browser'
+import {setTimeout as delay} from 'node:timers/promises'
 
 /** Read a public page once in Chromium; login/CAPTCHA/access-denied pages remain failures. */
 async function readRenderedPage(url:string,signal:AbortSignal):Promise<{url:string;html:string}> {
@@ -47,13 +48,14 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
   let recordedFailure = false
   let renderedFallbackUrl: string | null = null
   for (let index = 0; index < variants.length && !options.signal.aborted; index++) {
-    for (let attempt = 0; attempt < 1; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       let url = variants[index]
       // Give the first homepage enough time for a slow TLS/server response. One deadline covers
       // redirects and the body too; alternate hosts and optional pages keep a short budget.
       const timeoutMs = options.home && index === 0 ? Math.max(12_000, options.timeoutMs ?? 0) : options.timeoutMs ?? 5000
       const deadline = AbortSignal.timeout(Math.min(timeoutMs, options.home && index > 0 ? 5000 : timeoutMs))
       const signal = AbortSignal.any([options.signal, deadline])
+      let retryTemporary = false
       try {
         for (let redirects = 0; redirects < 5; redirects++) {
           const response = await fetch(url, { redirect:'manual', signal, headers:{accept:'text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8','accept-language':'en-US,en;q=0.9','user-agent':chromeUserAgent()} })
@@ -65,6 +67,15 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
           }
           if (!response.ok) {
             await response.body?.cancel()
+            if (attempt === 0 && [502,503,504].includes(response.status)) {
+              const retryAfter = response.headers.get('retry-after')
+              const seconds = retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter)*1000 : retryAfter ? Date.parse(retryAfter)-Date.now() : 1500
+              // Respect longer Retry-After without holding a scan open or retrying early.
+              if (Number.isFinite(seconds) && seconds > 2000) throw Object.assign(new Error(`${initial.host} is temporarily unavailable. Retry this website later.`),{stopVariants:true})
+              await delay(Math.max(0,Number.isFinite(seconds)?seconds:1500),undefined,{signal:options.signal})
+              retryTemporary = true
+              break
+            }
             // Retry a temporary outage over HTTP first. Starting Chromium here used up
             // the entire site budget before a healthy alternate hostname could respond.
             if(options.renderFallback && options.home && response.status===503)renderedFallbackUrl ??= url
@@ -85,6 +96,7 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
           } finally { await reader.cancel().catch(()=>undefined) }
           return {url:final,html:html+decoder.decode()}
         }
+        if (retryTemporary) continue
         throw new Error('The website redirected too many times. Check its current address.')
       } catch (error) {
         if (options.signal.aborted) throw options.signal.reason
