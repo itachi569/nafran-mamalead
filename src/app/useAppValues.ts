@@ -1,3 +1,5 @@
+import { localDate } from '../../electron/local-date'
+import { coveragePins } from './coverage-pins'
 import {userError} from '../../electron/user-errors'
 import { contactQuality } from '../../electron/lead-quality'
 import {parseBulkKeywords, keywordMergePreview, readMapsDraft, MAX_MAP_KEYWORDS} from './map-keywords'
@@ -97,7 +99,7 @@ function notificationTime(at: string): string {
 
 // Contact completeness, in the same spirit as the reference's score column: a lead with a
 // website, a phone number, a rating and real review volume is worth contacting first.
-function scoreLead(lead: Lead): number { return contactQuality(lead) }
+function scoreLead(lead: Lead): number { return lead.score ?? contactQuality(lead) }
 
 function formatDuration(ms: number): string {
   const total = Math.max(0, Math.round(ms / 1000))
@@ -330,7 +332,11 @@ export function useAppValues() {
   const email = useEmailPage()
   const db = useMemo(() => localDb(), [])
 
-  const [view, setView] = useState('dashboard')
+  const [firstAccountVisit] = useState(() => {
+    try { return !!window.desktop && !localStorage.getItem('mamalead.maps.draft') && !localStorage.getItem('mamalead.onboarding.accountShown') } catch { return false }
+  })
+  const [view, setView] = useState(firstAccountVisit ? 'settings' : 'dashboard')
+  useEffect(() => { if (firstAccountVisit) { try { localStorage.setItem('mamalead.onboarding.accountShown','1') } catch {} } }, [firstAccountVisit])
   useEffect(()=>{document.title='MamaLead — '+(VIEW_NAMES[view] || 'Dashboard')},[view])
   const restoreMapsDraft = useRef(!localStorage.getItem('mamalead.maps.draft'))
   const [range, setRange] = useState<'7 Days' | '30 Days' | 'All Time'>('30 Days')
@@ -433,7 +439,7 @@ export function useAppValues() {
   useEffect(() => { try { localStorage.setItem('mamalead.maps.draft',JSON.stringify({keywords,max:maxResults,location:mapsLocation})) } catch {} }, [keywords,maxResults,mapsLocation])
   const [bulkKeywordsOpen, setBulkKeywordsOpen] = useState(false)
   const [bulkKeywordsText, setBulkKeywordsText] = useState('')
-  const [stab, setStab] = useState('plan')
+  const [stab, setStab] = useState(firstAccountVisit ? 'acct' : 'plan')
   const [lifetimeCheckoutUntil, setLifetimeCheckoutUntil] = useState(readPendingLifetimeCheckout)
   const [licenseNextStep, setLicenseNextStep] = useState('')
   const [swWarn, setSwWarn] = useState(readNotificationsEnabled)
@@ -444,7 +450,7 @@ export function useAppValues() {
   // only once there is something to import.
   const impText = useRef('')
   // Derive counts from the visible text, so closing/clearing never leaves an old scan count.
-  const impPreview = useMemo(()=>importPreview(impValue),[impValue])
+  const impPreview = useMemo(()=>importPreview(impValue,view==='social'),[impValue,view])
   const impSites = impPreview.sites.length
   const impProfiles = view === 'social' ? impPreview.profiles.length : 0
   const impCount = impSites + impProfiles
@@ -488,6 +494,7 @@ export function useAppValues() {
   const [toast, setToast] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const notificationCenter=useNotifications(swWarn)
+  useEffect(()=>{if(notificationsOpen)notificationCenter.markSeen()},[notificationsOpen,notificationCenter.markSeen])
   const {notifications,notify,markRead:markNotificationRead,markAllRead:markNotificationsRead,remove:deleteNotification}=notificationCenter
 
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
@@ -1277,7 +1284,7 @@ export function useAppValues() {
   const [runs, setRuns] = useState<StoredRun[]>([])
   useEffect(()=>{if(restoreMapsDraft.current && runs.length){restoreMapsDraft.current=false;setMapsLocation(runs[0].location || '')}},[runs])
   const runsRequest = useRef(0)
-  const [runStats, setRunStats] = useState({ runs: 0, clean: 0, places: 0, medianMs: 0 })
+  const [runStats, setRunStats] = useState({ runs: 0, clean: 0, failed: 0, stopped: 0, places: 0, medianMs: 0 })
   const [dashboard, setDashboard] = useState<DashboardTotals | null>(null)
   const [rangeDashboard, setRangeDashboard] = useState<{ range: typeof range; totals: DashboardTotals } | null>(null)
   const rangeRequest = useRef(0)
@@ -1386,7 +1393,7 @@ export function useAppValues() {
     }
   }, [db, refreshPhone, range])
 
-  const websiteLookup = useWebsiteLookup(db, () => { if (!featureAccessAllowed()) { showAccessPrompt(); return false }; return true }, session => { void refreshLists(); email.refresh(); social.refresh(); reload(); if(emailAutoVerifyOn && session.fields.email && session.status==='done')void verifyEmailValidity(session.rows.filter(row=>row.emails.length>0).map(row=>row.leadId)); const failed=session.rows.filter(row=>row.status==='failed').length; notify(failed?'Website lookup needs attention':'Website lookup finished',session.rows.length+' websites scanned'+(failed?' · '+failed+' need a retry':'. Review the published business contacts.'),failed?'info':'success',undefined,{kind:failed?'warn':'import',chips:[session.rows.length+' sites',session.rows.filter(row=>row.emails.length || row.phones.length || row.socials.length || row.address).length+' with details'],action:{type:'view',view:'website'},actionLabel:'Open Website Lookup',eventKey:'enrichment:'+session.jobId+':'+session.status}) })
+  const websiteLookup = useWebsiteLookup(db, () => { if (!featureAccessAllowed()) { showAccessPrompt(); return false }; return true }, session => { void refreshLists(); email.refresh(); social.refresh(); reload(); const failed=session.rows.filter(row=>row.status==='failed').length; notify(failed?'Website lookup needs attention':'Website lookup finished',session.rows.length+' websites scanned'+(failed?' · '+failed+' need a retry':'. Review the published business contacts.'),failed?'info':'success',undefined,{kind:failed?'warn':'import',chips:[session.rows.length+' sites',session.rows.filter(row=>row.emails.length || row.phones.length || row.socials.length || row.address).length+' with details'],action:{type:'view',view:'website'},actionLabel:'Open Website Lookup',eventKey:'enrichment:'+session.jobId+':'+session.status}) })
 
   const refreshReports = useCallback(async () => {
     const historyRequest=++runsRequest.current
@@ -1942,7 +1949,7 @@ export function useAppValues() {
     if(!count){flash('There are no results to export.');return}
     setExportSelection({ title, summary: exportKind === 'invoices' ? description : `${count.toLocaleString()} ${description} · choose a file format`, request: {
       kind: exportKind, limit: count, delimiter: 'csv', columns,
-      fileName: `${stem}-${new Date().toISOString().slice(0,10)}`,
+      fileName: `${stem}-${localDate()}`,
       ...(leadIds !== undefined ? {leadIds} : {}),
       ...(leadFilterKey ? {leadFilter:leadFilterKey,search} : {}),
     } })
@@ -1971,7 +1978,7 @@ export function useAppValues() {
       if(request!==savedMapsExportRequest.current)return
       if(!total)throw new Error('This saved search has no leads to export.')
       const place=run.location || 'saved search'
-      const date=new Date(run.started_at).toISOString().slice(0,10)
+      const date=localDate(run.started_at)
       const stem=place.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,60) || 'saved-search'
       setExportSelection({title:'Export saved Google Maps search',summary:place+' · '+termsOfRun(run)+' · '+total.toLocaleString()+' saved businesses · '+shortDateTime(run.started_at),request:{
         kind:'leads',limit:total,runId:id,delimiter:'csv',columns:['Business name','Domain','Phone','Email','Address','Rating','Review count','Socials','Source','Saved date'],fileName:'google-maps-'+stem+'-'+date,
@@ -2431,8 +2438,8 @@ export function useAppValues() {
     dashInsight:
       selectedDashboard && selectedDashboard.total
         ? selectedDashboard.noEmail
-          ? `${selectedDashboard.noEmail} of ${selectedDashboard.total} leads have a website but no address on file. A pass over their sites would lift email coverage from ${dashEmailPct}% towards ${dashShare(selectedDashboard.withWebsite)}%.`
-          : `Every lead with a website has an address on file.${biggestPlatform ? ` ${biggestPlatform.leads} of ${selectedDashboard.total} carry a ${biggestPlatform.platform} profile.` : ''}`
+          ? `${selectedDashboard.noEmail} of ${selectedDashboard.total} leads have a website but no email address on file. A pass over their sites would lift email coverage from ${dashEmailPct}% towards ${dashShare(selectedDashboard.withWebsite)}%.`
+          : `Every lead with a website has an email address on file.${biggestPlatform ? ` ${biggestPlatform.leads} of ${selectedDashboard.total} carry a ${biggestPlatform.platform} profile.` : ''}`
         : 'Run a Google Maps scrape and this panel reports what was found.',
     dashNoEmail: selectedDashboard?.noEmail ?? 0,
     dashNoPhone: selectedDashboard?.noPhone ?? 0,
@@ -2937,7 +2944,7 @@ export function useAppValues() {
     verifyEmailValidity: () => void verifyEmailValidity(),
     verifyEmailLeadValidity: (leadIds:string[]) => void verifyEmailValidity(leadIds),
     // The next run shares one total cap across all keywords and selected areas.
-    foundLabel: `${mapsDisplayed.filter(lead=>Number.isFinite(lead.latitude)&&Number.isFinite(lead.longitude)).length} of ${mapsDisplayed.length} with coordinates · ${Math.min(8,mapsDisplayed.filter(lead=>Number.isFinite(lead.latitude)&&Number.isFinite(lead.longitude)).length)} shown`,
+    foundLabel: `${mapsDisplayed.filter(lead=>Number.isFinite(lead.latitude)&&Number.isFinite(lead.longitude)).length} of ${mapsDisplayed.length} with coordinates · ${coveragePins(mapsDisplayed).length} markers`,
     goDashboard: () => go('dashboard'),
 
     goEmail: () => go('email'),
@@ -2993,9 +3000,9 @@ export function useAppValues() {
       const field = document.querySelector<HTMLTextAreaElement>('[data-imptext="1"]')
       const raw = field?.value ?? impText.current
       impText.current = raw
-      const parsed = importPreview(raw)
+      const parsed = importPreview(raw,view==='social')
       const all = [...parsed.sites, ...(view === 'social' ? parsed.profiles : [])]
-      const batch = importPreview(all.slice(0,WEBSITE_IMPORT_LIMIT).join('\n'))
+      const batch = importPreview(all.slice(0,WEBSITE_IMPORT_LIMIT).join('\n'),view==='social')
       const {profiles:profileLines,sites:siteLines} = batch
       try { savePendingImport(view, all.slice(WEBSITE_IMPORT_LIMIT)) }
       catch { flash('The remaining websites could not be saved. Split this list into batches of 500 before scanning.'); return }
@@ -3449,67 +3456,9 @@ export function useAppValues() {
     mapsEmailPct: `${mapsPct('email')}%`,
     mapsEmailPctNumber: mapsPct('email'),
     mapsEmailBars: mapsBars('email', '#D5DECB'),
-    // The map's pins take the businesses this run captured. Where a lead carries coordinates the
-    // pin is plotted from them, so the shape on the map is the searched area itself — Lahore pins
-    // land where Lahore is, and Manchester pins where Manchester is. Leads without coordinates
-    // (an import, or a listing Google gave no position for) are spread on a fixed grid instead.
-    mapsPinSummary: `Showing ${Math.min(8,mapsDisplayed.filter(lead=>typeof lead.latitude==='number'&&typeof lead.longitude==='number').length)} pins of ${mapsDisplayed.length} saved results. All businesses are in Results below.`,
+    mapsPinSummary: `${mapsDisplayed.filter(lead=>typeof lead.latitude==='number'&&typeof lead.longitude==='number').length} of ${mapsDisplayed.length} results have coordinates. Nearby locations are grouped; hover or focus a marker to see all names.`,
     nextMapsLocation: !snapshot.running && mapsLocation.trim() && mapsLocation.trim().toLowerCase()!==((mapsRunId==='latest'?runs[0]:runs.find(run=>run.id===mapsRunId))?.location || '').toLowerCase() ? mapsLocation.trim() : '',
-    mapsPins: (() => {
-      const placed = mapsDisplayed.filter(lead=>typeof lead.latitude==='number'&&typeof lead.longitude==='number').slice(0, 8)
-      const points = placed.filter(
-        (lead): lead is typeof lead & { latitude: number; longitude: number } =>
-          typeof lead.latitude === 'number' && typeof lead.longitude === 'number',
-      )
-      const spread = [22, 34, 46, 58, 70, 30, 54, 42]
-      const drop = [38, 26, 52, 34, 60, 68, 74, 46]
-      let bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number } | null = null
-      if (points.length > 1) {
-        const lats = points.map((lead) => lead.latitude)
-        const lngs = points.map((lead) => lead.longitude)
-        bounds = {
-          minLat: Math.min(...lats),
-          maxLat: Math.max(...lats),
-          minLng: Math.min(...lngs),
-          maxLng: Math.max(...lngs),
-        }
-      }
-      /** Keeps a pin inside the plot and away from the very edge, where its label would clip. */
-      const inset = (share: number) => `${Math.min(72, Math.max(8, Math.round(share * 100)))}%`
-      const usedPositions:{x:number;y:number}[]=[]
-      return placed.map((lead, index) => {
-        let x = `${spread[index] ?? 50}%`
-        let y = `${drop[index] ?? 50}%`
-        if (bounds && typeof lead.latitude === 'number' && typeof lead.longitude === 'number') {
-          // A single point has no extent to scale against, so it sits at the centre of the plot.
-          const lngSpan = bounds.maxLng - bounds.minLng
-          const latSpan = bounds.maxLat - bounds.minLat
-          const across = lngSpan > 0 ? (lead.longitude - bounds.minLng) / lngSpan : 0.5
-          // Latitude grows northwards while the plot grows downwards, so the axis is flipped.
-          const down = latSpan > 0 ? 1 - (lead.latitude - bounds.minLat) / latSpan : 0.5
-          x = inset(across * 0.84 + 0.08)
-          y = inset(down * 0.78 + 0.11)
-        }
-        let px=parseFloat(x),py=parseFloat(y)
-        for(let attempt=0;attempt<8 && usedPositions.some(point=>Math.abs(point.x-px)<24 && Math.abs(point.y-py)<12);attempt++){py=18+(index*13+attempt*13)%65;px=Math.min(74,Math.max(24,px))}
-        usedPositions.push({x:px,y:py});x=px+'%';y=py+'%'
-        const row = leadToLedger(lead)
-        return {
-          // The stylesheet hides every pin until `data-on="y"`, which is what fades it in as the
-          // place lands. Any other truthy value leaves the plot empty.
-          on: 'y',
-          // The running panel reveals its pins one at a time as places land, which is what the
-          // reference's p1…p8 flags did; the map shows every pin it has.
-          reveal: index < found ? 'y' : 'n',
-          // The reference alternates its pill colours; the map keeps that alternation.
-          color: index % 4 === 0 || index % 4 === 3 ? '#1C1C1C' : '#C8D5BB',
-          ini: row.ini,
-          name: lead.name,
-          x,
-          y,
-        }
-      })
-    })(),
+    mapsPins: coveragePins(mapsDisplayed),
     ledgerTotal: storedLeadCount,
     // The All Leads footer counts the rows on screen against everything on file, which is more
     // than one page of them. The rows are read from the grouped list, so the footer and the table
@@ -3637,7 +3586,7 @@ export function useAppValues() {
     importRows: imports.rows,
     websiteRecentDomains: imports.rows.slice(0, 5).map((row) => row.domain),
     websitePreview: imports.preview,
-    importStatus: enrichmentActivity.find(item=>item.kind==='website' && item.status==='running')?.message || (imports.websiteBatches.length ? `${imports.websiteBatches.length} website import runs on file` : 'Nothing imported yet'),
+    importStatus: enrichmentActivity.find(item=>item.kind==='website' && item.status==='running')?.message || (imports.websiteBatches.length ? `${imports.websiteBatches.length} website import batches on file` : 'Nothing imported yet'),
     importSummary: imports.websiteBatches.length
       ? (() => {
           const latest = imports.websiteBatches[0] as { source_count?: number; added?: number; skipped?: number }
@@ -3677,12 +3626,12 @@ export function useAppValues() {
     runMedianHalf: `:${formatDuration(runStats.medianMs).split(':')[1] ?? '00'}`,
     runMedianBadge: 'Median',
     runCleanNum: String(runStats.clean),
-    runCleanTotal: `/${runStats.runs}`,
-    runCleanBadge: runStats.runs ? `${Math.round((runStats.clean / runStats.runs) * 100)}%` : '—',
+    runCleanTotal: `/${runStats.clean+runStats.failed}`,
+    runCleanBadge: `${runStats.stopped} stopped · ${runStats.failed} failed`,
     runClean:
       runStats.runs === 0
         ? '—'
-        : `${runStats.clean}/${runStats.runs} · ${Math.round((runStats.clean / runStats.runs) * 100)}%`,
+        : `${runStats.clean} completed · ${runStats.stopped} stopped · ${runStats.failed} failed`,
     runRows: filteredTimeline.slice(0, runsLimit).map((entry) => {
       if (entry.kind === 'import') {
         const batch = entry.batch
@@ -3693,9 +3642,9 @@ export function useAppValues() {
         return {
           when: `${shortDate(entry.at)} ${shortTimeFormat.format(new Date(entry.at))}`,
           keywords: socialImport ? 'Social profile import' : 'Website import',
-          summary: `${source} supplied · ${added} added · ${skipped} skipped`,
-          isDone: true, isFailed: false, isCancelled: false,
-          done: 'Imported', failed: 'Failed', cancelled: 'Cancelled',
+          summary: socialImport ? `${source} supplied · ${added} added · ${skipped} skipped` : `${source} websites · ${added} new · ${Number(batch.reused ?? skipped)} reused${batch.job_id ? ` · ${batch.scan_found} with results · ${batch.scan_empty} without published contacts · ${batch.scan_failed} failed` : ''}`,
+          isDone: !['failed','stopped','running','queued'].includes(String(batch.scan_status)), isFailed: batch.scan_status==='failed', isCancelled: ['stopped','running','queued'].includes(String(batch.scan_status)),
+          done: batch.job_id ? Number(batch.scan_failed)>0 ? 'Completed with errors' : 'Completed' : 'Imported', failed: 'Scan failed', cancelled: batch.scan_status==='stopped' ? 'Stopped by you' : batch.scan_status==='queued' ? 'Queued' : 'Scanning',
           bars: [{ height: `${Math.max(6, Math.round((added / Math.max(1, source)) * 100))}%` }],
           actionLabel: socialImport ? 'Open Social' : 'Open Lookup',
           open: () => go(socialImport ? 'social' : 'website'),
@@ -3829,7 +3778,7 @@ export function useAppValues() {
           return next
         }),
     })),
-    runBadge: snapshot.running ? 'RUNNING' : view==='runs' ? `${filteredTimeline.length} RECORDS` : `${runStats.runs} RUNS`,
+    runBadge: snapshot.running ? 'RUNNING' : view==='runs' ? `${filteredTimeline.filter(item=>item.kind==='maps').length} MAPS SEARCHES · ${filteredTimeline.filter(item=>item.kind==='import').length} IMPORT BATCHES` : `${runStats.runs} MAPS SEARCHES`,
     runChips: [
       ['All activity', timeline.length],
       ['Maps', runs.length],

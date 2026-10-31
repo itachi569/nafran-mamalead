@@ -1,3 +1,4 @@
+import {localDate} from '../../electron/local-date'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LocalApi } from '../types/desktop'
 import { DEFAULT_LOOKUP_FIELDS, type WebsiteLookupFields, type WebsiteLookupSession } from '../../electron/enrichment/website-lookup'
@@ -90,7 +91,7 @@ export function useWebsiteLookup(db: LocalApi | null, allowed: () => boolean, on
     exporting.current=true;setExportBusy(true);setError('')
     const columns=['Business name','Website',...(session.fields.email?['Emails']:[]),...(session.fields.phone?['Phone numbers']:[]),...(session.fields.address?['Business address']:[]),...(session.fields.social?['Social links']:[]),'Sources','Status','Error']
     try {
-      const result=await db.exports.write({kind:'website',lookupJobId:session.jobId,format,limit:exportRows.length,leadIds:exportRows.map(row=>row.leadId),columns,delimiter:'csv',fileName:`mamalead-website-lookup-${new Date().toISOString().slice(0,10)}`})
+      const result=await db.exports.write({kind:'website',lookupJobId:session.jobId,format,limit:exportRows.length,leadIds:exportRows.map(row=>row.leadId),columns,delimiter:'csv',fileName:`mamalead-website-lookup-${localDate()}`})
       if (result && alive.current) {setExportOpen(false);setExportNote(`${result.rows} website${result.rows===1?'':'s'} exported to ${result.fileName}.`)}
     } catch (err) {if(alive.current)setError(err instanceof Error ? err.message : 'The export could not be saved.')}
     finally {exporting.current=false;if(alive.current)setExportBusy(false)}

@@ -33,6 +33,7 @@ export interface EnrichmentProgress {
   message: string
   at: string
   outcomes?: Record<string,{status:'found'|'not-published'|'error'|'pending'|'skipped';searches:number;error?:string}>
+  fieldFindings?: Record<string,{email?:boolean;phone?:boolean;social?:boolean}>
   activeLeadIds?: string[]
 }
 
@@ -75,6 +76,7 @@ export class EnrichmentRunner {
   private activeProgress: EnrichmentProgress | null = null
   private stoppedJobId = ''
   private outcomes: NonNullable<EnrichmentProgress['outcomes']> = {}
+  private fieldFindings: NonNullable<EnrichmentProgress['fieldFindings']> = {}
   private activeLeadIds = new Set<string>()
 
   constructor(
@@ -110,6 +112,7 @@ export class EnrichmentRunner {
         if (job.id === this.foregroundJobId) this.foregroundJobId = ''
         this.stoppedJobId = ''
         this.outcomes = {}
+        this.fieldFindings = {}
         this.activeLeadIds.clear()
         try { this.activeRunId=JSON.parse(job.options || '{}').runId || '' } catch { this.activeRunId='' }
         try {
@@ -237,6 +240,7 @@ export class EnrichmentRunner {
       }
 
       let siteFailure: string | null = null
+      let readBusinessPage = false
       try {
 
       const directoryError = directoryScanError(lead.website)
@@ -263,6 +267,7 @@ export class EnrichmentRunner {
           ? this.enricher.inspectContactFast(lead.website, signal,true)
           : this.enricher.inspectContactFast(lead.website, signal)
       const findings = await waitForAbort(inspect, signal)
+      readBusinessPage = findings.pagesRead.length > 0
       if ((kind === 'email' || (isLookup && fields.email)) && !findings.error && !findings.emails.length && !signal.aborted) {
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,leadName:lead.name,message:`Checking the website's displayed contact pages for ${lead.name}…`})
         const renderedSignal=AbortSignal.any([signal,AbortSignal.timeout(35_000)])
@@ -296,6 +301,7 @@ export class EnrichmentRunner {
       if (findings.error) {
         findings.error = userError(findings.error)
         this.outcomes[leadId] = {status:'error',searches:0,error:findings.error}
+        if (!readBusinessPage) this.repository.discardFailedImport(job.id,leadId)
         processed += 1
         failed += 1
         searchFailure = findings.error
@@ -341,6 +347,11 @@ export class EnrichmentRunner {
       // The site has now been read, whatever came back. The finder pages show the leads that are
       // covered so far, so this is written before the next lead is started rather than at the end.
       this.repository.markLeadScanned(leadId)
+      if (kind === 'website') this.fieldFindings[leadId] = {
+        ...(fields.email ? {email:findings.emails.length > 0} : {}),
+        ...(fields.phone ? {phone:findings.phones.length > 0} : {}),
+        ...(fields.social ? {social:findings.socials.length > 0} : {}),
+      }
       this.outcomes[leadId] = {status:found > beforeFound ? 'found' : 'not-published',searches:0}
       this.emit({
         jobId: job.id,
@@ -364,6 +375,7 @@ export class EnrichmentRunner {
         searchFailure = userError(error)
         this.outcomes[leadId] = {status:'error',searches:0,error:searchFailure}
         if (isLookup) this.repository.saveWebsiteLookupRow(job.id,{...emptyLookupRow(lead),status:'failed',error:searchFailure})
+        if (!readBusinessPage) this.repository.discardFailedImport(job.id,leadId)
         this.emit({jobId:job.id,kind,status:'running',processed,total:leadIds.length,found,failed,leadName:lead.name,message:`Could not finish ${lead.name}: ${searchFailure}`})
       }
       // Other people's servers: leave a gap between them, with an immediate Stop response.
@@ -408,7 +420,7 @@ export class EnrichmentRunner {
   }
 
   private emit(progress: Omit<EnrichmentProgress, 'at' | 'failed'> & {failed?:number}): void {
-    const complete: EnrichmentProgress = {...progress,runId:progress.jobId ? this.activeRunId : undefined,outcomes:{...this.outcomes},activeLeadIds:[...this.activeLeadIds].filter(id=>!this.outcomes[id]),failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
+    const complete: EnrichmentProgress = {...progress,runId:progress.jobId ? this.activeRunId : undefined,outcomes:{...this.outcomes},fieldFindings:{...this.fieldFindings},activeLeadIds:[...this.activeLeadIds].filter(id=>!this.outcomes[id]),failed:progress.failed ?? (this.activeProgress?.jobId===progress.jobId ? this.activeProgress.failed : 0),at:new Date().toISOString()}
     if (progress.jobId) {
       this.activeProgress = complete
       this.repository.saveJobProgress(progress.jobId,complete)

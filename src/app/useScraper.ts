@@ -110,6 +110,7 @@ export function storedToLead(row: StoredLead): Lead {
     // it is puts "Maps" beside a lead no scrape ever produced.
     provider: row.provider === 'mock' || row.provider === 'import' ? row.provider : 'chromium-maps',
     capturedAt: row.captured_at,
+    score: row.score,
     lastScannedAt: row.last_scanned_at ?? null,
   }
 }

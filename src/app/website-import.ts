@@ -1,4 +1,5 @@
 import { websiteDomain } from '../../electron/website-domain'
+import { directoryScanError } from '../../electron/enrichment/source-policy'
 const PROFILE_HOSTS = ['instagram.com', 'facebook.com', 'fb.com', 'linkedin.com', 'tiktok.com', 'youtube.com', 'youtu.be', 'twitter.com', 'x.com']
 export const WEBSITE_IMPORT_LIMIT = 500
 export function pendingImport(view: string): string { try { return localStorage.getItem(`mamalead.import.remaining.${view}`) || '' } catch { return '' } }
@@ -23,20 +24,25 @@ export function pastedLines(text: string): string[] {
   return text.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'))
 }
 
-export type ImportPreviewRow = { value: string; status: 'Ready' | 'Duplicate' | 'Skipped' }
+export type ImportPreviewRow = { value: string; status: 'Ready' | 'Duplicate' | 'Skipped'; reason?: string }
 
 /** Preview and scan dispatch share these exact normalization and deduplication rules. */
-function previewLines(lines: string[]) {
+function previewLines(lines: string[], allowProfiles = false) {
   const sites: string[] = [], profiles: string[] = [], rows: ImportPreviewRow[] = []
   const seen = new Set<string>()
   let duplicates = 0, invalid = 0
   for (const line of lines) {
     const profile = isProfileLine(line)
     const host = websiteDomain(line)
+    let directProfile = false
+    if (profile && allowProfiles) {
+      try { directProfile = line.startsWith('@') || new URL(/^https?:\/\//i.test(line) ? line : 'https://'+line).pathname.replace(/\//g,'').length > 0 } catch { /* Not a profile URL. */ }
+    }
+    const reason = directProfile ? '' : directoryScanError(line)
     const key = profile ? `profile:${line}` : `site:${host}`
-    if (!profile && !host) {
+    if ((!profile && !host) || reason) {
       invalid++
-      rows.push({ value: line, status: 'Skipped' })
+      rows.push({ value: line, status: 'Skipped', reason: reason || 'Enter a valid business website.' })
     } else if (seen.has(key)) {
       duplicates++
       rows.push({ value: line, status: 'Duplicate' })
@@ -50,7 +56,7 @@ function previewLines(lines: string[]) {
   return { sites, profiles, rows, duplicates, invalid, skipped: duplicates + invalid }
 }
 
-export function importPreview(text: string) { return previewLines(pastedLines(text)) }
+export function importPreview(text: string, allowProfiles = false) { return previewLines(pastedLines(text), allowProfiles) }
 
 /** CSV quoting, escaped quotes and quoted line breaks are retained when detecting columns. */
 function csvRows(text: string): string[][] {
@@ -86,7 +92,7 @@ function columnLetter(column: number): string {
 }
 
 /** Prefer the website/domain column over other URLs, including a social profile column. */
-export function websiteListFromCsv(text: string, selectedColumn?: number) {
+export function websiteListFromCsv(text: string, selectedColumn?: number, allowProfiles = false) {
   if (/[\u0000-\u0008\u000e-\u001f]/u.test(text.slice(0,4096)) || /^PK\u0003\u0004/.test(text)) throw new Error('This file is not a text CSV/TSV.')
   const rows = csvRows(text.replace(/^\uFEFF/, ''))
   if (!rows.length) throw new Error('This file is empty.')
@@ -109,7 +115,7 @@ export function websiteListFromCsv(text: string, selectedColumn?: number) {
   const hasHeader = header >= 0 || (!rows[first].some(looksLikeWebsite) && rows.length > 1 && rows[first].length > 1)
   if (selectedColumn !== undefined && Number.isInteger(selectedColumn) && selectedColumn >= 0 && selectedColumn < rows[first].length) column = selectedColumn
   const values = rows.slice(hasHeader ? first + 1 : first).map(row => (row[column] ?? '').trim())
-  const preview = previewLines(values)
+  const preview = previewLines(values, allowProfiles)
   const columns = rows[first].map((label,index) => ({index,label:hasHeader ? label : `Column ${columnLetter(index)}`}))
   return { text: values.join('\n'), column: columnLetter(column), columnIndex:column, label: hasHeader ? rows[first][column] : 'website', rowCount: values.length, preview, columns,
     error: preview.sites.length + preview.profiles.length ? '' : `No website or domain column found. Columns found: ${columns.map(c=>c.label).join(', ')}. Choose a column or upload a list containing website URLs.` }

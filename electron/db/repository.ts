@@ -591,14 +591,16 @@ export class Repository {
     )
   }
 
-  runCounts(workspaceId: string): { runs: number; clean: number; places: number; medianMs: number } {
-    const totals = this.db.one<{ runs: number; clean: number; places: number }>(
+  runCounts(workspaceId: string): { runs: number; clean: number; failed: number; stopped: number; places: number; medianMs: number } {
+    const totals = this.db.one<{ runs: number; clean: number; failed: number; stopped: number; places: number }>(
       `select count(*) as runs,
               count(case when status = 'done' then 1 end) as clean,
+              count(case when status = 'failed' then 1 end) as failed,
+              count(case when status = 'cancelled' then 1 end) as stopped,
               coalesce(sum(found), 0) as places
        from scrape_runs where workspace_id = ?`,
       [workspaceId],
-    ) ?? { runs: 0, clean: 0, places: 0 }
+    ) ?? { runs: 0, clean: 0, failed: 0, stopped: 0, places: 0 }
     const durations = this.db
       .query<{ duration_ms: number }>(
         `select duration_ms from scrape_runs where workspace_id = ? and status = 'done' and duration_ms is not null order by duration_ms`,
@@ -1461,22 +1463,55 @@ export class Repository {
   /** Latest completed outcome per lead, retained across page changes and app restarts. */
   scanOutcomes(workspaceId: string, kind: string): Record<string,{status:'found'|'not-published'|'error'|'pending'|'skipped'; searches:number; error?:string}> {
     const result: Record<string,{status:'found'|'not-published'|'error'|'pending'|'skipped'; searches:number; error?:string}> = {}
-    for (const row of this.db.query<{options:string;lead_ids:string;status:string;error:string|null}>(
-      "select options, lead_ids, status, error from enrichment_jobs where workspace_id = ? and kind = ? order by created_at desc, rowid desc", [workspaceId,kind])) {
+    for (const row of this.db.query<{id:string;kind:string;options:string;lead_ids:string;status:string;error:string|null}>(
+      "select id, kind, options, lead_ids, status, error from enrichment_jobs where workspace_id = ? and kind in (?, 'website') order by created_at desc, rowid desc", [workspaceId,kind])) {
       try {
-        const progress=JSON.parse(row.options || '{}').progress || {}
-        const outcomes=progress.outcomes || {}
+        const options=JSON.parse(row.options || '{}'), progress=options.progress || {}
+        if (row.kind === 'website' && kind !== 'website' && options.fields && options.fields[kind] !== true) continue
+        const outcomes={...(progress.outcomes || {})}
+        let snapshots:WebsiteLookupRow[] = []
+        if (row.kind==='website' && kind!=='website' && options.source==='website-lookup') snapshots=readWebsiteLookup(this.db,workspaceId,row.id)?.rows ?? []
         for (const id of JSON.parse(row.lead_ids)) {
+          if (row.kind === 'website' && kind !== 'website') {
+            const field=progress.fieldFindings?.[id]?.[kind]
+            const snapshot=snapshots.find(item=>item.leadId===id)
+            if (typeof field==='boolean') outcomes[id]={status:field?'found':'not-published',searches:0}
+            else if (snapshot?.status==='done') {
+              const count=kind==='email'?snapshot.emails.length:kind==='phone'?snapshot.phones.length:snapshot.socials.length
+              outcomes[id]={status:count?'found':'not-published',searches:0}
+            } else if (outcomes[id]?.status==='found' || outcomes[id]?.status==='not-published') delete outcomes[id]
+          }
           if (!outcomes[id] && ['queued','running'].includes(row.status)) outcomes[id]={status:'pending',searches:0}
-        }
-        // Older failed jobs still need a visible failure, never a false 'not found'.
-        if (!progress.outcomes && row.status==='failed' && row.error!=='Cancelled by user') {
-          for (const id of JSON.parse(row.lead_ids)) outcomes[id]={status:'error', searches:0,error:row.error || 'This scan failed. Retry this website.'}
+          if (!outcomes[id] && row.status==='failed' && row.error!=='Cancelled by user') outcomes[id]={status:'error',searches:0,error:row.error || 'This scan failed. Retry this website.'}
         }
         for (const [id,outcome] of Object.entries(outcomes)) if (!(id in result)) result[id]=outcome as typeof result[string]
       } catch { /* A malformed historical record must not hide the rest of the workspace. */ }
     }
     return result
+  }
+
+  recentScanErrors(workspaceId: string, question = ''): string {
+    const latest = new Map<string,Record<string,{status:string;error?:string}>>()
+    for (const kind of ['email','phone','social','website']) latest.set(kind,this.scanOutcomes(workspaceId,kind))
+    const errors:{domain:string;kind:string;error:string;at:string}[]=[]
+    const seen=new Set<string>()
+    for (const job of this.db.query<{kind:string;options:string;created_at:string}>("select kind,options,created_at from enrichment_jobs where workspace_id = ? order by created_at desc,rowid desc limit 100",[workspaceId])) {
+      try {
+        const options=JSON.parse(job.options || '{}')
+        for (const [id,value] of Object.entries(options.progress?.outcomes || {})) {
+          const outcome=value as {status:string;error?:string}, key=job.kind+':'+id
+          if(seen.has(key))continue
+          seen.add(key)
+          if(outcome.status!=='error' || latest.get(job.kind)?.[id]?.status!=='error')continue
+          const saved=this.getLead(workspaceId,id)
+          const archived=options.failedImportRows?.find((item:{row:WebsiteLookupRow})=>item.row.leadId===id)?.row
+          const domain=websiteDomain(saved?.website || archived?.website || '')
+          if(domain && outcome.error)errors.push({domain,kind:job.kind,error:outcome.error.slice(0,350),at:job.created_at})
+        }
+      } catch { /* Ignore malformed old job metadata. */ }
+    }
+    errors.sort((a,b)=>Number(question.toLowerCase().includes(b.domain))-Number(question.toLowerCase().includes(a.domain)))
+    return JSON.stringify(errors.slice(0,20))
   }
 
   /** The state of one queued pass, so a page can wait for its own scan rather than the whole queue. */
@@ -1523,9 +1558,10 @@ export class Repository {
     if (domains.length > 500) throw new Error('Scan up to 500 unique websites at a time. Split this list into smaller batches.')
     const active = this.db.one<{ id: string }>("select id from enrichment_jobs where workspace_id = ? and kind = 'website' and status in ('queued','running') and json_extract(options, '$.source') = 'website-lookup'", [workspaceId])
     if (active) throw new Error('A Website Lookup is already running. Wait for it to finish before starting another.')
-    const imported = this.importWebsites(workspaceId, domains, false)
     return this.db.transaction(() => {
-      const {jobId} = this.queueJob(workspaceId, 'website', imported.leadIds, {source:'website-lookup',fields,added:imported.added,reused:imported.skipped})
+      const imported = this.importWebsites(workspaceId, domains, false)
+      if (!imported.leadIds.length) throw new Error('Use a business website. Social platforms and directory listings cannot be scanned here.')
+      const {jobId} = this.queueJob(workspaceId, 'website', imported.leadIds, {source:'website-lookup',fields,added:imported.added,reused:imported.skipped,batchId:imported.batchId,addedLeadIds:imported.addedLeadIds})
       for (const [position,id] of imported.leadIds.entries()) {
         const lead = this.getLead(workspaceId,id)!
         this.db.run('insert into website_lookup_rows (job_id,lead_id,position,data) values (?,?,?,?)',[jobId,id,position,JSON.stringify(emptyLookupRow(lead))])
@@ -1538,6 +1574,31 @@ export class Repository {
 
   saveWebsiteLookupRow(jobId: string, row: WebsiteLookupRow): void {
     this.db.run('update website_lookup_rows set data = ?, status = ?, error = ? where job_id = ? and lead_id = ?', [JSON.stringify(row),row.status,row.error,jobId,row.leadId])
+  }
+
+  /** Roll back only a new, untouched placeholder that never yielded a readable business page.
+   * Keep the failed session snapshot before FK cleanup, so History, retry and exports retain it. */
+  discardFailedImport(jobId: string, leadId: string): void {
+    this.db.transaction(() => {
+      const job = this.db.one<{workspace_id:string;options:string}>('select workspace_id, options from enrichment_jobs where id = ?', [jobId])
+      if (!job) return
+      const options = JSON.parse(job.options || '{}')
+      if (!Array.isArray(options.addedLeadIds) || !options.addedLeadIds.includes(leadId)) return
+      const lead = this.getLead(job.workspace_id, leadId)
+      if (!lead || lead.provider !== 'import' || lead.run_id || lead.bookmarked || lead.last_scanned_at ||
+          lead.name !== websiteDomain(lead.website) || lead.phone || lead.address || lead.category || lead.place_ref) return
+      for (const table of ['lead_contacts','social_profiles','decision_makers','list_items','scrape_run_leads']) {
+        if (this.db.one(`select 1 from ${table} where lead_id = ? limit 1`,[leadId])) return
+      }
+      if (this.db.one("select 1 from enrichment_jobs j, json_each(j.lead_ids) i where j.id <> ? and j.status in ('queued','running') and i.value = ? limit 1",[jobId,leadId])) return
+      if (this.db.one('select 1 from website_lookup_rows where lead_id = ? and job_id <> ? limit 1',[leadId,jobId])) return
+      const saved = this.db.one<{position:number;data:string;status:string;error:string}>('select position,data,status,error from website_lookup_rows where job_id = ? and lead_id = ?',[jobId,leadId])
+      const snapshot = saved ? {...JSON.parse(saved.data),status:saved.status,error:saved.error} : emptyLookupRow(lead)
+      options.failedImportRows = [...(options.failedImportRows ?? []).filter((item:{row:WebsiteLookupRow})=>item.row.leadId!==leadId),{position:saved?.position ?? 0,row:snapshot}]
+      if (typeof options.added==='number') options.added=Math.max(0,options.added-1)
+      this.db.run('update enrichment_jobs set options = ? where id = ?',[JSON.stringify(options),jobId])
+      this.db.run('delete from leads where id = ? and workspace_id = ?',[leadId,job.workspace_id])
+    })
   }
 
   // ---------------------------------------------------------------- exports
@@ -1586,13 +1647,13 @@ export class Repository {
    * find the business's real name, address and contacts from the site itself. Domains already on
    * file are skipped rather than duplicated, so re-importing a list is harmless.
    */
-  importWebsites(workspaceId: string, input: string[], enqueue = true): { batchId: string; added: number; skipped: number; leadIds: string[] } {
+  importWebsites(workspaceId: string, input: string[], enqueue = true): { batchId: string; added: number; skipped: number; leadIds: string[]; addedLeadIds: string[] } {
     return this.db.transaction(() => {
       const seen = new Set<string>()
       const domains: string[] = []
       for (const raw of input) {
         const host = normaliseDomain(raw)
-        if (!host || seen.has(host)) continue
+        if (!host || seen.has(host) || directoryScanError(raw)) continue
         seen.add(host)
         domains.push(host)
       }
@@ -1640,11 +1701,7 @@ export class Repository {
       )
 
       if (addedLeadIds.length && enqueue) {
-        this.db.run(
-          `insert into enrichment_jobs (id, workspace_id, kind, lead_ids, status, created_at)
-           values (?, ?, 'website', ?, 'queued', ?)`,
-          [randomUUID(), workspaceId, JSON.stringify(addedLeadIds), nowIso()],
-        )
+        this.queueJob(workspaceId, 'website', addedLeadIds, {batchId,addedLeadIds})
         this.db.run(
           `insert into usage_counters (workspace_id, period, lookups_used) values (?, ?, ?)
            on conflict (workspace_id, period) do update set lookups_used = lookups_used + excluded.lookups_used`,
@@ -1652,7 +1709,7 @@ export class Repository {
         )
       }
 
-      return { batchId, added: addedLeadIds.length, skipped, leadIds }
+      return { batchId, added: addedLeadIds.length, skipped, leadIds, addedLeadIds }
     })
   }
 
@@ -1781,10 +1838,19 @@ export class Repository {
   }
 
   listImports(workspaceId: string, limit = 20): Record<string, unknown>[] {
-    return this.db.query('select * from import_batches where workspace_id = ? order by created_at desc limit ?', [
-      workspaceId,
-      limit,
-    ])
+    return this.db.query<Record<string,unknown>>('select * from import_batches where workspace_id = ? order by created_at desc limit ?', [workspaceId,limit]).map(batch=>{
+      if (batch.kind !== 'websites') return batch
+      const job=this.db.one<{id:string;status:string;error:string|null;options:string}>("select id,status,error,options from enrichment_jobs where workspace_id = ? and json_extract(options,'$.batchId') = ? order by created_at desc, rowid desc limit 1",[workspaceId,batch.id])
+      if (!job) return batch
+      const options=JSON.parse(job.options || '{}'), outcomes=Object.values(options.progress?.outcomes || {}) as {status:string}[]
+      const discarded=options.failedImportRows?.length ?? 0
+      return {...batch,added:Math.max(0,Number(batch.added)-discarded),reused:Number(batch.skipped),job_id:job.id,
+        scan_status:job.error==='Cancelled by user'?'stopped':job.status,
+        scan_found:outcomes.filter(item=>item.status==='found').length,
+        scan_empty:outcomes.filter(item=>item.status==='not-published').length,
+        scan_failed:outcomes.filter(item=>item.status==='error').length,
+        scan_processed:options.progress?.processed ?? 0, discarded}
+    })
   }
 
   // ---------------------------------------------------------------- search history

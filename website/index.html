@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>MamaLead — Find Your Next Client on Google Maps</title>
+<title>MamaLead — Find Your Next Client or Job on Google Maps</title>
 <meta name="description" content="Find businesses by category and city, collect their published contact details, and build a list to approach for client work or job opportunities. MamaLead for Windows: Rs 10,000 Lifetime access.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/png" href="/img/mamalead-favicon.png?v=2">
+<link rel="icon" type="image/png" href="img/mamalead-favicon.png?v=2">
+<script src="./billing.js"></script>
 <script src="./support.js"></script>
 <style id="zip-hero-design">
 /* Animation and layout for the user-supplied first screen only. */
@@ -31,7 +32,8 @@
 @keyframes zipHeroChipLight { 0%, 70% { background: rgba(255,255,255,.55); color: #42473F; } 74%, 94% { background: #1C1C1C; color: #FFFFFF; } 98%, 100% { background: rgba(255,255,255,.55); color: #42473F; } }
 @keyframes zipHeroFillIn { from { transform: scaleX(0); } to { transform: none; } }
 .zip-hero-button:hover { transform:translateY(-2px); }
-.zip-hero .hero-buy:hover { color:#fff; box-shadow:0 30px 52px -20px #1c1c1cd9; }
+.zip-hero .hero-buy:hover { color:#fff; background:#9C2019!important; box-shadow:0 30px 52px -20px rgba(184,40,31,.9); }
+.pricing-lifetime .pricing-action.fomo-buy:hover { background:#9C2019!important; }
 .zip-hero a:focus-visible { outline:3px solid #415735; outline-offset:5px; }
 @media(max-width:600px) {
  .zip-hero h1 { font-size:clamp(34px,8.7vw,48px)!important; }
@@ -161,10 +163,106 @@
   <div style="position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(60vw 52vh at 4% 6%, rgba(169,188,155,.5), transparent 62%), radial-gradient(56vw 50vh at 96% 34%, rgba(200,213,187,.46), transparent 62%), radial-gradient(62vw 56vh at 20% 88%, rgba(213,222,203,.46), transparent 66%);"></div>
   <div style="position: relative; z-index: 1;">
 
+  <sc-if value="{{ checkoutNotice }}" hint-placeholder-val="{{ false }}">
+    <aside role="status" aria-live="polite" style="position:fixed;top:78px;right:20px;left:20px;margin:auto;max-width:620px;z-index:100;padding:20px;border-radius:20px;background:#FFFFFF;color:#1C1C1C;box-shadow:0 15px 60px #0003;">
+      <p style="margin:0 0 12px;">{{ checkoutNotice }}</p>
+      <button type="button" onClick="{{ retryBilling }}" style="min-height:44px;padding:8px 18px;border-radius:24px;background:#1C1C1C;color:white;border:0;cursor:pointer;">Check status</button>
+      <button type="button" aria-label="Dismiss checkout message" onClick="{{ dismissCheckoutNotice }}" style="min-height:44px;margin-left:10px;padding:8px 16px;border:0;border-radius:24px;cursor:pointer;">Close</button>
+    </aside>
+  </sc-if>
+
+  <sc-if value="{{ showPaid }}" hint-placeholder-val="{{ false }}">
+    <div role="status" aria-live="polite" style="position: fixed; top: 76px; left: 0; right: 0; z-index: 70; display: flex; justify-content: center; padding: 0 16px; pointer-events: none;">
+      <div style="pointer-events: auto; width: 100%; max-width: 760px; max-height: calc(100vh - 92px); overflow: auto; display: grid; gap: 18px; padding: 22px; border-radius: 26px; background: #1C1C1C; color: #FFFFFF; box-shadow: 0 34px 70px -30px rgba(28,28,28,.75); animation: zipHeroModalIn .6s cubic-bezier(.16,1,.3,1) both;">
+        <div style="display: flex; align-items: flex-start; gap: 14px;">
+          <span aria-hidden="true" style="flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #C8D5BB;"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1C1C1C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+          <div style="flex: 1; min-width: 0;">
+            <p style="margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.02em;">Payment successful</p>
+            <p style="margin: 4px 0 0; font-size: 15px; line-height: 1.5; color: #D9DDD5; text-wrap: pretty;">Your license key has been emailed to you. Download MamaLead and continue your work.</p>
+          </div>
+          <button type="button" aria-label="Close" onClick="{{ closePaid }}" style="flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -6px -6px 0 0; border: 0; border-radius: 50%; background: transparent; color: #FFFFFF; cursor: pointer;" style-hover="background: rgba(255,255,255,.1);"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        </div>
+        <ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px;">
+          <li style="display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.07);"><span style="font-size: 12px; font-weight: 500; letter-spacing: .14em; color: #C8D5BB;">STEP 1</span><span style="font-size: 15px; font-weight: 700;">Download &amp; install</span><span style="font-size: 13.5px; line-height: 1.5; color: #D9DDD5;">Run the Windows installer.</span></li>
+          <li style="display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.07);"><span style="font-size: 12px; font-weight: 500; letter-spacing: .14em; color: #C8D5BB;">STEP 2</span><span style="font-size: 15px; font-weight: 700;">Open MamaLead</span><span style="font-size: 13.5px; line-height: 1.5; color: #D9DDD5;">It opens on Settings &amp; Billing → Account.</span></li>
+          <li style="display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.07);"><span style="font-size: 12px; font-weight: 500; letter-spacing: .14em; color: #C8D5BB;">STEP 3</span><span style="font-size: 15px; font-weight: 700;">Paste your key</span><span style="font-size: 13.5px; line-height: 1.5; color: #D9DDD5;">Copy it from the email, paste in License key and press Activate.</span></li>
+        </ol>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;">
+          <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 26px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 15px; font-weight: 700; white-space: nowrap; text-decoration: none;" style-hover="background: #DCE5D2;">Download for Windows<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"></path><path d="M7 11l5 5 5-5"></path><path d="M5 19.5h14"></path></svg></a>
+          <span style="font-size: 13px; line-height: 1.5; color: #B9BEB4;">No email? Check spam, or write to <a href="mailto:billing@nafran.co" style="color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px;">billing@nafran.co</a></span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showTrial }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ onTrialOverlay }}" style="position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(28,28,28,.42); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: zipHeroFadeIn .3s ease both;">
+      <div role="dialog" aria-modal="true" aria-labelledby="trial-title" style="position: relative; width: 100%; max-width: 460px; max-height: calc(100vh - 40px); overflow: auto; padding: 30px 28px 26px; border-radius: 28px; background: #F7F7F5; color: #1C1C1C; box-shadow: 0 40px 90px -40px rgba(28,28,28,.7); animation: zipHeroModalIn .5s cubic-bezier(.16,1,.3,1) both;">
+        <button type="button" aria-label="Close" onClick="{{ closeTrial }}" style="position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: #1C1C1C; cursor: pointer;" style-hover="background: rgba(28,28,28,.06);"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        <sc-if value="{{ trialChoose }}" hint-placeholder-val="{{ false }}">
+          <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: #1C1C1C; color: #C8D5BB; font-size: 11px; letter-spacing: .16em; white-space: nowrap;">DOWNLOAD MAMALEAD</span>
+          <h2 id="trial-title" style="margin: 16px 0 0; font-size: 30px; line-height: 1.08; letter-spacing: -.035em; font-weight: 700;">How do you want to start?</h2>
+          <p style="margin: 10px 0 0; font-size: 15px; line-height: 1.55; color: #42473F; text-wrap: pretty;">Get Lifetime access or try MamaLead free for one day. Either way, your license key is emailed to you.</p>
+          <div style="margin: 22px 0 0; display: grid; gap: 10px;">
+            <a href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" style="display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 20px; background: #B8281F; color: #FFFFFF; text-decoration: none; box-shadow: 0 18px 34px -18px rgba(184,40,31,.7);" style-hover="background: #9C2019;">
+              <span style="flex: 1; min-width: 0; display: grid; gap: 3px;">
+                <span style="font-size: 11px; font-weight: 700; letter-spacing: .16em; color: #FFFFFF;">{{ popupLabel }}</span>
+                <span style="font-size: 22px; font-weight: 700; letter-spacing: -.02em;">Claim lifetime access at 50% off</span>
+                <span style="font-size: 13px; line-height: 1.45; color: #FFFFFF; font-variant-numeric: tabular-nums;">{{ popupLine }}</span>
+              </span>
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg>
+            </a>
+            <button type="button" onClick="{{ chooseTrial }}" style="display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-radius: 20px; border: 1px solid rgba(28,28,28,.1); background: #FFFFFF; color: #1C1C1C; font: inherit; text-align: left; cursor: pointer;" style-hover="border-color: #34502F;">
+              <span style="flex: 1; min-width: 0; display: grid; gap: 3px;">
+                <span style="font-size: 11px; font-weight: 500; letter-spacing: .16em; color: #34502F;">FREE 1-DAY TRIAL</span>
+                <span style="font-size: 22px; font-weight: 700; letter-spacing: -.02em;">Free</span>
+                <span style="font-size: 13px; line-height: 1.45; color: #42473F;">24 hours from activation. Enter your email to get the key.</span>
+              </span>
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#34502F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg>
+            </button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ trialForm }}" hint-placeholder-val="{{ true }}">
+          <sc-if value="{{ trialCanBack }}" hint-placeholder-val="{{ false }}">
+            <button type="button" onClick="{{ trialBack }}" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: -12px 0 6px -4px; padding: 0 4px; border: 0; background: none; color: #42473F; font: inherit; font-size: 13px; cursor: pointer;"><svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12h-14"></path><path d="M11 6.5L5.5 12l5.5 5.5"></path></svg>Back</button>
+          </sc-if>
+          <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: #1C1C1C; color: #C8D5BB; font-size: 11px; letter-spacing: .16em; white-space: nowrap;">{{ trialEyebrow }}</span>
+          <h2 id="trial-title" style="margin: 16px 0 0; font-size: 30px; line-height: 1.08; letter-spacing: -.035em; font-weight: 700;">{{ trialTitle }}</h2>
+          <p style="margin: 10px 0 0; font-size: 15px; line-height: 1.55; color: #42473F; text-wrap: pretty;">{{ trialLead }}</p>
+          <form onSubmit="{{ onTrialSubmit }}" noValidate="{{ true }}" style="margin: 22px 0 0; display: grid; gap: 10px;">
+            <label for="trial-email" style="font-size: 13px; font-weight: 500;">Email</label>
+            <input id="trial-email" ref="{{ emailRef }}" type="email" autocomplete="email" placeholder="you@example.com" value="{{ trialEmail }}" onChange="{{ onTrialEmail }}" style="height: 54px; padding: 0 18px; border-radius: 16px; border: 1px solid {{ inputBorder }}; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 16px; outline: none;" style-focus="border-color: #34502F; box-shadow: 0 0 0 3px rgba(52,80,47,.16);">
+            <sc-if value="{{ trialError }}" hint-placeholder-val="{{ false }}">
+              <p role="alert" style="margin: 0; font-size: 13px; color: #A23B2A;">{{ trialError }}</p>
+            </sc-if>
+            <button type="submit" disabled="{{ trialSending }}" style="height: 54px; margin-top: 4px; border: 0; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font: inherit; font-size: 15.5px; font-weight: 700; cursor: pointer;" style-hover="background: #34502F;">{{ trialCta }}</button>
+            <p style="margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: #555956;">{{ trialPolicy }}</p>
+            <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="display:inline-flex;align-items:center;min-height:44px;color:#1C1C1C;font-size:13px;text-decoration:underline;text-underline-offset:3px;">Already have a key? Download the app</a>
+          </form>
+        </sc-if>
+        <sc-if value="{{ trialSent }}" hint-placeholder-val="{{ false }}">
+          <span aria-hidden="true" style="display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #C8D5BB;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#1C1C1C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+          <h2 id="trial-title" style="margin: 16px 0 0; font-size: 28px; line-height: 1.1; letter-spacing: -.035em; font-weight: 700; text-wrap: pretty;">Your license key has been emailed to you</h2>
+          <p style="margin: 10px 0 0; font-size: 15px; line-height: 1.55; color: #42473F; overflow-wrap: anywhere;">We sent your 1-day trial license key to <strong style="color: #1C1C1C;">{{ trialEmail }}</strong>. Download the app, paste the key and continue your work.</p>
+          <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="margin: 22px 0 0; display: flex; align-items: center; justify-content: center; gap: 10px; height: 54px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 15.5px; font-weight: 700; text-decoration: none;" style-hover="background: #34502F;">Download for Windows<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#C8D5BB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"></path><path d="M7 11l5 5 5-5"></path><path d="M5 19.5h14"></path></svg></a>
+          <ol style="margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px;">
+            <li style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; font-size: 13.5px; line-height: 1.45;"><span style="flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #C8D5BB; font-size: 12px; font-weight: 700;">1</span>Install and open MamaLead. It opens on the License key page.</li>
+            <li style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; font-size: 13.5px; line-height: 1.45;"><span style="flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #C8D5BB; font-size: 12px; font-weight: 700;">2</span>Paste the key from your email and press Activate.</li>
+            <li style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; font-size: 13.5px; line-height: 1.45;"><span style="flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #C8D5BB; font-size: 12px; font-weight: 700;">3</span>You'll see “Your free trial is active”. Start finding leads.</li>
+          </ol>
+          <div style="margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; color: #555956;">
+            <span>No email? Check spam.</span>
+            <button type="button" disabled="{{ !trialCanChange }}" onClick="{{ changeTrialEmail }}" style="min-height: 44px; padding: 0; border: 0; background: none; color: #1C1C1C; font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;">Use a different email</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
   <header class="site-header" style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
     <div class="site-header-row" style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
       <a href="#top" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
-        <img data-brand-logo="mamalead" src="/img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" decoding="async" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
+        <img data-brand-logo="mamalead" src="img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" decoding="async" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
         <span style="line-height: 1.1;">
           <span style="display: block; font-size: 15.5px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
           <span style="display: block; font-size: 10.5px; color: #555956;">Windows desktop app</span>
@@ -178,12 +276,12 @@
         <a href="#pricing" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Pricing</a>
         <a href="#faq" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">FAQ</a>
       </nav>
-      <a class="desktop-pricing" href="#pricing" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 13px; font-weight: 500; white-space: nowrap; transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF;">Rs 10,000 · Lifetime</a>
+      <a class="desktop-pricing" href="#pricing" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #B8281F; color: #FFFFFF; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 22px -12px rgba(184,40,31,.8); transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF; background: #9C2019;">Lifetime · 50% off</a>
       <a class="mobile-download" href="#download">Download</a>
       <button class="mobile-menu-button" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>
     <nav id="mobile-menu" aria-label="Mobile navigation" hidden>
-      <a href="#pricing">Pricing · Rs 10,000 Lifetime</a><a href="#download">Free trial / Windows download</a><a href="#how">How it works</a><a href="#modules">Modules</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a><a href="mailto:billing@nafran.co">Support</a>
+      <a href="#pricing">Pricing · Lifetime 50% off</a><a href="#download">Free trial / Windows download</a><a href="#how">How it works</a><a href="#modules">Modules</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a><a href="mailto:billing@nafran.co">Support</a>
     </nav>
   </header>
 
@@ -195,23 +293,22 @@
     <div style="position: relative; max-width: 1180px; margin: 0 auto; padding: 0 24px; text-align: center;">
       <span style="display: inline-block; font-size: 11px; font-weight: 500; letter-spacing: .18em; color: #2A2E2A; animation: zipHeroRiseSm .7s cubic-bezier(.16,1,.3,1) both;">FOR FREELANCERS, AGENCIES &amp; JOB SEEKERS</span>
       <h1 style="margin: 24px auto 0; font-size: clamp(38px, 5.8vw, 78px); line-height: 1; letter-spacing: -.05em; font-weight: 700;">
-        <span style="display: block; overflow: hidden; padding: 0 .04em .08em;"><span style="display: block; animation: zipHeroLineUp 1s cubic-bezier(.16,1,.3,1) .12s both;">Find Your Next Client</span></span>
-        <span style="display: block; overflow: hidden; padding: 0 .04em .12em; margin-top: -.06em;"><span style="display: block; background-image: linear-gradient(100deg, #34502F 0%, #34502F 42%, #A6BD96 50%, #34502F 58%, #34502F 100%); background-size: 260% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: zipHeroLineUp 1s cubic-bezier(.16,1,.3,1) .24s both, zipHeroSheenText 6.5s ease-in-out 1.8s infinite;">on Google Maps.</span></span>
+        <span style="display: block; overflow: hidden; padding: 0 .04em .08em;"><span style="display: block; animation: zipHeroLineUp 1s cubic-bezier(.16,1,.3,1) .12s both;">Find Your Next Client or Job</span></span>
+        <span style="display: block; overflow: hidden; padding: 0 .04em 0; margin-top: -.06em;"><span style="display: block; padding-bottom: .16em; background-image: linear-gradient(100deg, #34502F 0%, #34502F 42%, #A6BD96 50%, #34502F 58%, #34502F 100%); background-size: 260% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: zipHeroLineUp 1s cubic-bezier(.16,1,.3,1) .24s both, zipHeroSheenText 6.5s ease-in-out 1.8s infinite;">on Google Maps.</span></span>
       </h1>
-      <p class="hero-job-note" style="margin: 18px auto 0; font-size: clamp(17px, 1.9vw, 21px); line-height: 1.4; color: #1C1C1C; animation: zipHeroRise .9s cubic-bezier(.16,1,.3,1) .34s both;"><strong style="font-weight: 700;">Looking for a job?</strong> Find companies you can approach.</p>
-      <div aria-hidden="true" class="zip-search-demo" style="margin: 24px 0 0; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: zipHeroRiseSm .8s cubic-bezier(.16,1,.3,1) .4s both;">
+      <div class="zip-search-demo" style="margin: 24px 0 0; display: flex; flex-direction: column; align-items: center; gap: 12px; animation: zipHeroRiseSm .8s cubic-bezier(.16,1,.3,1) .4s both;">
         <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; max-width: 100%; padding: 6px; border-radius: 28px; background: rgba(255,255,255,.62); backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 16px 36px -22px rgba(28,28,28,.4);">
-          <span style="display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; padding: 11px 18px; border-radius: 999px; background: #FFFFFF; text-align: left;">
+          <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; padding: 11px 18px; border-radius: 999px; background: #FFFFFF; text-align: left;">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#555956" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M10.8 3.8a7 7 0 1 0 0 14 7 7 0 0 0 0-14z"></path><path d="M20.2 20.2l-4.4-4.4"></path></svg>
             <span style="position: relative; flex: 1; min-width: 150px; height: 1.35em; font-size: 15.5px; font-weight: 500; color: #1C1C1C;"><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 0.0s infinite both, zipHeroTypeKw 16s linear 0.0s infinite both;">dentists</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 3.2s infinite both, zipHeroTypeKw 16s linear 3.2s infinite both;">gyms</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 6.4s infinite both, zipHeroTypeKw 16s linear 6.4s infinite both;">real estate agents</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 9.6s infinite both, zipHeroTypeKw 16s linear 9.6s infinite both;">restaurants</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 12.8s infinite both, zipHeroTypeKw 16s linear 12.8s infinite both;">hair salons</span></span>
           </span>
-          <span style="display: flex; align-items: center; gap: 10px; flex: 1 1 140px; min-width: 0; padding: 11px 18px; border-radius: 999px; background: #FFFFFF; text-align: left;">
+          <span aria-hidden="true" style="display: flex; align-items: center; gap: 10px; flex: 1 1 140px; min-width: 0; padding: 11px 18px; border-radius: 999px; background: #FFFFFF; text-align: left;">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#555956" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex: none;"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"></path><path d="M12 7.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z"></path></svg>
             <span style="position: relative; flex: 1; min-width: 96px; height: 1.35em; font-size: 15.5px; font-weight: 500; color: #1C1C1C;"><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 0.0s infinite both, zipHeroTypeCity 16s linear 0.0s infinite both;">Lahore</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 3.2s infinite both, zipHeroTypeCity 16s linear 3.2s infinite both;">Dubai</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 6.4s infinite both, zipHeroTypeCity 16s linear 6.4s infinite both;">London</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 9.6s infinite both, zipHeroTypeCity 16s linear 9.6s infinite both;">Karachi</span><span data-demo-slot style="position: absolute; left: 0; top: 0; white-space: nowrap; opacity: 0; animation: zipHeroDemoSlot 16s linear 12.8s infinite both, zipHeroTypeCity 16s linear 12.8s infinite both;">Manchester</span></span>
           </span>
-          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 14.5px; font-weight: 500; white-space: nowrap; animation: zipHeroDemoPress 3.2s ease-in-out infinite;">Get leads<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#C8D5BB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></span>
+          <a href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 14.5px; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; animation: zipHeroDemoPress 3.2s ease-in-out infinite;">Buy now<svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#C8D5BB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></a>
         </div>
-        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;"><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.00s infinite both;">Name</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.09s infinite both;">Address</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.18s infinite both;">Phone</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.27s infinite both;">Email</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.36s infinite both;">Website</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.45s infinite both;">Socials</span></div>
+        <div aria-hidden="true" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;"><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.00s infinite both;">Name</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.09s infinite both;">Address</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.18s infinite both;">Phone</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.27s infinite both;">Email</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.36s infinite both;">Website</span><span style="padding: 5px 11px; border-radius: 999px; font-size: 12px; white-space: nowrap; border: 1px solid rgba(255,255,255,.85); animation: zipHeroChipLight 3.2s linear 0.45s infinite both;">Socials</span></div>
       </div>
       <div style="margin: 26px 0 0; display: flex; justify-content: center;">
         <div class="zip-offer-card" style="display: flex; flex-direction: column; gap: 12px; max-width: 100%; padding: 14px 20px 14px 14px; border-radius: 24px; background: rgba(255,255,255,.62); backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 16px 36px -22px rgba(28,28,28,.4); text-align: left; animation: zipHeroPopIn .9s cubic-bezier(.16,1,.3,1) .42s both;">
@@ -231,8 +328,9 @@
             </span>
           </div>
           <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;">
-            <span style="flex: 1 1 150px; height: 5px; border-radius: 3px; background: rgba(28,28,28,.1); overflow: hidden;"><span style="display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #A9BC9B, #1C1C1C); transform-origin: left center; animation: zipHeroFillIn 1.4s cubic-bezier(.16,1,.3,1) .9s both; width: 50%; transition: width 1s linear;"></span></span>
-            <span style="font-size: 11.5px; color: #2F332F; white-space: nowrap;">Save 50% on Lifetime</span>
+            <span style="flex: 1 1 150px; height: 5px; border-radius: 3px; background: rgba(28,28,28,.1); overflow: hidden;"><span style="display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #E0857C, #B8281F); transform-origin: left center; animation: zipHeroFillIn 1.4s cubic-bezier(.16,1,.3,1) .9s both; width: {{ claimedPct }}; transition: width 1s linear;"></span></span>
+            <sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}"><span style="font-size: 11.5px; font-weight: 700; color: #8E1E17; white-space: nowrap;"><span>{{ seatsClaimed }} of {{ seatsTotal }} launch licenses claimed</span></span></sc-if>
+            <sc-if value="{{ noSeats }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11.5px; color: #2F332F; white-space: nowrap;">Save 50% on Lifetime</span></sc-if>
           </div>
         </div>
       </div>
@@ -243,22 +341,29 @@
         <span style="display: inline-flex; align-items: center; gap: 10px; padding: 9px 18px 9px 10px; border-radius: 999px; background: rgba(255,255,255,.62); backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 16px 36px -22px rgba(28,28,28,.4); font-size: 14px; white-space: nowrap; animation: zipHeroRiseSm .7s cubic-bezier(.16,1,.3,1) 0.7s both;"><span style="width: 22px; height: 22px; flex: none; border-radius: 50%; background: #1C1C1C; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"></path></svg></span>No monthly subscription</span>
       </div>
       <div style="margin: 30px 0 0; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; animation: zipHeroRise .9s cubic-bezier(.16,1,.3,1) .74s both;">
-        <a class="hero-buy zip-hero-button" href="#pricing" style="position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: clamp(10px, 2.4vw, 16px); max-width: 100%; padding: 18px clamp(18px, 4vw, 28px); border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: clamp(15px, 4vw, 17px); font-weight: 500; white-space: nowrap; box-shadow: 0 24px 44px -20px rgba(28,28,28,.8); transition: transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease;">
+        <a class="hero-buy zip-hero-button" href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" style="position: relative; overflow: hidden; display: inline-flex; align-items: center; gap: clamp(10px, 2.4vw, 16px); max-width: 100%; padding: 18px clamp(18px, 4vw, 28px); border-radius: 999px; background: #B8281F; color: #FFFFFF; font-size: clamp(15px, 4vw, 17px); font-weight: 700; white-space: normal; text-align: center; box-shadow: 0 24px 44px -20px rgba(184,40,31,.85); transition: transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease;">
           <span aria-hidden="true" style="position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: linear-gradient(100deg, rgba(255,255,255,0), rgba(255,255,255,.2), rgba(255,255,255,0)); transform: translateX(-140%) skewX(-18deg); animation: zipHeroCtaShine 3.8s ease-in-out 2.2s infinite;"></span>
-          <span style="position: relative; font-size: clamp(18px, 5vw, 21px); font-weight: 700; letter-spacing: -.02em; color: #C8D5BB;">Rs 10,000</span>
-          <span aria-hidden="true" style="position: relative; width: 1px; height: 26px; background: rgba(255,255,255,.24);"></span>
-          <span style="position: relative;">Get Lifetime Access</span>
+          <span style="position: relative;">Claim lifetime access at 50% off</span>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: relative; animation: zipHeroArrowNudge 1.8s ease-in-out infinite;"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg>
         </a>
-        <a class="hero-trial zip-hero-button" href="#download" style="display: inline-flex; align-items: center; gap: 12px; max-width: 100%; padding: 18px clamp(18px, 4vw, 28px); border-radius: 999px; background: rgba(255,255,255,.82); backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); border: 1px solid rgba(255,255,255,.95); box-shadow: inset 0 1px 0 #FFFFFF, 0 18px 36px -22px rgba(28,28,28,.4); font-size: clamp(15px, 4vw, 17px); font-weight: 500; white-space: nowrap; transition: transform .35s cubic-bezier(.16,1,.3,1);">Start free 1-day trial<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5"></path><path d="M7.5 10.5l4.5 4.5 4.5-4.5"></path><path d="M5 19.5h14"></path></svg></a>
+        <a class="hero-trial zip-hero-button" href="#download" onClick="{{ onStartTrial }}" style="display: inline-flex; align-items: center; gap: 12px; max-width: 100%; padding: 18px clamp(18px, 4vw, 28px); border-radius: 999px; background: rgba(255,255,255,.82); backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); border: 1px solid rgba(255,255,255,.95); box-shadow: inset 0 1px 0 #FFFFFF, 0 18px 36px -22px rgba(28,28,28,.4); font-size: clamp(15px, 4vw, 17px); font-weight: 500; white-space: nowrap; transition: transform .35s cubic-bezier(.16,1,.3,1);">Start free 1-day trial<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10.5"></path><path d="M7.5 10.5l4.5 4.5 4.5-4.5"></path><path d="M5 19.5h14"></path></svg></a>
       </div>
-      <p style="margin: 16px 0 0; font-size: 13px; color: #2F332F; animation: zipHeroRiseSm .7s cubic-bezier(.16,1,.3,1) .84s both;">The launch price is yours to keep. Pay once. No monthly bill.</p>
+      <div style="margin: 18px 0 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 10px; animation: zipHeroRiseSm .7s cubic-bezier(.16,1,.3,1) .8s both;">
+        <sc-if value="{{ showCountdown }}" hint-placeholder-val="{{ true }}">
+          <span role="timer" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #FBE7E4; color: #8E1E17; font-size: 13.5px; font-weight: 700;"><span aria-hidden="true" style="width: 8px; height: 8px; flex: none; border-radius: 50%; background: #B8281F; box-shadow: 0 0 0 3px rgba(184,40,31,.18);"></span><span>Launch offer ends in <span style="font-variant-numeric: tabular-nums;">{{ countdown }}</span></span></span>
+        </sc-if>
+        <sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}">
+          <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #FBE7E4; color: #8E1E17; font-size: 13.5px; font-weight: 700;"><span>Only {{ seatsLeft }} launch licenses left</span></span>
+        </sc-if>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 13px; color: #2F332F; animation: zipHeroRiseSm .7s cubic-bezier(.16,1,.3,1) .84s both;">The launch price is yours to keep. Pay once. No monthly bill.</p>
       <div style="margin: 22px 0 0; display: flex; justify-content: center;">
         <div style="display: flex; align-items: center; gap: 16px; padding: 16px 26px 16px 20px; border-radius: 22px; background: rgba(255,255,255,.62); backdrop-filter: blur(20px) saturate(170%); -webkit-backdrop-filter: blur(20px) saturate(170%); border: 1px solid rgba(255,255,255,.9); box-shadow: inset 0 1px 0 rgba(255,255,255,.95), 0 16px 36px -22px rgba(28,28,28,.4); text-align: left; animation: zipHeroRiseSm .8s cubic-bezier(.16,1,.3,1) .92s both;">
           <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1C1C1C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none;"><path d="M12 3l7.5 3v5.6c0 4.6-3.2 8.3-7.5 9.4-4.3-1.1-7.5-4.8-7.5-9.4V6z"></path><path d="M8.6 12.2l2.4 2.4 4.4-4.6"></path></svg>
           <span>
             <span style="display: block; font-size: 15px; font-weight: 700; color: #1C1C1C;">Try it before you buy</span>
             <span style="display: block; margin-top: 3px; font-size: 13px; color: #2F332F;">Free for 24 hours · Up to 300 Maps leads · No card needed</span>
+            <span style="display: block; margin-top: 3px; font-size: 12.5px; color: #42473F;">Windows 10 / 11 · macOS and Linux coming soon</span>
           </span>
         </div>
       </div>
@@ -275,8 +380,8 @@
   <section id="pricing" data-screen-label="Pricing" class="pricing-section">
  <div class="pricing-intro"><span class="latest-eyebrow">CHOOSE YOUR ACCESS</span><h2>Lifetime access.<br>Half the price.</h2><p>Regular price Rs 20,000. Get Lifetime access for Rs 10,000 with our launch offer. Download MamaLead for Windows, then activate your plan in the app.</p></div>
  <div class="pricing-grid">
-  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on up to two machines. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Buy now in Settings &amp; Billing and pay through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p></div><a href="#download" class="pricing-action">Get Lifetime for Rs 10,000</a></article>
-  <article class="pricing-card"><span class="plan-label">1-DAY TRIAL</span><h3>Free</h3><p class="plan-summary">Explore the core features for 24 hours from activation. One trial per email and one machine.</p><ul><li>300 Google Maps leads total across keywords</li><li>Website emails, phone numbers and social profiles</li><li>Website Lookup with your selected contact fields</li><li>All Leads, Saved Lists and Run History</li><li>Branded PDF and Excel exports</li><li>Saved lead data stays on your computer</li></ul><div class="plan-next"><strong>Start with your email</strong><p>Request a trial key in Settings &amp; Billing → Usage. Enter the emailed key in Account; your 24 hours start when you activate.</p></div><a href="#download" class="pricing-action">Download app to start trial</a></article>
+  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on up to two machines. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Lifetime access here and pay securely through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p></div><div style="margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px;"><sc-if value="{{ showCountdown }}" hint-placeholder-val="{{ true }}"><span role="timer" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span aria-hidden="true" style="width: 7px; height: 7px; flex: none; border-radius: 50%; background: #FF6B5E;"></span><span>Ends in <span style="font-variant-numeric: tabular-nums;">{{ countdown }}</span></span></span></sc-if><sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span>Only {{ seatsLeft }} left</span></span></sc-if></div><a href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" class="pricing-action fomo-buy" style="margin-top: 14px; background: #B8281F; color: #FFFFFF; box-shadow: 0 18px 34px -18px rgba(184,40,31,.8);">Claim lifetime access at 50% off</a></article>
+  <article class="pricing-card"><span class="plan-label">1-DAY TRIAL</span><h3>Free</h3><p class="plan-summary">Explore the core features for 24 hours from activation. One trial per email and one machine.</p><ul><li>300 Google Maps leads total across keywords</li><li>Website emails, phone numbers and social profiles</li><li>Website Lookup with your selected contact fields</li><li>All Leads, Saved Lists and Run History</li><li>Branded PDF and Excel exports</li><li>Saved lead data stays on your computer</li></ul><div class="plan-next"><strong>Start with your email</strong><p>Enter your email here to receive a trial key, then download the app. Paste the key in Account; your 24 hours start when you activate.</p></div><a href="#download" class="pricing-action" onClick="{{ onOpenTrial }}">Get my free trial key</a></article>
  </div><p class="pricing-note">Email validity is optional and requires a configured, authorised verification provider. Public website availability and provider limits still apply. See your plan and Maps usage in Settings &amp; Billing.</p>
 </section>
 
@@ -297,7 +402,7 @@
       <div style="margin: 46px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 22px;">
         <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;" style-hover="transform: translateY(-8px);">
           <button type="button" onClick="{{ openStep1 }}" aria-label="Open the Google Maps Scraper module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
-            <img width="1440" height="960" src="img/app/v1.4.19/maps-light.png" alt="Latest light-mode Google Maps Scraper page with keywords, location and filters" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+            <img width="1440" height="960" src="img/app/v1.4.22/maps-light.png" alt="Latest light-mode Google Maps Scraper page with keywords, location and filters" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
           </button>
           <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
             <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">01</span>
@@ -308,7 +413,7 @@
         </div>
         <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .08s;" style-hover="transform: translateY(-8px);">
           <button type="button" onClick="{{ openStep2 }}" aria-label="Open the Email Finder module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
-            <img width="1440" height="1040" src="img/app/v1.4.19/email.png" alt="Latest Email Finder overview with optional validity, Cascade, Confidence mix and saved-email search" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain;" />
+            <img width="1440" height="1040" src="img/app/v1.4.22/email.png" alt="Latest Email Finder overview with optional validity, Cascade, Confidence mix and saved-email search" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: contain;" />
           </button>
           <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
             <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">02</span>
@@ -319,7 +424,7 @@
         </div>
         <div style="display: flex; flex-direction: column; padding: 12px 12px 26px; border-radius: 32px; background: linear-gradient(152deg, rgba(255,255,255,.52) 0%, rgba(255,255,255,.28) 46%, rgba(255,255,255,.42) 100%); backdrop-filter: blur(26px) saturate(150%); -webkit-backdrop-filter: blur(26px) saturate(150%); border: 1px solid rgba(255,255,255,.72); box-shadow: inset 0 2px 1px rgba(255,255,255,.95), inset 0 -2px 1px rgba(255,255,255,.6), 0 40px 70px -44px rgba(40,56,44,.42); transition: transform .6s cubic-bezier(.16,1,.3,1); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .16s;" style-hover="transform: translateY(-8px);">
           <button type="button" onClick="{{ openStep3 }}" aria-label="Open the All Leads, Saved Lists and Run History module" style="display: block; padding: 0; border: 0; border-radius: 20px; overflow: hidden; background: #F5F5F4; cursor: zoom-in;">
-            <img width="1440" height="960" src="img/app/v1.4.19/leads.png" alt="Latest light-mode All Leads page with the permanent store and lead ledger" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
+            <img width="1440" height="960" src="img/app/v1.4.22/leads.png" alt="Latest light-mode All Leads page with the permanent store and lead ledger" decoding="async" style="display: block; width: 100%; height: auto; aspect-ratio: 3 / 2;" />
           </button>
           <div style="padding: 22px 12px 0; display: flex; flex-direction: column; flex: 1;">
             <span style="font-size: 56px; line-height: .9; font-weight: 700; letter-spacing: -.04em; background-image: radial-gradient(circle at 50% 50%, #1C1C1C 1.45px, transparent 1.55px); background-size: 3.2px 3.2px; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">03</span>
@@ -334,7 +439,7 @@
 
   <section id="latest" aria-labelledby="latest-heading" style="max-width:1180px;margin:0 auto;padding:0 24px 28px">
     <div style="padding:clamp(24px,3vw,36px);border-radius:26px;background:#e4ebdd">
-      <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.20</p>
+      <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.22</p>
       <h2 id="latest-heading" class="latest-heading">Find the right business contacts. Keep every step clear.</h2>
       <div class="latest-feature-grid">
         <article><h3>Automatic updates, your choice</h3><p>Turn on background downloads in Account. Get a new-release notice, follow progress and restart when you are ready. Your leads and settings stay on this PC.</p></article><article><h3>Short answers. Straight to the page.</h3><p>MamaLead Assist keeps replies concise and adds the relevant page name below the answer. Click it to open a module, Reports or App updates.</p></article><article><h3>Read a notification with one click</h3><p>New scan, export and update notices pop up in the top-right corner. Click to open the related page and mark the notice read, or review it later in Notifications. All/Unread, Mark all read and delete with Undo remain available.</p></article><article><h3>Your Maps limit stays in place</h3><p>Set one total for the run across keywords and areas. Request 40 and collect at most 40. If fewer results are available, the search finishes with those results.</p></article>
@@ -376,7 +481,7 @@
     </div>
   </section>
 
-  <section id="workflow" aria-labelledby="workflow-heading" style="padding:20px 0 90px"><div style="max-width:1180px;margin:0 auto;padding:0 24px"><div class="latest-workflow"><p class="latest-eyebrow">YOUR EVERYDAY WORKFLOW</p><h2 id="workflow-heading" class="latest-heading">A clearer path from a website to a useful contact.</h2><div class="latest-feature-grid"><article><h3>The main number comes first</h3><p>Phone Finder prioritises the website's main contact number, keeps extra numbers one click away and preserves saved Maps numbers. Targeted checks keep scans responsive, with bounded waits for slow websites.</p></article><article><h3>Read the relevant contact pages</h3><p>Email Finder keeps one main email published on each business website, including Contact Us pages found through links and sitemaps. Optional validity checks apply to the current list.</p></article><article><h3>Pick the details you need</h3><p>Website Lookup lets you choose emails, phones, social profiles and addresses separately. When the scan finishes, its results come into view with each site's status and sources.</p></article><article><h3>Exports you can use</h3><p>PDF and Excel files include the MamaLead logo, clear column headings and properly arranged rows. Export your current finder results, a saved Maps search or selected Website Lookup rows. Email exports keep the same main address shown in the app.</p></article><article><h3>Saved Maps searches, up top</h3><p>Open an earlier city or keyword run from Saved searches and export just that run. The current scan continues to show its own leads in Results.</p></article><article><h3>Updates with a next step</h3><p>Click an unread notification card to mark it read. Notifications has All and Unread views, read controls and delete with Undo. Open the related result, revisit a saved Maps run or reveal an exported file in its folder.</p></article></div><div class="latest-update"><div><p class="latest-eyebrow">APP UPDATES</p><h3>Keep your app up to date.</h3><p>Open Settings &amp; Billing → Account and enable <strong>Automatic updates</strong> for background downloads. New-release notices appear even when you prefer manual updates.</p><p>See progress, then choose <strong>Restart to install</strong> or install when you normally close MamaLead. A download finishing does not interrupt your work with a forced restart.</p><small>Checks run while the app is open. New features reach users when a release is published.</small></div><figure><img width="782" height="385" src="img/app/v1.4.19/app-updates.png" alt="Automatic updates switch and Check for updates in MamaLead Account" loading="lazy" decoding="async"><figcaption>Current app controls. Automatic updates is your choice.</figcaption></figure></div><div class="latest-assist"><div><p class="latest-eyebrow">MAMALEAD ASSIST</p><h3>A short answer. The right page.</h3><p>Get help with the app in English, Urdu, Roman Urdu and other supported languages. Roman Urdu stays in Latin letters, including short follow-ups, rather than switching to Hindi. Ask explicitly if you want a different reply language.</p><p>Replies stay concise, with the relevant page-name link directly below the answer. Open Social Profiles, Email Finder, Phone Finder, Reports or App updates with that link. No personal AI-provider key is needed.</p><small>Internet access and your plan's AI allowance apply. Assist provides guidance; it does not run app actions for you.</small></div><figure class="latest-assist-shot"><img width="385" height="487" src="img/app/v1.4.19/assist.png" alt="Short Roman Urdu reply in MamaLead Assist with an Email Finder page link" loading="lazy" decoding="async"><figcaption>Actual app, illustrative conversation. The page link appears beneath the answer.</figcaption></figure></div><p style="margin:24px 0 0;font-size:12px;color:#555d51;line-height:1.6">Results depend on public information the website makes accessible. Missing details stay blank; published contact information is not a guarantee of an active mailbox or an answered phone.</p></div></div></section>
+  <section id="workflow" aria-labelledby="workflow-heading" style="padding:20px 0 90px"><div style="max-width:1180px;margin:0 auto;padding:0 24px"><div class="latest-workflow"><p class="latest-eyebrow">YOUR EVERYDAY WORKFLOW</p><h2 id="workflow-heading" class="latest-heading">A clearer path from a website to a useful contact.</h2><div class="latest-feature-grid"><article><h3>The main number comes first</h3><p>Phone Finder prioritises the website's main contact number, keeps extra numbers one click away and preserves saved Maps numbers. Targeted checks keep scans responsive, with bounded waits for slow websites.</p></article><article><h3>Read the relevant contact pages</h3><p>Email Finder keeps one main email published on each business website, including Contact Us pages found through links and sitemaps. Optional validity checks apply to the current list.</p></article><article><h3>Pick the details you need</h3><p>Website Lookup lets you choose emails, phones, social profiles and addresses separately. When the scan finishes, its results come into view with each site's status and sources.</p></article><article><h3>Exports you can use</h3><p>PDF and Excel files include the MamaLead logo, clear column headings and properly arranged rows. Export your current finder results, a saved Maps search or selected Website Lookup rows. Email exports keep the same main address shown in the app.</p></article><article><h3>Saved Maps searches, up top</h3><p>Open an earlier city or keyword run from Saved searches and export just that run. The current scan continues to show its own leads in Results.</p></article><article><h3>Updates with a next step</h3><p>Click an unread notification card to mark it read. Notifications has All and Unread views, read controls and delete with Undo. Open the related result, revisit a saved Maps run or reveal an exported file in its folder.</p></article></div><div class="latest-update"><div><p class="latest-eyebrow">APP UPDATES</p><h3>Keep your app up to date.</h3><p>Open Settings &amp; Billing → Account and enable <strong>Automatic updates</strong> for background downloads. New-release notices appear even when you prefer manual updates.</p><p>See progress, then choose <strong>Restart to install</strong> or install when you normally close MamaLead. A download finishing does not interrupt your work with a forced restart.</p><small>Checks run while the app is open. New features reach users when a release is published.</small></div><figure><img width="782" height="385" src="img/app/v1.4.22/app-updates.png" alt="Automatic updates switch and Check for updates in MamaLead Account" loading="lazy" decoding="async"><figcaption>Current app controls. Automatic updates is your choice.</figcaption></figure></div><div class="latest-assist"><div><p class="latest-eyebrow">MAMALEAD ASSIST</p><h3>A short answer. The right page.</h3><p>Get help with the app in English, Urdu, Roman Urdu and other supported languages. Roman Urdu stays in Latin letters, including short follow-ups, rather than switching to Hindi. Ask explicitly if you want a different reply language.</p><p>Replies stay concise, with the relevant page-name link directly below the answer. Open Social Profiles, Email Finder, Phone Finder, Reports or App updates with that link. No personal AI-provider key is needed.</p><small>Internet access and your plan's AI allowance apply. Assist provides guidance; it does not run app actions for you.</small></div><figure class="latest-assist-shot"><img width="385" height="487" src="img/app/v1.4.22/assist.png" alt="Short Roman Urdu reply in MamaLead Assist with an Email Finder page link" loading="lazy" decoding="async"><figcaption>Actual app, illustrative conversation. The page link appears beneath the answer.</figcaption></figure></div><p style="margin:24px 0 0;font-size:12px;color:#555d51;line-height:1.6">Results depend on public information the website makes accessible. Missing details stay blank; published contact information is not a guarantee of an active mailbox or an answered phone.</p></div></div></section>
 
   <section id="privacy" data-screen-label="Privacy" style="padding: 40px 0 90px;">
     <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
@@ -400,7 +505,7 @@
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5"></path></svg></span>Account and licence</div>
-              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Download first, then activate an emailed trial or Lifetime key in Settings &amp; Billing → Account to use the app features. If you connect Google, its sign-in opens on Google's own page.</p>
+              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Choose a trial or Lifetime here, receive your key by email, then download and activate it in Settings &amp; Billing → Account to use the app features. If you connect Google, its sign-in opens on Google's own page.</p>
             </div>
             <div>
               <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 8.5h10a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 7 18.5V10a1.5 1.5 0 0 1 1.5-1.5z"></path><path d="M4 15.5V5.5A1.5 1.5 0 0 1 5.5 4h10"></path></svg></span>Back it up like any file</div>
@@ -414,7 +519,7 @@
             <h3 style="margin: 10px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em;">From download to your first lead</h3>
             <div style="margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px;">
               <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">01</b><span style="flex: 1; font-size: 13.5px;">Download and install the desktop app</span></div>
-              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">02</b><span style="flex: 1; font-size: 13.5px;">Choose a trial or Lifetime in Settings &amp; Billing</span></div>
+              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">02</b><span style="flex: 1; font-size: 13.5px;">Paste your emailed key in Account</span></div>
               <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">03</b><span style="flex: 1; font-size: 13.5px;">Activate your emailed key in Account and start collecting leads</span></div>
             </div>
             <p style="margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; color: #42473F;">Your lead database stays on your device. See your plan, usage and invoices inside the app.</p>
@@ -446,8 +551,13 @@
             <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Desktop installer</span>
             <span style="padding: 7px 13px; border-radius: 999px; background: #F5F5F4; font-size: 12.5px; white-space: nowrap;">Choose your install folder</span>
           </div>
+          <div style="margin: 14px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: #42473F;">Windows only for now.</span>
+            <span style="display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; border: 1px dashed rgba(28,28,28,.28); font-size: 12.5px; white-space: nowrap;">macOS <span style="color: #555956;">· Coming soon</span></span>
+            <span style="display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; border: 1px dashed rgba(28,28,28,.28); font-size: 12.5px; white-space: nowrap;">Linux <span style="color: #555956;">· Coming soon</span></span>
+          </div>
           <div style="margin: 26px 0 0; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-            <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="display: inline-flex; align-items: center; gap: 11px; padding: 17px 30px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 15px; font-weight: 500; white-space: nowrap; box-shadow: 0 16px 34px -16px rgba(28,28,28,.7);">Download for Windows</a>
+            <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" onClick="{{ onDownloadClick }}" style="display: inline-flex; align-items: center; gap: 11px; padding: 17px 30px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 15px; font-weight: 500; white-space: nowrap; box-shadow: 0 16px 34px -16px rgba(28,28,28,.7);">Download for Windows</a>
           </div>
           <p style="margin: 12px 0 0; font-size: 13px; line-height: 1.6; color: #42473F;"><strong>Step 1 · Download</strong><br>Save the Windows installer to your computer.</p>
           <p style="margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: #42473F;"><strong>Step 2 · Install and get started</strong><br>Open the installer, choose your install folder, and launch MamaLead. The app will guide you through getting started.</p>
@@ -492,7 +602,7 @@
       <div style="display: flex; flex-wrap: wrap; gap: 26px; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0;">
         <div style="flex: 1 1 300px; min-width: 0;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <img data-footer-brand-logo="mamalead" src="/img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
+            <img data-footer-brand-logo="mamalead" src="img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
             <span style="font-size: 17px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
           </div>
           <p style="margin: 14px 0 0; max-width: 340px; font-size: 13px; line-height: 1.6; color: #B9BEB6;">A local-first desktop lead generation app. It finds and organises business data; it does not contact anyone on your behalf.</p>
@@ -501,8 +611,8 @@
         <nav style="flex: 1 1 300px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 20px; align-content: start; font-size: 13.5px;">
           <a href="#how" style="color: #E9EBE7;">How it works</a>
           <a href="#modules" style="color: #E9EBE7;">Modules</a>
-          <a href="/privacy.html" style="color: #E9EBE7;">Privacy policy</a>
-          <a href="/terms.html" style="color: #E9EBE7;">Terms of use</a>
+          <a href="privacy.html" style="color: #E9EBE7;">Privacy policy</a>
+          <a href="terms.html" style="color: #E9EBE7;">Terms of use</a>
           <a href="mailto:billing@nafran.co" style="color: #E9EBE7;">Contact support</a>
           <a href="#pricing" style="color: #E9EBE7;">Pricing</a>
           <a href="#download" style="color: #E9EBE7;">Download</a>
@@ -552,7 +662,7 @@
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;heroShot&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dashboard&quot;,&quot;Google Maps&quot;,&quot;All Leads&quot;],&quot;default&quot;:&quot;Dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;showPainting&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;openModuleOnLoad&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;min&quot;:0,&quot;max&quot;:8,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Modules&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;heroShot&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dashboard&quot;,&quot;Google Maps&quot;,&quot;All Leads&quot;],&quot;default&quot;:&quot;Dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;showPainting&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;openModuleOnLoad&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;min&quot;:0,&quot;max&quot;:8,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Modules&quot;},&quot;previewPaymentSuccess&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Checkout&quot;},&quot;offerEndsAt&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-11-30T23:59:59+05:00&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Launch offer&quot;},&quot;seatsTotal&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;min&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Launch offer&quot;},&quot;seatsLeft&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;min&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Launch offer&quot;},&quot;showCountdown&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Launch offer&quot;},&quot;showSeatsLeft&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Launch offer&quot;}}">
 const MODULES = [
   {
     "num": "01",
@@ -570,14 +680,14 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/dashboard-light.png",
+        "src": "img/app/v1.4.22/dashboard-light.png",
         "label": "Dashboard",
         "caption": "Latest MamaLead dashboard with a local sample workspace. Illustrative sample workspace.",
         "alt": "Latest MamaLead dashboard with a local sample workspace.",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/reports.png",
+        "src": "img/app/v1.4.22/reports.png",
         "label": "Insights / Reports",
         "caption": "Saved lead totals, Maps searches and contact coverage on this device. Illustrative sample workspace.",
         "alt": "Saved lead totals, Maps searches and contact coverage on this device.",
@@ -604,14 +714,14 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/maps-light.png",
+        "src": "img/app/v1.4.22/maps-light.png",
         "label": "Google Maps",
         "caption": "Keywords, location, one total limit and Saved searches. Illustrative sample workspace.",
         "alt": "MamaLead 1.4.19 Google Maps Scraper with Saved searches at the top",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/saved-searches.png",
+        "src": "img/app/v1.4.22/saved-searches.png",
         "label": "Saved searches",
         "caption": "Reopen a saved run and export its own results as PDF or Excel. Illustrative sample workspace.",
         "alt": "Saved Maps searches panel with locations, dates and per-run export controls",
@@ -639,21 +749,21 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/social.png",
+        "src": "img/app/v1.4.22/social.png",
         "label": "Social Profiles",
         "caption": "Published social profiles and live search across saved results. Illustrative sample workspace.",
         "alt": "Latest Social Profiles page with saved profile search, History and platform coverage",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/import-websites.png",
+        "src": "img/app/v1.4.22/import-websites.png",
         "label": "Import websites",
         "caption": "Paste links, upload CSV/TSV or choose a saved Maps run. Illustrative sample workspace.",
         "alt": "Current shared Import websites dialog with three input sources",
         "ratio": "661 / 562"
       },
       {
-        "src": "img/app/v1.4.19/social-progress.png",
+        "src": "img/app/v1.4.22/social-progress.png",
         "label": "Scan progress",
         "caption": "Live Social Profiles scan with checked and remaining counts and Stop scan. Illustrative sample workspace.",
         "alt": "Live Social Profiles scan with checked and remaining counts and Stop scan.",
@@ -684,35 +794,35 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/email.png",
+        "src": "img/app/v1.4.22/email.png",
         "label": "Email Finder",
         "caption": "Optional validity, saved search, Cascade and Confidence mix, with an Unknown recheck when available. Illustrative sample workspace.",
         "alt": "Email Finder overview with optional validity, saved-email search, Cascade, Confidence mix and Recheck Unknown controls",
         "ratio": "1440 / 1040"
       },
       {
-        "src": "img/app/v1.4.19/email-results.png",
+        "src": "img/app/v1.4.22/email-results.png",
         "label": "Main email results",
         "caption": "One main published email per company, with validity status and exports. Fictional sample workspace.",
         "alt": "Email Finder Addresses table with main emails, verification status and export controls",
         "ratio": "1106 / 578"
       },
       {
-        "src": "img/app/v1.4.19/email-validity.png",
+        "src": "img/app/v1.4.22/email-validity.png",
         "label": "Scoped email validity",
         "caption": "Check the current import or saved-search results, follow Checking X/Y and use Stop checking. Illustrative sample workspace and verification run.",
         "alt": "Email Finder showing main business emails, current verification count, a progress message and Stop checking",
         "ratio": "1440 / 1040"
       },
       {
-        "src": "img/app/v1.4.19/import-websites.png",
+        "src": "img/app/v1.4.22/import-websites.png",
         "label": "Import websites",
         "caption": "Scan only the website list you choose. Illustrative sample workspace.",
         "alt": "Website import dialog with paste, file and Maps-run choices",
         "ratio": "661 / 562"
       },
       {
-        "src": "img/app/v1.4.19/email-progress.png",
+        "src": "img/app/v1.4.22/email-progress.png",
         "label": "Scan progress",
         "caption": "Live Email Finder scan with checked and remaining counts and Stop scan. Illustrative sample workspace.",
         "alt": "Live Email Finder scan with checked and remaining counts and Stop scan.",
@@ -741,21 +851,21 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/phone.png",
+        "src": "img/app/v1.4.22/phone.png",
         "label": "Phone Finder",
         "caption": "Main contact numbers, extra numbers, coverage and backfill. Illustrative sample workspace.",
         "alt": "Latest Phone Finder showing saved phone results and main website contact labels",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/live-search.png",
+        "src": "img/app/v1.4.22/live-search.png",
         "label": "Live saved search",
         "caption": "Type a company or number to bring matching saved results directly below the bar. Illustrative sample workspace.",
         "alt": "Phone Finder live saved search with matching business rows",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/phone-progress.png",
+        "src": "img/app/v1.4.22/phone-progress.png",
         "label": "Scan progress",
         "caption": "Live Phone Finder scan with checked and remaining counts and Stop scan. Illustrative sample workspace.",
         "alt": "Live Phone Finder scan with checked and remaining counts and Stop scan.",
@@ -782,14 +892,14 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/website.png",
+        "src": "img/app/v1.4.22/website.png",
         "label": "Website Lookup",
         "caption": "Selected fields, progress, per-site results and source pages. Illustrative sample workspace.",
         "alt": "Latest Website Lookup with separate email, phone, social and address options and saved results",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/website-results.png",
+        "src": "img/app/v1.4.22/website-results.png",
         "label": "Contact results",
         "caption": "Current website results with selected contact fields, source pages and export controls. Illustrative sample workspace.",
         "alt": "Current website results with selected contact fields, source pages and export controls.",
@@ -814,28 +924,28 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/leads.png",
+        "src": "img/app/v1.4.22/leads.png",
         "label": "All Leads",
         "caption": "Your saved business records and available contacts. Illustrative sample workspace.",
         "alt": "Latest All Leads page with saved lead records",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/lists.png",
+        "src": "img/app/v1.4.22/lists.png",
         "label": "Saved Lists",
         "caption": "Named groups for the businesses you want to keep together. Illustrative sample workspace.",
         "alt": "Latest Saved Lists page with a sample shortlist",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/runs.png",
+        "src": "img/app/v1.4.22/runs.png",
         "label": "Run History",
         "caption": "Saved runs and their recorded activity. Illustrative sample workspace.",
         "alt": "Latest Run History page",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/notifications.png",
+        "src": "img/app/v1.4.22/notifications.png",
         "label": "Notifications",
         "caption": "Click an unread card to mark it read. Open related results, filter All/Unread or delete with Undo. Illustrative sample notifications.",
         "alt": "Latest notification centre with real event categories and saved-result actions",
@@ -867,28 +977,28 @@ const MODULES = [
     ],
     "shots": [
       {
-        "src": "img/app/v1.4.19/settings.png",
+        "src": "img/app/v1.4.22/settings.png",
         "label": "Usage and plan",
         "caption": "Manage the active plan, local usage and purchases. Illustrative sample workspace.",
         "alt": "Latest Settings and Billing Usage page with the active plan and remaining allowances",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/settings-account.png",
+        "src": "img/app/v1.4.22/settings-account.png",
         "label": "Account and licence",
         "caption": "Trial and Lifetime activation, update controls and local account settings. Illustrative sample workspace.",
         "alt": "Latest Settings and Billing Account page",
         "ratio": "1440 / 960"
       },
       {
-        "src": "img/app/v1.4.19/app-updates.png",
+        "src": "img/app/v1.4.22/app-updates.png",
         "label": "Automatic updates",
         "caption": "Choose background downloads, check manually and decide when to restart. Illustrative sample workspace.",
         "alt": "MamaLead App updates card with Automatic updates switch, version, status and manual check",
         "ratio": "782 / 385"
       },
       {
-        "src": "img/app/v1.4.19/assist.png",
+        "src": "img/app/v1.4.22/assist.png",
         "label": "Short answers and page links",
         "caption": "A short Roman Urdu answer with an Email Finder page link underneath. Illustrative response in the actual app.",
         "alt": "MamaLead Assist with a concise answer and a related Email Finder text link",
@@ -921,7 +1031,7 @@ const FAQS = [
   ],
   [
     "Can I find emails without checking validity?",
-    "Yes. On the Email Finder page, leave Verify found emails Off to find published emails only. Turn it On before scanning for an automatic check, or use Check email validity beside the scan results or Addresses table later. This choice is remembered and is not repeated inside Email Finder's website-import dialog. Website Lookup also offers optional validity when emails are selected. An authorised verification provider is required."
+    "Yes. On the Email Finder page, leave Verify found emails Off to find published emails only. Turn it On before scanning for an automatic check, or use Check email validity beside the scan results or Addresses table later. This choice is remembered and is not repeated inside Email Finder's website-import dialog. Email validity controls are available only in Email Finder. An authorised verification provider is required."
   ],
   [
     "Will email validity check my whole saved database?",
@@ -977,7 +1087,7 @@ const FAQS = [
   ],
   [
     "Can I correct my trial email?",
-    "Before activation, change the email in Settings & Billing and request a replacement key. The previous key becomes invalid. An activated or completed trial cannot be restarted by changing email."
+    "Before activation, use a different email in the website trial popup or change it in Settings & Billing and request a replacement key. The previous key becomes invalid. An activated or completed trial cannot be restarted by changing email."
   ],
   [
     "Do I need an API key?",
@@ -993,7 +1103,7 @@ const FAQS = [
   ],
   [
     "How do I buy Lifetime?",
-    "Choose Buy now in the desktop app. Stripe Checkout asks for your email and card. After payment is verified, your Lifetime key is emailed and Account opens in the app so you can activate it."
+    "Choose Lifetime access on this website. Enter your email first; an existing Lifetime email is blocked before payment. Stripe Checkout collects your card details. After verified payment and email delivery, download MamaLead. A new installation opens Account so you can paste and activate the key. Existing users can also buy from Settings & Billing."
   ],
   [
     "Is scraping Google Maps allowed?",
@@ -1015,27 +1125,37 @@ const FAQS = [
 
 const HERO = {
   "Dashboard": {
-    "src": "img/app/v1.4.19/dashboard-light.png",
+    "src": "img/app/v1.4.22/dashboard-light.png",
     "alt": "MamaLead 1.4.19 light-mode dashboard with an illustrative saved workspace",
     "caption": "Latest desktop design. Screenshots use fictional sample businesses."
   },
   "Google Maps": {
-    "src": "img/app/v1.4.19/maps-light.png",
+    "src": "img/app/v1.4.22/maps-light.png",
     "alt": "Latest Google Maps Scraper with a total lead limit and top Saved searches button",
     "caption": "Set one run limit, watch current results and reopen saved searches."
   },
   "All Leads": {
-    "src": "img/app/v1.4.19/leads.png",
+    "src": "img/app/v1.4.22/leads.png",
     "alt": "Latest All Leads saved business workspace",
     "caption": "Collected businesses stay in your local saved workspace."
   }
 };
 
 class Component extends DCLogic {
-  state = { mod: -1, shot: 0, faq: 0 };
+  state = { mod: -1, shot: 0, faq: 0, paid: false, paidClosed: false, trial: null, trialStep: 'form', trialEmail: '', trialSending: false, trialError: '', trialDone: false };
+  emailRef = React.createRef();
 
   componentDidMount() {
+    this._mounted = true;
+    this.restoreBilling();
+    this._tick = setInterval(() => this.setState({ now: Date.now() }), 1000);
     this._key = (e) => {
+      if (this.state.trial && e.key === 'Tab') {
+        const items = Array.from(document.querySelectorAll('[aria-labelledby="trial-title"] button:not(:disabled), [aria-labelledby="trial-title"] a[href], [aria-labelledby="trial-title"] input')).filter(el => el.getClientRects().length);
+        const first = items[0], last = items[items.length - 1];
+        if (items.length && ((!e.shiftKey && document.activeElement === last) || (e.shiftKey && document.activeElement === first) || !items.includes(document.activeElement))) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+      }
+      if (this.state.trial && e.key === 'Escape') return this.closeTrial();
       if (this.state.mod < 0) return;
       if (e.key === 'Escape') this.close();
       else if (e.key === 'ArrowRight') this.step(1);
@@ -1046,7 +1166,92 @@ class Component extends DCLogic {
     if (start >= 1 && start <= MODULES.length) this.open(start - 1);
   }
 
+  componentDidUpdate(_, prev) {
+    const s = this.state;
+    if (s.trial && s.trialStep === 'form' && (!prev.trial || prev.trialStep !== 'form')) {
+      setTimeout(() => this.emailRef.current && this.emailRef.current.focus({ preventScroll: true }), 60);
+    }
+  }
+
+  async restoreBilling() {
+    const returning = new URLSearchParams(location.search).get('checkout') === 'success';
+    if (returning) this.setState({ checkoutNotice: 'Checking your payment and email delivery…' });
+    try {
+      for (let attempt = 0; attempt < (returning ? 5 : 1); attempt++) {
+        const status = await window.MamaLeadBilling.status();
+        if (!this._mounted) return;
+        const paid = !!(status?.lifetime?.active && status?.purchaseEmail);
+        this.setState({ paidUser: paid, ...(paid && returning ? {paid:true, checkoutNotice:''} : {}),
+          ...(status?.trialRequest?.emailSent ? {trialEmail:status.trialRequest.email, trialDone:true, trialCanChange:status.trialRequest.canChangeEmail} : {}) });
+        if (!returning || paid) return;
+        if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 1800));
+      }
+      this.setState({ checkoutNotice: 'Payment or email delivery is not confirmed yet. Retry the check, or contact billing@nafran.co if you have already paid.' });
+    } catch (error) { if (this._mounted) this.setState({ checkoutNotice: returning ? error.message : '' }); }
+  }
+
+  async checkout(e) {
+    e.preventDefault();
+    if (this._checkoutBusy) return;
+    const email = (this.state.lifetimeEmail || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return this.setState({trialError:'Enter a valid email address.'});
+    this._checkoutBusy = true;
+    this.setState({checkoutBusy:true,trialError:''});
+    try { location.assign(await window.MamaLeadBilling.checkout(email)); }
+    catch (error) { this.setState({checkoutBusy:false,trialError:error.message}); }
+    finally { this._checkoutBusy = false; }
+  }
+
+  openTrial(mode) {
+    this._returnFocus = document.activeElement;
+    this.setState((s) => ({ trial: mode, trialFrom: mode, trialStep: mode === 'choose' ? 'choose' : mode === 'lifetime' ? 'form' : (s.trialDone ? 'sent' : 'form'), trialError: '' }));
+    document.documentElement.style.overflow = 'hidden';
+    setTimeout(() => document.querySelector('[aria-labelledby="trial-title"] button')?.focus(), 80);
+  }
+
+  closeTrial() {
+    this.setState({ trial: null });
+    this._returnFocus?.focus?.();
+    document.documentElement.style.overflow = '';
+  }
+
+  async submitTrial(e) {
+    e.preventDefault();
+    if (this._trialBusy) return;
+    const email = this.state.trialEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return this.setState({ trialError: 'Enter a valid email address.' });
+    this._trialBusy = true;
+    this.setState({ trialSending: true, trialError: '' });
+    try {
+      await window.MamaLeadBilling.trial(email, this.state.trialReplace);
+      if (this._mounted) this.setState({ trialStep: 'sent', trialDone: true, trialEmail: email, trialCanChange:true, trialReplace:false });
+    } catch (error) {
+      if (this._mounted) this.setState({ trialError: error.message || "We couldn't send your key. Please try again." });
+    } finally { this._trialBusy = false; if (this._mounted) this.setState({trialSending:false}); }
+  }
+
+  fomo() {
+    const p = this.props;
+    const end = Date.parse(p.offerEndsAt || '');
+    const ms = isNaN(end) ? 0 : Math.max(0, end - (this.state.now || Date.now()));
+    const pad = (n) => String(n).padStart(2, '0');
+    const countdown = `${Math.floor(ms / 864e5)}d ${pad(Math.floor(ms / 36e5) % 24)}h ${pad(Math.floor(ms / 6e4) % 60)}m ${pad(Math.floor(ms / 1e3) % 60)}s`;
+    const showCountdown = (p.showCountdown === true) && ms > 0;
+    const total = Math.max(1, p.seatsTotal ?? 0);
+    const seatsLeft = Math.min(total, Math.max(0, p.seatsLeft ?? 0));
+    const showSeats = (p.showSeatsLeft === true) && seatsLeft > 0;
+    return {
+      countdown, showCountdown, showSeats, noSeats: !showSeats, seatsLeft, seatsTotal: total,
+      seatsClaimed: total - seatsLeft,
+      claimedPct: showSeats ? `${Math.round((total - seatsLeft) / total * 100)}%` : '50%',
+      popupLabel: showSeats ? `LAUNCH OFFER · ONLY ${seatsLeft} LEFT` : 'LAUNCH OFFER · 50% OFF',
+      popupLine: showCountdown ? `Pay once, never monthly. Offer ends in ${countdown}.` : "Pay once. Never pay monthly. Launch price won't last.",
+    };
+  }
+
   componentWillUnmount() {
+    this._mounted = false;
+    clearInterval(this._tick);
     window.removeEventListener('keydown', this._key);
     document.documentElement.style.overflow = '';
   }
@@ -1106,7 +1311,56 @@ class Component extends DCLogic {
 
     return {
       modules, cur, faqs,
+      checkoutBusy: !!this.state.checkoutBusy,
+      checkoutNotice: this.state.checkoutNotice || '',
+      onLifetimeCheckout: (e) => { e.preventDefault(); this.openTrial('lifetime'); },
+      retryBilling: () => this.restoreBilling(),
+      dismissCheckoutNotice: () => this.setState({checkoutNotice:''}),
+      trialCanChange: this.state.trialCanChange !== false,
+      trialPolicy: this.state.trial === 'lifetime' ? 'One Lifetime key per email. Pay once: Rs 10,000 PKR. Use the key on up to two machines.' : 'One trial per email and one machine. Runs 24 hours from activation.',
       showModal: open,
+      showTrial: !!this.state.trial,
+      trialChoose: this.state.trialStep === 'choose',
+      trialCanBack: this.state.trialFrom === 'choose',
+      chooseTrial: () => this.setState((s) => ({ trial: 'trial', trialStep: s.trialDone ? 'sent' : 'form' })),
+      trialBack: () => this.setState({ trial: 'choose', trialStep: 'choose', trialError: '' }),
+      trialForm: this.state.trialStep === 'form',
+      trialSent: this.state.trialStep === 'sent',
+      trialEyebrow: this.state.trial === 'lifetime' ? 'LIFETIME ACCESS · RS 10,000' : this.state.trial === 'required' ? 'BEFORE YOU DOWNLOAD' : 'FREE 1-DAY TRIAL',
+      trialTitle: this.state.trial === 'lifetime' ? 'Get Lifetime access' : this.state.trial === 'required' ? 'Enter your email first' : 'Get your free 1-day trial',
+      trialLead: this.state.trial === 'lifetime' ? 'Enter the email for your Lifetime key. We check it before opening secure Stripe Checkout.' : this.state.trial === 'required'
+        ? 'Your 1-day trial license key is sent by email. Enter your email, then download MamaLead.'
+        : "Enter your email and we'll send your trial license key. Then download MamaLead and start.",
+      trialEmail: this.state.trial === 'lifetime' ? (this.state.lifetimeEmail || '') : this.state.trialEmail,
+      trialError: this.state.trialError,
+      trialSending: this.state.trialSending || this.state.checkoutBusy,
+      trialCta: this.state.trial === 'lifetime' ? (this.state.checkoutBusy ? 'Checking email…' : 'Continue to secure payment') : this.state.trialSending ? 'Sending…' : 'Send my trial key',
+      inputBorder: this.state.trialError ? '#A23B2A' : 'rgba(28,28,28,.14)',
+      emailRef: this.emailRef,
+      onTrialEmail: (e) => this.setState({ [this.state.trial === 'lifetime' ? 'lifetimeEmail' : 'trialEmail']: e.target.value, trialError: '' }),
+      onTrialSubmit: (e) => this.state.trial === 'lifetime' ? this.checkout(e) : this.submitTrial(e),
+      closeTrial: () => this.closeTrial(),
+      onTrialOverlay: (e) => { if (e.target === e.currentTarget) this.closeTrial(); },
+      changeTrialEmail: () => {
+        this.setState({ trialStep: 'form', trialReplace:true, trialEmail: '', trialError:'' });
+      },
+      onStartTrial: (e) => {
+        e.preventDefault();
+        const el = document.getElementById('download');
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: reduce ? 'auto' : 'smooth' });
+        setTimeout(() => this.openTrial('trial'), reduce ? 0 : 750);
+      },
+      onOpenTrial: (e) => { e.preventDefault(); this.openTrial('trial'); },
+      onDownloadClick: (e) => {
+        if (!this.state.paidUser) { e.preventDefault(); this.openTrial('choose'); }
+      },
+      ...this.fomo(),
+      showPaid: !this.state.paidClosed && this.state.paid,
+      closePaid: () => {
+        this.setState({ paid: false, paidClosed: true });
+        const u = new URL(location.href); u.searchParams.delete('checkout'); u.searchParams.delete('session_id'); history.replaceState(null, '', u);
+      },
       showPainting: this.props.showPainting !== false,
       heroSrc: hero.src, heroAlt: hero.alt, heroCaption: hero.caption,
       heroRatio: '3 / 2',

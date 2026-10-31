@@ -1,3 +1,4 @@
+import {localDate} from '../local-date'
 // Writes an export to disk.
 //
 // The export modal already lets a scope and a column set be chosen; this is the half that was
@@ -59,7 +60,7 @@ function shortDate(iso: unknown): string {
   const raw = text(iso)
   if (!raw) return ''
   const date = new Date(raw)
-  return Number.isNaN(date.getTime()) ? raw : date.toISOString().slice(0, 10)
+  return Number.isNaN(date.getTime()) ? raw : localDate(date)
 }
 
 function duration(ms: unknown): string {
@@ -307,7 +308,7 @@ async function buildXlsx(table: ExportTable, kind: ExportKind): Promise<Buffer> 
     editAs: 'oneCell',
   })
   sheet.mergeCells(2, 1, 2, lastColumn)
-  sheet.getCell(2, 1).value = `${exportTitle(kind)}  |  ${table.values.length} ${table.values.length===1?'row':'rows'}  |  ${new Date().toISOString().slice(0, 10)}`
+  sheet.getCell(2, 1).value = `${exportTitle(kind)}  |  ${table.values.length} ${table.values.length===1?'row':'rows'}  |  ${localDate()}`
   sheet.getCell(2, 1).font = { name: 'Aptos', size: 11, color: { argb: 'FF435042' } }
   sheet.getCell(2, 1).alignment = { vertical: 'middle', indent: 2 }
   sheet.getRow(2).height = 27

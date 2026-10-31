@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AppValues } from './useAppValues'
 import { importPreview, websiteListFromCsv, WEBSITE_IMPORT_LIMIT } from './website-import'
 import './import-websites-dialog.css'
-import { EmailValidityChoice } from './EmailValidityChoice'
 
 type Source = 'paste' | 'file' | 'run'
 type WebsiteFile = ReturnType<typeof websiteListFromCsv> & { name: string; bytes: number; content: string }
@@ -34,7 +33,7 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
   const alive = useRef(true)
   const runRequest = useRef(0)
   const destination = V.isEmail ? 'Email Finder' : V.isPhone ? 'Phone Finder' : V.isWebsite ? 'Website Lookup' : 'Social Profiles'
-  const preview = useMemo(() => importPreview(V.impValue), [V.impValue])
+  const preview = useMemo(() => importPreview(V.impValue,V.isSocial), [V.impValue,V.isSocial])
 
   const ready = preview.sites.length + (V.isSocial ? preview.profiles.length : 0)
 
@@ -70,7 +69,7 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
   function acceptFile(name: string, content: string, bytes: number, column?: number) {
     if (!/\.(csv|tsv|xlsx)$/i.test(name)) throw new Error('Choose a CSV, TSV or Excel website list.')
     if (bytes > 20 * 1024 * 1024) throw new Error('Choose a CSV, TSV or Excel file no larger than 20 MB.')
-    const next = { ...websiteListFromCsv(content, column), name, bytes, content }
+    const next = { ...websiteListFromCsv(content, column,V.isSocial), name, bytes, content }
     if (!alive.current) return
     setFile(next); setError(next.error)
     if (activeSource.current === 'file') V.setImportText(next.text)
@@ -112,7 +111,6 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
         }}><span className="wi-source-icon"><SourceIcon kind={tab.id}/></span><span><strong>{tab.title}</strong><span className="wi-meta">{tab.detail}</span></span></button>)}
       </div>
       <div className="wi-body" role="tabpanel" id={`wi-panel-${source}`} aria-labelledby={`wi-tab-${source}`}>
-        {V.isWebsite && V.websiteLookup.fields.email && <EmailValidityChoice enabled={V.emailAutoVerifyOn} disabled={V.emailScanBusy || V.websiteLookup.running} onToggle={V.toggleEmailAutoVerify}/>}
         {source === 'paste' && <>
           <div className="wi-paste">
             <div className="wi-paste-label"><label htmlFor="website-import-urls">Website URLs</label><div><span>{preview.rows.length} {preview.rows.length === 1 ? 'line' : 'lines'}</span><button type="button" onClick={() => { const sample = 'https://example.com\nhttps://www.example.com/contact\nhttps://example.org\nhttps://example.net'; setPaste(sample); V.setImportText(sample) }}>Paste a sample</button></div></div>
@@ -134,7 +132,7 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
           finally { if (alive.current) setReading(false) }
         }}>
           <div className="wi-file-heading"><span className="wi-file-icon"><SourceIcon kind="file"/></span><div className="wi-file-copy"><strong>{file?.name ?? 'Choose your website list'}</strong><span>{file ? `${file.rowCount.toLocaleString()} rows · ${sizeLabel(file.bytes)}` : 'CSV, TSV or Excel · up to 20 MB'}</span></div><button type="button" className="wi-primary website-file-picker" disabled={reading} onClick={() => void browse()}>{reading ? 'Opening…' : file ? 'Change file' : 'Choose file'}</button></div>
-          {file ? <div className="wi-file-preview"><table aria-label="Website file preview"><thead><tr><th>Row</th><th title={file.label}>Column {file.column} · {file.label}</th><th>Status</th></tr></thead><tbody>{file.preview.rows.slice(0, 5).map((row, index) => <tr key={index}><td>{index + 1}</td><td title={row.value}>{row.value || 'No website'}</td><td><span data-ftag={row.status.toLowerCase()}>{row.status}</span></td></tr>)}</tbody></table><p>{file.rowCount > 5 ? `${(file.rowCount - 5).toLocaleString()} more rows · ` : ''}{ready.toLocaleString()} ready · {file.preview.duplicates} duplicate{file.preview.duplicates === 1 ? '' : 's'} · {file.preview.invalid} skipped</p></div> : <div className="wi-drop-empty"><SourceIcon kind="paste"/><span>Drop your file here, or choose it from your computer.</span><small>Your website or domain column is detected automatically.</small></div>}
+          {file ? <div className="wi-file-preview"><table aria-label="Website file preview"><thead><tr><th>Row</th><th title={file.label}>Column {file.column} · {file.label}</th><th>Status</th></tr></thead><tbody>{file.preview.rows.slice(0, 5).map((row, index) => <tr key={index}><td>{index + 1}</td><td title={row.value}>{row.value || 'No website'}</td><td><span data-ftag={row.status.toLowerCase()} title={row.reason}>{row.status}{row.reason ? ` · ${row.reason}` : ''}</span></td></tr>)}</tbody></table><p>{file.rowCount > 5 ? `${(file.rowCount - 5).toLocaleString()} more rows · ` : ''}{ready.toLocaleString()} ready · {file.preview.duplicates} duplicate{file.preview.duplicates === 1 ? '' : 's'} · {file.preview.invalid} skipped</p></div> : <div className="wi-drop-empty"><SourceIcon kind="paste"/><span>Drop your file here, or choose it from your computer.</span><small>Your website or domain column is detected automatically.</small></div>}
           <p className="wi-hint">Drop another CSV, TSV or Excel file on this box to replace it. The website or domain column is read automatically.</p>
         </div>}
         {source === 'run' && <>
@@ -146,12 +144,13 @@ export function ImportWebsitesDialog({ V }: { V: AppValues }) {
         </>}
         {file && source === 'file' && <label className="wi-hint">Website column <select aria-label="Website column" value={file.columnIndex} onChange={event=>acceptFile(file.name,file.content,file.bytes,Number(event.target.value))}>{file.columns.map(c=><option key={c.index} value={c.index}>{c.label}</option>)}</select></label>}
       </div>
+      {source === 'paste' && preview.rows.some(row=>row.reason) && <p className="wi-hint" role="status">Skipped: {preview.rows.filter(row=>row.reason).slice(0,3).map(row=>row.value).join(', ')}. Use a valid business website; directory and social platform links are excluded here.</p>}
       {(error || (V.isWebsite && V.websiteLookup.error)) && <p className="wi-error" role="alert">{error || V.websiteLookup.error}</p>}
       {ready > WEBSITE_IMPORT_LIMIT && <p className="wi-batch-notice" role="status">{ready} ready · {ready-WEBSITE_IMPORT_LIMIT} over the {WEBSITE_IMPORT_LIMIT} limit. Scan the first {WEBSITE_IMPORT_LIMIT}; the remaining links are saved for the next time you open Import websites.</p>}
       {source === 'paste' && <div className="wi-stats" id="website-import-count" data-import-count="1" role="status">
         <div className="wi-ready"><strong>{ready}</strong><span>ready to {preview.profiles.length && !preview.sites.length ? 'import' : 'scan'}</span></div>
         <div><strong>{preview.duplicates}</strong><span>duplicates merged</span></div>
-        <div><strong>{preview.invalid}</strong><span>not a website</span></div>
+        <div><strong>{preview.invalid}</strong><span>invalid / non-business</span></div>
       </div>}
       <footer className="wi-footer website-import-footer"><span className="wi-summary" role="status">{busy ? 'Preparing your websites…' : ready ? `${ready.toLocaleString()} unique ${preview.profiles.length ? 'items' : ready === 1 ? 'website' : 'websites'} ready` : 'Add websites to start your scan'}</span><div><button type="button" className="wi-cancel" data-socimpcancel="1" onClick={V.closeImp}>Cancel</button><button type="button" className="wi-primary wi-scan" data-socimpgo="1" data-importgo="1" data-run="1" disabled={Boolean(busy) || !V.impHasLines} onClick={V.impImport}><SourceIcon kind="search"/>{V.impHasLines && !busy ? V.impScanLabel : 'Scan websites'}</button></div></footer>
     </section>

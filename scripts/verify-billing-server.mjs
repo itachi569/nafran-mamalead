@@ -37,7 +37,7 @@ const fakeStripe = async (raw, request) => {
     const count = [...sessions.keys()].filter((key) => key !== 'cs_test_standalone').length
     const id = decisionPass && body.get('metadata[checkoutFlow]') === 'desktop-standalone' ? 'cs_test_standalone' : decisionPass ? `cs_test_decision${count || ''}` : `cs_test_lifetime${count || ''}`
     const url = `https://checkout.stripe.com/c/pay/${id}`
-    sessions.set(id, { id, url, client_reference_id: body.get('client_reference_id'), mode: body.get('mode'), metadata: { product: body.get('metadata[product]'), checkoutFlow: body.get('metadata[checkoutFlow]') }, status: 'open', payment_status: 'unpaid', customer: body.get('customer'), customer_details: { email: customers.get(body.get('customer')) }, payment_intent: 'pi_mock', subscription: null, livemode: false, amount_total: decisionPass ? 100000 : 1000000, currency: 'pkr', manualPrice: body.get('line_items[0][price_data][unit_amount]') })
+    sessions.set(id, { id, url, success_url:body.get('success_url'), cancel_url:body.get('cancel_url'), client_reference_id: body.get('client_reference_id'), mode: body.get('mode'), metadata: { product: body.get('metadata[product]'), checkoutFlow: body.get('metadata[checkoutFlow]') }, status: 'open', payment_status: 'unpaid', customer: body.get('customer'), customer_details: { email: customers.get(body.get('customer')) }, payment_intent: 'pi_mock', subscription: null, livemode: false, amount_total: decisionPass ? 100000 : 1000000, currency: 'pkr', manualPrice: body.get('line_items[0][price_data][unit_amount]') })
     if (body.get('mode') === 'subscription') subscriptions.set('sub_mock', { id: 'sub_mock', status: 'active', livemode: false, customer: body.get('customer'), latest_invoice: 'in_decision', items: { data: [{ price: { id: 'price_decision' }, current_period_start: Math.floor(Date.now() / 1000) - 60, current_period_end: Math.floor(Date.now() / 1000) + 2_592_000 }] } })
     result = { id, url }
   } else if (/\/checkout\/sessions\/cs_test_\w+\/line_items$/.test(path)) {
@@ -178,7 +178,7 @@ try {
   check('reopening a paid return does not issue a second license', reissued.status === 200 && reissued.body.licenseKey === null && reissued.body.last4 === issued.body.licenseKey.slice(-4) && service.db.prepare('select count(*) as count from licenses').get().count === 1)
   const repeatBuyer = (await call('/v1/installations', null, 'POST')).body.token
   const repeatedEmail = await call('/v1/checkout', repeatBuyer, 'POST', { product: 'lifetime', email: 'BUYER@example.test' })
-  check('another installation cannot pay again or get another lifetime key for the same email', repeatedEmail.status === 409 && /account already exists/i.test(repeatedEmail.body.error) && service.db.prepare('select count(*) as count from licenses').get().count === 1)
+  check('another installation cannot pay again or get another lifetime key for the same email', repeatedEmail.status === 409 && /This email is already used/i.test(repeatedEmail.body.error) && service.db.prepare('select count(*) as count from licenses').get().count === 1)
   const trialUpgradeBuyer = (await call('/v1/installations', null, 'POST')).body.token
   const upgradeCheckout = await call('/v1/checkout', trialUpgradeBuyer, 'POST', { product: 'lifetime', email: 'trial@example.test' })
   check('a trial email can start one lifetime upgrade', upgradeCheckout.status === 200 && upgradeCheckout.body.url.startsWith('https://checkout.stripe.com/'))
@@ -342,7 +342,12 @@ try {
   const directUse = await call('/v1/decision-maker/consume', directToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000006' }, directDevice)
   check('device-bound pass counts Decision Maker searches', directUse.status === 200 && directUse.body.remaining === 999)
   const directInsert = service.db.prepare('insert into decision_lead_uses (owner_id, period_key, subject_hash, slot, created_at) values (?, ?, ?, ?, ?)')
+  // Batch fixture writes: 999 synchronous fsyncs can outlast the local HTTP keep-alive on Windows.
+  service.db.exec('begin')
+  try {
   for (let slot = 2; slot <= 1000; slot += 1) directInsert.run(directOwner, `pass:${directSessionId}`, `direct-lead-${slot}`, slot, new Date().toISOString())
+    service.db.exec('commit')
+  } catch(error) {service.db.exec('rollback');throw error}
   const directRenewal = await call('/v1/checkout', directToken, 'POST', { product: 'decisionMaker' }, directDevice)
   const directRenewalId = directRenewal.body.url?.split('/').at(-1)
   check('exhausted device-bound pass can be renewed manually with the same Stripe customer', directRenewal.status === 200 && directRenewalId !== directSessionId && sessions.get(directRenewalId)?.customer === 'cus_direct')
@@ -368,7 +373,54 @@ try {
     const liveToken = (await registration.json()).token
     const forbidden = await fetch(liveBase + '/v1/checkout', { method: 'POST', headers: { authorization: `Bearer ${liveToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'lifetime' }) })
     check('live Checkout refuses a local HTTP return URL', forbidden.status === 503)
-  } finally {
+    const websiteToken = (await call('/v1/installations', null, 'POST')).body.token
+  const webCheckout = await call('/v1/checkout', websiteToken, 'POST', {product:'lifetime',channel:'website',email:'website@example.test'})
+  const webSession = sessions.get(webCheckout.body.url?.split('/').at(-1))
+  check('website Lifetime checkout uses the checked email and returns to the website', webCheckout.status === 200 && webSession.metadata.checkoutFlow === 'website' && webSession.success_url.startsWith('https://mamalead.com/?checkout=success') && webSession.cancel_url === 'https://mamalead.com/?checkout=cancelled#pricing')
+  check('website unpaid checkout cannot claim success', !(await call('/v1/status',websiteToken)).body.lifetime.active)
+  Object.assign(webSession,{status:'complete',payment_status:'paid',customer_details:{email:'website@example.test'}})
+  const webPaid = await call('/v1/status',websiteToken)
+  check('verified website payment emails a key before reporting delivery', webPaid.status === 200 && webPaid.body.lifetime.active && webPaid.body.purchaseEmail === 'website@example.test' && emails.at(-1).to === 'website@example.test')
+  const webKey = emails.at(-1).licenseKey, emailCount = emails.length
+  await call('/v1/status',websiteToken)
+  check('repeat website status is idempotent', emails.length === emailCount)
+  for (const device of ['c'.repeat(64),'d'.repeat(64)]) {
+    const installation=(await call('/v1/installations',null,'POST')).body.token
+    const result=await call('/v1/activate',installation,'POST',{licenseKey:webKey},device)
+    check('website purchase leaves desktop activation slots available '+device[0],result.status===200 && result.body.active)
+  }
+  const webTrialToken=(await call('/v1/installations',null,'POST')).body.token
+  await call('/v1/trial',webTrialToken,'POST',{email:'website-trial@example.test'})
+  const webTrialKey=emails.at(-1).licenseKey
+  check('browser trial status confirms actual email delivery', (await call('/v1/status',webTrialToken)).body.trialRequest.emailSent === true)
+  const trialDesktop=(await call('/v1/installations',null,'POST')).body.token, webTrialDevice='e'.repeat(64)
+  check('website trial key activates on the desktop', (await call('/v1/activate',trialDesktop,'POST',{licenseKey:webTrialKey},webTrialDevice)).status === 200)
+  const nextBrowser=(await call('/v1/installations',null,'POST')).body.token
+  await call('/v1/trial',nextBrowser,'POST',{email:'another-website-trial@example.test'})
+  const nextKey=emails.at(-1).licenseKey, nextDesktop=(await call('/v1/installations',null,'POST')).body.token
+  check('changing browser and email cannot restart a trial on the same device', (await call('/v1/activate',nextDesktop,'POST',{licenseKey:nextKey},webTrialDevice)).status === 409)
+  const retryToken=(await call('/v1/installations',null,'POST')).body.token
+  const retryCheckout=await call('/v1/checkout',retryToken,'POST',{product:'lifetime',channel:'website'})
+  const retrySession=sessions.get(retryCheckout.body.url.split('/').at(-1))
+  Object.assign(retrySession,{status:'complete',payment_status:'paid',customer:'cus_webretry',customer_details:{email:'website-retry@example.test'}})
+  failNextLicenseEmail=true
+  check('website return does not confirm an undelivered key', (await call('/v1/status',retryToken)).status === 503)
+  const retryPaid=await call('/v1/status',retryToken)
+  check('website return recovers pending delivery after reconciliation cleared the pending checkout', retryPaid.status===200 && retryPaid.body.purchaseEmail==='website-retry@example.test')
+  const duplicateEmailToken=(await call('/v1/installations',null,'POST')).body.token
+  const beforeDuplicateSessions=sessions.size, beforeDuplicateEmails=emails.length
+  const duplicateLifetime=await call('/v1/checkout',duplicateEmailToken,'POST',{product:'lifetime',channel:'website',email:' WEBSITE@EXAMPLE.TEST '})
+  check('already-used Lifetime email is rejected before Stripe checkout creation',duplicateLifetime.status===409 && /This email is already used/.test(duplicateLifetime.body.error) && sessions.size===beforeDuplicateSessions)
+  check('original buyer sees the same duplicate-email notice', /This email is already used/.test((await call('/v1/checkout',websiteToken,'POST',{product:'lifetime',channel:'website',email:'website@example.test'})).body.error))
+  const duplicateTrial=await call('/v1/trial',duplicateEmailToken,'POST',{email:' WEBSITE-TRIAL@EXAMPLE.TEST '})
+  check('already-used trial email shows the explicit notice without another email',duplicateTrial.status===409 && /This email is already used/.test(duplicateTrial.body.error) && emails.length===beforeDuplicateEmails)
+  const racingTokens=await Promise.all([0,1].map(async()=> (await call('/v1/installations',null,'POST')).body.token))
+  const racingTrials=await Promise.all(racingTokens.map(t=>call('/v1/trial',t,'POST',{email:'concurrent-trial@example.test'})))
+  check('concurrent trial requests cannot issue two keys for one email',racingTrials.filter(r=>r.status===200).length===1 && racingTrials.filter(r=>r.status===409).length===1)
+  const racingCheckouts=await Promise.all(racingTokens.map(t=>call('/v1/checkout',t,'POST',{product:'lifetime',channel:'website',email:'concurrent-lifetime@example.test'})))
+  check('concurrent Lifetime requests cannot open two checkouts for one email',racingCheckouts.filter(r=>r.status===200).length===1 && racingCheckouts.filter(r=>r.status===409).length===1)
+  console.log('PASS website purchase/trial delivery, duplicate emails and desktop handoff')
+} finally {
     await new Promise((resolve) => live.server.close(resolve))
     live.db.close()
   }

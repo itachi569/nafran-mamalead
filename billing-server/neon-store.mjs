@@ -285,6 +285,13 @@ export function createNeonStore(databaseUrl) {
         where id = ${trialId} and sent_at is not null and revoked_at is null
           and (bound_installation_id is null or bound_installation_id = ${installationId})
           and (expires_at is null or expires_at > ${activatedAt})
+          and not exists (
+            select 1 from billing_trial_licenses prior
+            join billing_installations used on used.id = prior.bound_installation_id
+            join billing_installations target on target.id = ${installationId}
+            where prior.id <> ${trialId} and prior.activated_at is not null
+              and (used.id = target.id or (target.device_id is not null and used.device_id = target.device_id))
+          )
         returning activated_at, expires_at
       `
       if (!rows.length) return null

@@ -169,7 +169,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       const pending = await stripe(`checkout/sessions/${encodeURIComponent(sessionId)}`)
       if (pending.status === 'complete' && pending.payment_status === 'paid') {
         const purchase = await reconcile(sessionId)
-        if (purchase.product === 'lifetime' && !purchase.duplicate && pending.metadata?.checkoutFlow === 'desktop') await issueLicense(purchase)
+        if (purchase.product === 'lifetime' && !purchase.duplicate && ['desktop', 'website'].includes(pending.metadata?.checkoutFlow)) await issueLicense(purchase)
         if (purchase.product === 'decisionMaker' && !purchase.duplicate && pending.metadata?.checkoutFlow === 'desktop-standalone') await issueDecisionLicense(purchase)
       }
     }
@@ -177,6 +177,13 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     if (row.decision_pass_session_id && !row.refunded_duplicate_session_id) {
       const unsentDecisionKey = await store.decisionLicenseForPurchase?.(row.id)
       if (unsentDecisionKey && !unsentDecisionKey.sent_at) await issueDecisionLicense(row)
+    }
+    if (row.lifetime_session_id && !row.refunded_duplicate_session_id) {
+      const delivery = await store.licenseForPurchase?.(row.id)
+      if (delivery && !delivery.sent_at) {
+        const session = await stripe(`checkout/sessions/${encodeURIComponent(row.lifetime_session_id)}`)
+        if (await paidLifetimeSession(session, row.id)) await issueLicense(row)
+      }
     }
     const lifetimePrice = await price(prices.lifetime)
     if (lifetimePrice.amount !== LIFETIME_PRICE.amount || lifetimePrice.interval) throw new HttpError(502, 'The configured Lifetime Price must be Rs 10,000 PKR one-time.')
@@ -223,7 +230,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       purchaseEmail: purchasedLicense?.sent_at ? purchasedLicense.email : null,
       decisionKeyEmail: purchasedDecisionLicense?.sent_at ? purchasedDecisionLicense.email : null,
       trial: { active: trialActive, expiresAt: isTrial ? linkedLicense.expires_at ?? null : null },
-      trialRequest: { requested: Boolean(requestedTrial), email: requestedTrial?.email ?? null,
+      trialRequest: { requested: Boolean(requestedTrial), emailSent: Boolean(requestedTrial?.sent_at && !requestedTrial.revoked_at), email: requestedTrial?.email ?? null,
         canChangeEmail: Boolean(requestedTrial?.sent_at && !requestedTrial.activated_at && !requestedTrial.bound_installation_id && !requestedTrial.revoked_at) },
       coreLicenseActive: licenseActive,
       decisionKeyActive: decisionLicenseActive || Boolean(directPeriod),
@@ -417,9 +424,9 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     if (typeof store.trialByEmail !== 'function' || typeof store.createTrial !== 'function') throw new HttpError(503, 'Trial storage is not configured.')
     const existing = await store.trialForInstallation(row.id)
     const emailTrial = await store.trialByEmail(email)
-    if (emailTrial && emailTrial.installation_id !== row.id) throw new HttpError(409, 'A 1-day trial has already been requested for this email.')
-    if (existing && replaceExisting && existing.email === email) throw new HttpError(409, 'Enter a different email address. This email already received its one trial key.')
-    if (existing && !replaceExisting) throw new HttpError(409, 'A 1-day trial has already been requested for this email or browser.')
+    if (emailTrial && emailTrial.installation_id !== row.id) throw new HttpError(409, 'This email is already used for a 1-day trial. Use the key already emailed to you.')
+    if (existing && replaceExisting && existing.email === email) throw new HttpError(409, 'This email is already used for a 1-day trial. Enter a different email only to correct an unactivated key.')
+    if (existing && !replaceExisting) throw new HttpError(409, existing.email === email ? 'This email is already used for a 1-day trial. Use the key already emailed to you.' : 'This browser already requested its trial. Correct the email for the existing unactivated key instead.')
     if (!existing && replaceExisting) throw new HttpError(409, 'Request a trial key before changing its email.')
     if (existing && (existing.activated_at || existing.bound_installation_id || existing.revoked_at)) {
       throw new HttpError(409, 'This device has already activated or closed its trial. Changing email does not start another free trial.')
@@ -700,7 +707,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         }
         if (method === 'POST' && url.pathname === '/v1/checkout') {
           if (mode === 'live' && publicUrl.protocol !== 'https:') throw new HttpError(503, 'Live Checkout requires a hosted HTTPS billing URL.')
-          const { product, email: rawEmail } = await jsonBody(readBody)
+          const { product, email: rawEmail, channel } = await jsonBody(readBody)
           if (product === 'decisionMaker') {
             if (!deviceId) throw new HttpError(403, 'Open the MamaLead desktop app to subscribe to Decision Makers.')
             const status = await verifiedStatus(row)
@@ -752,10 +759,10 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
               mode: 'payment', ...(row.customer_id ? { customer: row.customer_id } : { customer_creation: 'always' }),
               'payment_method_types[0]': 'card',
               'line_items[0][price]': prices.lifetime, 'line_items[0][quantity]': '1',
-              client_reference_id: row.id, 'metadata[product]': product, 'metadata[checkoutFlow]': 'desktop',
+              client_reference_id: row.id, 'metadata[product]': product, 'metadata[checkoutFlow]': channel === 'website' ? 'website' : 'desktop',
               'invoice_creation[enabled]': 'true',
-              success_url: new URL('/return?session_id={CHECKOUT_SESSION_ID}', publicUrl).toString(),
-              cancel_url: new URL('/cancel', publicUrl).toString(),
+              success_url: channel === 'website' ? new URL('/?checkout=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/return?session_id={CHECKOUT_SESSION_ID}', publicUrl).toString(),
+              cancel_url: channel === 'website' ? new URL('/?checkout=cancelled#pricing', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/cancel', publicUrl).toString(),
             })
             if (!/^https:\/\/checkout\.stripe\.com\//.test(session.url ?? '')) throw new HttpError(502, 'Stripe did not return a Checkout URL.')
             if (typeof store.clearPurchaseError === 'function') await store.clearPurchaseError(row.id)
@@ -766,9 +773,9 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           if (!store.reserveLifetimeEmail || !store.lifetimeCheckoutByEmail || !store.lifetimeCheckoutForInstallation || !store.lifetimeLicenseByEmail || !store.saveLifetimeCheckout || !store.releaseLifetimeEmail) {
             throw new HttpError(503, 'Lifetime email storage is not configured.')
           }
+          if (await store.lifetimeLicenseByEmail(email)) throw new HttpError(409, 'This email is already used for Lifetime access. Use the key already emailed to you.')
           const current = await verifiedStatus(row)
           if (current.lifetime.active) throw new HttpError(409, 'The Lifetime Deal is already purchased for this installation.')
-          if (await store.lifetimeLicenseByEmail(email)) throw new HttpError(409, 'An account already exists for this email. Use its lifetime license key.')
           const sameEmailReservation = await store.lifetimeCheckoutByEmail(email)
           if (sameEmailReservation && sameEmailReservation.installation_id !== row.id) {
             let expired = !sameEmailReservation.session_id && Date.now() - Date.parse(sameEmailReservation.created_at) > 120_000
@@ -797,14 +804,15 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
             throw new HttpError(409, 'A checkout is already starting for another email. Try again shortly.')
           }
           reservation = await store.reserveLifetimeEmail(email, row.id)
-          if (!reservation) throw new HttpError(409, 'An account already exists or a lifetime checkout is in progress for this email.')
+          if (!reservation) throw new HttpError(409, 'This email is already used or has a Lifetime checkout in progress. Complete the existing checkout or use your emailed key.')
           if (!reservation.newlyCreated && !reservation.session_id) throw new HttpError(409, 'A checkout is already starting for this email. Try again shortly.')
           const fields = {
             mode: 'payment',
             'line_items[0][price]': prices.lifetime, 'line_items[0][quantity]': '1',
             client_reference_id: row.id, 'metadata[product]': product,
-            success_url: new URL(`/` + `?purchase=success&session_id={CHECKOUT_SESSION_ID}`, env.APP_PUBLIC_URL || publicUrl).toString(),
-            cancel_url: new URL('/cancel', publicUrl).toString(),
+            ...(channel === 'website' ? { 'metadata[checkoutFlow]': 'website' } : {}),
+            success_url: new URL(channel === 'website' ? '/?checkout=success&session_id={CHECKOUT_SESSION_ID}' : '/?purchase=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || (channel === 'website' ? 'https://mamalead.com' : publicUrl)).toString(),
+            cancel_url: channel === 'website' ? new URL('/?checkout=cancelled#pricing', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/cancel', publicUrl).toString(),
           }
           try {
             const customer = await stripe('customers', { email })

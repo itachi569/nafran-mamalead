@@ -1,3 +1,4 @@
+import {MapCoveragePin} from './MapCoveragePin'
 // GENERATED FILE · do not edit by hand.
 // Source: .reference/markup.html (the MamaLead document bundled by the reference app).
 // Regenerate with: node scripts/build-reference-ui.mjs
@@ -801,10 +802,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{position: "relative", height: "clamp(240px,30vh,340px)", marginTop: "18px", borderRadius: "20px", overflow: "hidden", background: "#E9EBE4"}}>
                       {(V.mapsPins ?? []).map((pin, __ipin) => (
                         <Fragment key={__ipin}>
-                          <span data-pin="1" data-on={pin.reveal} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: pin.color === "#1C1C1C" ? "#F0F0F0" : "#1C1C1C", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
-                            <span style={{display: "grid", placeItems: "center", width: "20px", height: "20px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "8.5px", fontWeight: "700"}}>{pin.ini}</span>
-                            <span style={{overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}}>{pin.name}</span>
-                          </span>
+                          <MapCoveragePin pin={pin}/>
                         </Fragment>
                       ))}
                     </div>
@@ -1040,10 +1038,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                     <div style={{position: "relative", height: "clamp(250px,25vw,330px)", marginTop: "16px", borderRadius: "18px", overflow: "hidden", background: "#E9EBE4"}}>
                       {(V.mapsPins ?? []).map((pin, __ipin) => (
                         <Fragment key={__ipin}>
-                          <span data-pin="1" data-on={pin.on} data-name={pin.name} title={pin.name} style={{position: "absolute", left: pin.x, top: pin.y, maxWidth:"calc(100% - " + pin.x + " - 8px)", display: "flex", alignItems: "center", gap: "7px", padding: "5px 12px 5px 5px", borderRadius: "999px", background: pin.color, color: pin.color === "#1C1C1C" ? "#F0F0F0" : "#1C1C1C", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap", boxShadow: "0 10px 20px -13px rgba(28,28,28,.85)"}}>
-                            <span style={{display: "grid", placeItems: "center", width: "20px", height: "20px", borderRadius: "999px", background: "#1C1C1C", color: "#F0F0F0", fontSize: "8.5px", fontWeight: "700"}}>{pin.ini}</span>
-                            <span style={{overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}}>{pin.name}</span>
-                          </span>
+                          <MapCoveragePin pin={pin}/>
                         </Fragment>
                       ))}
                     </div>
@@ -1577,7 +1572,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                   </section>
                   <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#1C1C1C", color: "#F0F0F0", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                     <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Run in Bulk</h2>
-                    <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#9BA29C"}}>{V.emailNoAddress} leads still have no address on file.</p>
+                    <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#9BA29C"}}>{V.emailNoAddress} leads still have no email address on file.</p>
                     <div style={{display: "flex", flexDirection: "column", gap: "8px", marginTop: "18px"}}>
                       <button data-action="Find & verify needed" type="button" data-attn="1" style={{display: "flex", alignItems: "center", gap: "12px", width: "100%", padding: "13px 15px", border: "0", borderRadius: "14px", background: "#C8D5BB", color: "#1C1C1C", fontFamily: "inherit", fontSize: "13.5px", fontWeight: "500", textAlign: "left", cursor: "pointer"}}>
                         <span style={{flex: "1"}}>Find &amp; verify needed</span>

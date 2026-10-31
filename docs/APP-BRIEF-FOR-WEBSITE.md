@@ -1,4 +1,6 @@
-# Nafran Leads Scraper — App Brief (for designing the website)
+# Nafran Leads Scraper — historical app design brief
+
+> This is the original design brief and includes retired pricing/features. For the current 1.4.22 website and activation flow, see [website-design-2026-10-31.md](website-design-2026-10-31.md) and [qa-1.4.22-resolution.md](qa-1.4.22-resolution.md).
 
 This document describes the **desktop app** so a web version / marketing site can be designed from
 it. It covers every screen, what each control does, the data behind it, and the services it talks to.

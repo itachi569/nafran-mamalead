@@ -18,7 +18,7 @@ const types = {
   '.woff2': 'font/woff2',
 }
 
-const allowedFile = /^(?:index\.html|privacy\.html|terms\.html|support\.js|sales\.js|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
+const allowedFile = /^(?:index\.html|privacy\.html|terms\.html|support\.js|sales\.js|billing\.js|uploads\/[\w .-]+|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
 
 const server = createServer(async (request, response) => {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -57,7 +57,7 @@ const server = createServer(async (request, response) => {
   response.writeHead(200, {
     'content-type': types[extension] || 'application/octet-stream',
     'content-length': info.size,
-    'cache-control': extension === '.html' || file === 'sales.js' ? 'no-store' : 'public, max-age=86400',
+    'cache-control': extension === '.html' || ['sales.js','billing.js'].includes(file) ? 'no-store' : 'public, max-age=86400',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'strict-origin-when-cross-origin',

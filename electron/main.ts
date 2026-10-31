@@ -503,7 +503,13 @@ ipcMain.handle('notifications:reveal-export',async (_event,payload:{path?:string
 ipcMain.handle('assist:status', () => billingAssistStatus())
 ipcMain.handle('assist:test', () => askAssist({ messages: [{ role: 'user', content: 'Say hello in one short sentence.' }] })
   .then(({ model }) => ({ connected: true, model })))
-ipcMain.handle('assist:chat', (_event, payload: AssistChatRequest = {}) => askAssist(payload))
+ipcMain.handle('assist:chat', (_event, payload: AssistChatRequest = {}) => {
+  const {db,repository}=openDatabase()
+  const question=payload.messages?.filter(message=>message.role==='user').at(-1)?.content || ''
+  const recentScanErrors=repository.recentScanErrors(db.ensureWorkspace().id,question)
+  return askAssist({...payload,context:{...payload.context,recentScanErrors,
+    troubleshootingRule:'Use the saved domain-specific scan errors when troubleshooting. Match the website in the question first; explain its recorded error without inventing a cause.'}})
+})
 
 type EmailValiditySummary = {
   configured: boolean

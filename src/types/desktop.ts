@@ -26,6 +26,7 @@ export interface Lead {
   keyword: string
   provider: ProviderId
   capturedAt: string
+  score?: number
   /** When a finder last read this lead's own site; null when it never has. */
   lastScannedAt: string | null
 }
@@ -261,7 +262,7 @@ export interface LocalApi {
   }
   runs: {
     list: (limit?: number) => Promise<StoredRun[]>
-    counts: () => Promise<{ runs: number; clean: number; places: number; medianMs: number }>
+    counts: () => Promise<{ runs: number; clean: number; failed: number; stopped: number; places: number; medianMs: number }>
   }
   contacts: {
     list: (kind: 'email' | 'phone' | 'social', leadIds?: string[]) => Promise<Record<string, unknown>[]>

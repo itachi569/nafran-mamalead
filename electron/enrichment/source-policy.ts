@@ -8,7 +8,7 @@ export function socialWebsite(value:string):boolean {
 export function directoryScanError(website: string): string | null {
   try {
     const host = new URL(cleanWebsiteUrl(website) || website).hostname.toLowerCase().replace(/^www\./, '')
-    if(socialWebsite(website))return 'This is a social profile, not the business website. Its link is kept under Social Profiles; add the business’s own website to scan its contacts.'
+    if(socialWebsite(website))return 'This is a social website. Paste a full profile link in Social Profiles, or use the business’s own website to scan its contacts.'
     if(['lovable.app','github.io','wixsite.com'].includes(host))return 'Use the business’s full hosted website address, including its subdomain.'
     if (directories.some(domain => host === domain || host.endsWith('.' + domain))) return 'This is a directory listing. Use the business’s own website to find its contacts; directory-wide contacts were not imported.'
   } catch { return 'This website URL is invalid. Check it and retry.' }

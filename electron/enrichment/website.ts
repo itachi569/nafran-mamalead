@@ -825,7 +825,7 @@ export class WebsiteEnricher {
 
     if(!/^https?:$/.test(origin.protocol))return {...findings,error:'Enter an HTTP or HTTPS website URL.'}
     if(signal?.aborted)throw new DOMException('Enrichment cancelled','AbortError')
-    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),16_000)
+    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(new Error('The website took too long to respond. Retry this website.')),16_000)
     const combined=AbortSignal.any([budget.signal,...(signal?[signal]:[])])
     const found=new Map<string,FoundSocial>(),own=canonicalSocialProfile(origin.href)
     if(own)found.set(socialProfileIdentity(own),{...own,page:origin.href})
@@ -876,7 +876,7 @@ export class WebsiteEnricher {
     const result:WebsiteFindings={emails:[],phones:[],socials:[],people:[],addresses:[],pagesRead:[],error:null}
     let origin:URL
     try{origin=new URL(website)}catch{return {...result,error:'Enter a valid website URL.'}}
-    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(),16_000)
+    const budget=new AbortController(),timer=setTimeout(()=>budget.abort(new Error('The website took too long to respond. Retry this website.')),16_000)
     const combined=AbortSignal.any([budget.signal,...(signal?[signal]:[])])
     const sameSite=(raw:string,base=origin.href):string|null=>{try{const url=new URL(decodeHtml(raw),base);url.hash='';return /^https?:$/.test(url.protocol)&&url.host.replace(/^www\./i,'')===origin.host.replace(/^www\./i,'')?url.href:null}catch{return null}}
     const resolved=new Map<string,string>()

@@ -268,6 +268,12 @@ export function createBillingServer(options = {}) {
           db.exec('ROLLBACK')
           return null
         }
+        const previous = db.prepare(`select t.id from trial_licenses t
+          join installations used on used.id = t.bound_installation_id
+          join installations target on target.id = ?
+          where t.id <> ? and t.activated_at is not null
+          and (used.id = target.id or (target.device_id is not null and used.device_id = target.device_id)) limit 1`).get(installationId, trialId)
+        if (previous) { db.exec('ROLLBACK'); return null }
         if (!trial.bound_installation_id) db.prepare('update trial_licenses set bound_installation_id = ?, activated_at = ?, expires_at = ? where id = ?').run(installationId, activatedAt, expiresAt, trialId)
         const installed = db.prepare('update installations set license_id = ?, license_slot = 1 where id = ? returning id').get(trialId, installationId)
         if (!installed) { db.exec('ROLLBACK'); return null }

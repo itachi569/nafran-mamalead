@@ -44,6 +44,7 @@ export function nowIso(): string {
 }
 
 export class LocalDatabase {
+  private transactionDepth = 0
   private readonly db: DatabaseSync
   /** Where the file lives, for the page that says the store is on this machine. */
   private readonly file: string
@@ -184,14 +185,20 @@ export class LocalDatabase {
   }
 
   transaction<T>(work: () => T): T {
-    this.db.exec('begin')
+    const depth = this.transactionDepth
+    const point = 'nested_' + depth
+    this.db.exec(depth ? 'savepoint ' + point : 'begin')
+    this.transactionDepth++
     try {
       const value = work()
-      this.db.exec('commit')
+      this.db.exec(depth ? 'release savepoint ' + point : 'commit')
       return value
     } catch (error) {
-      this.db.exec('rollback')
+      this.db.exec(depth ? 'rollback to savepoint ' + point : 'rollback')
+      if (depth) this.db.exec('release savepoint ' + point)
       throw error
+    } finally {
+      this.transactionDepth--
     }
   }
 

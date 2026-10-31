@@ -108,6 +108,8 @@ test('a site that never responds times out after its retry without trapping othe
     assert.equal(status.processed,3);assert.equal(status.failed,1);assert.equal(status.found,2)
     assert.match(status.outcomes[imported.leadIds[0]].error,/too long/)
     assert(events.some(e=>e.processed===2&&e.activeLeadIds.includes(imported.leadIds[0])))
-    assert(Date.now()-start<15000,'a permanently unresponsive site has a bounded retry budget')
+    // The homepage gets 12s and host fallback shares the 16s whole-site deadline.
+    // Permit 1.5s of test scheduling overhead while preserving the concurrent-results assertion above.
+    assert(Date.now()-start<17500,'a permanently unresponsive site respects its 16s whole-site budget')
   })}finally{db.close()}
 })

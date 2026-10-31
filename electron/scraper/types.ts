@@ -57,6 +57,7 @@ export interface Lead {
   keyword: string
   provider: ProviderId
   capturedAt: string
+  score?: number
 }
 
 export interface RunProgress {

@@ -12,7 +12,7 @@ try{
  for(let i=0;i<50;i++){try{if((await fetch(base)).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
  assert.equal((await fetch(base+'/terms.html')).status,200)
  browser=await chromium.launch({headless:true})
- const out=resolve('screenshots/qa-1.4.19/website');mkdirSync(out,{recursive:true})
+ const out=resolve('screenshots/qa-1.4.22/website');mkdirSync(out,{recursive:true})
  for(const viewport of [{width:1440,height:1000},{width:390,height:844},{width:375,height:812},{width:768,height:1024}]){
   const page=await browser.newPage({viewport});const errors=[],failedResources=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)failedResources.push(r.status()+' '+r.url())})
   await page.goto(base,{waitUntil:'networkidle'})
@@ -31,12 +31,11 @@ try{
    assert.deepEqual(tiny,[],'mobile text at least 12px')
    await page.goto(base,{waitUntil:'networkidle'})
   }
-  assert.match(await page.locator('#top h1').innerText(),/Find Your Next Client\s+on Google Maps\./)
-  assert.match(await page.locator('.hero-job-note').innerText(),/Looking for a job\? Find companies you can approach\./)
-  assert.match(await page.locator('.hero-buy').innerText(),/Rs 10,000\s+Get Lifetime Access/)
+  assert.match(await page.locator('#top h1').innerText(),/Find Your Next Client or Job\s+on Google Maps/)
+  assert.match(await page.locator('.hero-buy').innerText(),/Claim lifetime access at 50% off/)
   assert.equal(await page.locator('.zip-search-demo [data-demo-slot]').count(),10)
   assert.ok(await page.locator('.zip-search-demo [data-demo-slot]').first().evaluate(el=>getComputedStyle(el).animationName.includes('zipHeroDemoSlot')))
-  assert.match(await page.locator('#top').innerText(),/Save 50% on Lifetime/)
+  assert.match(await page.locator('#top').innerText(),/Save Rs 10,000/)
   assert.doesNotMatch(await page.locator('#top').innerText(),/Launch window.*gone|v1\.4\.0/)
   if(viewport.width<=640){
    const offer=await page.locator('.zip-offer-main').boundingBox(),badge=await page.locator('.zip-offer-main>span:last-child').boundingBox()
@@ -45,12 +44,15 @@ try{
   assert.equal(await page.locator('#top .hero-trial').getAttribute('href'),'#download')
   assert.match(await page.locator('.pricing-grid article').first().innerText(),/LIFETIME ACCESS/)
   assert.ok(await page.evaluate(()=>Boolean(document.querySelector('#pricing').compareDocumentPosition(document.querySelector('#how')) & Node.DOCUMENT_POSITION_FOLLOWING)))
+  await page.waitForTimeout(1800)
   await page.screenshot({path:out+'/home-'+viewport.width+'.png'})
   await page.locator('#top .hero-trial').click()
-  await page.waitForFunction(()=>location.hash==='#download'&&document.querySelector('#download').getBoundingClientRect().top<innerHeight*.6)
-  await page.waitForTimeout(700)
-  assert.ok(await page.locator('#download a').filter({hasText:'Download for Windows'}).first().isVisible())
+  await page.getByRole('dialog').waitFor()
+  await page.locator('#trial-email').waitFor()
+  await page.waitForTimeout(1000);
+  assert.ok(await page.locator('#download').evaluate(el=>el.getBoundingClientRect().top<innerHeight*.6), JSON.stringify(await page.locator('#download').evaluate(el=>({top:el.getBoundingClientRect().top,scroll:scrollY,height:innerHeight,body:document.body.scrollTop}))))
   await page.screenshot({path:out+'/trial-download-'+viewport.width+'.png'})
+  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
   await page.goto(base+'/terms.html',{waitUntil:'networkidle'})
   assert.match(await page.locator('body').innerText(),/10,000/)
   assert.ok(await page.locator('a[href="mailto:billing@nafran.co"]').count())

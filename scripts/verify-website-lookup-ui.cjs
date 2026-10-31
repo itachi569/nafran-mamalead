@@ -18,7 +18,7 @@ async function main(){
    const {EnrichmentRunner}=req('./dist-electron/enrichment/runner.js');
    const {WebsiteEnricher}=req('./dist-electron/enrichment/website.js');
    const {writeExport,buildExport}=req('./dist-electron/export/writer.js');
-   globalThis.__lookupTest={db,repository,ws,started:[],out,buildExport};
+   globalThis.__lookupTest={db,repository,ws,started:[],out,buildExport,validityCalls:0};
    // Only reserved fixture hosts are intercepted. No production data/license state is changed.
    const fetchOriginal=globalThis.fetch;
    globalThis.fetch=async(raw,options)=>{
@@ -37,6 +37,7 @@ async function main(){
    WebsiteEnricher.prototype.inspectPeople=async()=>{throw Error('Website Lookup must not scan owners')};
    const runner=new EnrichmentRunner(db,repository,{authorize:async()=>{},consumeDecisionLead:async()=>{throw Error('Website Lookup must not consume Decision Makers credits')},onProgress:progress=>{for(const win of BrowserWindow.getAllWindows())win.webContents.send('enrichment:progress',progress)}});
    const override=(channel,handler)=>{ipcMain.removeHandler(channel);ipcMain.handle(channel,handler)};
+   override('emailValidity:verify',()=>{__lookupTest.validityCalls++;throw Error('Website Lookup must not trigger email validity')});
    override('billing:status',()=>({connected:true,configured:true,coreLicenseActive:true,license:{active:true,kind:'lifetime'},lifetime:{active:true,amount:1000000,currency:'pkr',interval:null}}));
    override('db:lookup:start',(_,payload)=>{
     const session=repository.startWebsiteLookup(ws,payload.input,payload.fields);globalThis.__lookupTest.started.push({sites:payload.input,fields:payload.fields});
@@ -52,7 +53,9 @@ async function main(){
    override('db:runs:list',()=>[run]);
    override('db:leads:list',(_,query)=>repository.listLeads(ws,query?.runId==='fixture-maps'?{limit:500}:query));
   },{out});
-  const page=await app.firstWindow();await page.setViewportSize({width:1440,height:1050});await page.reload();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const page=await app.firstWindow();await page.setViewportSize({width:1440,height:1050});
+  await page.evaluate(()=>localStorage.setItem('nafran.email.verifyAfterScan','1'));
+  await page.reload();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.locator('[data-view="website"]').waitFor({timeout:60000});await page.locator('[data-view="website"]').click();
   const panel=page.locator('[data-website-lookup]'),input=panel.getByRole('textbox',{name:'Websites to look up'});
   const scrollSnapshots=[];
@@ -60,7 +63,7 @@ async function main(){
   if(!(await panel.locator('[data-lookup-input-count]').innerText()).startsWith('0 ready'))throw Error('Stale count on empty input');
   const start=panel.getByRole('button',{name:/Start lookup/});if(!await start.isDisabled())throw Error('Empty lookup enabled');
   await input.fill('northstar.test\nhttps://www.northstar.test/team\nharbor.test\nblocked.test\nnot a website');
-  if(!(await panel.locator('[data-lookup-input-count]').innerText()).includes('3 ready · 1 duplicates · 1 invalid'))throw Error('Input count mismatch');
+  if(!(await panel.locator('[data-lookup-input-count]').innerText()).includes('3 ready · 1 duplicates · 1 skipped'))throw Error('Input count mismatch');
   await panel.screenshot({path:join(out,'website-lookup-setup.png')});
   await start.click();await panel.getByRole('heading',{name:'Reading public website pages'}).waitFor();
   await panel.getByRole('heading',{name:'Scan complete with errors'}).waitFor({timeout:20000}).catch(async error=>{console.log(await panel.innerText());console.log(await app.evaluate(()=>{const t=globalThis.__lookupTest;return t.repository.websiteLookupSession(t.ws)}));throw error});
@@ -100,7 +103,10 @@ async function main(){
   await recordScroll('Restored completed scan');
   if(await panel.locator('[data-lookup-row]').count()!==2)throw Error('Session not restored after reload');
   await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());await panel.screenshot({path:join(out,'website-lookup-dark.png')});await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());
-  await panel.getByRole('button',{name:'Import websites',exact:true}).click();await modal.getByRole('tab',{name:/From a Maps run/}).click();await modal.locator('[data-runpick]').first().click();await modal.getByRole('button',{name:'Scan 3 sites',exact:true}).click();await modal.waitFor({state:'detached'});await panel.getByRole('heading',{name:'Scan complete with errors'}).waitFor({timeout:60000});
+  // The failed new placeholder was rolled back; only the two real saved websites remain.
+  await panel.getByRole('button',{name:'Import websites',exact:true}).click();await modal.getByRole('tab',{name:/From a Maps run/}).click();await modal.locator('[data-runpick]').first().click();await modal.getByRole('button',{name:'Scan 2 sites',exact:true}).click();await modal.waitFor({state:'detached'});await panel.getByRole('heading',{name:'Scan complete',exact:true}).waitFor({timeout:60000});
+  if(await app.evaluate(()=>__lookupTest.validityCalls)!==0)throw Error('Website Lookup used Email Finder auto-verification preference');
+  if(await panel.getByRole('switch',{name:'Verify found emails',exact:true}).count())throw Error('Email validity toggle remains in Website Lookup');
   if(errors.length)throw Error(errors.join('; '));
   const result={packaged:await app.evaluate(({app})=>app.isPackaged),version:await app.evaluate(({app})=>app.getVersion()),...backend,emailOnlyRescanJob:emailOnly,checks:['current input counts','combined selected-field scan','sitemap contact emails','all published phones','published name/address/socials','per-website status and sources','PDF/Excel exports','selected export scope','500-site and empty/options validation','no owner records/jobs/credits','native CSV import','existing lead rescan without duplicates','unchecked category isolation','session reload recovery','saved Maps run import','dark mode']};
   result.scrollSnapshots=scrollSnapshots;writeFileSync(join(out,sourceMode?'source-check.json':'packaged-check.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));

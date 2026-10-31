@@ -1,0 +1,12 @@
+{
+  "version": "1.4.22",
+  "packaged": true,
+  "capturedAt": "2026-10-31T08:43:30.019Z",
+  "fixture": "Synthetic progress: 1 of 3 websites; no real network",
+  "files": [
+    "social-progress.png",
+    "email-progress.png",
+    "phone-progress.png"
+  ],
+  "rendererErrors": []
+}

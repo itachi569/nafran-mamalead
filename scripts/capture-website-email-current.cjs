@@ -1,6 +1,6 @@
 // Isolated illustrative capture; never uses customer data or performs a purchase.
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{createRequire}=require('node:module');
-const root=path.resolve(__dirname,'..'),{_electron}=createRequire(path.join(root,'package.json'))('playwright'),out=path.join(root,'website/img/app/v1.4.19');
+const root=path.resolve(__dirname,'..'),{_electron}=createRequire(path.join(root,'package.json'))('playwright'),out=path.join(root,'website/img/app/v1.4.22');
 async function until(read,test,timeout=20000){const start=Date.now();while(Date.now()-start<timeout){const value=await read();if(test(value))return value;await new Promise(resolve=>setTimeout(resolve,80))}throw Error('Expected email screenshot state was not reached')}
 (async()=>{
  const env={...process.env,APPDATA:fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-site-private-'))};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;delete env.DATAFORSEO_API_KEY;delete env.DATAFORSEO_API_KEY_FILE;

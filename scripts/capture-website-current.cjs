@@ -1,6 +1,6 @@
 // Isolated illustrative capture; never uses customer data or performs a purchase.
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os'),{createRequire}=require('node:module');
-const root=path.resolve(__dirname,'..'),{_electron}=createRequire(path.join(root,'package.json'))('playwright'),out=path.join(root,'website/img/app/v1.4.19');fs.mkdirSync(out,{recursive:true});
+const root=path.resolve(__dirname,'..'),{_electron}=createRequire(path.join(root,'package.json'))('playwright'),out=path.join(root,'website/img/app/v1.4.22');fs.mkdirSync(out,{recursive:true});
 (async()=>{
  const env={...process.env,APPDATA:fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-site-private-'))};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
  const app=await _electron.launch({executablePath:path.join(root,'release/win-unpacked/MamaLead.exe'),args:['--user-data-dir='+fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-site-latest-'))],env,timeout:60000});
@@ -26,13 +26,34 @@ const root=path.resolve(__dirname,'..'),{_electron}=createRequire(path.join(root
    override('billing:invoices',()=>({invoices:[]}));override('notifications:show',()=>({shown:true}));
    req('./dist-electron/billing/client.js').billingAssistChat=async()=>({text:'Email Finder mein Verify found emails On karein, ya scan ke baad Check email validity use karein. Sirf current list ki emails check hongi.',model:'illustrative-capture'});
    const updater=req('electron-updater').autoUpdater;
-   updater.checkForUpdates=async()=>{updater.emit('checking-for-update');updater.emit('update-not-available',{version:'1.4.19'});return null};
+   updater.checkForUpdates=async()=>{updater.emit('checking-for-update');updater.emit('update-not-available',{version:'1.4.22'});return null};
    global.fetch=async()=>{throw Error('Network disabled in fictional screenshot workspace')};
   });
   const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewportSize({width:1440,height:960});
   await page.evaluate(()=>{localStorage.setItem('ls-theme','light');localStorage.setItem('mamalead.planWelcomeDismissed','1');localStorage.setItem('nafran.notifications',JSON.stringify([{id:'sample-scan',title:'Maps scrape complete',body:'8 leads captured near Manchester.',at:new Date().toISOString(),level:'success',unread:true,runId:'sample-map-0',kind:'scrape',chips:['8 leads'],action:{type:'view',view:'maps',runId:'sample-map-0',focus:'results'},actionLabel:'Review leads'},{id:'sample-import',title:'Phone scan finished',body:'Published phone results are ready to review.',at:new Date().toISOString(),level:'success',unread:true,kind:'import',action:{type:'view',view:'phone'},actionLabel:'Open Phone Finder'}]))});await page.reload();
-  await page.locator('[data-view="dashboard"]').waitFor({timeout:60000});
+  await page.locator('[data-view="dashboard"]').waitFor({timeout:60000});await page.emulateMedia({reducedMotion:'reduce'});await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}'});
   const welcome=page.getByRole('button',{name:'Dismiss trial and Lifetime notice'});if(await welcome.count())await welcome.click();
+  if(process.env.CAPTURE_PROGRESS_ONLY==='1'){
+   await app.evaluate(({app,ipcMain,BrowserWindow})=>{
+    const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json')),{db,repository}=req('./dist-electron/db/index.js').openDatabase();
+    req('./dist-electron/billing/client.js').requireActiveLicense=async()=>{};
+    ipcMain.removeHandler('enrichment:prioritize');ipcMain.handle('enrichment:prioritize',(_,payload)=>{
+     const job=db.one('select * from enrichment_jobs where id=?',[payload.jobId]),ids=JSON.parse(job.lead_ids);
+     repository.markJob(job.id,'running');
+     const progress={jobId:job.id,kind:job.kind,status:'running',processed:1,total:ids.length,found:1,failed:0,leadName:'Maple Dental Studio',message:'Reading published contact details from the website…',at:new Date().toISOString(),activeLeadIds:[ids[1]],outcomes:{[ids[0]]:{status:'found',searches:0}}};
+     repository.saveJobProgress(job.id,progress);for(const win of BrowserWindow.getAllWindows())win.webContents.send('enrichment:progress',progress);return {started:true};
+    });
+   });
+   for(const kind of ['social','email','phone']){
+    await page.locator(`[data-view="${kind}"]`).click();await page.getByRole('button',{name:'Import websites',exact:true}).click();
+    const modal=page.locator('[data-impmodal]');await modal.locator('textarea').fill('https://cedardental.example\nhttps://mapledentalstudio.example\nhttps://willowsmileclinic.example');
+    await modal.getByRole('button',{name:'Scan 3 sites',exact:true}).click();await modal.waitFor({state:'detached'});
+    const card=page.locator(`[data-finder-progress="${kind}"]`);await card.getByRole('button',{name:'Stop scan',exact:true}).waitFor();await page.waitForTimeout(800);
+    await card.screenshot({path:path.join(out,kind+'-progress.png')});console.log('Captured '+kind+' progress');
+   }
+   if(errors.length)throw Error(errors.join('; '));
+   fs.writeFileSync(path.join(out,'capture-progress.json'),JSON.stringify({version:await app.evaluate(({app})=>app.getVersion()),packaged:true,capturedAt:new Date().toISOString(),fixture:'Synthetic progress: 1 of 3 websites; no real network',files:['social-progress.png','email-progress.png','phone-progress.png'],rendererErrors:errors},null,2));return;
+  }
   if(process.env.CAPTURE_REPORTS_ONLY==='1'){
    await page.setViewportSize({width:1440,height:1200});
    await page.locator('[data-reports-card]').first().click();await page.locator('[data-report-stat]').first().waitFor();
@@ -58,7 +79,7 @@ const root=path.resolve(__dirname,'..'),{_electron}=createRequire(path.join(root
   await page.locator('[data-view="dashboard"]').click();await page.locator('[data-reports-card]').first().click();await page.locator('[data-report-stat]').first().waitFor();await page.getByRole('dialog',{name:'Insights / Reports',exact:true}).screenshot({path:path.join(out,'reports.png')});await page.getByRole('button',{name:'Close dialog',exact:true}).click();
   await page.locator('[data-notifications-button]').click();await page.locator('[data-notifications-panel]').screenshot({path:path.join(out,'notifications.png')});await page.keyboard.press('Escape');
   if(errors.length)throw Error(errors.join('; '));
-  if(await app.evaluate(({app})=>app.getVersion())!=='1.4.19')throw Error('Stale app build');
+  if(await app.evaluate(({app})=>app.getVersion())!=='1.4.22')throw Error('Stale app build');
   fs.writeFileSync(path.join(out,'capture.json'),JSON.stringify({version:await app.evaluate(({app})=>app.getVersion()),packaged:true,workspace:'Fictional sample data, not customer records',size:{width:1440,height:960},capturedAt:new Date().toISOString(),files:fs.readdirSync(out).filter(file=>file.endsWith('.png'))},null,2));
  }finally{await app.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

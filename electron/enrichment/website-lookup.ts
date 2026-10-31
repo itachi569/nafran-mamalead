@@ -34,7 +34,7 @@ export function lookupFields(value: unknown): WebsiteLookupFields {
   return fields
 }
 
-export function lookupOptions(raw?: string): { source?: string; fields?: WebsiteLookupFields; added?: number; reused?: number } {
+export function lookupOptions(raw?: string): { source?: string; fields?: WebsiteLookupFields; added?: number; reused?: number; batchId?: string; addedLeadIds?: string[]; failedImportRows?: {position:number;row:WebsiteLookupRow}[] } {
   try { return JSON.parse(raw || '{}') } catch { return {} }
 }
 
@@ -51,12 +51,13 @@ export function readWebsiteLookup(db: LocalDatabase, workspaceId: string, jobId?
   )
   if (!job) return null
   const options = lookupOptions(job.options)
-  const rows = db.query<{ data: string; status: WebsiteLookupRow['status']; error: string }>(
-    'select data, status, error from website_lookup_rows where job_id = ? order by position', [job.id],
+  const savedRows = db.query<{ position:number; data: string; status: WebsiteLookupRow['status']; error: string }>(
+    'select position, data, status, error from website_lookup_rows where job_id = ? order by position', [job.id],
   ).map(saved => {
     const data=JSON.parse(saved.data) as WebsiteLookupRow
-    return {...data,emails:[...data.emails].sort((a,b)=>compareEmailContacts(a,b)).slice(0,1),status:saved.status,error:saved.error}
+    return {position:saved.position,row:{...data,emails:[...data.emails].sort((a,b)=>compareEmailContacts(a,b)).slice(0,1),status:saved.status,error:saved.error}}
   })
+  const rows = [...savedRows,...(options.failedImportRows ?? [])].sort((a,b)=>a.position-b.position).map(saved=>saved.row)
   if (job.status === 'failed') for (const row of rows) {
     if (row.status === 'queued' || row.status === 'running') { row.status = 'failed'; row.error = job.error || 'The scan stopped before this website was completed.' }
   }

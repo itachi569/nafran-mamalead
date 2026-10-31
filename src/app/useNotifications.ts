@@ -48,6 +48,7 @@ export function useNotifications(enabled:boolean) {
     return item.id
   },[commit])
   const markRead=useCallback((id:string)=>{dismissPopup(id);commit(current.current.map(item=>item.id===id?{...item,unread:false}:item))},[commit,dismissPopup])
+  const markSeen=useCallback(()=>{if(current.current.some(item=>item.unread))commit(current.current.map(item=>({...item,unread:false})))},[commit])
   const toggleRead=useCallback((id:string)=>commit(current.current.map(item=>item.id===id?{...item,unread:!item.unread}:item)),[commit])
   const markAllRead=useCallback(()=>{setPopups([]);commit(current.current.map(item=>({...item,unread:false})));removed.current=null;feedback('All notifications marked as read')},[commit,feedback])
   const remove=useCallback((id:string)=>{
@@ -64,5 +65,5 @@ export function useNotifications(enabled:boolean) {
     commit(items);removed.current=null;window.clearTimeout(timer.current);setToast(null)
   },[commit])
   const find=useCallback((id:string)=>current.current.find(item=>item.id===id),[])
-  return {notifications:notifications.filter(item=>!/decision[ -]?maker|owner email|owner scan/i.test(item.title)),notify,markRead,toggleRead,markAllRead,remove,undo,toast,find,popups,dismissPopup,dismissPopups}
+  return {notifications:notifications.filter(item=>!/decision[ -]?maker|owner email|owner scan/i.test(item.title)),notify,markRead,markSeen,toggleRead,markAllRead,remove,undo,toast,find,popups,dismissPopup,dismissPopups}
 }
