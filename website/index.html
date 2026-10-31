@@ -77,6 +77,39 @@
   @keyframes riseSm { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   @keyframes popIn { from { opacity: 0; transform: translateY(34px) scale(.985); } to { opacity: 1; transform: none; } }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes assistDot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  @keyframes assistPulse { 0% { box-shadow: 0 0 0 0 rgba(143,190,120,.65); } 100% { box-shadow: 0 0 0 7px rgba(143,190,120,0); } }
+  @keyframes assistCaret { 50% { opacity: 0; } }
+  @keyframes assistIn { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
+  @keyframes luInA { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @keyframes luInB { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  @media (min-width: 1080px) { .lu-grid { grid-template-columns: minmax(0,1.05fr) minmax(0,1fr) !important; } }
+  .lu-listwrap { container-type: inline-size; }
+  .lu-list button { min-height: 46px !important; padding-top: 8px !important; padding-bottom: 8px !important; }
+  @container (min-width: 440px) { .lu-list { display: grid !important; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px !important; } .lu-list li:last-child:nth-child(odd) { grid-column: 1 / -1; } .lu-list button { min-height: 54px !important; } .lu-list button > span:nth-child(2) { font-size: 14px !important; } }
+  @keyframes wfPulse { 0% { box-shadow: 0 0 0 0 rgba(52,80,47,.45); } 100% { box-shadow: 0 0 0 14px rgba(52,80,47,0); } }
+  .wf-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);align-items:center}
+  .wf-row .wf-node{grid-column:2;grid-row:1;justify-self:center}
+  .wf-row .wf-card{grid-column:1;grid-row:1}
+  .wf-row .wf-ghost{grid-column:3;grid-row:1;justify-self:start;padding-left:22px}
+  .wf-row.wf-r .wf-card{grid-column:3}
+  .wf-row.wf-r .wf-ghost{grid-column:1;justify-self:end;padding:0 22px 0 0}
+  .wf-x{left:50%}
+  .wf-cap{display:flex;justify-content:center}
+  @media(max-width:760px){.wf-row{grid-template-columns:44px minmax(0,1fr);column-gap:12px}.wf-row .wf-node{grid-column:1;justify-self:start;align-self:start;margin-top:18px}.wf-row .wf-card,.wf-row.wf-r .wf-card{grid-column:2}.wf-row .wf-ghost{display:none}.wf-x{left:22px}.wf-cap{justify-content:flex-start}}
+  @keyframes pvPacket { 0% { left: 0%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+  @keyframes pvRow { 0% { opacity: 0; transform: translateY(-8px) scaleX(.7); } 10%, 72% { opacity: 1; transform: none; } 100% { opacity: .35; transform: none; } }
+  @keyframes pvType { from { width: 0; } to { width: 39ch; } }
+  @keyframes pvBlink { 50% { opacity: 0; } }
+  @keyframes pvCopy { 0%, 10% { left: 0%; opacity: 0; } 18% { opacity: 1; } 62% { left: 100%; opacity: 1; } 72%, 100% { left: 100%; opacity: 0; } }
+  @keyframes pvLand { 0%, 58% { opacity: 0; transform: scale(.4); } 66%, 90% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
+  @keyframes pvChip { 0%, 40%, 100% { background: rgba(255,255,255,.65); color: #1C1C1C; } 6%, 30% { background: #1C1C1C; color: #FFFFFF; } }
+  @keyframes pvStepRow { 0%, 40%, 100% { background: #FFFFFF; transform: none; } 6%, 30% { background: #DCE5D2; transform: translateX(6px); } }
+  @keyframes pvCountA { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  @keyframes pvCountB { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  @keyframes pvPin { 0% { box-shadow: 0 0 0 0 rgba(28,28,28,.35); } 100% { box-shadow: 0 0 0 12px rgba(28,28,28,0); } }
+  @media (min-width: 900px) { .pv-stage { grid-template-columns: minmax(0,1.08fr) minmax(0,1fr) !important; } .pv-online { padding-left: 90px; } }
+  @media (prefers-reduced-motion: reduce) { .pv-anim, .pv-anim * { animation: none !important; } }
   @keyframes modalIn { from { opacity: 0; transform: translateY(24px) scale(.97); } to { opacity: 1; transform: none; } }
 
   .latest-eyebrow{margin:0;font-size:11px;letter-spacing:.12em;color:#42473f;line-height:1.6}
@@ -86,7 +119,7 @@
   .latest-feature-grid p{margin:0;font-size:13.5px;line-height:1.7;color:#42473f}
   .latest-workflow{padding:clamp(24px,4vw,44px);border-radius:28px;background:#e5ebdd;border:1px solid #1c1c1c14}
   #latest .latest-feature-grid,.latest-workflow .latest-feature-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .latest-assist{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:26px;align-items:center;margin-top:30px;padding:28px;border-radius:22px;background:#f5f5f4}
+  .latest-assist{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(min(100%,340px),1fr);gap:26px;align-items:center;margin-top:30px;padding:28px;border-radius:22px;background:#f5f5f4}
   .latest-assist h3{font-size:26px;line-height:1.15;letter-spacing:-.025em;margin:12px 0 14px}
   .latest-assist p{font-size:13.5px;line-height:1.7;color:#42473f;margin:12px 0}
   .latest-assist small{display:block;font-size:12px;line-height:1.6;color:#555d51}
@@ -102,6 +135,7 @@
   .latest-update small{display:block;font-size:12px;line-height:1.6;color:#555d51}
   @media(max-width:640px){.latest-update{grid-template-columns:minmax(0,1fr);padding:20px}}
   @media(max-width:900px){#latest .latest-feature-grid,.latest-workflow .latest-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:860px){.latest-assist{grid-template-columns:minmax(0,1fr)!important}}
   @media(max-width:640px){.latest-assist{grid-template-columns:minmax(0,1fr);padding:20px}.latest-feature-grid{gap:22px}#latest .latest-feature-grid,.latest-workflow .latest-feature-grid{grid-template-columns:minmax(0,1fr)}}
 .pricing-section{max-width:1180px;margin:auto;padding:40px 24px 90px}.pricing-intro{text-align:center;margin:0 auto 36px;max-width:660px}.pricing-intro h2{font-size:clamp(32px,4vw,50px);letter-spacing:-.04em;line-height:1.06;margin:16px 0}.pricing-intro p{color:#42473f;font-size:15px;line-height:1.65}.pricing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.pricing-card{display:flex;flex-direction:column;padding:32px;border-radius:28px;background:#f5f5f4;border:1px solid #dce1d6}.plan-label{font-size:11px;letter-spacing:.13em;color:#4b5944}.pricing-card h3{font-size:clamp(36px,4vw,48px);line-height:1.15;letter-spacing:-.045em;margin:20px 0 12px}.pricing-card h3 small{font-size:14px;letter-spacing:0;font-weight:400;white-space:nowrap}.plan-summary{min-height:66px;font-size:15px;line-height:1.6;color:#42473f;margin:0 0 24px}.pricing-card ul{list-style:none;margin:0;padding:24px 0;border-top:1px solid #dce1d6}.pricing-card li{position:relative;padding-left:29px;line-height:1.5;font-size:14px;margin-bottom:13px}.pricing-card li:before{content:'✓';position:absolute;left:0;top:1px;border-radius:50%;background:#c8d5bb;color:#1c1c1c;width:20px;height:20px;text-align:center;font-size:12px}.plan-next{margin-top:auto;padding:20px;border-radius:18px;background:#e6ebdf;min-height:151px}.plan-next strong{font-size:13px}.plan-next p{font-size:13px;line-height:1.65;margin:9px 0 0;color:#42473f}#pricing .pricing-action{border-radius:999px;margin-top:24px;padding:12px 18px;background:#1c1c1c;color:white;font-size:14px;font-weight:700;text-align:center}.pricing-lifetime{background:#1c1c1c;color:#f5f5f4}.pricing-lifetime .plan-label{color:#c8d5bb}.pricing-lifetime .plan-summary{color:#d4dacd}.pricing-lifetime ul{border-color:#495043}.pricing-lifetime .plan-next{background:#30372b;color:#f5f5f4}.pricing-lifetime .plan-next p{color:#d4dacd}#pricing .pricing-lifetime .pricing-action{background:#c8d5bb;color:#1c1c1c}.pricing-note{max-width:760px;margin:22px auto 0;text-align:center;font-size:12.5px;line-height:1.7;color:#50574b}@media(max-width:680px){.pricing-grid{grid-template-columns:1fr}.pricing-card{padding:24px}.plan-summary{min-height:0}.plan-next{min-height:0}}
 
@@ -190,7 +224,7 @@
         </ol>
         <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;">
           <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 26px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 15px; font-weight: 700; white-space: nowrap; text-decoration: none;" style-hover="background: #DCE5D2;">Download for Windows<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"></path><path d="M7 11l5 5 5-5"></path><path d="M5 19.5h14"></path></svg></a>
-          <span style="font-size: 13px; line-height: 1.5; color: #B9BEB4;">No email? Check spam, or write to <a href="mailto:billing@nafran.co" style="color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px;">billing@nafran.co</a></span>
+          <span style="font-size: 13px; line-height: 1.5; color: #B9BEB4;">No email? Check spam, or <a href="support.html?topic=licence" style="color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px;">contact support</a></span>
         </div>
       </div>
     </div>
@@ -260,6 +294,12 @@
     </div>
   </sc-if>
 
+  <a class="help-launcher" href="support.html" aria-label="Need help? Contact MamaLead support" style="position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 80; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 8px 0 18px; border-radius: 999px; border: 1px solid rgba(28,28,28,.06); background: #FFFFFF; color: #1C1C1C; box-shadow: 0 18px 40px -18px rgba(28,28,28,.45), 0 2px 6px rgba(28,28,28,.06); transition: transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s ease;" style-hover="transform: translateY(-2px); color: #1C1C1C; box-shadow: 0 24px 46px -18px rgba(28,28,28,.55), 0 2px 6px rgba(28,28,28,.06);">
+    <span aria-hidden="true" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #2E9E5B; box-shadow: 0 0 0 3px rgba(46,158,91,.16);"></span>
+    <span style="font-size: 15px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap;">Need help?</span>
+    <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 11px; border-radius: 999px; background: #E6EDDF; color: #34502F; font-size: 12px; font-weight: 700; white-space: nowrap;">Support</span>
+  </a>
+
   <header class="site-header" style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
     <div class="site-header-row" style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
       <a href="#top" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
@@ -269,20 +309,20 @@
           <span style="display: block; font-size: 10.5px; color: #555956;">Windows desktop app</span>
         </span>
       </a>
-      <a class="desktop-support" href="mailto:billing@nafran.co" style="color:inherit;font-size:13px;text-decoration:none;padding:8px;">Support</a>
       <nav class="desktop-nav" aria-label="Main navigation" style="margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); overflow-x: auto; max-width: 100%;">
         <a href="#how" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">How it works</a>
         <a href="#modules" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Modules</a>
         <a href="#privacy" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Privacy</a>
         <a href="#pricing" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Pricing</a>
         <a href="#faq" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">FAQ</a>
+        <a href="support.html" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Support</a>
       </nav>
       <a class="desktop-pricing" href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #B8281F; color: #FFFFFF; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 22px -12px rgba(184,40,31,.8); transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF; background: #9C2019;">Lifetime · 50% off</a>
       <a class="mobile-download" href="#download">Download</a>
       <button class="mobile-menu-button" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>
     <nav id="mobile-menu" aria-label="Mobile navigation" hidden>
-      <a href="#pricing">Pricing · Lifetime 50% off</a><a href="#download">Free trial / Windows download</a><a href="#how">How it works</a><a href="#modules">Modules</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a><a href="mailto:billing@nafran.co">Support</a>
+      <a href="#pricing">Pricing · Lifetime 50% off</a><a href="#download">Free trial / Windows download</a><a href="#how">How it works</a><a href="#modules">Modules</a><a href="#privacy">Privacy</a><a href="#faq">FAQ</a><a href="support.html">Support</a>
     </nav>
   </header>
 
@@ -382,8 +422,8 @@
   <section id="pricing" data-screen-label="Pricing" class="pricing-section">
  <div class="pricing-intro"><span class="latest-eyebrow">CHOOSE YOUR ACCESS</span><h2>Lifetime access.<br>Half the price.</h2><p>Regular price Rs 20,000. Get Lifetime access for Rs 10,000 with our launch offer. Download MamaLead for Windows, then activate your plan in the app.</p></div>
  <div class="pricing-grid">
-  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on up to two machines. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Lifetime access here and pay securely through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p></div><div style="margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px;"><sc-if value="{{ showCountdown }}" hint-placeholder-val="{{ true }}"><span role="timer" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span aria-hidden="true" style="width: 7px; height: 7px; flex: none; border-radius: 50%; background: #FF6B5E;"></span><span>Ends in <span style="font-variant-numeric: tabular-nums;">{{ countdown }}</span></span></span></sc-if><sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span>Only {{ seatsLeft }} left</span></span></sc-if></div><a href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" class="pricing-action fomo-buy" style="margin-top: 14px; background: #B8281F; color: #FFFFFF; box-shadow: 0 18px 34px -18px rgba(184,40,31,.8);">Claim lifetime access at 50% off</a></article>
-  <article class="pricing-card"><span class="plan-label">1-DAY TRIAL</span><h3>Free</h3><p class="plan-summary">Explore the core features for 24 hours from activation. One trial per email and one machine.</p><ul><li>300 Google Maps leads total across keywords</li><li>Website emails, phone numbers and social profiles</li><li>Website Lookup with your selected contact fields</li><li>All Leads, Saved Lists and Run History</li><li>Branded PDF and Excel exports</li><li>Saved lead data stays on your computer</li></ul><div class="plan-next"><strong>Start with your email</strong><p>Enter your email here to receive a trial key, then download the app. Paste the key in Account; your 24 hours start when you activate.</p></div><a href="#download" class="pricing-action" onClick="{{ onOpenTrial }}">Get my free trial key</a></article>
+  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on up to two machines. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Lifetime access here and pay securely through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p><p style="margin:10px 0 0;font-size:13px">Questions before buying? <a href="support.html?topic=licence" style="color:inherit;text-decoration:underline;text-underline-offset:3px">Contact us</a></p></div><div style="margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px;"><sc-if value="{{ showCountdown }}" hint-placeholder-val="{{ true }}"><span role="timer" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span aria-hidden="true" style="width: 7px; height: 7px; flex: none; border-radius: 50%; background: #FF6B5E;"></span><span>Ends in <span style="font-variant-numeric: tabular-nums;">{{ countdown }}</span></span></span></sc-if><sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span>Only {{ seatsLeft }} left</span></span></sc-if></div><a href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" class="pricing-action fomo-buy" style="margin-top: 14px; background: #B8281F; color: #FFFFFF; box-shadow: 0 18px 34px -18px rgba(184,40,31,.8);">Claim lifetime access at 50% off</a></article>
+  <article class="pricing-card"><span class="plan-label">1-DAY TRIAL</span><h3>Free</h3><p class="plan-summary">Explore the core features for 24 hours from activation. One trial per email and one machine.</p><ul><li>300 Google Maps leads total across keywords</li><li>Website emails, phone numbers and social profiles</li><li>Website Lookup with your selected contact fields</li><li>All Leads, Saved Lists and Run History</li><li>Branded PDF and Excel exports</li><li>Saved lead data stays on your computer</li></ul><div class="plan-next"><strong>Start with your email</strong><p>Enter your email here to receive a trial key, then download the app. Paste the key in Account; your 24 hours start when you activate.</p><p style="margin:10px 0 0;font-size:13px">Questions before buying? <a href="support.html?topic=licence" style="color:inherit;text-decoration:underline;text-underline-offset:3px">Contact us</a></p></div><a href="#download" class="pricing-action" onClick="{{ onOpenTrial }}">Get my free trial key</a></article>
  </div><p class="pricing-note">Email validity is optional and requires a configured, authorised verification provider. Public website availability and provider limits still apply. See your plan and Maps usage in Settings &amp; Billing.</p>
 </section>
 
@@ -439,21 +479,140 @@
     </div>
   </section>
 
-  <section id="latest" aria-labelledby="latest-heading" style="max-width:1180px;margin:0 auto;padding:0 24px 28px">
-    <div style="padding:clamp(24px,3vw,36px);border-radius:26px;background:#e4ebdd">
-      <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.23</p>
-      <h2 id="latest-heading" class="latest-heading">Find the right business contacts. Keep every step clear.</h2>
-      <div class="latest-feature-grid">
-        <article><h3>Automatic updates, your choice</h3><p>Turn on background downloads in Account. Get a new-release notice, follow progress and restart when you are ready. Your leads and settings stay on this PC.</p></article><article><h3>Short answers. Straight to the page.</h3><p>MamaLead Assist keeps replies concise and adds the relevant page name below the answer. Click it to open a module, Reports or App updates.</p></article><article><h3>Read a notification with one click</h3><p>New scan, export and update notices pop up in the top-right corner. Click to open the related page and mark the notice read, or review it later in Notifications. All/Unread, Mark all read and delete with Undo remain available.</p></article><article><h3>Your Maps limit stays in place</h3><p>Set one total for the run across keywords and areas. Request 40 and collect at most 40. If fewer results are available, the search finishes with those results.</p></article>
-        <article><h3>See progress. Stop when needed.</h3><p>Social, Email and Phone scans show a live progress panel, the current business, percentage checked and remaining count. Stop scan keeps completed results; failed businesses can be retried.</p></article>
-        <article><h3>Your saved work, in one report</h3><p>Open Insights / Reports for saved lead totals, Maps searches and email, phone and social coverage. Refresh the report or reopen an earlier search.</p></article>
-        <article><h3>Live search, no extra click</h3><p>Type a name, email, phone or profile URL. Related saved matches appear below the search bar; a complete phone number narrows to exact matches.</p></article>
-        <article><h3>Your history stays useful</h3><p>Open earlier finder searches from History, or revisit a whole Maps run with Saved searches. Your search history stays available when you reopen the app.</p></article>
-        <article><h3>Choose a website list</h3><p>Paste links, choose a CSV, TSV or Excel file, or reuse a Maps run. Review ready, duplicate and skipped counts. Scan up to 500 sites at a time and keep the remaining sites ready for the next batch.</p></article>
-        <article><h3>One main email. Your choice to verify.</h3><p>Email Finder shows one main email published on each business website. Choose validity on the page or check the current results later. Follow the checked count and use Stop checking when needed.</p></article>
-        <article><h3>Social scans keep moving</h3><p>Scan several websites at once. A slow or failed site does not hold up the rest; retry only failed sites. Duplicate profiles, hidden spam, share, login, post and video links are left out.</p></article>
-        <article><h3>Captured leads stay saved</h3><p>Maps saves results as they arrive. Reopen interrupted searches with the leads already captured, see stopped-run totals, and keep your keywords, location and Google session choice for the next search.</p></article>
-        <article><h3>Results come into view</h3><p>Website Lookup moves to its results when the scan finishes. Review the published details and source pages, then export the current scan or selected websites.</p></article>
+  <section id="support-in-app" ref="{{ supSectionRef }}" data-screen-label="New: Contact support" aria-labelledby="support-in-app-heading" style="max-width:1180px;margin:0 auto;padding:0 24px 28px;scroll-margin-top:76px">
+    <div style="position: relative; overflow: hidden; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: clamp(28px, 4vw, 48px); align-items: center; padding: clamp(24px, 4vw, 48px); border-radius: 28px; background: #1C1C1C; color: #F0F0F0;">
+      <div aria-hidden="true" style="position: absolute; right: -160px; top: -200px; width: 560px; height: 560px; border-radius: 50%; background: radial-gradient(closest-side, rgba(200,213,187,.24), transparent); pointer-events: none; transform: translate({{ glowX }}px, {{ glowY }}px); transition: transform 2.6s cubic-bezier(.45,0,.2,1);"></div>
+      <div aria-hidden="true" style="position: absolute; left: -220px; bottom: -260px; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(closest-side, rgba(169,188,155,.12), transparent); pointer-events: none;"></div>
+      <div style="position: relative; min-width: 0;">
+        <span style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 11px; font-weight: 700; letter-spacing: .16em; white-space: nowrap; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0s, transform .8s cubic-bezier(.16,1,.3,1) 0s;"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #34502F;"></span>NEW IN 1.4.27</span>
+        <h2 id="support-in-app-heading" style="margin: 18px 0 0; font-size: clamp(30px, 4.2vw, 50px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700; color: #FFFFFF; text-wrap: balance; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.08s, transform .8s cubic-bezier(.16,1,.3,1) 0.08s;">Stuck? Message us without leaving the app.</h2>
+        <p style="margin: 16px 0 0; max-width: 500px; font-size: 16px; line-height: 1.6; color: #D4DACD; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.16s, transform .8s cubic-bezier(.16,1,.3,1) 0.16s;">Contact support now lives inside MamaLead. Write what happened, pick a topic and send. It works even before your licence is active, and we reply by email.</p>
+        <p style="margin: 28px 0 0; font-size: 11px; letter-spacing: .16em; color: #C8D5BB; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.22s, transform .8s cubic-bezier(.16,1,.3,1) 0.22s;">FOUR WAYS IN</p>
+        <ol style="margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px;">
+          <li style="position: relative; overflow: hidden; display: flex; align-items: baseline; gap: 14px; padding: 13px 16px; border-radius: 16px; background: {{ w0bg }}; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.28s, transform .8s cubic-bezier(.16,1,.3,1) 0.28s, background .45s ease;"><span style="flex: none; font-size: 12px; font-weight: 700; color: {{ w0num }}; font-variant-numeric: tabular-nums; transition: color .45s ease;">01</span><span style="font-size: 14.5px; line-height: 1.5;"><strong style="color: #FFFFFF;">Sidebar</strong> → Contact support, from any page</span><span aria-hidden="true" style="position: absolute; left: 0; bottom: 0; height: 2px; width: {{ w0bar }}; background: #C8D5BB; transition: {{ w0tr }};"></span></li>
+          <li style="position: relative; overflow: hidden; display: flex; align-items: baseline; gap: 14px; padding: 13px 16px; border-radius: 16px; background: {{ w1bg }}; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.34s, transform .8s cubic-bezier(.16,1,.3,1) 0.34s, background .45s ease;"><span style="flex: none; font-size: 12px; font-weight: 700; color: {{ w1num }}; font-variant-numeric: tabular-nums; transition: color .45s ease;">02</span><span style="font-size: 14.5px; line-height: 1.5;"><strong style="color: #FFFFFF;">Settings &amp; Billing → Account</strong> → Help &amp; support</span><span aria-hidden="true" style="position: absolute; left: 0; bottom: 0; height: 2px; width: {{ w1bar }}; background: #C8D5BB; transition: {{ w1tr }};"></span></li>
+          <li style="position: relative; overflow: hidden; display: flex; align-items: baseline; gap: 14px; padding: 13px 16px; border-radius: 16px; background: {{ w2bg }}; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.4s, transform .8s cubic-bezier(.16,1,.3,1) 0.4s, background .45s ease;"><span style="flex: none; font-size: 12px; font-weight: 700; color: {{ w2num }}; font-variant-numeric: tabular-nums; transition: color .45s ease;">03</span><span style="font-size: 14.5px; line-height: 1.5;"><strong style="color: #FFFFFF;">Licence problems</strong> — a failed activation opens the form with the error already filled in</span><span aria-hidden="true" style="position: absolute; left: 0; bottom: 0; height: 2px; width: {{ w2bar }}; background: #C8D5BB; transition: {{ w2tr }};"></span></li>
+          <li style="position: relative; overflow: hidden; display: flex; align-items: baseline; gap: 14px; padding: 13px 16px; border-radius: 16px; background: {{ w3bg }}; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.46s, transform .8s cubic-bezier(.16,1,.3,1) 0.46s, background .45s ease;"><span style="flex: none; font-size: 12px; font-weight: 700; color: {{ w3num }}; font-variant-numeric: tabular-nums; transition: color .45s ease;">04</span><span style="font-size: 14.5px; line-height: 1.5;"><strong style="color: #FFFFFF;">Assist</strong> — ask how to reach us, or hit a failed answer, and get one Contact support link</span><span aria-hidden="true" style="position: absolute; left: 0; bottom: 0; height: 2px; width: {{ w3bar }}; background: #C8D5BB; transition: {{ w3tr }};"></span></li>
+        </ol>
+        <div style="margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px; opacity: {{ rvOp }}; transform: {{ rvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) 0.54s, transform .8s cubic-bezier(.16,1,.3,1) 0.54s;">
+          <span style="padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(200,213,187,.35); font-size: 13px; color: #E9EBE7; white-space: nowrap;">Draft stays on your PC until you send</span>
+          <span style="padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(200,213,187,.35); font-size: 13px; color: #E9EBE7; white-space: nowrap;">No leads, keys or files attached</span>
+          <span style="padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(200,213,187,.35); font-size: 13px; color: #E9EBE7; white-space: nowrap;">Offline? Open it in your email app</span>
+        </div>
+      </div>
+
+      <div style="position: relative; min-width: 0; opacity: {{ rvOp }}; transform: {{ rvCardTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) .2s, transform 1.1s cubic-bezier(.16,1,.3,1) .2s;">
+        <div ref="{{ supCardRef }}" onPointerDown="{{ onSupCardDown }}" onFocus="{{ onSupCardDown }}" style="position: relative; padding: 22px; border-radius: 24px; background: #F7F7F5; color: #1C1C1C; box-shadow: 0 40px 80px -40px rgba(0,0,0,.8);">
+          <sc-if value="{{ supToast }}" hint-placeholder-val="{{ false }}">
+            <div role="status" style="position: absolute; top: -18px; right: -10px; z-index: 3; display: flex; align-items: flex-start; gap: 10px; width: min(300px, calc(100% - 20px)); padding: 12px 14px; border-radius: 16px; background: #FFFFFF; box-shadow: 0 22px 44px -22px rgba(28,28,28,.6), 0 0 0 1px rgba(28,28,28,.06); animation: modalIn .45s cubic-bezier(.16,1,.3,1) both;">
+              <img src="img/mamalead-favicon.png?v=2" alt="" width="28" height="28" style="flex: none; width: 28px; height: 28px; border-radius: 8px;">
+              <span style="min-width: 0; line-height: 1.35;"><span style="display: block; font-size: 13px; font-weight: 700;">Support message received</span><span style="display: block; margin-top: 2px; font-size: 12.5px; color: #42473F;">Ticket {{ supTicket }} saved. We’ll reply by email.</span></span>
+            </div>
+          </sc-if>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span style="display: flex; align-items: center; gap: 10px;"><img src="img/mamalead-favicon.png?v=2" alt="" width="32" height="32" style="width: 32px; height: 32px; border-radius: 9px;"><span style="line-height: 1.1;"><span style="display: block; font-size: 14.5px; font-weight: 700;">MamaLead</span><span style="display: block; font-size: 10.5px; letter-spacing: .14em; color: #4B5548;">HELP &amp; SUPPORT</span></span></span>
+            <button type="button" onClick="{{ onSupReplay }}" style="display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: #E6EDDF; color: #34502F; font: inherit; font-size: 11.5px; font-weight: 500; white-space: nowrap; cursor: pointer;"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: {{ supBadgeDot }};"></span>{{ supBadge }}</button>
+          </div>
+
+          <sc-if value="{{ supForm }}" hint-placeholder-val="{{ true }}">
+            <form onSubmit="{{ onSupSend }}" noValidate="{{ true }}" style="margin: 18px 0 0; display: grid; gap: 14px;">
+              <div>
+                <p style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">How can we help?</p>
+                <p style="margin: 4px 0 0; font-size: 13.5px; line-height: 1.5; color: #42473F;">Tell us what happened or share an idea. Your draft stays on this device until you send it.</p>
+              </div>
+              <div role="radiogroup" aria-label="What is this about?" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                <sc-for list="{{ supCats }}" as="c" hint-placeholder-count="4">
+                  <button type="button" role="radio" data-auto="{{ c.id }}" aria-checked="{{ c.checked }}" onClick="{{ c.onPick }}" style="min-height: 40px; padding: 0 15px; border-radius: 999px; border: 1px solid {{ c.border }}; background: {{ c.bg }}; color: {{ c.color }}; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: background .3s ease, color .3s ease, border-color .3s ease;">{{ c.label }}</button>
+                </sc-for>
+              </div>
+              <label style="display: grid; gap: 6px; font-size: 12.5px; font-weight: 500;">Reply email
+                <input type="email" data-auto="email" autocomplete="off" placeholder="you@example.com" value="{{ supEmail }}" onChange="{{ onSupEmail }}" style="height: 46px; padding: 0 14px; border-radius: 14px; border: 1px solid {{ supEmailBorder }}; box-shadow: {{ supEmailRing }}; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14.5px; font-weight: 400; outline: none; transition: border-color .25s ease, box-shadow .25s ease;" style-focus="border-color: #34502F; box-shadow: 0 0 0 3px rgba(52,80,47,.14);">
+              </label>
+              <label style="position: relative; display: grid; gap: 6px; font-size: 12.5px; font-weight: 500;">Message
+                <textarea rows="3" data-auto="msg" maxLength="5000" placeholder="What were you trying to do? What happened?" value="{{ supMsg }}" onChange="{{ onSupMsg }}" style="padding: 12px 14px 26px; border-radius: 14px; border: 1px solid {{ supMsgBorder }}; box-shadow: {{ supMsgRing }}; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14.5px; font-weight: 400; line-height: 1.45; resize: none; outline: none; transition: border-color .25s ease, box-shadow .25s ease;" style-focus="border-color: #34502F; box-shadow: 0 0 0 3px rgba(52,80,47,.14);"></textarea>
+                <span style="position: absolute; right: 12px; bottom: 8px; font-size: 11.5px; font-weight: 400; color: #6B706A; font-variant-numeric: tabular-nums;">{{ supCount }} / 5,000</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 14px; border-radius: 14px; background: {{ supDiagBg }}; font-size: 13.5px; font-weight: 500; cursor: pointer; transition: background .4s ease;">
+                <input type="checkbox" checked="{{ supDiag }}" onChange="{{ onSupDiag }}" style="width: 18px; height: 18px; margin: 0; accent-color: #34502F;">Attach diagnostics
+                <span style="margin-left: auto; font-size: 12px; font-weight: 400; color: #4B5548;">{{ supDiagNote }}</span>
+              </label>
+              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #4B5548;">We send your message plus app version, OS and licence last 4. No leads, keys or files are attached automatically. Don’t paste licence keys or passwords.</p>
+              <sc-if value="{{ supError }}" hint-placeholder-val="{{ false }}">
+                <p role="alert" style="margin: 0; font-size: 12.5px; color: #A23B2A;">{{ supError }}</p>
+              </sc-if>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;">
+                <button type="button" onClick="{{ onSupDiscard }}" style="min-height: 44px; margin-right: auto; padding: 0 6px; border: 0; background: none; color: #42473F; font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;">Discard draft</button>
+                <button type="submit" data-auto="send" style="min-height: 46px; padding: 0 22px; border: 0; border-radius: 999px; background: {{ supSendBg }}; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transform: scale({{ supSendScale }}); transition: transform .15s ease, background .3s ease;" style-hover="background: #34502F;">{{ supSendLabel }}</button>
+              </div>
+            </form>
+          </sc-if>
+
+          <sc-if value="{{ supSent }}" hint-placeholder-val="{{ false }}">
+            <div style="margin: 18px 0 0; padding: 30px 8px 10px; display: grid; justify-items: center; gap: 8px; text-align: center; animation: modalIn .5s cubic-bezier(.16,1,.3,1) both;">
+              <span aria-hidden="true" style="display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; background: #C8D5BB; font-size: 24px; font-weight: 700; animation: zipHeroPop50 .5s cubic-bezier(.16,1,.3,1) .1s both;">✓</span>
+              <p style="margin: 8px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -.03em;">Message received</p>
+              <p style="margin: 0; font-size: 14px; color: #42473F;">Your ticket is <strong style="color: #1C1C1C;">{{ supTicket }}</strong>.</p>
+              <p style="margin: 0; max-width: 300px; font-size: 14px; line-height: 1.5; color: #42473F; overflow-wrap: anywhere;">We’ll reply to <strong style="color: #1C1C1C;">{{ supEmail }}</strong>.</p>
+              <button type="button" onClick="{{ onSupReset }}" style="margin-top: 14px; min-height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;" style-hover="background: #34502F;">Try it yourself</button>
+            </div>
+          </sc-if>
+
+          <span aria-hidden="true" style="position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; opacity: {{ curOp }}; transform: translate({{ curX }}px, {{ curY }}px) scale({{ curScale }}); transform-origin: 3px 2px; transition: transform .7s cubic-bezier(.65,0,.25,1), opacity .35s ease;">
+            <svg viewBox="0 0 24 24" width="24" height="24" style="display: block; filter: drop-shadow(0 4px 6px rgba(28,28,28,.35));"><path d="M4 2.5l15 9.2-6.6 1.3 3.7 7.2-2.9 1.4-3.6-7.3L4.8 19z" fill="#1C1C1C" stroke="#FFFFFF" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+            <span style="position: absolute; left: -10px; top: -10px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #34502F; opacity: {{ curRing }}; transform: scale({{ curRingScale }}); transition: opacity .45s ease, transform .45s ease;"></span>
+          </span>
+        </div>
+        <p style="margin: 16px 0 0; font-size: 12.5px; line-height: 1.5; color: #B9BEB4; text-align: center;">{{ supFootnote }}</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="latest" ref="{{ luRef }}" aria-labelledby="latest-heading" style="max-width:1180px;margin:0 auto;padding:0 24px 28px">
+    <div style="position: relative; overflow: clip; padding: clamp(22px, 3.4vw, 44px); border-radius: 28px; background: #E4EBDD;">
+      <div aria-hidden="true" style="position: absolute; right: -120px; top: -140px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,.7), transparent); pointer-events: none;"></div>
+      <div style="position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 28px;">
+        <div style="min-width: 0; flex: 1 1 520px; opacity: {{ luRvOp }}; transform: {{ luRvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1), transform .8s cubic-bezier(.16,1,.3,1);">
+          <p class="latest-eyebrow">LATEST APP UPDATES · 1.4.27</p>
+          <h2 id="latest-heading" class="latest-heading" style="margin-bottom: 0;">Find the right business contacts. Keep every step clear.</h2>
+        </div>
+        <div role="tablist" aria-label="Filter updates" style="display: flex; flex-wrap: wrap; gap: 6px; opacity: {{ luRvOp }}; transform: {{ luRvTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1) .1s, transform .8s cubic-bezier(.16,1,.3,1) .1s;">
+          <sc-for list="{{ luCats }}" as="c" hint-placeholder-count="5">
+            <button type="button" role="tab" aria-selected="{{ c.selected }}" onClick="{{ c.onPick }}" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px 0 15px; border-radius: 999px; border: 1px solid {{ c.border }}; background: {{ c.bg }}; color: {{ c.color }}; font: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background .3s ease, color .3s ease;">{{ c.label }}<span style="display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px; background: {{ c.countBg }}; font-size: 11.5px; font-variant-numeric: tabular-nums;">{{ c.count }}</span></button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div class="lu-grid" onMouseEnter="{{ onLuEnter }}" onMouseLeave="{{ onLuLeave }}" style="position: relative; margin: 28px 0 0; display: grid; grid-template-columns: minmax(0,1fr); gap: 18px; align-items: stretch;">
+        <article class="lu-spot" style="min-width: 0; display: flex; flex-direction: column; min-height: 440px; padding: clamp(22px, 3vw, 32px); border-radius: 24px; background: #1C1C1C; color: #F0F0F0; box-shadow: 0 40px 70px -46px rgba(28,28,28,.8); opacity: {{ luRvOp }}; transform: {{ luSpotTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) .15s, transform 1s cubic-bezier(.16,1,.3,1) .15s;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+            <span style="display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums;"><span style="font-size: clamp(56px, 7vw, 84px); line-height: .9; font-weight: 700; letter-spacing: -.05em; color: #C8D5BB; animation: {{ luAnim }};">{{ luNum }}</span><span style="font-size: 14px; color: #8E948B;">/ {{ luTotal }}</span></span>
+            <span style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(200,213,187,.3); font-size: 12px; color: #E9EBE7; white-space: nowrap;"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: {{ luCatColor }}; box-shadow: 0 0 0 2px rgba(255,255,255,.18);"></span>{{ luCatLabel }}</span>
+          </div>
+          <div style="margin: auto 0; padding: 28px 0 0; animation: {{ luAnim }};">
+            <h3 style="margin: 0; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.12; letter-spacing: -.03em; font-weight: 700; color: #FFFFFF; text-wrap: balance;">{{ luTitle }}</h3>
+            <p style="margin: 14px 0 0; max-width: 460px; font-size: 16px; line-height: 1.65; color: #D4DACD;">{{ luDesc }}</p>
+          </div>
+          <div style="margin: 0; padding-top: 28px; display: flex; align-items: center; gap: 10px;">
+            <button type="button" aria-label="Previous update" onClick="{{ onLuPrev }}" style="flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); background: transparent; color: #FFFFFF; cursor: pointer;" style-hover="background: rgba(255,255,255,.08);"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12h-14"></path><path d="M11 6.5L5.5 12l5.5 5.5"></path></svg></button>
+            <button type="button" aria-label="Next update" onClick="{{ onLuNext }}" style="flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 0; background: #C8D5BB; color: #1C1C1C; cursor: pointer;" style-hover="background: #DCE5D2;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg></button>
+            <span aria-hidden="true" style="flex: 1; min-width: 40px; height: 3px; margin: 0 6px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden;"><span style="display: block; height: 100%; width: {{ luBarW }}; border-radius: 3px; background: #C8D5BB; transition: {{ luBarTr }};"></span></span>
+            <button type="button" onClick="{{ onLuPlay }}" aria-pressed="{{ luPausedAria }}" style="flex: none; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: #C9CEC4; font: inherit; font-size: 12.5px; cursor: pointer;" style-hover="color: #FFFFFF;">{{ luPlayLabel }}</button>
+          </div>
+        </article>
+
+        <div class="lu-listwrap" style="position: relative; min-width: 0;">
+        <ol class="lu-list" ref="{{ luListRef }}" aria-label="All updates" style="min-width: 0; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px;">
+          <sc-for list="{{ luRows }}" as="r" hint-placeholder-count="15">
+            <li style="opacity: {{ r.op }}; transform: {{ r.tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1) {{ r.delay }}, transform .6s cubic-bezier(.16,1,.3,1) {{ r.delay }};">
+              <button type="button" onClick="{{ r.onPick }}" aria-current="{{ r.current }}" style="position: relative; overflow: hidden; width: 100%; display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 10px 16px; border: 0; border-radius: 16px; background: {{ r.bg }}; box-shadow: {{ r.shadow }}; color: #1C1C1C; font: inherit; text-align: left; cursor: pointer; transition: background .3s ease, box-shadow .3s ease, transform .3s cubic-bezier(.16,1,.3,1); transform: {{ r.shift }};" style-hover="background: #FFFFFF;">
+                <span style="flex: none; width: 24px; font-size: 12px; font-weight: 700; color: {{ r.numColor }}; font-variant-numeric: tabular-nums;">{{ r.num }}</span>
+                <span style="flex: 1; min-width: 0; font-size: 15px; font-weight: {{ r.weight }}; line-height: 1.35;">{{ r.t }}</span>
+                <span aria-hidden="true" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: {{ r.dot }};"></span>
+              </button>
+            </li>
+          </sc-for>
+        </ol>
+        </div>
       </div>
     </div>
   </section>
@@ -483,58 +642,280 @@
     </div>
   </section>
 
-  <section id="workflow" aria-labelledby="workflow-heading" style="padding:20px 0 90px"><div style="max-width:1180px;margin:0 auto;padding:0 24px"><div class="latest-workflow"><p class="latest-eyebrow">YOUR EVERYDAY WORKFLOW</p><h2 id="workflow-heading" class="latest-heading">A clearer path from a website to a useful contact.</h2><div class="latest-feature-grid"><article><h3>The main number comes first</h3><p>Phone Finder prioritises the website's main contact number, keeps extra numbers one click away and preserves saved Maps numbers. Targeted checks keep scans responsive, with bounded waits for slow websites.</p></article><article><h3>Read the relevant contact pages</h3><p>Email Finder keeps one main email published on each business website, including Contact Us pages found through links and sitemaps. Optional validity checks apply to the current list.</p></article><article><h3>Pick the details you need</h3><p>Website Lookup lets you choose emails, phones, social profiles and addresses separately. When the scan finishes, its results come into view with each site's status and sources.</p></article><article><h3>Exports you can use</h3><p>PDF and Excel files include the MamaLead logo, clear column headings and properly arranged rows. Export your current finder results, a saved Maps search or selected Website Lookup rows. Email exports keep the same main address shown in the app.</p></article><article><h3>Saved Maps searches, up top</h3><p>Open an earlier city or keyword run from Saved searches and export just that run. The current scan continues to show its own leads in Results.</p></article><article><h3>Updates with a next step</h3><p>Click an unread notification card to mark it read. Notifications has All and Unread views, read controls and delete with Undo. Open the related result, revisit a saved Maps run or reveal an exported file in its folder.</p></article></div><div class="latest-update"><div><p class="latest-eyebrow">APP UPDATES</p><h3>Keep your app up to date.</h3><p>Open Settings &amp; Billing → Account and enable <strong>Automatic updates</strong> for background downloads. New-release notices appear even when you prefer manual updates.</p><p>See progress, then choose <strong>Restart to install</strong> or install when you normally close MamaLead. A download finishing does not interrupt your work with a forced restart.</p><small>Checks run while the app is open. New features reach users when a release is published.</small></div><figure><img width="782" height="385" src="img/app/v1.4.22/app-updates.png" alt="Automatic updates switch and Check for updates in MamaLead Account" loading="lazy" decoding="async"><figcaption>Current app controls. Automatic updates is your choice.</figcaption></figure></div><div class="latest-assist"><div><p class="latest-eyebrow">MAMALEAD ASSIST</p><h3>A short answer. The right page.</h3><p>Get help with the app in English, Urdu, Roman Urdu and other supported languages. Roman Urdu stays in Latin letters, including short follow-ups, rather than switching to Hindi. Ask explicitly if you want a different reply language.</p><p>Replies stay concise, with the relevant page-name link directly below the answer. Open Social Profiles, Email Finder, Phone Finder, Reports or App updates with that link. No personal AI-provider key is needed.</p><small>Internet access and your plan's AI allowance apply. Assist provides guidance; it does not run app actions for you.</small></div><figure class="latest-assist-shot"><img width="385" height="487" src="img/app/v1.4.22/assist.png" alt="Short Roman Urdu reply in MamaLead Assist with an Email Finder page link" loading="lazy" decoding="async"><figcaption>Actual app, illustrative conversation. The page link appears beneath the answer.</figcaption></figure></div><p style="margin:24px 0 0;font-size:12px;color:#555d51;line-height:1.6">Results depend on public information the website makes accessible. Missing details stay blank; published contact information is not a guarantee of an active mailbox or an answered phone.</p></div></div></section>
+  <section id="workflow" aria-labelledby="workflow-heading" style="padding:20px 0 90px"><div style="max-width:1180px;margin:0 auto;padding:0 24px"><div class="latest-workflow"><p class="latest-eyebrow">YOUR EVERYDAY WORKFLOW</p><h2 id="workflow-heading" class="latest-heading">A clearer path from a website to a useful contact.</h2>
+      <div ref="{{ wfRef }}" style="position: relative; margin: 34px 0 10px;">
+        <span class="wf-x" aria-hidden="true" style="position: absolute; top: 18px; bottom: 18px; width: 2px; margin-left: -1px; border-radius: 2px; background: rgba(28,28,28,.12);"><span ref="{{ wfFillRef }}" style="display: block; width: 100%; height: 100%; border-radius: 2px; background: #1C1C1C; transform-origin: top center; transform: scaleY(0);"></span></span>
+        <span class="wf-x" aria-hidden="true" style="position: absolute; top: 18px; bottom: 18px; width: 0; pointer-events: none;"><span ref="{{ wfDotRef }}" style="position: absolute; left: 0; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #C8D5BB; border: 3px solid #1C1C1C; box-shadow: 0 0 0 6px rgba(200,213,187,.45), 0 0 24px 6px rgba(200,213,187,.7); opacity: 0; transition: opacity .3s ease;"></span></span>
+        <ol style="position: relative; margin: 0; padding: 0; list-style: none; display: grid; gap: 22px;">
+        <li class="wf-cap" aria-hidden="true"><span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 12.5px; font-weight: 500; white-space: nowrap;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#C8D5BB" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"></circle><path d="M3.5 12h17M12 3.5c2.6 2.6 2.6 14.4 0 17M12 3.5c-2.6 2.6-2.6 14.4 0 17"></path></svg>A website</span></li>
+        <li data-wf-step="0" class="wf-row">
+          <span class="wf-node" aria-hidden="true" style="position: relative; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid {{ wf0NodeBorder }}; background: {{ wf0NodeBg }}; color: {{ wf0NodeColor }}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; transform: scale({{ wf0NodeScale }}); animation: {{ wf0Pulse }}; transition: background .4s ease, color .4s ease, border-color .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);">01</span>
+          <article class="wf-card" style="min-width: 0; padding: 22px; border-radius: 22px; background: {{ wf0CardBg }}; box-shadow: {{ wf0Shadow }}; opacity: {{ wf0Op }}; transform: {{ wf0Tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1), background .4s ease, box-shadow .5s ease;">
+            <span style="display: inline-flex; font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #52614C;">STEP 1 · WEBSITE LOOKUP</span>
+            <h3 style="margin: 8px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font-weight: 700;">Pick the details you need</h3>
+            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #42473F;">Website Lookup lets you choose emails, phones, social profiles and addresses separately. When the scan finishes, its results come into view with each site's status and sources.</p>
+            <div aria-hidden="true" style="margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf0ChipBorder }}; background: {{ wf0ChipBg }}; color: {{ wf0ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0.00s, color .4s ease 0.00s, border-color .4s ease 0.00s;">Emails</span><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf0ChipBorder }}; background: {{ wf0ChipBg }}; color: {{ wf0ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0.14s, color .4s ease 0.14s, border-color .4s ease 0.14s;">Phones</span><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf0ChipBorder }}; background: {{ wf0ChipBg }}; color: {{ wf0ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0.28s, color .4s ease 0.28s, border-color .4s ease 0.28s;">Social profiles</span><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf0ChipBorder }}; background: {{ wf0ChipBg }}; color: {{ wf0ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0.42s, color .4s ease 0.42s, border-color .4s ease 0.42s;">Addresses</span></div>
+          </article>
+          <span class="wf-ghost" aria-hidden="true" style="font-size: clamp(64px, 8vw, 112px); line-height: 1; font-weight: 700; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 1.5px {{ wf0Ghost }}; transition: -webkit-text-stroke-color .6s ease; font-variant-numeric: tabular-nums;">01</span>
+        </li>
+        <li data-wf-step="1" class="wf-row wf-r">
+          <span class="wf-node" aria-hidden="true" style="position: relative; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid {{ wf1NodeBorder }}; background: {{ wf1NodeBg }}; color: {{ wf1NodeColor }}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; transform: scale({{ wf1NodeScale }}); animation: {{ wf1Pulse }}; transition: background .4s ease, color .4s ease, border-color .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);">02</span>
+          <article class="wf-card" style="min-width: 0; padding: 22px; border-radius: 22px; background: {{ wf1CardBg }}; box-shadow: {{ wf1Shadow }}; opacity: {{ wf1Op }}; transform: {{ wf1Tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1), background .4s ease, box-shadow .5s ease;">
+            <span style="display: inline-flex; font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #52614C;">STEP 2 · EMAIL FINDER</span>
+            <h3 style="margin: 8px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font-weight: 700;">Read the relevant contact pages</h3>
+            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #42473F;">Email Finder keeps one main email published on each business website, including Contact Us pages found through links and sitemaps. Optional validity checks apply to the current list.</p>
+            <div aria-hidden="true" style="margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf1ChipBorder }}; background: {{ wf1ChipBg }}; color: {{ wf1ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0s, color .4s ease 0s, border-color .4s ease 0s;">Home</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#7A8F6C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf1ChipBorder }}; background: {{ wf1ChipBg }}; color: {{ wf1ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease .18s, color .4s ease .18s, border-color .4s ease .18s;">Contact Us</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#7A8F6C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf1ChipBorder }}; background: {{ wf1ChipBg }}; color: {{ wf1ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease .36s, color .4s ease .36s, border-color .4s ease .36s;">Sitemap</span></div>
+          </article>
+          <span class="wf-ghost" aria-hidden="true" style="font-size: clamp(64px, 8vw, 112px); line-height: 1; font-weight: 700; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 1.5px {{ wf1Ghost }}; transition: -webkit-text-stroke-color .6s ease; font-variant-numeric: tabular-nums;">02</span>
+        </li>
+        <li data-wf-step="2" class="wf-row">
+          <span class="wf-node" aria-hidden="true" style="position: relative; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid {{ wf2NodeBorder }}; background: {{ wf2NodeBg }}; color: {{ wf2NodeColor }}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; transform: scale({{ wf2NodeScale }}); animation: {{ wf2Pulse }}; transition: background .4s ease, color .4s ease, border-color .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);">03</span>
+          <article class="wf-card" style="min-width: 0; padding: 22px; border-radius: 22px; background: {{ wf2CardBg }}; box-shadow: {{ wf2Shadow }}; opacity: {{ wf2Op }}; transform: {{ wf2Tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1), background .4s ease, box-shadow .5s ease;">
+            <span style="display: inline-flex; font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #52614C;">STEP 3 · PHONE FINDER</span>
+            <h3 style="margin: 8px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font-weight: 700;">The main number comes first</h3>
+            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #42473F;">Phone Finder prioritises the website's main contact number, keeps extra numbers one click away and preserves saved Maps numbers. Targeted checks keep scans responsive, with bounded waits for slow websites.</p>
+            <div aria-hidden="true" style="margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf2ChipBorder }}; background: {{ wf2ChipBg }}; color: {{ wf2ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0s, color .4s ease 0s, border-color .4s ease 0s;">Main number</span><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed rgba(28,28,28,.25); font-size: 12px; color: #42473F; white-space: nowrap; opacity: {{ wf2Soft }}; transition: opacity .5s ease .3s;">+ extra numbers, one click away</span></div>
+          </article>
+          <span class="wf-ghost" aria-hidden="true" style="font-size: clamp(64px, 8vw, 112px); line-height: 1; font-weight: 700; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 1.5px {{ wf2Ghost }}; transition: -webkit-text-stroke-color .6s ease; font-variant-numeric: tabular-nums;">03</span>
+        </li>
+        <li data-wf-step="3" class="wf-row wf-r">
+          <span class="wf-node" aria-hidden="true" style="position: relative; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid {{ wf3NodeBorder }}; background: {{ wf3NodeBg }}; color: {{ wf3NodeColor }}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; transform: scale({{ wf3NodeScale }}); animation: {{ wf3Pulse }}; transition: background .4s ease, color .4s ease, border-color .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);">04</span>
+          <article class="wf-card" style="min-width: 0; padding: 22px; border-radius: 22px; background: {{ wf3CardBg }}; box-shadow: {{ wf3Shadow }}; opacity: {{ wf3Op }}; transform: {{ wf3Tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1), background .4s ease, box-shadow .5s ease;">
+            <span style="display: inline-flex; font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #52614C;">STEP 4 · EXPORTS</span>
+            <h3 style="margin: 8px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font-weight: 700;">Exports you can use</h3>
+            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #42473F;">PDF and Excel files include the MamaLead logo, clear column headings and properly arranged rows. Export your current finder results, a saved Maps search or selected Website Lookup rows. Email exports keep the same main address shown in the app.</p>
+            <div aria-hidden="true" style="margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 13px 0 9px; border-radius: 10px; border: 1px solid {{ wf3ChipBorder }}; background: {{ wf3ChipBg }}; color: {{ wf3ChipColor }}; font-size: 12px; font-weight: 700; transform: {{ wf3FileTf }}; transition: transform .5s cubic-bezier(.16,1,.3,1) 0.00s, background .4s ease 0.00s, color .4s ease 0.00s;"><img src="img/mamalead-favicon.png?v=2" alt="" width="18" height="18" style="width: 18px; height: 18px; border-radius: 5px;">PDF</span><span style="display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 13px 0 9px; border-radius: 10px; border: 1px solid {{ wf3ChipBorder }}; background: {{ wf3ChipBg }}; color: {{ wf3ChipColor }}; font-size: 12px; font-weight: 700; transform: {{ wf3FileTf }}; transition: transform .5s cubic-bezier(.16,1,.3,1) 0.12s, background .4s ease 0.12s, color .4s ease 0.12s;"><img src="img/mamalead-favicon.png?v=2" alt="" width="18" height="18" style="width: 18px; height: 18px; border-radius: 5px;">Excel</span></div>
+          </article>
+          <span class="wf-ghost" aria-hidden="true" style="font-size: clamp(64px, 8vw, 112px); line-height: 1; font-weight: 700; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 1.5px {{ wf3Ghost }}; transition: -webkit-text-stroke-color .6s ease; font-variant-numeric: tabular-nums;">04</span>
+        </li>
+        <li data-wf-step="4" class="wf-row">
+          <span class="wf-node" aria-hidden="true" style="position: relative; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid {{ wf4NodeBorder }}; background: {{ wf4NodeBg }}; color: {{ wf4NodeColor }}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; transform: scale({{ wf4NodeScale }}); animation: {{ wf4Pulse }}; transition: background .4s ease, color .4s ease, border-color .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);">05</span>
+          <article class="wf-card" style="min-width: 0; padding: 22px; border-radius: 22px; background: {{ wf4CardBg }}; box-shadow: {{ wf4Shadow }}; opacity: {{ wf4Op }}; transform: {{ wf4Tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1), background .4s ease, box-shadow .5s ease;">
+            <span style="display: inline-flex; font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #52614C;">STEP 5 · GOOGLE MAPS</span>
+            <h3 style="margin: 8px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font-weight: 700;">Saved Maps searches, up top</h3>
+            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #42473F;">Open an earlier city or keyword run from Saved searches and export just that run. The current scan continues to show its own leads in Results.</p>
+            <div aria-hidden="true" style="margin: 16px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;"><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf4ChipBorder }}; background: {{ wf4ChipBg }}; color: {{ wf4ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease 0s, color .4s ease 0s, border-color .4s ease 0s;">Saved searches</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#7A8F6C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf4ChipBorder }}; background: {{ wf4ChipBg }}; color: {{ wf4ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease .18s, color .4s ease .18s, border-color .4s ease .18s;">Earlier run</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#7A8F6C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg><span style="display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid {{ wf4ChipBorder }}; background: {{ wf4ChipBg }}; color: {{ wf4ChipColor }}; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .4s ease .36s, color .4s ease .36s, border-color .4s ease .36s;">Export that run</span></div>
+          </article>
+          <span class="wf-ghost" aria-hidden="true" style="font-size: clamp(64px, 8vw, 112px); line-height: 1; font-weight: 700; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 1.5px {{ wf4Ghost }}; transition: -webkit-text-stroke-color .6s ease; font-variant-numeric: tabular-nums;">05</span>
+        </li>
+        <li data-wf-step="5" class="wf-row wf-r">
+          <span class="wf-node" aria-hidden="true" style="position: relative; z-index: 2; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid {{ wf5NodeBorder }}; background: {{ wf5NodeBg }}; color: {{ wf5NodeColor }}; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; transform: scale({{ wf5NodeScale }}); animation: {{ wf5Pulse }}; transition: background .4s ease, color .4s ease, border-color .4s ease, transform .5s cubic-bezier(.34,1.56,.64,1);">06</span>
+          <article class="wf-card" style="min-width: 0; padding: 22px; border-radius: 22px; background: {{ wf5CardBg }}; box-shadow: {{ wf5Shadow }}; opacity: {{ wf5Op }}; transform: {{ wf5Tf }}; transition: opacity .6s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1), background .4s ease, box-shadow .5s ease;">
+            <span style="display: inline-flex; font-size: 11px; font-weight: 500; letter-spacing: .14em; color: #52614C;">STEP 6 · NOTIFICATIONS</span>
+            <h3 style="margin: 8px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -.02em; font-weight: 700;">Updates with a next step</h3>
+            <p style="margin: 8px 0 0; font-size: 14px; line-height: 1.65; color: #42473F;">Click an unread notification card to mark it read. Notifications has All and Unread views, read controls and delete with Undo. Open the related result, revisit a saved Maps run or reveal an exported file in its folder.</p>
+            <div aria-hidden="true" style="margin: 16px 0 0; display: flex; align-items: center; gap: 10px; max-width: 300px; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(28,28,28,.08); background: #F7F7F5;"><img src="img/mamalead-favicon.png?v=2" alt="" width="24" height="24" style="flex: none; width: 24px; height: 24px; border-radius: 7px;"><span style="flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; line-height: 1.3;">New export notice<span style="display: block; font-size: 11.5px; font-weight: 400; color: #4B5548;">{{ wf5Note }}</span></span><span style="flex: none; width: 9px; height: 9px; border-radius: 50%; background: #B8281F; opacity: {{ wf5Unread }}; transform: scale({{ wf5Unread }}); transition: opacity .4s ease .5s, transform .4s ease .5s;"></span></div>
+          </article>
+          <span class="wf-ghost" aria-hidden="true" style="font-size: clamp(64px, 8vw, 112px); line-height: 1; font-weight: 700; letter-spacing: -.06em; color: transparent; -webkit-text-stroke: 1.5px {{ wf5Ghost }}; transition: -webkit-text-stroke-color .6s ease; font-variant-numeric: tabular-nums;">06</span>
+        </li>
+        <li class="wf-cap" aria-hidden="true"><span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 15px; border-radius: 999px; background: {{ wfEndBg }}; color: {{ wfEndColor }}; font-size: 12.5px; font-weight: 700; white-space: nowrap; transform: scale({{ wfEndScale }}); box-shadow: {{ wfEndShadow }}; transition: background .5s ease, color .5s ease, transform .6s cubic-bezier(.34,1.56,.64,1), box-shadow .5s ease;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>A useful contact</span></li>
+        </ol>
+      </div><div class="latest-update"><div><p class="latest-eyebrow">APP UPDATES</p><h3>Keep your app up to date.</h3><p>Open Settings &amp; Billing → Account and enable <strong>Automatic updates</strong> for background downloads. New-release notices appear even when you prefer manual updates.</p><p>See progress, then choose <strong>Restart to install</strong> or install when you normally close MamaLead. A download finishing does not interrupt your work with a forced restart.</p><small>Checks run while the app is open. New features reach users when a release is published.</small></div><figure><img width="782" height="385" src="img/app/v1.4.22/app-updates.png" alt="Automatic updates switch and Check for updates in MamaLead Account" loading="lazy" decoding="async"><figcaption>Current app controls. Automatic updates is your choice.</figcaption></figure></div><div class="latest-assist"><div><p class="latest-eyebrow">MAMALEAD ASSIST</p><h3>A short answer. The right page.</h3><p>Get help with the app in English, Urdu, Roman Urdu and other supported languages. Roman Urdu stays in Latin letters, including short follow-ups, rather than switching to Hindi. Ask explicitly if you want a different reply language.</p><p>Replies stay concise, with the relevant page-name link directly below the answer. Open Social Profiles, Email Finder, Phone Finder, Reports or App updates with that link. No personal AI-provider key is needed.</p><small>Internet access and your plan's AI allowance apply. Assist provides guidance; it does not run app actions for you.</small></div><figure class="latest-assist-shot" ref="{{ asRef }}" style="margin: 0; min-width: 0;">
+  <div style="position: relative; display: flex; flex-direction: column; min-height: 520px; border-radius: 22px; overflow: hidden; background: #F7F7F5; box-shadow: 0 34px 64px -38px rgba(28,28,28,.6), 0 0 0 1px rgba(28,28,28,.07); opacity: {{ asOp }}; transform: {{ asTf }}; transition: opacity .8s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.16,1,.3,1);">
+    <div style="flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #1C1C1C; color: #FFFFFF;">
+      <img src="img/mamalead-favicon.png?v=2" alt="" width="34" height="34" style="flex: none; width: 34px; height: 34px; border-radius: 10px; background: #2A2E2A;">
+      <span style="flex: 1; min-width: 0; line-height: 1.2;">
+        <span style="display: block; font-size: 15px; font-weight: 700; letter-spacing: -.01em;">MamaLead Assist</span>
+        <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; margin-top: 3px; font-size: 11.5px; color: #C9CEC4;"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #8FBE78; animation: assistPulse 1.8s ease-out infinite;"></span>{{ asStatus }}<span aria-hidden="true" style="color: #6E756A;">·</span><span style="color: #C8D5BB;">{{ asLang }}</span></span>
+      </span>
+    </div>
 
-  <section id="privacy" data-screen-label="Privacy" style="padding: 40px 0 90px;">
+    <div aria-live="polite" style="flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 16px 16px 8px;">
+      <sc-if value="{{ asUserShown }}" hint-placeholder-val="{{ true }}">
+        <div style="align-self: flex-end; max-width: 84%; padding: 11px 14px; border-radius: 18px 18px 6px 18px; background: #1C1C1C; color: #FFFFFF; font-size: 14px; line-height: 1.45; transform-origin: right bottom; animation: assistIn .45s cubic-bezier(.16,1,.3,1) both;">{{ asQ }}</div>
+      </sc-if>
+      <sc-if value="{{ asThinking }}" hint-placeholder-val="{{ false }}">
+        <div aria-label="Assist is typing" style="align-self: flex-start; display: flex; gap: 5px; padding: 14px 16px; border-radius: 18px 18px 18px 6px; background: #E9EAE6; transform-origin: left bottom; animation: assistIn .35s cubic-bezier(.16,1,.3,1) both;">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #42473F; animation: assistDot 1s ease-in-out infinite;"></span>
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #42473F; animation: assistDot 1s ease-in-out .15s infinite;"></span>
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #42473F; animation: assistDot 1s ease-in-out .3s infinite;"></span>
+        </div>
+      </sc-if>
+      <sc-if value="{{ asReplying }}" hint-placeholder-val="{{ true }}">
+        <div style="align-self: flex-start; max-width: 90%; padding: 11px 14px; border-radius: 18px 18px 18px 6px; background: #E9EAE6; color: #1C1C1C; font-size: 14px; line-height: 1.5; transform-origin: left bottom; animation: assistIn .35s cubic-bezier(.16,1,.3,1) both;">{{ asReply }}</div>
+      </sc-if>
+      <sc-if value="{{ asLinkShown }}" hint-placeholder-val="{{ true }}">
+        <span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 0 14px; font-size: 13.5px; font-weight: 500; color: #34502F; animation: riseSm .5s cubic-bezier(.16,1,.3,1) both;"><span style="background-image: linear-gradient(#34502F, #34502F); background-size: 100% 1px; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px;">{{ asLink }}</span><svg aria-hidden="true" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M9 7h8v8"></path></svg></span>
+      </sc-if>
+      <sc-if value="{{ asChipsShown }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px;">
+          <sc-for list="{{ asChips }}" as="c" hint-placeholder-count="2">
+            <button type="button" onClick="{{ c.onPick }}" style="min-height: 36px; padding: 0 13px; border-radius: 999px; border: 0; background: #E9EAE6; color: #2F332F; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; animation: riseSm .45s cubic-bezier(.16,1,.3,1) both; animation-delay: {{ c.delay }};" style-hover="background: #DCE5D2; color: #1C1C1C;">{{ c.q }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <div aria-hidden="true" style="flex: none; padding: 6px 14px 8px;">
+      <div style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 6px 0 16px; border-radius: 999px; background: #ECEDE9; box-shadow: {{ asInputRing }}; transition: box-shadow .25s ease;">
+        <span style="flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; color: {{ asInputColor }};">{{ asInput }}<sc-if value="{{ asCaret }}" hint-placeholder-val="{{ false }}"><span style="display: inline-block; width: 1.5px; height: 16px; margin-left: 1px; vertical-align: -3px; background: #1C1C1C; animation: assistCaret 1s steps(1) infinite;"></span></sc-if></span>
+        <span style="flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: {{ asSendBg }}; transform: scale({{ asSendScale }}); transition: transform .15s ease, background .25s ease;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"></path><path d="M6 11l6-6 6 6"></path></svg></span>
+      </div>
+    </div>
+    <a href="support.html" style="flex: none; align-self: flex-start; display: inline-flex; align-items: center; min-height: 32px; margin: 0 0 8px 16px; font-size: 12px; color: #42473F; text-decoration: underline; text-underline-offset: 3px;">Rather email us instead?</a>
+  </div>
+  <figcaption>Recreated from the app with illustrative conversations. Tap a suggestion to see another answer.</figcaption>
+</figure></div><p style="margin:24px 0 0;font-size:12px;color:#555d51;line-height:1.6">Results depend on public information the website makes accessible. Missing details stay blank; published contact information is not a guarantee of an active mailbox or an answered phone.</p></div></div></section>
+
+  <section id="privacy" ref="{{ pvRef }}" class="pv-anim" data-screen-label="Privacy" style="padding: 40px 0 90px;">
     <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
-      <div style="text-align: center; animation: riseSm .7s cubic-bezier(.16,1,.3,1) both;">
+      <div style="text-align: center; opacity: {{ pvOp }}; transform: {{ pvTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) 0s, transform .9s cubic-bezier(.16,1,.3,1) 0s;">
         <span style="display: inline-flex; padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.55); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.85); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); font-size: 10px; letter-spacing: .16em; color: #2A2E2A; white-space: nowrap;">PRIVACY</span>
         <h2 style="margin: 18px 0 0; font-size: clamp(30px, 3.8vw, 48px); line-height: 1.04; letter-spacing: -.04em; font-weight: 700;">Your leads stay on this PC</h2>
         <p style="margin: 14px auto 0; max-width: 620px; font-size: 15px; line-height: 1.6; color: #42473F;">Your lead database stays on your PC. Activation and billing use the MamaLead service; optional Assist messages and limited workspace context pass through it to the AI provider.</p>
       </div>
-      <div style="margin: 44px 0 0; display: flex; flex-wrap: wrap; gap: 18px; align-items: stretch;">
-        <div style="flex: 1 1 460px; min-width: 0; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0; box-shadow: 0 50px 90px -50px rgba(28,28,28,.6); animation: popIn .95s cubic-bezier(.16,1,.3,1) both;">
-          <div style="font-size: 10.5px; letter-spacing: .16em; color: #C8D5BB;">WHERE YOUR DATA LIVES</div>
-          <div style="margin: 14px 0 0; padding: 14px 16px; border-radius: 14px; background: #2A2E2A; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: clamp(12px, 1.4vw, 15px); color: #E9EBE7; overflow-x: auto; white-space: nowrap;">%APPDATA%\nafran-leads-scraper\leads.db</div>
-          <div style="margin: 24px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 22px 26px;">
-            <div>
-              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3z"></path><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"></path></svg></span>Stored on disk</div>
-              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Every lead, run and saved list is written to one SQLite file on your machine.</p>
+
+      <div style="position: relative; overflow: hidden; margin: 44px 0 0; padding: clamp(20px, 3.4vw, 40px); border-radius: 30px; background: #1C1C1C; color: #F0F0F0; box-shadow: 0 50px 90px -50px rgba(28,28,28,.6); opacity: {{ pvOp }}; transform: {{ pvTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) 0.1s, transform .9s cubic-bezier(.16,1,.3,1) 0.1s;">
+        <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(rgba(200,213,187,.13) 1px, transparent 1.2px); background-size: 22px 22px; -webkit-mask-image: radial-gradient(70% 80% at 30% 40%, #000, transparent); mask-image: radial-gradient(70% 80% at 30% 40%, #000, transparent); pointer-events: none;"></div>
+        <div class="pv-stage" style="position: relative; display: grid; grid-template-columns: minmax(0,1fr); gap: 22px 0; align-items: center;">
+
+          <div style="position: relative; z-index: 1; padding: clamp(18px, 2.4vw, 26px); border-radius: 24px; border: 1.5px dashed rgba(200,213,187,.5); background: rgba(255,255,255,.035); box-shadow: 0 0 0 8px rgba(200,213,187,.04), 0 0 60px -10px rgba(200,213,187,.18);">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+              <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .16em; color: #C8D5BB;"><svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#C8D5BB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="12" rx="2"></rect><path d="M8.5 20h7M12 16.5V20"></path></svg>YOUR PC · WHERE YOUR DATA LIVES</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 11.5px; font-weight: 700; white-space: nowrap;"><svg aria-hidden="true" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#1C1C1C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"></rect><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"></path></svg>Lead database stays here</span>
             </div>
-            <div>
-              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17.5a4.5 4.5 0 0 1-.6-9 5.5 5.5 0 0 1 10.6 1.5 3.8 3.8 0 0 1 .5 7.5"></path><path d="M4 4l16 16"></path></svg></span>What connects online</div>
-              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Activation sends a hashed device ID and OS label to our license server. If you use MamaLead Assist, your message and workspace context go to its AI provider.</p>
+            <div style="margin: 14px 0 0; padding: 14px 16px; border-radius: 14px; background: #2A2E2A; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: clamp(12px, 1.35vw, 14.5px); color: #E9EBE7; overflow-x: auto; white-space: nowrap;"><span style="display: inline-block; vertical-align: bottom; overflow: hidden; white-space: nowrap; animation: {{ pvTypeAnim }};">%APPDATA%\nafran-leads-scraper\leads.db</span><span aria-hidden="true" style="display: inline-block; width: 8px; height: 1.1em; margin-left: 2px; vertical-align: -2px; background: #C8D5BB; animation: pvBlink 1s steps(1) infinite;"></span></div>
+            <div style="margin: 16px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; align-items: center;">
+              <div aria-hidden="true" style="position: relative; padding: 12px; border-radius: 16px; background: rgba(0,0,0,.25); border: 1px solid rgba(200,213,187,.14);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; font-size: 11px; color: #B9BEB6;"><span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'SFMono-Regular', Consolas, monospace; color: #E9EBE7;"><svg aria-hidden="true" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#C8D5BB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3z"></path><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"></path></svg>leads.db</span><span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #8FBE78; animation: assistPulse 1.6s ease-out infinite;"></span>writing</span></div>
+                <div style="display: grid; gap: 6px;"><span style="display: flex; align-items: center; gap: 8px; height: 22px; padding: 0 10px; border-radius: 8px; background: rgba(200,213,187,.08); animation: pvRow 4s cubic-bezier(.16,1,.3,1) 0s infinite both;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #C8D5BB;"></span><span style="height: 6px; width: 52%; border-radius: 3px; background: rgba(233,235,231,.38);"></span><span style="margin-left: auto; height: 6px; width: 18%; border-radius: 3px; background: rgba(233,235,231,.18);"></span></span><span style="display: flex; align-items: center; gap: 8px; height: 22px; padding: 0 10px; border-radius: 8px; background: rgba(200,213,187,.08); animation: pvRow 4s cubic-bezier(.16,1,.3,1) 0.5s infinite both;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #C8D5BB;"></span><span style="height: 6px; width: 38%; border-radius: 3px; background: rgba(233,235,231,.38);"></span><span style="margin-left: auto; height: 6px; width: 18%; border-radius: 3px; background: rgba(233,235,231,.18);"></span></span><span style="display: flex; align-items: center; gap: 8px; height: 22px; padding: 0 10px; border-radius: 8px; background: rgba(200,213,187,.08); animation: pvRow 4s cubic-bezier(.16,1,.3,1) 1s infinite both;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #C8D5BB;"></span><span style="height: 6px; width: 64%; border-radius: 3px; background: rgba(233,235,231,.38);"></span><span style="margin-left: auto; height: 6px; width: 18%; border-radius: 3px; background: rgba(233,235,231,.18);"></span></span><span style="display: flex; align-items: center; gap: 8px; height: 22px; padding: 0 10px; border-radius: 8px; background: rgba(200,213,187,.08); animation: pvRow 4s cubic-bezier(.16,1,.3,1) 1.5s infinite both;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #C8D5BB;"></span><span style="height: 6px; width: 44%; border-radius: 3px; background: rgba(233,235,231,.38);"></span><span style="margin-left: auto; height: 6px; width: 18%; border-radius: 3px; background: rgba(233,235,231,.18);"></span></span></div>
+              </div>
+              <div>
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #FFFFFF;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3z"></path><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"></path></svg></span>Stored on disk</h3>
+                <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #C4C9C0;">Every lead, run and saved list is written to one SQLite file on your machine.</p>
+              </div>
             </div>
-            <div>
-              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5"></path></svg></span>Account and licence</div>
-              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Choose a trial or Lifetime here, receive your key by email, then download and activate it in Settings &amp; Billing → Account to use the app features. If you connect Google, its sign-in opens on Google's own page.</p>
+          </div>
+
+          <div style="position: relative; min-width: 0; display: grid; gap: 14px;">
+            <h3 class="pv-online" style="margin: 0; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #FFFFFF;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17.5a4.5 4.5 0 0 1-.6-9 5.5 5.5 0 0 1 10.6 1.5 3.8 3.8 0 0 1 .5 7.5"></path><path d="M4 4l16 16"></path></svg></span>What connects online</h3>
+
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 0;">
+              <div aria-hidden="true" style="position: relative; flex: 1 1 90px; min-width: 90px; height: 34px;">
+                <span style="position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: linear-gradient(90deg, rgba(200,213,187,.55), rgba(200,213,187,.2));"></span>
+                <span style="position: absolute; top: 50%; padding: 4px 9px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 10.5px; font-weight: 700; white-space: nowrap; transform: translate(-50%, -50%); box-shadow: 0 0 16px rgba(200,213,187,.6); animation: pvPacket 3.6s cubic-bezier(.55,0,.35,1) infinite;">ID · OS</span>
+              </div>
+              <div style="flex: 1 1 250px; min-width: 0; display: flex; gap: 12px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08);">
+                <span style="flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(200,213,187,.14); color: #C8D5BB;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="12" r="3.5"></circle><path d="M12 12h8.5M17.5 12v3M20.5 12v2.5"></path></svg></span>
+                <span style="min-width: 0;"><span style="display: block; font-size: 14px; font-weight: 700; color: #FFFFFF;">License server</span><span style="display: block; margin-top: 4px; font-size: 13px; line-height: 1.55; color: #C4C9C0;">Activation sends a hashed device ID and OS label to our license server.</span></span>
+              </div>
             </div>
-            <div>
-              <div style="display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 8.5h10a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 7 18.5V10a1.5 1.5 0 0 1 1.5-1.5z"></path><path d="M4 15.5V5.5A1.5 1.5 0 0 1 5.5 4h10"></path></svg></span>Back it up like any file</div>
-              <p style="margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: #B9BEB6;">Copy leads.db somewhere safe and you have a full backup of your data.</p>
+
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 0;">
+              <div aria-hidden="true" style="position: relative; flex: 1 1 90px; min-width: 90px; height: 34px; opacity: {{ pvAiWire }}; transition: opacity .4s ease;">
+                <span style="position: absolute; left: 0; right: 0; top: 50%; height: 0; border-top: 2px {{ pvAiLine }} rgba(200,213,187,.45);"></span>
+                <sc-if value="{{ pvAssistOn }}" hint-placeholder-val="{{ true }}">
+                  <span style="position: absolute; top: 50%; padding: 4px 9px; border-radius: 999px; background: #FFFFFF; color: #1C1C1C; font-size: 10.5px; font-weight: 700; white-space: nowrap; transform: translate(-50%, -50%); box-shadow: 0 0 16px rgba(255,255,255,.4); animation: pvPacket 3.6s cubic-bezier(.55,0,.35,1) 1.8s infinite both;">Assist</span>
+                </sc-if>
+              </div>
+              <div style="flex: 1 1 250px; min-width: 0; display: flex; gap: 12px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); opacity: {{ pvAiCard }}; transition: opacity .4s ease;">
+                <span style="flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(200,213,187,.14); color: #C8D5BB;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8L12 17.5l-1.8-5.2L5 10.5l5.2-1.8z"></path><path d="M18.5 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"></path></svg></span>
+                <span style="flex: 1; min-width: 0;"><span style="display: block; font-size: 14px; font-weight: 700; color: #FFFFFF;">AI provider</span><span style="display: block; margin-top: 4px; font-size: 13px; line-height: 1.55; color: #C4C9C0;">If you use MamaLead Assist, your message and workspace context go to its AI provider.</span></span>
+              </div>
             </div>
+            <button type="button" role="switch" aria-checked="{{ pvAssistAria }}" onClick="{{ onPvAssist }}" style="justify-self: end; display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 6px 0 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: rgba(255,255,255,.04); color: #E9EBE7; font: inherit; font-size: 12.5px; cursor: pointer;">{{ pvAssistLabel }}<span aria-hidden="true" style="position: relative; width: 40px; height: 24px; border-radius: 999px; background: {{ pvSwitchBg }}; transition: background .3s ease;"><span style="position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #FFFFFF; transform: translateX({{ pvKnob }}); transition: transform .3s cubic-bezier(.34,1.56,.64,1);"></span></span></button>
           </div>
         </div>
-        <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 18px;">
-          <div style="flex: 1; padding: 26px; border-radius: 22px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 30px 60px -44px rgba(28,28,28,.3); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .08s;">
-            <div style="font-size: 10.5px; letter-spacing: .16em; color: #3F443F;">GET STARTED</div>
-            <h3 style="margin: 10px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em;">From download to your first lead</h3>
-            <div style="margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px;">
-              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">01</b><span style="flex: 1; font-size: 13.5px;">Download and install the desktop app</span></div>
-              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">02</b><span style="flex: 1; font-size: 13.5px;">Paste your emailed key in Account</span></div>
-              <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF;"><b style="font-size: 12px; color: #62765B;">03</b><span style="flex: 1; font-size: 13.5px;">Activate your emailed key in Account and start collecting leads</span></div>
-            </div>
-            <p style="margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; color: #42473F;">Your lead database stays on your device. See your plan, usage and invoices inside the app.</p>
+      </div>
+
+      <div style="margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 18px;">
+        <article style="display: flex; flex-direction: column; padding: 24px; border-radius: 24px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: 0 30px 60px -44px rgba(28,28,28,.3); opacity: {{ pvOp }}; transform: {{ pvTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) 0.18s, transform .9s cubic-bezier(.16,1,.3,1) 0.18s;">
+          <div aria-hidden="true" style="position: relative; height: 92px; border-radius: 16px; background: #FFFFFF; border: 1px solid rgba(28,28,28,.06);">
+            <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); display: grid; justify-items: center; gap: 4px; font-size: 10.5px; color: #4B5548;"><svg aria-hidden="true" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#34502F" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg>AppData</span>
+            <span style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: grid; justify-items: center; gap: 4px; font-size: 10.5px; color: #4B5548;"><svg aria-hidden="true" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#1C1C1C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg>Backup</span>
+            <span style="position: absolute; right: 20px; top: 14px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #34502F; color: #FFFFFF; font-size: 11px; font-weight: 700; animation: pvLand 3.4s ease-in-out infinite both;">✓</span>
+            <span style="position: absolute; left: 78px; right: 78px; top: 50%; height: 0; border-top: 1.5px dashed rgba(28,28,28,.2);"></span>
+            <span style="position: absolute; left: 78px; right: 78px; top: 50%; height: 0;"><span style="position: absolute; top: 0; display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border-radius: 8px; background: #1C1C1C; color: #FFFFFF; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10.5px; white-space: nowrap; transform: translate(-50%, -50%); animation: pvCopy 3.4s cubic-bezier(.55,0,.35,1) infinite both;"><svg aria-hidden="true" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="#C8D5BB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5c0-1.7 3.4-3 7.5-3s7.5 1.3 7.5 3-3.4 3-7.5 3-7.5-1.3-7.5-3z"></path><path d="M4.5 6.5v11c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-11M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"></path></svg>leads.db</span></span>
           </div>
-          <div style="flex: 1; padding: 26px; border-radius: 22px; background: #C8D5BB; box-shadow: 0 30px 60px -44px rgba(28,28,28,.3); animation: popIn .95s cubic-bezier(.16,1,.3,1) both; animation-delay: .16s;">
-            <div style="font-size: 10.5px; letter-spacing: .16em; color: #2F3A2C;">HOW A RUN BEHAVES</div>
-            <div style="margin: 14px 0 0; display: flex; flex-direction: column; gap: 9px; font-size: 13.5px; line-height: 1.5;">
-              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>1.5&ndash;3 s between places by default, adjustable up to 10 s.</span>
-              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Headless, or a visible browser window you can watch.</span>
-              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Runs in the app's own browser, with your own Google account if you sign it in.</span>
-              <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Stops with a clear message if Google shows a challenge.</span>
-            </div>
+          <h3 style="margin: 18px 0 0; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #C8D5BB; color: #1C1C1C; display: inline-flex; align-items: center; justify-content: center;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 8.5h10a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 7 18.5V10a1.5 1.5 0 0 1 1.5-1.5z"></path><path d="M4 15.5V5.5A1.5 1.5 0 0 1 5.5 4h10"></path></svg></span>Back it up like any file</h3>
+          <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #42473F;">Copy leads.db somewhere safe and you have a full backup of your data.</p>
+        </article>
+
+        <article style="display: flex; flex-direction: column; padding: 24px; border-radius: 24px; background: #E4EBDD; box-shadow: 0 30px 60px -44px rgba(28,28,28,.3); opacity: {{ pvOp }}; transform: {{ pvTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) 0.26s, transform .9s cubic-bezier(.16,1,.3,1) 0.26s;">
+          <div aria-hidden="true" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 92px; align-content: center; padding: 0 4px;">
+            <span style="padding: 9px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 500; white-space: nowrap; animation: pvChip 4.5s ease-in-out 0s infinite both;">Trial or Lifetime</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#52614C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg>
+            <span style="padding: 9px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 500; white-space: nowrap; animation: pvChip 4.5s ease-in-out 1.5s infinite both;">Key by email</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#52614C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12h14"></path><path d="M13 6.5l5.5 5.5L13 17.5"></path></svg>
+            <span style="padding: 9px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 500; white-space: nowrap; animation: pvChip 4.5s ease-in-out 3s infinite both;">Activate in Account</span>
           </div>
+          <h3 style="margin: 18px 0 0; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700;"><span style="width: 30px; height: 30px; border-radius: 9px; background: #1C1C1C; color: #C8D5BB; display: inline-flex; align-items: center; justify-content: center;"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"></path><path d="M5 20c.9-3.6 3.6-5.5 7-5.5s6.1 1.9 7 5.5"></path></svg></span>Account and licence</h3>
+          <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #2F332F;">Choose a trial or Lifetime here, receive your key by email, then download and activate it in Settings &amp; Billing → Account to use the app features. If you connect Google, its sign-in opens on Google's own page.</p>
+        </article>
+
+        <article style="display: flex; flex-direction: column; padding: 24px; border-radius: 24px; background: #F5F5F4; border: 1px solid rgba(28,28,28,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 30px 60px -44px rgba(28,28,28,.3); opacity: {{ pvOp }}; transform: {{ pvTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) 0.34s, transform .9s cubic-bezier(.16,1,.3,1) 0.34s;">
+          <div style="font-size: 10.5px; letter-spacing: .16em; color: #3F443F;">GET STARTED</div>
+          <h3 style="margin: 10px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -.025em;">From download to your first lead</h3>
+          <div style="position: relative; margin: 16px 0 0; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; animation: pvStepRow 4.5s ease-in-out 0s infinite both;"><b style="font-size: 12px; color: #62765B;">01</b><span style="flex: 1; font-size: 13.5px;">Download and install the desktop app</span></div>
+            <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; animation: pvStepRow 4.5s ease-in-out 1.5s infinite both;"><b style="font-size: 12px; color: #62765B;">02</b><span style="flex: 1; font-size: 13.5px;">Paste your emailed key in Account</span></div>
+            <div style="display: flex; align-items: baseline; gap: 10px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; animation: pvStepRow 4.5s ease-in-out 3s infinite both;"><b style="font-size: 12px; color: #62765B;">03</b><span style="flex: 1; font-size: 13.5px;">Activate your emailed key in Account and start collecting leads</span></div>
+          </div>
+          <p style="margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; color: #42473F;">Your lead database stays on your device. See your plan, usage and invoices inside the app.</p>
+        </article>
+      </div>
+
+      <div style="margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: clamp(18px, 3vw, 34px); align-items: center; padding: clamp(20px, 3vw, 32px); border-radius: 26px; background: #C8D5BB; box-shadow: 0 30px 60px -44px rgba(28,28,28,.3); opacity: {{ pvOp }}; transform: {{ pvTf }}; transition: opacity .9s cubic-bezier(.16,1,.3,1) 0.42s, transform .9s cubic-bezier(.16,1,.3,1) 0.42s;">
+        <div>
+          <div style="font-size: 10.5px; letter-spacing: .16em; color: #2F3A2C;">HOW A RUN BEHAVES</div>
+          <div style="margin: 14px 0 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5;">
+            <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>1.5&ndash;3 s between places by default, adjustable up to 10 s.</span>
+            <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Headless, or a visible browser window you can watch.</span>
+            <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Runs in the app's own browser, with your own Google account if you sign it in.</span>
+            <span style="display: flex; gap: 9px;"><span style="flex: none; margin-top: 7px; width: 6px; height: 6px; border-radius: 50%; background: #1C1C1C;"></span>Stops with a clear message if Google shows a challenge.</span>
+          </div>
+        </div>
+
+        <div style="min-width: 0; padding: 14px; border-radius: 20px; background: #F7F7F5; box-shadow: 0 24px 48px -30px rgba(28,28,28,.45);">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;">
+            <div role="radiogroup" aria-label="Browser mode" style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: #E9EAE6;">
+              <sc-for list="{{ pvModes }}" as="m" hint-placeholder-count="2">
+                <button type="button" role="radio" aria-checked="{{ m.checked }}" onClick="{{ m.onPick }}" style="min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: {{ m.bg }}; color: {{ m.color }}; box-shadow: {{ m.shadow }}; font: inherit; font-size: 12.5px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background .25s ease, color .25s ease;">{{ m.label }}</button>
+              </sc-for>
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; color: {{ pvStatusColor }};"><span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: {{ pvStatusColor }};"></span>{{ pvStatus }}</span>
+          </div>
+
+          <div style="position: relative; margin: 12px 0 0; border-radius: 14px; overflow: hidden; border: 1px solid rgba(28,28,28,.08); background: #FFFFFF;">
+            <sc-if value="{{ pvVisible }}" hint-placeholder-val="{{ false }}">
+              <div aria-hidden="true" style="display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid rgba(28,28,28,.07); background: #F1F2EF; animation: riseSm .35s ease both;">
+                <span style="width: 8px; height: 8px; border-radius: 50%; background: #E0857C;"></span><span style="width: 8px; height: 8px; border-radius: 50%; background: #E6C26B;"></span><span style="width: 8px; height: 8px; border-radius: 50%; background: #8FBE78;"></span>
+                <span style="flex: 1; margin-left: 6px; padding: 3px 10px; border-radius: 999px; background: #FFFFFF; font-size: 10.5px; color: #4B5548;">google.com/maps</span>
+              </div>
+            </sc-if>
+            <div aria-hidden="true" style="position: relative; height: 170px; background: radial-gradient(120% 90% at 20% 10%, #EEF3E8, #DCE5D2); opacity: {{ pvMapOp }}; transition: opacity .4s ease;">
+              <span style="position: absolute; inset: 0; background-image: linear-gradient(rgba(52,80,47,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(52,80,47,.08) 1px, transparent 1px); background-size: 28px 28px;"></span>
+              <span style="position: absolute; left: -10%; right: -10%; top: 58%; height: 10px; background: rgba(255,255,255,.75); transform: rotate(-8deg);"></span>
+              <span style="position: absolute; top: -10%; bottom: -10%; left: 44%; width: 8px; background: rgba(255,255,255,.75); transform: rotate(12deg);"></span>
+              <sc-for list="{{ pvPins }}" as="p" hint-placeholder-count="10">
+                <span style="position: absolute; left: {{ p.x }}; top: {{ p.y }}; width: {{ p.size }}; height: {{ p.size }}; border-radius: 50%; background: {{ p.bg }}; border: 2px solid #FFFFFF; transform: translate(-50%, -50%); animation: {{ p.anim }}; transition: background .35s ease, width .35s ease, height .35s ease;"></span>
+              </sc-for>
+            </div>
+            <sc-if value="{{ pvHeadless }}" hint-placeholder-val="{{ true }}">
+              <div style="position: absolute; left: 10px; top: 10px; padding: 5px 10px; border-radius: 999px; background: rgba(28,28,28,.82); color: #FFFFFF; font-size: 11px; white-space: nowrap;">Headless · no window, runs in the background</div>
+            </sc-if>
+            <sc-if value="{{ pvStopped }}" hint-placeholder-val="{{ false }}">
+              <div role="status" style="position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(247,247,245,.86); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: fadeIn .3s ease both;">
+                <div style="display: grid; justify-items: center; gap: 8px; text-align: center;">
+                  <span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 12px; background: #FFF0ED; border: 1px solid #D8A298; color: #9D2F22; font-size: 13px; font-weight: 700;">Run stopped: Google showed a challenge</span>
+                  <span style="font-size: 12px; color: #42473F;">Leads captured so far stay saved.</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="margin: 10px 0 0; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #42473F;">
+            <span style="white-space: nowrap; font-variant-numeric: tabular-nums;">Place {{ pvPlace }} · next in {{ pvWait }} s</span>
+            <span aria-hidden="true" style="flex: 1; height: 4px; border-radius: 4px; background: rgba(28,28,28,.08); overflow: hidden;"><span style="display: block; height: 100%; border-radius: 4px; background: #34502F; transform-origin: left center; animation: {{ pvCountAnim }};"></span></span>
+          </div>
+          <div style="margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;">
+            <label for="pv-delay" style="flex: 1 1 220px; display: grid; gap: 4px; font-size: 12px; font-weight: 500;">
+              <span style="display: flex; justify-content: space-between; gap: 10px;"><span>Delay between places</span><span style="font-variant-numeric: tabular-nums; color: #34502F;">1.5–{{ pvUpper }} s</span></span>
+              <input id="pv-delay" type="range" min="3" max="10" step="0.5" value="{{ pvUpperVal }}" onChange="{{ onPvUpper }}" style="width: 100%; accent-color: #34502F;">
+            </label>
+            <button type="button" onClick="{{ onPvChallenge }}" style="flex: none; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(28,28,28,.16); background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;" style-hover="border-color: #1C1C1C;">{{ pvChallengeLabel }}</button>
+          </div>
+          <p style="margin: 10px 0 0; font-size: 11.5px; color: #4B5548;">Illustration of a run. Default timing shown; drag to try up to 10 s.</p>
         </div>
       </div>
     </div>
@@ -574,6 +955,7 @@
           </div>
         </div>
       </div>
+      <p style="margin: 22px 0 0; text-align: center; font-size: 14px; color: #42473F;">Still stuck? <a href="support.html" style="color: #1C1C1C; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;">Contact support</a></p>
     </div>
   </section>
 
@@ -596,6 +978,7 @@
           </div>
         </sc-for>
       </div>
+      <p style="margin: 26px 0 0; text-align: center; font-size: 14px; color: #42473F;">Still stuck? <a href="support.html" style="color: #1C1C1C; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;">Contact support</a></p>
     </div>
   </section>
 
@@ -615,7 +998,7 @@
           <a href="#modules" style="color: #E9EBE7;">Modules</a>
           <a href="privacy.html" style="color: #E9EBE7;">Privacy policy</a>
           <a href="terms.html" style="color: #E9EBE7;">Terms of use</a>
-          <a href="mailto:billing@nafran.co" style="color: #E9EBE7;">Contact support</a>
+          <a href="support.html" style="color: #E9EBE7;">Contact support</a>
           <a href="#pricing" style="color: #E9EBE7;">Pricing</a>
           <a href="#download" style="color: #E9EBE7;">Download</a>
           <a href="#faq" style="color: #E9EBE7;">FAQ</a>
@@ -1089,7 +1472,7 @@ const FAQS = [
   ],
   [
     "Can I correct my trial email?",
-    "Before activation, use a different email in the website trial popup or change it in Settings & Billing and request a replacement key. The previous key becomes invalid. An activated or completed trial cannot be restarted by changing email."
+    "Before activation, use a different email in the website trial popup and request a replacement key. The previous key becomes invalid. An activated or completed trial cannot be restarted by changing email."
   ],
   [
     "Do I need an API key?",
@@ -1105,7 +1488,7 @@ const FAQS = [
   ],
   [
     "How do I buy Lifetime?",
-    "Choose Lifetime access on this website. Enter your email first; an existing Lifetime email is blocked before payment. Stripe Checkout collects your card details. After verified payment and email delivery, download MamaLead. A new installation opens Account so you can paste and activate the key. Existing users can also buy from Settings & Billing."
+    "Choose Lifetime access on this website. Stripe Checkout opens directly and collects your card details. After verified payment and email delivery, download MamaLead. A new installation opens Account so you can paste and activate the key. Existing users can also buy from Settings & Billing."
   ],
   [
     "Is scraping Google Maps allowed?",
@@ -1143,13 +1526,66 @@ const HERO = {
   }
 };
 
+const LU = [
+  { c: 'app', t: "Automatic updates, your choice", d: "Turn on background downloads in Account. Get a new-release notice, follow progress and restart when you are ready. Your leads and settings stay on this PC." },
+  { c: 'app', t: "Short answers. Straight to the page.", d: "MamaLead Assist keeps replies concise and adds the relevant page name below the answer. Click it to open a module, Reports or App updates." },
+  { c: 'app', t: "Read a notification with one click", d: "New scan, export and update notices pop up in the top-right corner. Click to open the related page and mark the notice read, or review it later in Notifications. All/Unread, Mark all read and delete with Undo remain available." },
+  { c: 'find', t: "Your Maps limit stays in place", d: "Set one total for the run across keywords and areas. Request 40 and collect at most 40. If fewer results are available, the search finishes with those results." },
+  { c: 'scan', t: "See progress. Stop when needed.", d: "Social, Email and Phone scans show a live progress panel, the current business, percentage checked and remaining count. Stop scan keeps completed results; failed businesses can be retried." },
+  { c: 'saved', t: "Your saved work, in one report", d: "Open Insights / Reports for saved lead totals, Maps searches and email, phone and social coverage. Refresh the report or reopen an earlier search." },
+  { c: 'saved', t: "Live search, no extra click", d: "Type a name, email, phone or profile URL. Related saved matches appear below the search bar; a complete phone number narrows to exact matches." },
+  { c: 'saved', t: "Your history stays useful", d: "Open earlier finder searches from History, or revisit a whole Maps run with Saved searches. Your search history stays available when you reopen the app." },
+  { c: 'scan', t: "Choose a website list", d: "Paste links, choose a CSV, TSV or Excel file, or reuse a Maps run. Review ready, duplicate and skipped counts. Scan up to 500 sites at a time and keep the remaining sites ready for the next batch." },
+  { c: 'find', t: "One main email. Your choice to verify.", d: "Email Finder shows one main email published on each business website. Choose validity on the page or check the current results later. Follow the checked count and use Stop checking when needed." },
+  { c: 'scan', t: "Social scans keep moving", d: "Scan several websites at once. A slow or failed site does not hold up the rest; retry only failed sites. Duplicate profiles, hidden spam, share, login, post and video links are left out." },
+  { c: 'find', t: "Captured leads stay saved", d: "Maps saves results as they arrive. Reopen interrupted searches with the leads already captured, see stopped-run totals, and keep your keywords, location and Google session choice for the next search." },
+  { c: 'scan', t: "Results come into view", d: "Website Lookup moves to its results when the scan finishes. Review the published details and source pages, then export the current scan or selected websites." },
+  { c: 'find', t: "Unknown emails get another check", d: "A normal validity check now retries Unknown results within the current import or result list. Completed results are kept, and empty or already-checked selections tell you so." },
+  { c: 'saved', t: "Your saved results are waiting", d: "Return to Email Finder or Phone Finder and your saved results open straight away. The old search and filter are cleared, and imports keep using the local database." },
+];
+const LU_CATS = [['all', 'All'], ['find', 'Finding contacts'], ['scan', 'Scanning'], ['saved', 'Saved work'], ['app', 'App & Assist']];
+const LU_COLOR = { find: '#34502F', scan: '#1C1C1C', saved: '#7A8F6C', app: '#B3C3A4' };
+
+const PV_PINS = [[12, 62], [24, 30], [36, 72], [47, 42], [58, 20], [64, 66], [75, 38], [85, 74], [90, 24], [30, 50]];
+
+const ASSIST = [
+  { lang: 'Roman Urdu', q: 'email mil jaye to us ki validity kasy check karun?', a: 'Email Finder mein Verify found emails On karein, ya scan ke baad Check email validity use karein. Sirf current list ki emails check hongi.', link: 'Email Finder' },
+  { lang: 'English', q: 'How do I keep the app updated?', a: 'Open Settings & Billing → Account and turn on Automatic updates. When a download finishes, choose Restart to install, or install when you next close MamaLead.', link: 'App updates' },
+  { lang: 'Roman Urdu', q: 'Phone Finder pehle kaunsa number dikhata hai?', a: 'Phone Finder website ka main contact number pehle dikhata hai. Extra numbers ek click door hain, aur saved Maps numbers bhi rehte hain.', link: 'Phone Finder' },
+];
+
 class Component extends DCLogic {
-  state = { mod: -1, shot: 0, faq: 0, paid: false, paidClosed: false, trial: null, trialStep: 'form', trialEmail: '', trialSending: false, trialError: '', trialDone: false };
+  state = { mod: -1, shot: 0, faq: 0, paid: false, paidClosed: false, trial: null, trialStep: 'form', trialEmail: '', trialSending: false, trialError: '', trialDone: false, sup: { cat: 'other', email: '', msg: '', diag: false, sent: false, ticket: '', error: '', tried: false, toast: false, typing: '', pressed: false }, cur: { x: 0, y: 0, op: 0, down: false }, supInView: false, supAuto: true, wayIdx: 0, glow: false, as: { i: 0, typed: '', user: false, thinking: false, words: 0, link: false, chips: false, press: false, inView: false }, wf: { reached: 0, done: false }, pv: { inView: false, assist: true, mode: 'headless', upper: 3, place: 0, wait: 2.2, stopped: false, tick: 0 }, lu: { cat: 'all', i: 0, n: 0, bar: false, hover: false, userPaused: false, inView: false } };
+  asRef = React.createRef();
+  luRef = React.createRef();
+  wfRef = React.createRef();
+  pvRef = React.createRef();
+  wfFillRef = React.createRef();
+  wfDotRef = React.createRef();
+  luListRef = React.createRef();
+  supSectionRef = React.createRef();
+  supCardRef = React.createRef();
   emailRef = React.createRef();
 
   componentDidMount() {
+    this.supWatch();
+    this.asWatch();
+    this.luWatch();
+    this.pvWatch();
+    this._wfReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._wfScroll = () => { if (this._wfRaf) return; this._wfRaf = requestAnimationFrame(() => { this._wfRaf = 0; this.wfUpdate(); }); };
+    window.addEventListener('scroll', this._wfScroll, { passive: true });
+    window.addEventListener('resize', this._wfScroll);
+    this._wfScroll();
     this._mounted = true;
-    this.restoreBilling();
+    this.restoreBilling().finally(() => {
+      if (!this._mounted) return;
+      const url = new URL(location.href), action = url.searchParams.get('action');
+      if (!['trial', 'lifetime'].includes(action)) return;
+      url.searchParams.delete('action'); history.replaceState(null, '', url);
+      if (action === 'lifetime') this.checkout();
+      else this.startTrial();
+    });
     this._tick = setInterval(() => this.setState({ now: Date.now() }), 1000);
     this._key = (e) => {
       if (this.state.trial && e.key === 'Tab') {
@@ -1168,8 +1604,10 @@ class Component extends DCLogic {
     if (start >= 1 && start <= MODULES.length) this.open(start - 1);
   }
 
-  componentDidUpdate(_, prev) {
+  componentDidUpdate() {
     const s = this.state;
+    const prev = this._prevTrial || {};
+    this._prevTrial = { trial: s.trial, trialStep: s.trialStep };
     if (s.trial && s.trialStep === 'form' && (!prev.trial || prev.trialStep !== 'form')) {
       setTimeout(() => this.emailRef.current && this.emailRef.current.focus({ preventScroll: true }), 60);
     }
@@ -1205,6 +1643,14 @@ class Component extends DCLogic {
     try { location.assign(await window.MamaLeadBilling.checkout()); }
     catch (error) { this.setState({checkoutBusy:false,checkoutRetry:true,checkoutNotice:error.message || 'Checkout could not be opened. Please try again.'}); }
     finally { this._checkoutBusy = false; }
+  }
+
+  startTrial(mode = 'trial') {
+    const el = document.getElementById('download');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (el) window.scrollTo({top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: reduce ? 'auto' : 'smooth'});
+    clearTimeout(this._trialScroll);
+    this._trialScroll = setTimeout(() => { if (this._mounted) this.openTrial(mode); }, reduce ? 0 : 750);
   }
 
   openTrial(mode) {
@@ -1261,8 +1707,13 @@ class Component extends DCLogic {
   }
 
   componentWillUnmount() {
+    this.asClear(); if (this._asIO) this._asIO.disconnect();
+    clearTimeout(this._luT); if (this._luIO) this._luIO.disconnect();
+    clearTimeout(this._pvT); if (this._pvIO) this._pvIO.disconnect();
+    window.removeEventListener('scroll', this._wfScroll); window.removeEventListener('resize', this._wfScroll); cancelAnimationFrame(this._wfRaf);
+    this.supClear(); clearInterval(this._supWays); clearTimeout(this._supToast); if (this._supIO) this._supIO.disconnect();
     this._mounted = false;
-    clearInterval(this._tick);
+    clearInterval(this._tick); clearTimeout(this._trialScroll);
     window.removeEventListener('keydown', this._key);
     document.documentElement.style.overflow = '';
   }
@@ -1279,6 +1730,438 @@ class Component extends DCLogic {
 
   step(d) {
     this.setState((s) => ({ mod: (s.mod + d + MODULES.length) % MODULES.length, shot: 0 }));
+  }
+
+  pvSet(p, cb) { this.setState((s) => ({ pv: { ...s.pv, ...p } }), cb); }
+
+  pvSchedule() {
+    clearTimeout(this._pvT);
+    const p = this.state.pv;
+    if (!p.inView || p.stopped || this._pvReduce) return;
+    this._pvT = setTimeout(() => this.pvStep(), p.wait * 1000);
+  }
+
+  pvStep() {
+    const p = this.state.pv;
+    const wait = +(1.5 + Math.random() * (p.upper - 1.5)).toFixed(1);
+    this.pvSet({ place: (p.place + 1) % PV_PINS.length, wait, tick: p.tick + 1 }, () => this.pvSchedule());
+  }
+
+  pvWatch(tries = 0) {
+    const el = this.pvRef.current;
+    if (!el) { if (tries < 30) requestAnimationFrame(() => this.pvWatch(tries + 1)); return; }
+    this._pvReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!('IntersectionObserver' in window)) return this.pvSet({ inView: true });
+    this._pvIO = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting !== this.state.pv.inView) this.pvSet({ inView: e.isIntersecting }, () => this.pvSchedule());
+    }, { threshold: .12 });
+    this._pvIO.observe(el);
+  }
+
+  privacyVals() {
+    const p = this.state.pv, show = p.inView || this._pvReduce;
+    const running = p.inView && !p.stopped && !this._pvReduce;
+    return {
+      pvRef: this.pvRef,
+      pvOp: show ? '1' : '0',
+      pvTf: show ? 'none' : 'translateY(26px)',
+      pvTypeAnim: show && !this._pvReduce ? 'pvType 1.6s steps(39) .4s both' : 'none',
+      pvAssistOn: p.assist,
+      pvAssistAria: String(p.assist),
+      pvAssistLabel: p.assist ? 'Using Assist' : 'Assist off · nothing sent',
+      pvSwitchBg: p.assist ? '#8FBE78' : 'rgba(255,255,255,.2)',
+      pvKnob: p.assist ? '16px' : '0px',
+      pvAiWire: p.assist ? '1' : '.35',
+      pvAiLine: p.assist ? 'solid' : 'dashed',
+      pvAiCard: p.assist ? '1' : '.5',
+      onPvAssist: () => this.pvSet({ assist: !p.assist }),
+      pvModes: [['headless', 'Headless'], ['visible', 'Visible window']].map(([id, label]) => {
+        const on = p.mode === id;
+        return { label, checked: String(on), bg: on ? '#FFFFFF' : 'transparent', color: on ? '#1C1C1C' : '#42473F', shadow: on ? '0 4px 10px -6px rgba(28,28,28,.4)' : 'none', onPick: () => this.pvSet({ mode: id }) };
+      }),
+      pvVisible: p.mode === 'visible',
+      pvHeadless: p.mode === 'headless',
+      pvMapOp: p.mode === 'visible' ? '1' : '.7',
+      pvPins: PV_PINS.map(([x, y], k) => {
+        const cur = k === p.place, done = k < p.place;
+        return {
+          x: x + '%', y: y + '%', size: cur ? '18px' : '12px',
+          bg: cur ? '#1C1C1C' : (done ? '#34502F' : 'rgba(28,28,28,.22)'),
+          anim: cur && running ? 'pvPin 1.2s ease-out infinite' : 'none',
+        };
+      }),
+      pvPlace: (p.place + 1) + ' of ' + PV_PINS.length,
+      pvWait: p.wait.toFixed(1),
+      pvCountAnim: running ? (p.tick % 2 ? 'pvCountA' : 'pvCountB') + ' ' + p.wait + 's linear both' : 'none',
+      pvUpper: p.upper.toFixed(1),
+      pvUpperVal: p.upper,
+      onPvUpper: (e) => this.pvSet({ upper: +e.target.value, wait: Math.min(p.wait, +e.target.value) }),
+      pvStopped: p.stopped,
+      pvStatus: p.stopped ? 'Stopped' : (running ? 'Running' : 'Paused'),
+      pvStatusColor: p.stopped ? '#9D2F22' : '#34502F',
+      pvChallengeLabel: p.stopped ? 'Resume run' : 'Show a Google challenge',
+      onPvChallenge: () => this.pvSet({ stopped: !p.stopped }, () => this.pvSchedule()),
+    };
+  }
+
+  wfUpdate() {
+    const el = this.wfRef.current, fill = this.wfFillRef.current, dot = this.wfDotRef.current;
+    if (!el || !fill || !dot) { if ((this._wfTries = (this._wfTries || 0) + 1) < 40) requestAnimationFrame(() => this.wfUpdate()); return; }
+    const r = el.getBoundingClientRect();
+    let p = (window.innerHeight * 0.62 - r.top) / Math.max(1, r.height);
+    p = this._wfReduce ? 1 : Math.min(1, Math.max(0, p));
+    fill.style.transform = 'scaleY(' + p.toFixed(4) + ')';
+    dot.style.top = (p * 100).toFixed(2) + '%';
+    dot.style.opacity = p > 0.005 && p < 0.995 ? '1' : '0';
+    let reached = 0;
+    el.querySelectorAll('[data-wf-step]').forEach((li) => { if ((li.offsetTop + li.offsetHeight * 0.35) / el.offsetHeight <= p) reached++; });
+    const done = p >= 0.985;
+    if (reached !== this.state.wf.reached || done !== this.state.wf.done) this.setState({ wf: { reached, done } });
+  }
+
+  workflowVals() {
+    const { reached, done } = this.state.wf;
+    const v = {
+      wfRef: this.wfRef, wfFillRef: this.wfFillRef, wfDotRef: this.wfDotRef,
+      wfEndBg: done ? '#C8D5BB' : 'rgba(255,255,255,.6)', wfEndColor: done ? '#1C1C1C' : '#6B7466',
+      wfEndScale: done ? '1.06' : '1', wfEndShadow: done ? '0 0 0 6px rgba(200,213,187,.45), 0 16px 30px -16px rgba(52,80,47,.6)' : 'none',
+    };
+    for (let k = 0; k < 6; k++) {
+      const on = k < reached, active = on && k === reached - 1 && !done;
+      Object.assign(v, {
+        ['wf' + k + 'Op']: on ? '1' : '.42',
+        ['wf' + k + 'Tf']: on ? 'none' : 'translateY(18px) scale(.98)',
+        ['wf' + k + 'CardBg']: on ? '#FFFFFF' : 'rgba(255,255,255,.45)',
+        ['wf' + k + 'Shadow']: active ? '0 30px 60px -34px rgba(28,28,28,.5)' : (on ? '0 18px 40px -36px rgba(28,28,28,.5)' : 'none'),
+        ['wf' + k + 'NodeBg']: on ? '#1C1C1C' : '#E4EBDD',
+        ['wf' + k + 'NodeColor']: on ? '#C8D5BB' : '#6B7466',
+        ['wf' + k + 'NodeBorder']: on ? '#1C1C1C' : 'rgba(28,28,28,.18)',
+        ['wf' + k + 'NodeScale']: active ? '1.12' : '1',
+        ['wf' + k + 'Pulse']: active ? 'wfPulse 1.6s ease-out infinite' : 'none',
+        ['wf' + k + 'ChipBg']: on ? '#1C1C1C' : '#F7F7F5',
+        ['wf' + k + 'ChipColor']: on ? '#FFFFFF' : '#42473F',
+        ['wf' + k + 'ChipBorder']: on ? '#1C1C1C' : 'rgba(28,28,28,.12)',
+        ['wf' + k + 'Soft']: on ? '1' : '0',
+        ['wf' + k + 'FileTf']: on ? 'none' : 'translateY(6px)',
+        ['wf' + k + 'Ghost']: active ? 'rgba(52,80,47,.55)' : (on ? 'rgba(28,28,28,.14)' : 'rgba(28,28,28,.07)'),
+        ['wf' + k + 'Unread']: on ? '0' : '1',
+        ['wf' + k + 'Note']: on ? 'Marked read · open the exported file' : 'Unread',
+      });
+    }
+    return v;
+  }
+
+  luSet(p, cb) { this.setState((s) => ({ lu: { ...s.lu, ...p } }), cb); }
+
+  luList(cat) { const c = cat || this.state.lu.cat; return LU.map((x, k) => k).filter((k) => c === 'all' || LU[k].c === c); }
+
+  luRunning() { const l = this.state.lu; return l.inView && !l.hover && !l.userPaused && !this._luReduce; }
+
+  luSchedule() {
+    clearTimeout(this._luT);
+    this.luSet({ bar: false });
+    if (!this.luRunning()) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (this.luRunning()) this.luSet({ bar: true }); }));
+    this._luT = setTimeout(() => this.luStep(1), 1500);
+  }
+
+  luGo(i) { this.setState((s) => ({ lu: { ...s.lu, i, n: s.lu.n + 1 } }), () => { this.luSchedule(); this.luReveal(); }); }
+
+  luReveal() {
+    const box = this.luListRef.current;
+    if (!box || box.scrollHeight <= box.clientHeight + 1) return;
+    const row = box.querySelector('[aria-current="true"]');
+    if (!row) return;
+    const li = row.parentElement, top = li.offsetTop, bottom = top + li.offsetHeight;
+    if (top < box.scrollTop + 8 || bottom > box.scrollTop + box.clientHeight - 48) box.scrollTo({ top: Math.max(0, top - 60), behavior: this._luReduce ? 'auto' : 'smooth' });
+  }
+
+  luStep(d) {
+    const list = this.luList(), pos = Math.max(0, list.indexOf(this.state.lu.i));
+    this.luGo(list[(pos + d + list.length) % list.length]);
+  }
+
+  luWatch(tries = 0) {
+    const el = this.luRef.current;
+    if (!el) { if (tries < 30) requestAnimationFrame(() => this.luWatch(tries + 1)); return; }
+    this._luReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!('IntersectionObserver' in window)) return this.luSet({ inView: true });
+    this._luIO = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting !== this.state.lu.inView) this.luSet({ inView: e.isIntersecting }, () => this.luSchedule());
+    }, { threshold: .2 });
+    this._luIO.observe(el);
+  }
+
+  latestVals() {
+    const l = this.state.lu, item = LU[l.i] || LU[0];
+    const list = this.luList();
+    const catName = (c) => (LU_CATS.find(([id]) => id === c) || [])[1] || '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+      luRef: this.luRef,
+      luListRef: this.luListRef,
+      luRvOp: l.inView || this._luReduce ? '1' : '0',
+      luRvTf: l.inView || this._luReduce ? 'none' : 'translateY(18px)',
+      luSpotTf: l.inView || this._luReduce ? 'none' : 'translateY(36px) rotate(-1deg)',
+      luCats: LU_CATS.map(([id, label]) => {
+        const on = l.cat === id;
+        return {
+          label, selected: String(on), count: id === 'all' ? LU.length : LU.filter((x) => x.c === id).length,
+          bg: on ? '#1C1C1C' : 'rgba(255,255,255,.6)', color: on ? '#FFFFFF' : '#1C1C1C', border: on ? '#1C1C1C' : 'rgba(28,28,28,.08)',
+          countBg: on ? 'rgba(200,213,187,.25)' : 'rgba(28,28,28,.06)',
+          onPick: () => { const first = this.luList(id)[0]; this.luSet({ cat: id }, () => this.luGo(first)); },
+        };
+      }),
+      luNum: pad(l.i + 1),
+      luTotal: String(LU.length),
+      luTitle: item.t,
+      luDesc: item.d,
+      luCatLabel: catName(item.c),
+      luCatColor: LU_COLOR[item.c],
+      luAnim: (l.n % 2 ? 'luInA' : 'luInB') + ' .35s cubic-bezier(.16,1,.3,1) both',
+      luBarW: l.bar ? '100%' : '0%',
+      luBarTr: l.bar ? 'width 1.5s linear' : 'width 0s',
+      luPlayLabel: l.userPaused || this._luReduce ? 'Play' : 'Pause',
+      luPausedAria: String(!!(l.userPaused || this._luReduce)),
+      onLuPrev: () => this.luStep(-1),
+      onLuNext: () => this.luStep(1),
+      onLuPlay: () => { if (this._luReduce) this._luReduce = false; this.luSet({ userPaused: !l.userPaused }, () => this.luSchedule()); },
+      onLuEnter: () => this.luSet({ hover: true }, () => this.luSchedule()),
+      onLuLeave: () => this.luSet({ hover: false }, () => this.luSchedule()),
+      luRows: list.map((k, n) => {
+        const on = k === l.i, show = l.inView || this._luReduce;
+        return {
+          num: pad(k + 1), t: LU[k].t, current: on ? 'true' : 'false',
+          bg: on ? '#FFFFFF' : 'rgba(255,255,255,.32)',
+          shadow: on ? '0 14px 30px -20px rgba(28,28,28,.45)' : 'none',
+          shift: on ? 'translateY(-2px)' : 'none',
+          numColor: on ? '#1C1C1C' : '#6B7466',
+          weight: on ? '700' : '500',
+          dot: LU_COLOR[LU[k].c],
+          op: show ? '1' : '0', tf: show ? 'none' : 'translateY(10px)', delay: (0.2 + n * 0.035).toFixed(3) + 's',
+          onPick: () => this.luGo(k),
+        };
+      }),
+    };
+  }
+
+  asSet(p) { this.setState((s) => ({ as: { ...s.as, ...p } })); }
+
+  asClear() { (this._asT || []).forEach(clearTimeout); this._asT = []; }
+
+  asPlay(i) {
+    this.asClear();
+    const c = ASSIST[i], T = (ms, fn) => this._asT.push(setTimeout(fn, ms));
+    this.asSet({ i, typed: '', user: false, thinking: false, words: 0, link: false, chips: false, press: false });
+    let t = 500;
+    for (let k = 1; k <= c.q.length; k++) T(t + k * 38, () => this.asSet({ typed: c.q.slice(0, k) }));
+    t += c.q.length * 38 + 350;
+    T(t, () => this.asSet({ press: true }));
+    T(t + 170, () => this.asSet({ press: false, typed: '', user: true }));
+    T(t + 600, () => this.asSet({ thinking: true }));
+    t += 1900;
+    T(t, () => this.asSet({ thinking: false, words: 1 }));
+    const n = c.a.split(' ').length;
+    for (let k = 2; k <= n; k++) T(t + k * 55, () => this.asSet({ words: k }));
+    t += n * 55;
+    T(t + 300, () => this.asSet({ link: true }));
+    T(t + 700, () => this.asSet({ chips: true }));
+    T(t + 5200, () => this.asPlay((i + 1) % ASSIST.length));
+  }
+
+  asWatch(tries = 0) {
+    const el = this.asRef.current;
+    if (!el) { if (tries < 30) requestAnimationFrame(() => this.asWatch(tries + 1)); return; }
+    this._asReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const still = () => this.asSet({ inView: true, i: 0, user: true, words: 999, link: true, chips: true });
+    if (this._asReduce || !('IntersectionObserver' in window)) return still();
+    this._asIO = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        this.asSet({ inView: true });
+        if (!this._asRunning) { this._asRunning = true; this.asPlay(this.state.as.i); }
+      } else if (this._asRunning) { this._asRunning = false; this.asClear(); }
+    }, { threshold: .3 });
+    this._asIO.observe(el);
+  }
+
+  assistVals() {
+    const a = this.state.as, c = ASSIST[a.i] || ASSIST[0];
+    const typing = a.typed.length > 0;
+    const words = c.a.split(' ');
+    return {
+      asRef: this.asRef,
+      asOp: a.inView ? '1' : '0',
+      asTf: a.inView ? 'none' : 'translateY(36px) rotate(1.5deg)',
+      asStatus: a.thinking ? 'Thinking…' : 'AI · workspace aware',
+      asLang: c.lang,
+      asQ: c.q,
+      asUserShown: a.user,
+      asThinking: a.thinking,
+      asReplying: a.words > 0,
+      asReply: words.slice(0, a.words).join(' '),
+      asLinkShown: a.link,
+      asLink: c.link,
+      asChipsShown: a.chips,
+      asChips: ASSIST.map((x, k) => ({ x, k })).filter(({ k }) => k !== a.i).map(({ x, k }, n) => ({
+        q: x.q, delay: (n * 0.09) + 's',
+        onPick: () => { this._asRunning = true; this.asPlay(k); },
+      })),
+      asInput: typing ? a.typed : 'Type a message…',
+      asInputColor: typing ? '#1C1C1C' : '#6B706A',
+      asCaret: typing,
+      asInputRing: typing ? '0 0 0 2px rgba(52,80,47,.25)' : 'none',
+      asSendBg: typing || a.press ? '#34502F' : '#1C1C1C',
+      asSendScale: a.press ? '.86' : '1',
+    };
+  }
+
+  supSet(patch) { this.setState((s) => ({ sup: { ...s.sup, ...patch } })); }
+
+  supClear() { (this._supT || []).forEach(clearTimeout); this._supT = []; }
+
+  supCursor(target, done) {
+    const card = this.supCardRef.current;
+    const el = card && card.querySelector('[data-auto="' + target + '"]');
+    if (!el) return;
+    const c = card.getBoundingClientRect(), r = el.getBoundingClientRect();
+    this.setState({ cur: { ...this.state.cur, x: r.left - c.left + Math.min(r.width * .62, r.width - 18), y: r.top - c.top + r.height * .55, op: 1 } });
+    if (done) done();
+  }
+
+  supClick(fn) {
+    this.setState({ cur: { ...this.state.cur, down: true } });
+    this._supT.push(setTimeout(() => { this.setState({ cur: { ...this.state.cur, down: false } }); fn && fn(); }, 170));
+  }
+
+  supType(key, text, start, step) {
+    for (let i = 1; i <= text.length; i++) this._supT.push(setTimeout(() => this.supSet({ [key]: text.slice(0, i), typing: i < text.length ? key : '' }), start + i * step));
+    return start + text.length * step;
+  }
+
+  supStartAuto() {
+    if (this._supManual || this._supReduce) return;
+    this.supClear();
+    const T = (ms, fn) => this._supT.push(setTimeout(fn, ms));
+    clearTimeout(this._supToast);
+    this.supSet({ cat: 'other', email: '', msg: '', diag: false, sent: false, toast: false, error: '', tried: false, typing: '', pressed: false });
+    this.setState({ cur: { x: 260, y: 300, op: 0, down: false }, supAuto: true });
+    T(500, () => this.supCursor('bug'));
+    T(1300, () => this.supClick(() => this.supSet({ cat: 'bug', diag: true })));
+    T(1800, () => this.supCursor('email'));
+    let t = this.supType('email', 'sara@brightstudio.pk', 2500, 62);
+    T(t + 300, () => this.supCursor('msg'));
+    t = this.supType('msg', 'My Maps scan stopped at 40%. Can you take a look?', t + 1000, 34);
+    T(t + 400, () => this.supCursor('send'));
+    T(t + 1200, () => { this.supSet({ pressed: true }); this.supClick(); });
+    T(t + 1500, () => {
+      this.supSet({ pressed: false, sent: true, toast: true, ticket: 'DEMO-' + String(Math.floor(1000 + Math.random() * 9000)) });
+      this.setState({ cur: { ...this.state.cur, op: 0 } });
+    });
+    T(t + 4400, () => this.supSet({ toast: false }));
+    T(t + 6200, () => this.supStartAuto());
+  }
+
+  supStopAuto() {
+    if (this._supManual) return;
+    this._supManual = true;
+    this.supClear();
+    this.setState({ supAuto: false, cur: { ...this.state.cur, op: 0 } });
+    this.supSet({ cat: 'bug', diag: true, email: '', msg: '', sent: false, toast: false, typing: '', pressed: false, error: '', tried: false });
+  }
+
+  supWatch(tries = 0) {
+    const el = this.supSectionRef.current;
+    if (!el) { if (tries < 30) requestAnimationFrame(() => this.supWatch(tries + 1)); return; }
+    this._supReduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (this._supReduce || !('IntersectionObserver' in window)) { this.setState({ supInView: true }); return; }
+    this._supIO = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        this.setState({ supInView: true });
+        if (!this._supWays) this._supWays = setInterval(() => this.setState((s) => ({ wayIdx: (s.wayIdx + 1) % 4, glow: !s.glow })), 2600);
+        if (!this._supRunning) { this._supRunning = true; this._supT = this._supT || []; this._supT.push(setTimeout(() => this.supStartAuto(), 700)); }
+      } else {
+        clearInterval(this._supWays); this._supWays = null;
+        if (this._supRunning) { this._supRunning = false; this.supClear(); }
+      }
+    }, { threshold: .25 });
+    this._supIO.observe(el);
+  }
+
+  supportVals() {
+    const sup = this.state.sup;
+    const set = (patch) => this.supSet(patch);
+    const auto = !!this.state.supAuto && !this._supManual;
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(sup.email.trim());
+    const msgOk = sup.msg.trim().length > 0;
+    const cats = [['licence', 'Licence'], ['bug', 'Bug'], ['feature', 'Feature request'], ['other', 'Other']];
+    const inView = !!this.state.supInView;
+    const cur = this.state.cur || { x: 0, y: 0, op: 0, down: false };
+    const ring = '0 0 0 3px rgba(52,80,47,.16)';
+    const wayIdx = this.state.wayIdx || 0;
+    const ways = {};
+    [0, 1, 2, 3].forEach((i) => {
+      const on = inView && i === wayIdx && !this._supReduce;
+      ways['w' + i + 'bg'] = on ? 'rgba(200,213,187,.16)' : 'rgba(255,255,255,.06)';
+      ways['w' + i + 'num'] = on ? '#FFFFFF' : '#C8D5BB';
+      ways['w' + i + 'bar'] = on ? '100%' : '0%';
+      ways['w' + i + 'tr'] = on ? 'width 2.6s linear' : 'width 0s';
+    });
+    return {
+      ...ways,
+      supSectionRef: this.supSectionRef,
+      supCardRef: this.supCardRef,
+      rvOp: inView ? '1' : '0',
+      rvTf: inView ? 'none' : 'translateY(18px)',
+      rvCardTf: inView ? 'rotate(-.6deg)' : 'translateY(40px) rotate(2deg)',
+      glowX: this.state.glow ? -60 : 0,
+      glowY: this.state.glow ? 50 : 0,
+      curOp: auto ? cur.op : 0,
+      curX: Math.round(cur.x),
+      curY: Math.round(cur.y),
+      curScale: cur.down ? .82 : 1,
+      curRing: cur.down ? '1' : '0',
+      curRingScale: cur.down ? '1' : '.4',
+      supBadge: auto ? 'Live demo · click to try' : 'Replay demo',
+      supBadgeDot: auto ? '#2E9E5B' : '#8FA382',
+      supFootnote: auto ? 'Watch it fill itself in, or click the form to try it. Nothing is sent from this page.' : 'Preview only. Nothing is sent from this page — the real form is in the MamaLead desktop app.',
+      supForm: !sup.sent,
+      supSent: sup.sent,
+      supToast: sup.toast,
+      supTicket: sup.ticket,
+      supEmail: sup.email,
+      supMsg: sup.msg,
+      supCount: sup.msg.length.toLocaleString(),
+      supDiag: sup.diag,
+      supDiagBg: sup.diag ? '#E3EBDA' : '#EEF0EA',
+      supDiagNote: sup.diag ? 'Counts & scrubbed errors' : 'Off',
+      supError: sup.error,
+      supEmailBorder: sup.typing === 'email' ? '#34502F' : (sup.tried && !emailOk ? '#A23B2A' : 'rgba(28,28,28,.12)'),
+      supMsgBorder: sup.typing === 'msg' ? '#34502F' : (sup.tried && !msgOk ? '#A23B2A' : 'rgba(28,28,28,.12)'),
+      supEmailRing: sup.typing === 'email' ? ring : 'none',
+      supMsgRing: sup.typing === 'msg' ? ring : 'none',
+      supSendBg: sup.pressed ? '#34502F' : '#1C1C1C',
+      supSendScale: sup.pressed ? '.94' : '1',
+      supSendLabel: sup.pressed ? 'Sending…' : 'Send message →',
+      supCats: cats.map(([id, label]) => {
+        const on = sup.cat === id;
+        return { id, label, checked: String(on), bg: on ? '#1C1C1C' : '#FFFFFF', color: on ? '#FFFFFF' : '#1C1C1C', border: on ? '#1C1C1C' : 'rgba(28,28,28,.14)', onPick: () => set({ cat: id, diag: id === 'bug' }) };
+      }),
+      onSupCardDown: () => { if (auto) this.supStopAuto(); },
+      onSupReplay: (e) => { e.stopPropagation(); if (auto) return this.supStopAuto(); this._supManual = false; this.supStartAuto(); },
+      onSupEmail: (e) => set({ email: e.target.value, error: '' }),
+      onSupMsg: (e) => set({ msg: e.target.value, error: '' }),
+      onSupDiag: (e) => set({ diag: e.target.checked }),
+      onSupDiscard: () => set({ msg: '', cat: 'other', diag: false, error: '', tried: false }),
+      onSupSend: (e) => {
+        e.preventDefault();
+        if (!emailOk || !msgOk) return set({ tried: true, error: !emailOk ? 'Enter a reply email so we can answer you.' : 'Write a short message first.' });
+        const ticket = 'DEMO-' + String(Math.floor(1000 + Math.random() * 9000));
+        set({ sent: true, ticket, toast: true, error: '', tried: false });
+        clearTimeout(this._supToast);
+        this._supToast = setTimeout(() => set({ toast: false }), 8000);
+      },
+      onSupReset: () => { clearTimeout(this._supToast); this._supManual = true; this.supClear(); this.setState({ supAuto: false }); set({ sent: false, msg: '', toast: false, cat: 'bug', diag: true }); },
+    };
   }
 
   renderVals() {
@@ -1321,6 +2204,11 @@ class Component extends DCLogic {
     const hero = HERO[this.props.heroShot] || HERO['Dashboard'];
 
     return {
+      ...this.privacyVals(),
+      ...this.workflowVals(),
+      ...this.latestVals(),
+      ...this.assistVals(),
+      ...this.supportVals(),
       modules, cur, faqs,
       checkoutBusy: !!this.state.checkoutBusy,
       checkoutNotice: this.state.checkoutNotice || '',
@@ -1356,16 +2244,10 @@ class Component extends DCLogic {
       changeTrialEmail: () => {
         this.setState({ trialStep: 'form', trialReplace:true, trialEmail: '', trialError:'' });
       },
-      onStartTrial: (e) => {
-        e.preventDefault();
-        const el = document.getElementById('download');
-        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: reduce ? 'auto' : 'smooth' });
-        setTimeout(() => this.openTrial('trial'), reduce ? 0 : 750);
-      },
-      onOpenTrial: (e) => { e.preventDefault(); this.openTrial('trial'); },
+      onStartTrial: (e) => { e.preventDefault(); this.startTrial(); },
+      onOpenTrial: (e) => { e.preventDefault(); this.startTrial(); },
       onDownloadClick: (e) => {
-        if (!this.state.paidUser) { e.preventDefault(); this.openTrial('choose'); }
+        if (!this.state.paidUser) { e.preventDefault(); this.startTrial('required'); }
       },
       ...this.fomo(),
       showPaid: !this.state.paidClosed && this.state.paid,

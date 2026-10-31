@@ -583,7 +583,7 @@ export function useAppValues() {
     const previous=previousAccess.current
     if(previous.seen && previous.active!==active) {
       const trial=featureBilling.license?.kind==='trial'
-      notify(active?(trial?'1-day trial activated':'Lifetime license activated'):'MamaLead access needs attention',active?'Your '+(trial?'1-day trial':'Lifetime access')+' is active on this device.':'Your trial or Lifetime access is not active. Open Settings & Billing to review your access.',active?'success':'info',undefined,{kind:active?'billing':'warn',action:{type:'view',view:'settings',tab:active?'acct':'plan'},actionLabel:'Open Settings & Billing',eventKey:'core-access:'+active+':'+(featureBilling.license?.activatedAt || featureBilling.license?.expiresAt || 'current')})
+      notify(active?(trial?'1-day trial started':'Lifetime license activated'):'MamaLead access needs attention',active?'Your '+(trial?'1-day trial':'Lifetime access')+' is active on this device.':'Your trial or Lifetime access is not active. Open Settings & Billing to review your access.',active?'success':'info',undefined,{kind:active?'billing':'warn',action:{type:'view',view:'settings',tab:active?'acct':'plan'},actionLabel:'Open Settings & Billing',eventKey:'core-access:'+active+':'+(featureBilling.license?.activatedAt || featureBilling.license?.expiresAt || 'current')})
     }
     previousAccess.current={active,seen:true}
   },[featureBilling,notify])
@@ -3810,8 +3810,8 @@ export function useAppValues() {
     runGoogle: () => void runScrape(true),
     runGuest: () => void runScrape(false),
     mapsGoogleConnected: Boolean(googleStatus?.signedIn),
-    startTrial: () => { setMapsPrompt(null); go('settings'); setStab('plan'); setBillingJump({target:'trial'}) },
-    getLifetimeKey: () => { setMapsPrompt(null); go('settings'); setStab('plan'); setBillingJump({target:'lifetime'}) },
+    startTrial: () => { setMapsPrompt(null); window.open('https://mamalead.com/?action=trial#download', '_blank', 'noopener,noreferrer') },
+    getLifetimeKey: () => { setMapsPrompt(null); window.open('https://mamalead.com/?action=lifetime#pricing', '_blank', 'noopener,noreferrer') },
     activateExistingKey: () => { setMapsPrompt(null); go('settings'); setStab('acct'); setBillingJump({target:'license'}) },
     runOverlayVisible: snapshot.running && !runMinimized,
     runReturnVisible: (snapshot.running && (runMinimized || view !== 'maps')) || (runMinimized && Boolean(snapshot.request)),

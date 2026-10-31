@@ -59,7 +59,7 @@ async function main(){
  assert.equal(await page.locator('[data-chat-panel]').count(),0)
  const sent=await app.evaluate(()=>globalThis.__assistChecks)
  assert.equal(sent.length,cases.length+1)
- assert.match(sent.at(-1).messages.at(-1).content,/Contact Support in the sidebar/)
+ assert.match(sent.at(-1).messages.at(-1).content,/Settings & Billing > Account > Help & support/)
  assert.match(sent.at(-1).messages.at(-1).content,/Do not claim our email\/phone details are listed there/)
  for(const payload of sent){assert.match(payload.messages.at(-1).content,/1-3 short sentences/);assert.ok(payload.messages.at(-1).content.length<=1200)}
  assert.deepEqual(errors,[])

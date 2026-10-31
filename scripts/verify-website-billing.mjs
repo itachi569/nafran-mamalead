@@ -67,7 +67,7 @@ try {
  assert.equal(trialCalls,3,'reload recovers delivery without sending another key')
  await page.keyboard.press('Escape');assert.equal(await dialog.count(),0)
  await page.locator('#download a').filter({hasText:'Download for Windows'}).first().click()
- await dialog.getByText('How do you want to start?',{exact:true}).waitFor()
+ await dialog.getByText('Your license key has been emailed to you',{exact:true}).waitFor()
  await page.keyboard.press('Escape')
  await page.goto(base+'/?checkout=success&session_id=forged',{waitUntil:'networkidle'})
  assert.equal(await page.getByText('Payment successful',{exact:true}).count(),0,'query string must not grant access')
@@ -82,18 +82,28 @@ try {
  const navigation=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
  await page.getByRole('button',{name:'Try again',exact:true}).click();await navigation
  assert.equal(checkoutCalls,2)
- for(const selector of ['.hero-buy','.desktop-pricing','.pricing-lifetime .pricing-action','#top a:has-text("Buy now")','download-choice']){
+ for(const selector of ['.hero-buy','.desktop-pricing','.pricing-lifetime .pricing-action','#top a:has-text("Buy now")']){
   await page.goto(base,{waitUntil:'networkidle'})
   let cta
-  if(selector==='download-choice'){
-   await page.locator('#download a').filter({hasText:'Download for Windows'}).first().click()
-   await dialog.getByText('How do you want to start?',{exact:true}).waitFor()
-   cta=dialog.getByRole('link',{name:/Claim lifetime access/})
-  }else cta=page.locator(selector)
+  cta=page.locator(selector)
   const before=checkoutCalls,next=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
   await cta.evaluate(el=>{el.click();el.click()});await next
   assert.equal(checkoutCalls,before+1,'double click creates one checkout request: '+selector)
  }
+ const appCheckout=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
+ await page.goto(base+'/?action=lifetime#pricing');await appCheckout
+ await page.goto(base,{waitUntil:'networkidle'});await page.evaluate(()=>localStorage.clear());trialEmail=''
+ await page.reload({waitUntil:'networkidle'})
+ await page.locator('#download a').filter({hasText:'Download for Windows'}).first().click()
+ await dialog.getByRole('heading',{name:'Enter your email first'}).waitFor()
+ assert.equal(await dialog.getByRole('link',{name:'Download for Windows'}).count(),0)
+ await page.keyboard.press('Escape')
+ await page.goto(base+'/?action=trial#download',{waitUntil:'networkidle'})
+ await dialog.getByRole('heading',{name:'Get your free 1-day trial'}).waitFor()
+ assert.ok(await page.evaluate(()=>window.scrollY>500),'app trial handoff scrolls to download before the form')
+ await page.keyboard.press('Escape')
+
+ await page.evaluate(()=>window.MamaLeadBilling.checkout())
  purchaseError='This email already has a lifetime account. The duplicate payment was refunded; use the original license key.'
  await page.goto(base+'/?checkout=success&session_id=duplicate',{waitUntil:'networkidle'})
  await page.getByText(purchaseError,{exact:true}).waitFor()

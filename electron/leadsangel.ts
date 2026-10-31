@@ -164,13 +164,15 @@ export async function verifyEmailAddressesWithLeadsAngel(
     if (status === 'completed' || status === 'failed' || status === 'cancelled') break
     onProgress?.(`LeadsAngel job: ${string(state.status) || 'running'} · ${Number(state.succeeded ?? 0)} of ${unique.length} checked…`)
     const succeeded=Number(state.succeeded??0)
-    if(onResults&&succeeded>fetched){await readResults();fetched=succeeded}
+    if(succeeded>fetched){await readResults();fetched=succeeded}
     if(!first)await pause(signal,1200)
     first=false
     state = await post('status', credentials, { job_id: jobId }, signal)
   }
   if (signal.aborted) throw signal.reason ?? new DOMException('Cancelled', 'AbortError')
   if (Date.now() >= deadline) {
+    try { await readResults() }
+    catch (error) { if (signal.aborted || !results.size) throw error }
     if(results.size)return [...results.values()]
     throw new EmailVerificationError('LeadsAngel job is still processing. Try again later.', true)
   }

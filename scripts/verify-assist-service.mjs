@@ -28,7 +28,7 @@ test('support instructions describe the real contact form and prohibit invented 
   const {service}=fixture({providerFetch:async(_,request)=>{sent=JSON.parse(request.body);return Response.json({choices:[{message:{content:'Open Contact Support to message our team.'}}]})}})
   await service.chat(row,{}, {messages:[{role:'user',content:'How can I contact your company?'}]})
   assert.match(sent.messages[0].content,/CONTACTING MAMALEAD/)
-  assert.match(sent.messages[0].content,/Contact Support in the sidebar/)
+  assert.match(sent.messages[0].content,/Settings & Billing > Account > Help & support/)
   assert.match(sent.messages[0].content,/Do not claim email or phone details are listed there/)
 })
 test('AI uses onboarding/trial/paid allowances from server status', async () => {

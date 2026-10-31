@@ -64,15 +64,15 @@ async function main(){
   const start=panel.getByRole('button',{name:/Start lookup/});if(!await start.isDisabled())throw Error('Empty lookup enabled');
   await input.fill('northstar.test\nhttps://www.northstar.test/team\nharbor.test\nblocked.test\nnot a website');
   if(!(await panel.locator('[data-lookup-input-count]').innerText()).includes('3 ready · 1 duplicates · 1 skipped'))throw Error('Input count mismatch');
-  await panel.screenshot({path:join(out,'website-lookup-setup.png')});
+  await panel.screenshot({animations:'disabled',path:join(out,'website-lookup-setup.png')});
   await start.click();await panel.getByRole('heading',{name:'Reading public website pages'}).waitFor();
   await panel.getByRole('heading',{name:'Scan complete with errors'}).waitFor({timeout:20000}).catch(async error=>{console.log(await panel.innerText());console.log(await app.evaluate(()=>{const t=globalThis.__lookupTest;return t.repository.websiteLookupSession(t.ws)}));throw error});
   if(await panel.locator('[data-lookup-row]').count()!==3)throw Error('Scan results not isolated');
-  await recordScroll('URL scan completion');await page.screenshot({path:join(out,'auto-scroll-viewport.png')});
+  await recordScroll('URL scan completion');await page.screenshot({animations:'disabled',path:join(out,'auto-scroll-viewport.png')});
   const text=await panel.innerText();for(const value of ['Northstar Studio','Harbor Dental','hello@northstar.test','12 King Street','facebook','linkedin','Retry needed'])if(!text.includes(value))throw Error('Missing result '+value);
   if(text.includes('sales@northstar.test'))throw Error('Secondary email shown instead of one main email');
   if(await input.inputValue()!=='')throw Error('Input did not reset');
-  await panel.screenshot({path:join(out,'website-lookup-results.png')});
+  await panel.screenshot({animations:'disabled',path:join(out,'website-lookup-results.png')});
   await panel.getByRole('button',{name:'Export results ↓'}).click();await page.getByRole('button',{name:'Excel (.xlsx)',exact:true}).click();await page.getByRole('dialog',{name:'Export Website Lookup'}).waitFor({state:'detached'});
   await panel.getByRole('button',{name:'Export results ↓'}).click();await page.getByRole('button',{name:'PDF (.pdf)',exact:true}).click();await page.getByRole('dialog',{name:'Export Website Lookup'}).waitFor({state:'detached'});
   const backend=await app.evaluate(()=>{
@@ -102,7 +102,7 @@ async function main(){
   await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));await page.reload();await page.locator('[data-view="website"]').click();await panel.locator('[data-lookup-row]').first().waitFor({timeout:20000});
   await recordScroll('Restored completed scan');
   if(await panel.locator('[data-lookup-row]').count()!==2)throw Error('Session not restored after reload');
-  await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());await panel.screenshot({path:join(out,'website-lookup-dark.png')});await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());
+  await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());await panel.screenshot({animations:'disabled',path:join(out,'website-lookup-dark.png')});await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());
   // The failed new placeholder was rolled back; only the two real saved websites remain.
   await panel.getByRole('button',{name:'Import websites',exact:true}).click();await modal.getByRole('tab',{name:/From a Maps run/}).click();await modal.locator('[data-runpick]').first().click();await modal.getByRole('button',{name:'Scan 2 sites',exact:true}).click();await modal.waitFor({state:'detached'});await panel.getByRole('heading',{name:'Scan complete',exact:true}).waitFor({timeout:60000});
   if(await app.evaluate(()=>__lookupTest.validityCalls)!==0)throw Error('Website Lookup used Email Finder auto-verification preference');

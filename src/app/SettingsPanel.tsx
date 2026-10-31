@@ -8,7 +8,6 @@ import { InvoicesPanel } from './InvoicesPanel'
 import { PaymentPanel } from './PaymentPanel'
 
 type BillingStatus = Awaited<ReturnType<DesktopApi['billing']['status']>>
-const pkr = (amount: number) => new Intl.NumberFormat('en-PK', { maximumFractionDigits: 0 }).format(amount / 100)
 
 const card = { padding: '22px 24px', borderRadius: '22px', background: '#F5F5F4' } as const
 const muted = { color: '#5A5F5C', fontSize: '13px', lineHeight: 1.5 } as const
@@ -23,17 +22,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const [billingRevision, setBillingRevision] = useState(0)
   const [billingBusy, setBillingBusy] = useState(false)
   const [billingError, setBillingError] = useState('')
-  const [trialOpen, setTrialOpen] = useState(false)
-  const [trialEmail, setTrialEmail] = useState('')
-  const [trialBusy, setTrialBusy] = useState(false)
-  const [trialSent, setTrialSent] = useState(false)
-  const [trialCorrecting, setTrialCorrecting] = useState(false)
-  const [trialEmailConflict, setTrialEmailConflict] = useState(false)
-  const [trialChangeBlocked, setTrialChangeBlocked] = useState(false)
-  const [trialEmailReset, setTrialEmailReset] = useState(0)
-  const [trialNotice, setTrialNotice] = useState('')
-  const [trialInvalid, setTrialInvalid] = useState(false)
-  const trialEmailInput = useRef<HTMLInputElement>(null)
   const [licenseStepNotice, setLicenseStepNotice] = useState('')
   const [licenseKey, setLicenseKey] = useState('')
   const [showKey,setShowKey] = useState(false)
@@ -50,18 +38,17 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     const jump = V.billingJump
     if (!jump || (jump.target === 'license' ? !V.tabAcct : !V.tabPlan)) return
     if (jump.target==='license') setChangeKey(true)
-    if (jump.target === 'trial' && !trialOpen) { setTrialOpen(true); return }
     // Billing cards arrive asynchronously. Keep the requested destination until it exists.
     const section = document.getElementById(`${jump.target}-section`)
     if (!section) return
     const timer = window.setTimeout(() => {
       section.scrollIntoView({behavior:'smooth',block:jump.target === 'lifetime' ? 'start' : 'center'})
-      const focus = jump.target === 'trial' ? trialEmailInput.current : jump.target === 'license' ? licenseKeyInput.current : section.querySelector<HTMLElement>('[data-lifetime-buy]:not(:disabled)') ?? section
+      const focus = jump.target === 'license' ? licenseKeyInput.current : section.querySelector<HTMLElement>('button') ?? section
       focus?.focus({preventScroll:true})
       V.clearBillingJump()
     },150)
     return () => window.clearTimeout(timer)
-  },[V.billingJump,V.tabPlan,V.tabAcct,V.clearBillingJump,billing.connected,billing.lifetime,trialOpen])
+  },[V.billingJump,V.tabPlan,V.tabAcct,V.clearBillingJump,billing.connected,billing.lifetime])
   const refreshBilling = useCallback(async () => {
     setBillingError('')
     if (!billingApi) return setBilling({ configured: false, connected: false, message: 'Desktop billing bridge is unavailable.' })
@@ -70,10 +57,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       const status = await billingApi.status()
       setBilling(status)
       setBillingRevision(value => value + 1)
-      if (status.trialRequest) {
-        setTrialSent(status.trialRequest.requested)
-        setTrialChangeBlocked(status.trialRequest.requested && !status.trialRequest.canChangeEmail)
-      }
       window.dispatchEvent(new Event('nafran:billing-updated'))
       return status
     }
@@ -98,12 +81,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   useEffect(() => {
     if (V.tabAcct && (licenseStepNotice || V.licenseNextStep)) licenseKeyInput.current?.focus()
   }, [V.tabAcct, V.licenseNextStep, licenseStepNotice])
-  useEffect(() => {
-    if (V.tabPlan && trialOpen && trialEmailReset) {
-      trialEmailInput.current?.focus()
-      trialEmailInput.current?.select()
-    }
-  }, [V.tabPlan, trialOpen, trialEmailReset])
   const openBilling = async (action: () => Promise<{ opened: boolean }>) => {
     setBillingBusy(true)
     setBillingError('')
@@ -111,23 +88,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     catch (error) { setBillingError(error instanceof Error ? error.message : 'Stripe could not be opened.') }
     finally { setBillingBusy(false) }
   }
-  const startLifetimeCheckout = async () => {
-    if (!billingApi) return
-    if (!lifetimePlanReady) { setBillingError('PKR Checkout is not ready on the billing server yet. No payment was opened.'); return }
-    setBillingBusy(true)
-    setBillingError('')
-    try {
-      const result = await billingApi.checkout('lifetime', '')
-      if (!result.opened) throw new Error('Stripe Checkout could not be opened.')
-      V.startLifetimeCheckoutWatch()
-      setBillingError('Enter your email and card on Stripe Checkout. Once your key is emailed, Account will open automatically.')
-    } catch (error) {
-      setBillingError(error instanceof Error ? error.message : 'Stripe Checkout could not be opened.')
-    } finally {
-      setBillingBusy(false)
-    }
-  }
-
   const activateLicense = async () => {
     const key = licenseKey.trim().toUpperCase().replace(/\s/g,'')
     if (!key) {
@@ -167,53 +127,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     }
     finally { setLicenseBusy(false) }
   }
-  const changeTrialEmail = () => {
-    setTrialCorrecting(billing.trialRequest?.requested ?? trialSent)
-    setTrialEmail('')
-    setTrialNotice('')
-    setTrialEmailConflict(false)
-    setLicenseStepNotice('')
-    V.clearLicenseNextStep()
-    setTrialOpen(true)
-    setTrialEmailReset(value => value + 1)
-    V.goTabPlan()
-    window.setTimeout(() => document.getElementById('trial-section')?.scrollIntoView({ behavior:'smooth', block:'center' }), 150)
-  }
-  const requestTrial = async () => {
-    if (!billingApi || trialBusy) return
-    if (billing.lifetime?.active || (billing.license?.active && billing.license.kind==='lifetime')) return
-    const email = trialEmail.trim().toLowerCase()
-    if (email.length > 254 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setTrialInvalid(true); setTrialNotice('Enter a valid email address for your trial key.'); trialEmailInput.current?.focus(); return }
-    setTrialInvalid(false)
-    const replacing = trialCorrecting || Boolean(billing.trialRequest?.requested && billing.trialRequest.canChangeEmail)
-    setTrialBusy(true)
-    setTrialNotice('')
-    try {
-      const result = await billingApi.requestTrial(email, replacing)
-      if (!result.emailSent) throw new Error('Trial email could not be delivered. Please try again.')
-      setTrialCorrecting(false)
-      setTrialEmailConflict(false)
-      setTrialSent(true)
-      setTrialOpen(false)
-      setTrialNotice(`Trial key sent to ${email}. Open that email, then enter the key in Account. Your 24 hours start when you activate it.`)
-      setLicenseStepNotice(`Trial key sent to ${email}. Paste it below when the email arrives. Your 24 hours start when you activate it.${replacing ? ' The previous key is no longer valid.' : ''}`)
-      await refreshBilling()
-      V.goTabAcct()
-    } catch (error) {
-      const message = (error instanceof Error ? error.message : 'Trial key could not be requested.').replace(/^Error invoking remote method '[^']+': (?:Error:\s*)?/i, '')
-      if (/already been requested|already received its one trial key/i.test(message)) {
-        if (/or browser|or device|already received/i.test(message)) setTrialSent(true)
-        setTrialEmailConflict(true)
-        setTrialOpen(true)
-        setTrialNotice('A trial key has already been requested. Use the key from your email, or choose Change email to enter a different address before activation.')
-      } else if (/can no longer be changed|already activated or closed/i.test(message)) {
-        setTrialChangeBlocked(true)
-        setTrialCorrecting(false)
-        setTrialOpen(false)
-        setTrialNotice('This device’s trial email cannot be changed. Use your existing key or contact support if you cannot access it. Changing email does not restart an activated trial.')
-      } else setTrialNotice(message)
-    } finally { setTrialBusy(false) }
-  }
   const tabs = [
     ['plan', 'Usage', V.goTabPlan, 'Leads, runs and lookups'],
     ['pay', 'Payment', V.goTabPay, 'Payments and Stripe'],
@@ -227,11 +140,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   ] as const
   const lifetimeActive=Boolean(billing.lifetime?.active || (billing.license?.active && billing.license.kind==='lifetime'))
   const activeLicense=Boolean(billing.coreLicenseActive && billing.license?.active)
-  const lifetimePlanReady = billing.lifetime?.currency === 'pkr' && billing.lifetime.amount === 1000000 && billing.lifetime.interval === null
-
-  const paymentSetupMessage = billing.connected && !lifetimePlanReady
-    ? 'Payments are paused until the billing server has the Rs 10,000 PKR Lifetime price.'
-    : ''
   return <div className="settings-page">
     {licenseNotice && <div data-license-notice="1" role={licenseNotice.kind === 'error' ? 'alert' : 'status'} style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 220, display: 'flex', alignItems: 'flex-start', gap: '12px', width: 'min(400px,calc(100vw - 40px))', padding: '14px 16px', borderRadius: '16px', background: licenseNotice.kind === 'error' ? '#F9E8E5' : '#E7EFE2', border: `1px solid ${licenseNotice.kind === 'error' ? '#D78278' : '#9DB58D'}`, color: '#1C1C1C', boxShadow: '0 18px 44px -22px rgba(28,28,28,.55)', fontSize: '13px', lineHeight: 1.5 }}>
       <strong style={{ flex: 1 }}>{licenseNotice.message}</strong><button type="button" aria-label="Dismiss license notice" onClick={() => setLicenseNotice(null)} style={{ border: 0, background: 'transparent', font: 'inherit', cursor: 'pointer', lineHeight: 1 }}>×</button>
@@ -247,45 +155,13 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       </nav>
       <div className="settings-content">
         {V.tabPlan && <>
-          {!lifetimeActive && <section data-card="1" className="billing-stage">
-            <div className="billing-stage-heading">
-              <div><h2>MamaLead billing</h2><p>{lifetimePlanReady ? `Prices and purchase status are verified with Stripe${billing.mode === 'test' ? ' test mode' : ''}.` : 'PKR Checkout update pending on the billing server. Payment is paused until the prices match.'}</p></div>
-              <span className="billing-status-pill">{billing.lifetime?.active ? 'Purchased' : lifetimePlanReady ? 'Not purchased' : 'PKR setup pending'}</span>
-            </div>
-            {paymentSetupMessage && <p data-checkout-setup-alert="1" role="status" className="billing-setup-alert">{paymentSetupMessage}</p>}
-            <div id="lifetime-section" tabIndex={-1} className="billing-offer" style={{scrollMarginTop:24}}>
-              <div className="billing-offer-top"><span className="billing-offer-badge"><span aria-hidden="true" className="billing-offer-dot" />LIFETIME ACCESS</span><span>Unlimited Maps, email, phone and social lookups</span></div>
-              <div className="billing-offer-body">
-                <div className="billing-offer-price-block">
-                  <div className="billing-offer-price-line"><div className="billing-offer-price"><span>Rs</span>{pkr(1000000)}</div><span className="billing-offer-price-unit">PKR · one-time</span></div>
-                  <p>Pay once for unlimited Maps, email, phone and social lookups. Your lifetime key arrives by email after payment.</p>
-                </div>
-                <div className="billing-offer-steps">
-                  <div className="billing-offer-eyebrow">HOW IT WORKS</div>
-                  <div><span>01</span> Enter your email and card on Stripe</div>
-                  <div><span>02</span> Receive your lifetime key by email</div>
-                  <div><span>03</span> Paste the key in Account to activate</div>
-                </div>
-              </div>
-              <p className="billing-plan-note">By continuing, review our <a href="https://mamalead.com/terms.html" target="_blank" rel="noreferrer">Terms of use</a> and <a href="https://mamalead.com/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>.</p><div className="billing-offer-benefits" aria-label="Lifetime plan benefits"><span>✓ Unlimited Maps leads</span><span>✓ Unlimited email lookups</span><span>✓ Unlimited phone lookups</span><span>✓ Unlimited social lookups</span></div>
-              <div className="billing-offer-bottom">
-                {billing.lifetime?.active ? <button type="button" onClick={V.goTabAcct} className="billing-offer-button">Open Account <span aria-hidden="true">↗</span></button> : <button type="button" data-lifetime-buy="1" disabled={billingBusy || !billingApi || !lifetimePlanReady} onClick={() => void startLifetimeCheckout()} className="billing-offer-button">{!lifetimePlanReady ? 'Payment setup pending' : billingBusy ? 'Opening Stripe…' : 'Buy now'} <span aria-hidden="true">↗</span></button>}
-                <p>{billing.lifetime?.active ? 'Your lifetime purchase is verified. Enter the emailed key in Account to activate this machine.' : lifetimePlanReady ? 'Enter your email and card directly on Stripe Checkout. Your lifetime key will be sent to that email after payment.' : 'Checkout will be available after the billing server has the Rs 10,000 PKR Stripe price.'}</p>
-              </div>
-            </div>
-            <div className="billing-plan-grid">
-
-              <div id="trial-section" className="billing-plan-card">
-                <div className="billing-plan-heading"><h3>1-day trial · up to 300 Maps leads across all keywords</h3>{billing.trial?.active && <span className="billing-plan-pill">Active</span>}</div>
-                <div className="billing-plan-action"><strong>Free</strong>{billing.trial?.active ? <span className="billing-plan-date">Until {new Date(billing.trial.expiresAt!).toLocaleString()}</span> : trialSent ? <button type="button" onClick={V.goTabAcct}>Enter key in Account</button> : <button type="button" data-trial-open="1" disabled={trialBusy} onClick={() => setTrialOpen(true)}>Get 1-day trial key</button>}</div>
-                {billing.trial?.active && billing.mapsLeads?.limit != null ? <p data-trial-maps-usage="1" className="billing-plan-note">{billing.mapsLeads.used ?? 0} of {billing.mapsLeads.limit} Maps leads used · {billing.mapsLeads.remaining ?? 0} remaining.</p> : <p className="billing-plan-note">Enter your email, receive a trial key, then activate it in Account. The 24 hours start at activation.</p>}
-                {!billing.trial?.active && !trialChangeBlocked && trialOpen && <form noValidate data-trial-form="1" className="billing-trial-form" onSubmit={(event) => { event.preventDefault(); void requestTrial() }}>
-                  <label htmlFor="desktop-trial-email">{trialCorrecting ? 'New email for your trial key' : 'Email for your trial key'}<input id="desktop-trial-email" aria-invalid={trialInvalid} aria-describedby="trial-email-notice" ref={trialEmailInput} type="email" autoComplete="email" required disabled={trialBusy} value={trialEmail} onChange={(event) => { setTrialEmail(event.target.value); setTrialInvalid(false); setTrialNotice(''); setTrialEmailConflict(false) }} placeholder="you@example.com" /></label>
-                  <button type="submit" disabled={trialBusy} style={{ ...button, background: "#1C1C1C", color: "white", padding: "13px 22px", fontWeight: 600 }}>{trialBusy ? 'Sending…' : trialCorrecting ? 'Send replacement key' : 'Send trial key'}</button>
-                </form>}
-                {trialNotice && <p id="trial-email-notice" data-trial-notice="1" role={trialInvalid ? "alert" : "status"} className="billing-plan-note">{trialNotice}</p>}
-                {(trialSent || trialEmailConflict) && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={button}>Change email</button>}
-              </div>
+          {!lifetimeActive && <section data-website-access="1" className="account-surface">
+            <h2>Get started on mamalead.com</h2>
+            <p>Get your free 1-day trial or buy Lifetime access on our website. We email your key; paste it in Account to activate this device.</p>
+            <div className="account-license-actions">
+              <span id="trial-section"><button type="button" onClick={V.startTrial}>Get 1-day trial ↗</button></span>
+              <span id="lifetime-section"><button type="button" onClick={V.getLifetimeKey}>Get Lifetime ↗</button></span>
+              <button type="button" onClick={V.activateExistingKey}>I already have a key</button>
             </div>
           </section>}
           <section data-maps-plan-guide="1" style={{ ...card, background: '#F5F5F4', border: '1px solid #E4E7DF' }}>
@@ -333,7 +209,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             <p className="account-license-description">{activeLicense ? `${billing.license?.kind === 'trial' ? '1-day trial' : 'Lifetime license'} active on this machine${billing.license?.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license?.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license?.email ? ` · ${billing.license.email}` : ''}.` : 'Paste a trial or lifetime key from your email to unlock this machine.'}</p>
             {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" className="account-license-note">{licenseStepNotice || V.licenseNextStep}</p>}
             <div className="account-license-actions">
-              {trialSent && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy || licenseBusy} onClick={changeTrialEmail}>Change email</button>}
               {activeLicense && !changeKey && <button type="button" onClick={()=>setChangeKey(true)}>Use a different key</button>}
               {changeKey && <button type="button" disabled={licenseBusy} onClick={()=>{setChangeKey(false);setLicenseKey('');setShowKey(false);setLicenseNotice(null)}}>Cancel key change</button>}
             </div>

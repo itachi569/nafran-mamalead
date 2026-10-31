@@ -6,7 +6,7 @@ async function main(){
  const options={...(packaged?{executablePath:process.env.MAMALEAD_TEST_EXE}:{cwd:process.cwd()}),args:[...(packaged?[]:['.']),'--user-data-dir='+profile],env,timeout:60000}
  let app=await _electron.launch(options)
  const setup=async(offlineConfig=false)=>{
-  const page=await app.firstWindow();await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).waitFor()
+  const page=await app.firstWindow();await page.locator('[data-view="settings"]').waitFor();assert.equal(await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).count(),0);await page.locator('[data-view="settings"]').click();await page.locator('[data-stab="acct"]').click();await page.locator('#help-support').waitFor()
   await app.evaluate(({app},offlineConfig)=>{const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'));globalThis.__support={mode:'success',offlineConfig,payloads:[]};req('./dist-electron/billing/client.js').billingSupportRequest=async(path,body,signal)=>{
    if(path.endsWith('/config')&&__support.offlineConfig)throw new Error('Config offline');if(path.endsWith('/config'))return {configured:true,email:'support@example.test',slaText:''};__support.payloads.push(body)
    if(__support.mode==='conflict')throw Object.assign(new Error('Please retry your message; a new request ID is needed.'),{status:409});if(__support.mode==='offline')throw new Error('Fixture connection unavailable')
@@ -18,7 +18,7 @@ async function main(){
  }
  try{
   let page=await setup();const errors=[];page.on('pageerror',e=>errors.push(e.message))
-  await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).click()
+  await page.locator('#help-support').getByRole('button',{name:'Contact support',exact:true}).click()
   let dialog=page.getByRole('dialog',{name:'How can we help?'})
   await dialog.getByLabel('Reply email').fill('review@example.test');await dialog.getByLabel('What is this about?').selectOption('bug')
   assert.equal(await dialog.getByLabel('Attach diagnostics').isChecked(),true)
@@ -28,7 +28,7 @@ async function main(){
   await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0)
   await app.close();app=await _electron.launch(options);page=await setup(true)
   assert.equal(await page.evaluate(async()=>(await window.desktop.support.status()).email),'support@example.test')
-  await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).click();dialog=page.getByRole('dialog',{name:'How can we help?'})
+  await page.locator('#help-support').getByRole('button',{name:'Contact support',exact:true}).click();dialog=page.getByRole('dialog',{name:'How can we help?'})
   assert.match(await dialog.getByLabel('Message',{exact:true}).inputValue(),/keep this draft/)
   await page.screenshot({path:join(out,packaged?'packaged-support-form.png':'desktop-support-form.png')})
   await app.evaluate(()=>{__support.mode='offline'})
@@ -38,7 +38,7 @@ async function main(){
   assert.equal(first.subject,'token [redacted]');assert.ok(first.message.includes('ali@gmail.com'))
   assert.ok(!first.message.includes(token43)&&!first.message.includes(apiKey),'desktop must redact tokens before transport')
   await app.evaluate(()=>{__support.mode='cancel'});await dialog.getByRole('button',{name:'Retry message'}).click();await dialog.getByRole('button',{name:'Cancel send'}).waitFor();await dialog.getByRole('button',{name:'Cancel send'}).click()
-  await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).click();dialog=page.getByRole('dialog',{name:'How can we help?'})
+  await page.locator('#help-support').getByRole('button',{name:'Contact support',exact:true}).click();dialog=page.getByRole('dialog',{name:'How can we help?'})
   await app.evaluate(()=>{__support.mode='conflict'})
   await dialog.getByRole('button',{name:'Send message',exact:false}).click();await dialog.getByRole('alert').filter({hasText:'new request ID'}).waitFor()
   assert.equal(await app.evaluate(()=>__support.payloads.at(-1).clientMessageId),first.clientMessageId)
@@ -47,7 +47,7 @@ async function main(){
   const sends=await app.evaluate(()=>__support.payloads);assert.notEqual(sends.at(-1).clientMessageId,first.clientMessageId)
   assert.equal(await page.evaluate(()=>localStorage.getItem('mamalead.supportDraft.v1')),null)
   await page.screenshot({path:join(out,packaged?'packaged-support-success.png':'desktop-support-success.png')})
-  await page.getByRole('button',{name:'Done',exact:true}).click();await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).click()
+  await page.getByRole('button',{name:'Done',exact:true}).click();await page.locator('#help-support').getByRole('button',{name:'Contact support',exact:true}).click()
   await page.getByText(/You can send another message in/).waitFor()
   await page.getByRole('button',{name:'Discard draft'}).click();await page.getByRole('button',{name:'Close contact support'}).click();assert.equal(await page.evaluate(()=>localStorage.getItem('mamalead.supportDraft.v1')),null)
   assert.deepEqual(errors,[]);console.log('PASS '+(packaged?'packaged':'development')+' support: unlicensed entry, draft survives app restart, 1024×700 layout, diagnostics, offline fallback, cancellation, same UUID retry, conflict UUID reset, cached offline address after restart, success, cleared draft and cooldown')

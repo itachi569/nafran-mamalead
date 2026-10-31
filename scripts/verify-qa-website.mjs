@@ -16,7 +16,7 @@ try{
  for(const viewport of [{width:1440,height:1000},{width:390,height:844},{width:375,height:812},{width:768,height:1024}]){
   const page=await browser.newPage({viewport});const errors=[],failedResources=[];page.on('pageerror',e=>errors.push(e.message));page.on('response',r=>{if(r.status()>=400)failedResources.push(r.status()+' '+r.url())})
   await page.goto(base,{waitUntil:'networkidle'})
-  assert.ok(await page.locator('a[href="mailto:billing@nafran.co"]').count())
+  assert.ok(await page.locator('a[href="support.html"]').count())
   assert.ok(await page.locator('a[href="/terms.html"],a[href="terms.html"]').count())
   assert.doesNotMatch(await page.locator('body').innerText(),/Subscribe\s*[·•]\s*Rs\s*1,000|Decision Makers pass/i)
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))

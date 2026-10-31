@@ -45,6 +45,7 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
   const maxBytes = options.maxBytes ?? 2_000_000
   let failure: unknown = new Error(`${initial.host} could not be read. Retry this website.`)
   let recordedFailure = false
+  let renderedFallbackUrl: string | null = null
   for (let index = 0; index < variants.length && !options.signal.aborted; index++) {
     for (let attempt = 0; attempt < 1; attempt++) {
       let url = variants[index]
@@ -64,9 +65,9 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
           }
           if (!response.ok) {
             await response.body?.cancel()
-            if(options.renderFallback && options.home && index===0 && [403,503].includes(response.status)){
-              try{return await readRenderedPage(url,AbortSignal.any([options.signal,AbortSignal.timeout(10_000)]))}catch(error){if(options.signal.aborted)throw options.signal.reason;throw Object.assign(new Error(userError(error)),{stopVariants:true})}
-            }
+            // Retry a temporary outage over HTTP first. Starting Chromium here used up
+            // the entire site budget before a healthy alternate hostname could respond.
+            if(options.renderFallback && options.home && response.status===503)renderedFallbackUrl ??= url
             const error = new Error(`${initial.host} could not be read (HTTP ${response.status}). Retry this website.`)
             if ([401,403,429].includes(response.status)) throw Object.assign(error,{stopVariants:true})
             throw error
@@ -98,5 +99,9 @@ export async function readWebsitePage(raw: string, options: { signal: AbortSigna
     }
   }
   if (options.signal.aborted) throw options.signal.reason
+  if (renderedFallbackUrl) {
+    try { return await readRenderedPage(renderedFallbackUrl,AbortSignal.any([options.signal,AbortSignal.timeout(7000)])) }
+    catch { if(options.signal.aborted)throw options.signal.reason }
+  }
   throw new Error(userError(failure))
 }

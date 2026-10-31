@@ -92,6 +92,22 @@ async function main() {
     assert.equal(result.length,2);assert.deepEqual(streamed,[{email:'yes@example.com',beforeComplete:true},{email:'no@example.com',beforeComplete:false}]);assert.equal(polls,2)
     console.log('PASS  partial SMTP results delivered early, deduplicated and scoped to requested addresses')
   }finally{global.fetch=originalFetch}
+  // A slow batch must retain completed rows even without a streaming callback.
+  const realNow=Date.now;let clock=realNow(),slowPolls=0,resultReads=0
+  Date.now=()=>clock
+  global.fetch=async url=>{
+    const path=new URL(url).pathname.split('/').at(-1)
+    if(path==='verify')return Response.json({id:'slow-job-12345678',status:'queued'})
+    if(path==='status'){if(++slowPolls===2)clock+=121000;return Response.json({status:'running',succeeded:1})}
+    if(++resultReads>1)throw new Error('Temporary provider failure during final read')
+    return Response.json({items:[{email:'yes@example.com',status:'done',result:{status:'safe'}}]})
+  }
+  try{
+    const rows=await verifyEmailAddressesWithLeadsAngel(credentials,['yes@example.com','pending@example.com'],new AbortController().signal)
+    assert.deepEqual(rows.map(row=>row.email),['yes@example.com'])
+    assert.equal(resultReads,2)
+    console.log('PASS slow provider preserves completed results without a callback, including a failed final read; pending rows are not marked valid')
+  }finally{Date.now=realNow;global.fetch=originalFetch}
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1 })

@@ -16,7 +16,11 @@
         ...(body === undefined ? {} : {body:JSON.stringify(body)})
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'The service is temporarily unavailable. Please try again.');
+      if (!response.ok) {
+        const error = new Error(data.message || data.error || 'The service is temporarily unavailable. Please try again.');
+        Object.assign(error, {status:response.status, field:data.field, retryAfterSeconds:data.retryAfterSeconds || Number(response.headers.get('Retry-After')) || 0});
+        throw error;
+      }
       return data;
     } catch (error) {
       if (error.name === 'AbortError') throw new Error('The request took too long. Please retry; we will check any existing request first.');
@@ -37,6 +41,14 @@
   async function status() { return token ? request('/v1/status', undefined, token) : null; }
   window.MamaLeadBilling = {
     status,
+    async support(input) {
+      // Website visitors use the same authenticated, rate-limited ticket inbox as the app.
+      const {licenseLast4, ...fields} = input;
+      // A visitor's key suffix helps support find their purchase; it is not proof of access.
+      if (/^[A-Za-z0-9]{4}$/.test(licenseLast4 || '')) fields.message += '\n\nLicence key ending (provided by visitor): ' + licenseLast4.toUpperCase();
+      return request('/v1/support', {...fields, page:'website', diagnostics:false,
+        meta:{app:{platform:'web'}}}, await identity());
+    },
     async trial(email, replaceExisting) {
       const credential = await identity();
       const existing = await status();

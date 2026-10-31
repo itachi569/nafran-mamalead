@@ -32,12 +32,12 @@ async function main(){
   const open=page.locator('[data-saved-maps-button]'),drawer=page.locator('[data-saved-maps]');
   await open.waitFor();await page.waitForFunction(()=>document.querySelector('[data-saved-maps-button] .ms-open-count')?.textContent==='58');
   if(await page.getByRole('combobox',{name:'Search / Run history',exact:true}).count())throw Error('Old history dropdown still present');
-  await open.scrollIntoViewIfNeeded();await open.locator('..').screenshot({path:join(out,'maps-saved-searches-header.png')});
+  await open.scrollIntoViewIfNeeded();await open.locator('..').screenshot({animations:'disabled',path:join(out,'maps-saved-searches-header.png')});
   // Saved-search exports must ignore the current results filter and selection.
   await page.getByRole('searchbox',{name:'Filter leads',exact:true}).fill('not-a-match');
   await open.click();await drawer.getByRole('heading',{name:'Saved searches 58'}).waitFor();
   await drawer.locator('[data-saved-run="lahore"]').waitFor();
-  await page.waitForTimeout(450);await drawer.locator('section').screenshot({path:join(out,'saved-searches-list.png')});
+  await page.waitForTimeout(450);await drawer.locator('section').screenshot({animations:'disabled',path:join(out,'saved-searches-list.png')});
   const query=drawer.getByRole('searchbox',{name:'Search saved searches'});
   await query.fill('lahore');if(await drawer.locator('[data-saved-run]').count()!==1)throw Error('City filter failed');
   const lahore=drawer.locator('[data-saved-run="lahore"]');
@@ -52,7 +52,7 @@ async function main(){
   if((await table.innerText()).includes('Karachi Business'))throw Error('Other city leaked into results');
   if(await page.getByRole('searchbox',{name:'Filter leads',exact:true}).inputValue()!=='')throw Error('Old results filter was not cleared');
   if(!(await page.locator('.maps-active-search').innerText()).includes('Lahore · Dentists'))throw Error('Selected search not labelled');
-  await page.screenshot({path:join(out,'lahore-saved-results.png'),animations:'disabled'});
+  await page.screenshot({animations:'disabled',path:join(out,'lahore-saved-results.png')});
   await open.click();await query.fill('Clinics');const bulk=drawer.locator('[data-saved-run="bulk"]');await bulk.waitFor();
   if(!(await bulk.innerText()).includes('1,005 of 2000 leads saved'))throw Error('Count used duplicates instead of stored leads');
   await bulk.getByRole('button',{name:'Export Islamabad search'}).click();await exportDialog.getByRole('button',{name:'Excel (.xlsx)',exact:true}).click();await exportDialog.waitFor({state:'detached'});
@@ -70,14 +70,14 @@ async function main(){
   });
   await open.click();await query.fill('Multan');const empty=drawer.locator('[data-saved-run="empty"]');if(!await empty.getByRole('button',{name:'Export Multan search'}).isDisabled())throw Error('Empty run export enabled');
   await query.fill('no-such-city');await drawer.getByRole('heading',{name:'No matching searches'}).waitFor();await drawer.getByRole('button',{name:'Clear search',exact:true}).click();
-  await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());await page.mouse.move(10,10);await page.waitForTimeout(3500);await drawer.locator('section').screenshot({path:join(out,'saved-searches-dark.png')});await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());
+  await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());await page.mouse.move(10,10);await page.waitForTimeout(3500);await drawer.locator('section').screenshot({animations:'disabled',path:join(out,'saved-searches-dark.png')});await page.evaluate(()=>document.querySelector('[data-theme-btn]').click());
   await drawer.getByRole('button',{name:'Close saved searches'}).focus();await page.keyboard.press('Shift+Tab');if(!await drawer.evaluate(el=>el.contains(document.activeElement)))throw Error('Focus escaped history');
   await page.keyboard.press('Escape');await drawer.waitFor({state:'detached'});
   await page.reload();await page.locator('[data-view="maps"]').click();await open.click();await drawer.locator('[data-saved-run="lahore"]').waitFor();if(await drawer.locator('[data-saved-run]').count()!==30)throw Error('Saved searches did not survive reload');await drawer.getByRole('button',{name:/Show more searches/}).click();if(await drawer.locator('[data-saved-run]').count()!==58)throw Error('Older saved searches were hidden');
   await app.evaluate(()=>globalThis.__savedMaps.seed('peshawar','Peshawar',2,'2026-10-29T12:00:00Z','Hotels'));
   await drawer.getByRole('button',{name:'Refresh',exact:true}).click();await drawer.locator('[data-saved-run="peshawar"]').waitFor();
   await drawer.getByRole('button',{name:'Close saved searches'}).click();await open.click();const fresh=drawer.locator('[data-saved-run="peshawar"]');await fresh.waitFor({timeout:8000}).catch(async error=>{console.log(await drawer.innerText());console.log(await app.evaluate(()=>globalThis.__savedMaps.repository.listRuns(globalThis.__savedMaps.ws,5000).map(run=>({id:run.id,location:run.location}))));throw error});await fresh.getByRole('button',{name:'Export Peshawar search'}).click();await exportDialog.waitFor();await page.keyboard.press('Escape');await exportDialog.waitFor({state:'detached'});if(!await drawer.isVisible())throw Error('Export cancel closed saved searches');
-  await page.setViewportSize({width:640,height:700});await page.waitForTimeout(400);const box=await drawer.locator('section').boundingBox();if(box.x<0||box.y<0||box.y+box.height>700)throw Error('Small history panel outside viewport');await drawer.locator('section').screenshot({path:join(out,'saved-searches-small.png')});
+  await page.setViewportSize({width:640,height:700});await page.waitForTimeout(400);const box=await drawer.locator('section').boundingBox();if(box.x<0||box.y<0||box.y+box.height>700)throw Error('Small history panel outside viewport');await drawer.locator('section').screenshot({animations:'disabled',path:join(out,'saved-searches-small.png')});
   await drawer.getByRole('button',{name:'Close saved searches'}).click();await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('searchbox',{name:'Filter leads',exact:true}).fill('old filter that must reset');
   await page.locator('[data-location="1"]').fill('Sialkot');
@@ -92,7 +92,7 @@ async function main(){
   if(await page.getByRole('searchbox',{name:'Filter leads',exact:true}).inputValue()!=='')throw Error('Current run hidden behind old filter');
   await emitLead(1);await emitLead(2);await table.getByText('Sialkot Live 2',{exact:true}).waitFor();if(await table.getByRole('row').count()!==3)throw Error('Live rows not appended/deduplicated');
   if(!(await page.locator('.maps-active-search').innerText()).includes('Current scan')||!(await page.locator('.maps-active-search').innerText()).includes('Sialkot'))throw Error('Live scan labelled as saved search');
-  await page.screenshot({path:join(out,'current-scan-live-results.png')});
+  await page.screenshot({animations:'disabled',path:join(out,'current-scan-live-results.png')});
   await app.evaluate(({BrowserWindow})=>{
     const t=globalThis.__savedMaps,request=t.liveRequest;const at='2026-10-30T12:00:00Z';
     const summary={runId:'current-live',status:'cancelled',provider:'chromium-maps',query:{...request.query,location:'Sialkot'},leads:t.liveLeads,startedAt:at,finishedAt:at,durationMs:1500,error:null};

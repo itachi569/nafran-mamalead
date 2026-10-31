@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./billing.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Contact support — MamaLead</title>
+<meta name="description" content="Questions about your MamaLead licence, a problem with the app, or an idea? Send us a message and we'll reply by email.">
+<link rel="icon" type="image/png" href="img/mamalead-favicon.png?v=2">
+<style>
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-400.woff2") format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-500.woff2") format('woff2'); font-weight: 500; font-display: swap; }
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-700.woff2") format('woff2'); font-weight: 700; font-display: swap; }
+  @font-face { font-family: 'Satoshi'; src: url("fonts/satoshi-900.woff2") format('woff2'); font-weight: 900; font-display: swap; }
+  @keyframes supSpin { to { transform: rotate(360deg); } }
+  @keyframes supRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #EFEFEF; color: #1C1C1C; font-family: 'Satoshi', 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased; text-wrap: pretty; }
+  a { color: #1C1C1C; text-decoration: none; }
+  a:hover { color: #4A5A47; }
+  :focus-visible { outline: 2px solid #45693A; outline-offset: 3px; }
+  input::placeholder, textarea::placeholder { color: #6E756A; }
+  .mobile-download, .mobile-menu-button { display: none; }
+  #mobile-menu[hidden] { display: none; }
+  #mobile-menu { display: none; padding: 8px 16px 16px; background: #F5F5F1; border-top: 1px solid #DCE1D6; }
+  #mobile-menu a { display: flex; align-items: center; min-height: 48px; padding: 10px 14px; border-radius: 12px; font-size: 15px; }
+  #mobile-menu a:hover { background: #E5EBDD; }
+  @media (max-width: 640px) {
+    #mobile-menu[data-open="true"] { display: block; }
+    .site-header .site-header-row { padding: 8px 12px !important; gap: 8px !important; flex-wrap: nowrap !important; min-height: 60px; }
+    .site-header .desktop-nav, .site-header .desktop-support, .site-header .desktop-pricing { display: none !important; }
+    .site-header .site-header-row > a:first-child { gap: 7px !important; margin-right: auto; min-height: 44px; }
+    .site-header .site-header-row > a:first-child span span:last-child { display: none !important; }
+    .site-header .mobile-download { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 14px; }
+    .mobile-menu-button { display: grid; place-items: center; min-width: 44px; height: 44px; border: 1px solid #CBD4C3; border-radius: 50%; background: #E7EDDE; color: #1C1C1C; cursor: pointer; }
+    .sup-actions > * { flex: 1 1 100% !important; justify-content: center; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+<script src="./sales.js" defer></script>
+</helmet>
+<div style="min-height: 100vh; background: radial-gradient(60vw 46vh at 4% 5%, rgba(169,188,155,.34), transparent 64%), radial-gradient(58vw 52vh at 96% 28%, rgba(200,213,187,.34), transparent 66%), #EFEFEF;">
+
+  <header class="site-header" style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
+    <div class="site-header-row" style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
+      <a href="index.html" style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+        <img src="img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
+        <span style="line-height: 1.1;">
+          <span style="display: block; font-size: 15.5px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
+          <span style="display: block; font-size: 10.5px; color: #555956;">Windows desktop app</span>
+        </span>
+      </a>
+      <nav class="desktop-nav" aria-label="Main navigation" style="margin: 0 auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: rgba(255,255,255,.45); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); overflow-x: auto; max-width: 100%;">
+        <a href="index.html#how" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">How it works</a>
+        <a href="index.html#modules" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Modules</a>
+        <a href="index.html#privacy" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Privacy</a>
+        <a href="index.html#pricing" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Pricing</a>
+        <a href="index.html#faq" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">FAQ</a>
+        <a href="support.html" aria-current="page" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #1C1C1C; font-weight: 500; white-space: nowrap; background: #FFFFFF; box-shadow: 0 4px 12px -8px rgba(28,28,28,.4);">Support</a>
+      </nav>
+      <a class="desktop-pricing" href="index.html#pricing" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #B8281F; color: #FFFFFF; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 22px -12px rgba(184,40,31,.8); transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF; background: #9C2019;">Lifetime · 50% off</a>
+      <a class="mobile-download" href="index.html#download">Download</a>
+      <button class="mobile-menu-button" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+    </div>
+    <nav id="mobile-menu" aria-label="Mobile navigation" hidden>
+      <a href="index.html#pricing">Pricing · Lifetime 50% off</a><a href="index.html#download">Free trial / Windows download</a><a href="index.html#how">How it works</a><a href="index.html#modules">Modules</a><a href="index.html#privacy">Privacy</a><a href="index.html#faq">FAQ</a><a href="support.html" aria-current="page">Support</a>
+    </nav>
+  </header>
+
+  <main style="max-width: 1180px; margin: 0 auto; padding: clamp(36px, 6vw, 72px) 24px 72px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: clamp(28px, 5vw, 64px); align-items: start;">
+
+    <section data-screen-label="Support intro" aria-labelledby="sup-title" style="position: sticky; top: 100px; min-width: 0; animation: supRise .7s cubic-bezier(.16,1,.3,1) both;">
+      <p style="margin: 0; font-size: 12px; font-weight: 500; letter-spacing: 1.8px; color: #52614C;">HELP &amp; SUPPORT</p>
+      <h1 id="sup-title" style="margin: 14px 0 0; font-size: clamp(40px, 6vw, 64px); line-height: 1; letter-spacing: -.045em; font-weight: 700;">How can we help?</h1>
+      <p style="margin: 18px 0 0; max-width: 480px; font-size: 17px; line-height: 1.6; color: #42473F;">Questions about your licence, a problem with the app, or an idea? Send us a message and we'll reply by email, usually within 1 business day.</p>
+      <div style="margin: 28px 0 0; display: grid; gap: 10px; max-width: 520px;">
+        <div style="display: flex; gap: 14px; padding: 16px 18px; border-radius: 14px; background: #EAF0E3;">
+          <span aria-hidden="true" style="flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #FFFFFF;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#34502F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="12" r="3.5"></circle><path d="M12 12h8.5M17.5 12v3M20.5 12v2.5"></path></svg></span>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.55;"><strong style="font-weight: 700;">Didn't get your licence key?</strong> Check spam, then write to us with the email you paid with.</p>
+        </div>
+        <div style="display: flex; gap: 14px; padding: 16px 18px; border-radius: 14px; background: #EAF0E3;">
+          <span aria-hidden="true" style="flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #FFFFFF;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#34502F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><path d="M12 7.5V12l3 2"></path></svg></span>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.55;"><strong style="font-weight: 700;">Trial key:</strong> one trial per email and one machine.</p>
+        </div>
+        <div style="display: flex; gap: 14px; padding: 16px 18px; border-radius: 14px; background: #EAF0E3;">
+          <span aria-hidden="true" style="flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #FFFFFF;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#34502F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="12" rx="2"></rect><path d="M8.5 20h7M12 16.5V20"></path></svg></span>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.55;"><strong style="font-weight: 700;">In the app?</strong> Use Settings &amp; Billing → Account → Contact support so we see your app version automatically.</p>
+        </div>
+      </div>
+      <p style="margin: 22px 0 0; font-size: 14px; color: #42473F;">Prefer email? <a href="mailto:billing@nafran.co" style="color: #1C1C1C; font-weight: 700; text-decoration: underline; text-underline-offset: 3px;">billing@nafran.co</a></p>
+    </section>
+
+    <section data-screen-label="Support form" aria-label="Contact form" style="min-width: 0; width: 100%; max-width: 680px; justify-self: center; padding: clamp(18px, 3vw, 26px); border-radius: clamp(20px, 3vw, 28px); background: #FAFBF8; box-shadow: 0 30px 100px #0005; animation: supRise .8s cubic-bezier(.16,1,.3,1) .08s both;">
+      <div role="status" aria-live="polite" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">{{ liveText }}</div>
+
+      <sc-if value="{{ isForm }}" hint-placeholder-val="{{ true }}">
+        <form onSubmit="{{ onSubmit }}" noValidate="{{ true }}" style="display: grid; gap: 16px;">
+          <sc-if value="{{ showSummary }}" hint-placeholder-val="{{ false }}">
+            <div ref="{{ summaryRef }}" tabIndex="-1" role="alert" style="padding: 14px 16px; border-radius: 14px; background: #FFF0ED; border: 1px solid #D8A298; color: #9D2F22;">
+              <p style="margin: 0; font-size: 14px; font-weight: 700;">Please fix the following:</p>
+              <ul style="margin: 6px 0 0; padding-left: 18px; display: grid; gap: 2px;">
+                <sc-for list="{{ summaryItems }}" as="s" hint-placeholder-count="2">
+                  <li style="font-size: 13.5px;"><a href="{{ s.href }}" style="color: #9D2F22; text-decoration: underline; text-underline-offset: 3px;">{{ s.text }}</a></li>
+                </sc-for>
+              </ul>
+            </div>
+          </sc-if>
+
+          <fieldset disabled="{{ sending }}" style="margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: 16px;">
+            <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Your message</legend>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px;">
+              <div style="display: grid; gap: 6px; align-content: start;">
+                <label for="f-name" style="font-size: 13px; font-weight: 600;">Name <span style="font-size: 12px; font-weight: 400; color: #576451;">optional</span></label>
+                <input id="f-name" type="text" autocomplete="name" maxLength="80" value="{{ fx.name.value }}" onChange="{{ fx.name.onChange }}" style="min-height: 44px; padding: 11px 13px; border-radius: 12px; border: 1px solid #C9D1C3; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px;">
+              </div>
+              <div style="display: grid; gap: 6px; align-content: start;">
+                <label for="f-email" style="font-size: 13px; font-weight: 600;">Email</label>
+                <input id="f-email" type="email" autocomplete="email" maxLength="254" required="{{ true }}" value="{{ fx.email.value }}" onChange="{{ fx.email.onChange }}" onBlur="{{ fx.email.onBlur }}" aria-invalid="{{ fx.email.invalid }}" aria-describedby="{{ fx.email.described }}" style="min-height: 44px; padding: 11px 13px; border-radius: 12px; border: 1px solid {{ fx.email.border }}; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px;">
+                <sc-if value="{{ fx.email.err }}" hint-placeholder-val="{{ false }}"><p id="f-email-err" style="margin: 0; font-size: 12.5px; color: #9D2F22;">{{ fx.email.err }}</p></sc-if>
+              </div>
+            </div>
+
+            <div style="display: grid; gap: 6px;">
+              <label for="f-category" style="font-size: 13px; font-weight: 600;">What is this about?</label>
+              <select id="f-category" value="{{ fx.category.value }}" onChange="{{ fx.category.onChange }}" style="min-height: 44px; padding: 11px 13px; border-radius: 12px; border: 1px solid #C9D1C3; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px;">
+                <option value="licence">Licence</option>
+                <option value="bug">Bug</option>
+                <option value="feature">Feature request</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div style="display: grid; gap: 6px;">
+              <label for="f-last4" style="font-size: 13px; font-weight: 600;">Licence key ending <span style="font-size: 12px; font-weight: 400; color: #576451;">optional</span></label>
+              <input id="f-last4" type="text" inputMode="text" autocomplete="off" maxLength="4" placeholder="e.g. 4F99" value="{{ fx.last4.value }}" onChange="{{ fx.last4.onChange }}" onBlur="{{ fx.last4.onBlur }}" aria-invalid="{{ fx.last4.invalid }}" aria-describedby="{{ fx.last4.described }}" style="width: 140px; max-width: 100%; min-height: 44px; padding: 11px 13px; border-radius: 12px; border: 1px solid {{ fx.last4.border }}; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px; letter-spacing: .12em; text-transform: uppercase;">
+              <p id="f-last4-help" style="margin: 0; font-size: 12.5px; color: #576451;">Only the last 4 characters. Never paste your full key.</p>
+              <sc-if value="{{ fx.last4.err }}" hint-placeholder-val="{{ false }}"><p id="f-last4-err" style="margin: 0; font-size: 12.5px; color: #9D2F22;">{{ fx.last4.err }}</p></sc-if>
+            </div>
+
+            <div style="display: grid; gap: 6px;">
+              <label for="f-subject" style="font-size: 13px; font-weight: 600;">Subject <span style="font-size: 12px; font-weight: 400; color: #576451;">optional</span></label>
+              <input id="f-subject" type="text" maxLength="120" placeholder="A short summary" value="{{ fx.subject.value }}" onChange="{{ fx.subject.onChange }}" style="min-height: 44px; padding: 11px 13px; border-radius: 12px; border: 1px solid #C9D1C3; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px;">
+            </div>
+
+            <div style="display: grid; gap: 6px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+                <label for="f-message" style="font-size: 13px; font-weight: 600;">Message</label>
+                <span id="f-message-count" style="font-size: 12px; color: #576451; font-variant-numeric: tabular-nums;">{{ count }} / 4,900</span>
+              </div>
+              <textarea id="f-message" rows="6" maxLength="4900" required="{{ true }}" placeholder="What were you trying to do? What happened?" value="{{ fx.message.value }}" onChange="{{ fx.message.onChange }}" onBlur="{{ fx.message.onBlur }}" aria-invalid="{{ fx.message.invalid }}" aria-describedby="{{ fx.message.described }}" style="min-height: 140px; padding: 11px 13px; border-radius: 12px; border: 1px solid {{ fx.message.border }}; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px; line-height: 1.5; resize: vertical;"></textarea>
+              <sc-if value="{{ fx.message.err }}" hint-placeholder-val="{{ false }}"><p id="f-message-err" style="margin: 0; font-size: 12.5px; color: #9D2F22;">{{ fx.message.err }}</p></sc-if>
+            </div>
+
+            <div aria-hidden="true" style="position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden;">
+              <label for="f-website">Website</label>
+              <input id="f-website" name="website" type="text" tabIndex="-1" autocomplete="off" value="{{ fx.website.value }}" onChange="{{ fx.website.onChange }}">
+            </div>
+
+            <sc-if value="{{ hasTurnstile }}" hint-placeholder-val="{{ false }}">
+              <div ref="{{ turnstileRef }}" style="min-height: 65px;"></div>
+            </sc-if>
+            <sc-if value="{{ noTurnstile }}" hint-placeholder-val="{{ true }}">
+              <div style="display: flex; align-items: center; gap: 10px; min-height: 65px; padding: 0 16px; border-radius: 12px; border: 1px dashed #C9D1C3; background: #FFFFFF; font-size: 12.5px; color: #576451;">
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#576451" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7 3v5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9v-5z"></path></svg>
+                Messages are protected by request limits and duplicate detection.
+              </div>
+            </sc-if>
+          </fieldset>
+
+          <p style="margin: 0; font-size: 12px; line-height: 1.55; color: #42473F;">We use your email only to reply. Don't paste licence keys, passwords or lead lists. See our <a href="privacy.html" style="color: #1C1C1C; text-decoration: underline; text-underline-offset: 3px;">Privacy Policy</a>.</p>
+
+          <sc-if value="{{ banner }}" hint-placeholder-val="{{ false }}">
+            <div role="alert" style="display: grid; gap: 12px; padding: 14px 16px; border-radius: 14px; background: #FFF0ED; border: 1px solid #D8A298;">
+              <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #9D2F22;">{{ bannerText }}</p>
+              <sc-if value="{{ bannerActions }}" hint-placeholder-val="{{ false }}">
+                <div class="sup-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <button type="submit" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: #1C1C1C; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;">Try again</button>
+                  <a href="{{ mailtoHref }}" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid #CBD2C5; background: #FFFFFF; color: #1C1C1C; font-size: 14px; font-weight: 600;">Open email</a>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <div class="sup-actions" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px;">
+            <button type="submit" aria-disabled="{{ btnAriaDisabled }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 26px; border-radius: 999px; border: 0; background: {{ btnBg }}; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 600; cursor: {{ btnCursor }}; transition: background .2s ease;">
+              <sc-if value="{{ sending }}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="animation: supSpin .8s linear infinite;"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></sc-if>
+              {{ btnLabel }}
+            </button>
+          </div>
+        </form>
+      </sc-if>
+
+      <sc-if value="{{ isSuccess }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: clamp(18px, 4vw, 40px) 8px; display: grid; justify-items: center; gap: 10px; text-align: center; animation: supRise .5s cubic-bezier(.16,1,.3,1) both;">
+          <span aria-hidden="true" style="display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%; background: #CFDDC1;"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#1C1C1C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+          <h2 style="margin: 10px 0 0; font-size: clamp(28px, 4vw, 36px); line-height: 1.1; letter-spacing: -.035em; font-weight: 700;">Message sent</h2>
+          <p style="margin: 0; max-width: 420px; font-size: 15.5px; line-height: 1.6; color: #42473F; overflow-wrap: anywhere;">Your ticket ID is <strong style="color: #1C1C1C; font-variant-numeric: tabular-nums;">{{ ticket }}</strong>. We'll reply to <strong style="color: #1C1C1C;">{{ replyEmail }}</strong>.</p>
+          <div class="sup-actions" style="margin: 18px 0 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
+            <button type="button" onClick="{{ copyTicket }}" style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border-radius: 999px; border: 1px solid #CBD2C5; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;">{{ copyLabel }}</button>
+            <button type="button" onClick="{{ sendAnother }}" style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border-radius: 999px; border: 1px solid #CBD2C5; background: #FFFFFF; color: #1C1C1C; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;">Send another message</button>
+            <a href="index.html" style="display: inline-flex; align-items: center; min-height: 46px; padding: 0 22px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 14px; font-weight: 600;" style-hover="color: #FFFFFF; background: #34502F;">Back to home</a>
+          </div>
+        </div>
+      </sc-if>
+    </section>
+  </main>
+
+  <footer data-screen-label="Footer" style="padding: 0 0 40px;">
+    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 26px; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0;">
+        <div style="flex: 1 1 300px; min-width: 0;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
+            <span style="font-size: 17px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
+          </div>
+          <p style="margin: 14px 0 0; max-width: 340px; font-size: 13px; line-height: 1.6; color: #B9BEB6;">A local-first desktop lead generation app. It finds and organises business data; it does not contact anyone on your behalf.</p>
+          <p style="margin: 18px 0 0; font-size: 11.5px; color: #8E948B;">Windows desktop app &middot; &copy; 2026 Nafran</p>
+        </div>
+        <nav aria-label="Footer" style="flex: 1 1 300px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 20px; align-content: start; font-size: 13.5px;">
+          <a href="index.html#how" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">How it works</a>
+          <a href="index.html#modules" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">Modules</a>
+          <a href="privacy.html" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">Privacy policy</a>
+          <a href="terms.html" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">Terms of use</a>
+          <a href="support.html" aria-current="page" style="display: inline-flex; align-items: center; min-height: 44px; color: #FFFFFF; font-weight: 700;">Contact support</a>
+          <a href="index.html#pricing" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">Pricing</a>
+          <a href="index.html#download" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">Download</a>
+          <a href="index.html#faq" style="display: inline-flex; align-items: center; min-height: 44px; color: #E9EBE7;">FAQ</a>
+        </nav>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;previewState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Live&quot;,&quot;Validation&quot;,&quot;Sending&quot;,&quot;Success&quot;,&quot;Rate limited&quot;,&quot;Error / offline&quot;,&quot;Captcha failed&quot;],&quot;default&quot;:&quot;Live&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Preview a state&quot;}}">
+const SUPPORT_EMAIL = 'billing@nafran.co';
+// Public Cloudflare Turnstile site key (mamalead.com, www.mamalead.com). Empty = placeholder box, no captcha required.
+const TURNSTILE_SITE_KEY = '';
+const DRAFT_KEY = 'mamalead.web.support.draft';
+const TOPICS = { licence: 'Licence', bug: 'Bug', feature: 'Feature request', other: 'Other' };
+const EMPTY = { name: '', email: '', category: 'other', last4: '', subject: '', message: '', website: '' };
+
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+}));
+
+function validate(f) {
+  const e = {};
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email.trim()) || f.email.length > 254) e.email = 'Enter a valid email address.';
+  const msg = f.message.trim();
+  if (msg.length < 10) e.message = 'Write at least 10 characters.';
+  else if (msg.length > 4900) e.message = 'Keep your message within 4,900 characters.';
+  else if ((msg.match(/https?:\/\/|www\./gi) || []).length > 5) e.message = 'Include at most 5 links.';
+  if (f.last4 && !/^[A-Za-z0-9]{4}$/.test(f.last4)) e.last4 = 'Use the last 4 characters only.';
+  return e;
+}
+
+class Component extends DCLogic {
+  state = { f: { ...EMPTY }, id: '', touched: {}, submitted: false, status: 'idle', ticket: '', retryMin: 0, serverErr: null, token: '', copied: false };
+  summaryRef = React.createRef();
+  turnstileRef = React.createRef();
+
+  componentDidMount() {
+    let draft = null;
+    try { draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) {}
+    const f = { ...EMPTY, ...(draft && draft.f ? draft.f : {}), website: '' };
+    const q = new URLSearchParams(location.search);
+    const topic = (q.get('topic') || '').toLowerCase();
+    if (TOPICS[topic]) f.category = topic;
+    const last4 = q.get('last4') || '';
+    if (/^[A-Za-z0-9]{4}$/.test(last4)) f.last4 = last4.toUpperCase();
+    this._lastF = f;
+    this.setState({ f, id: (draft && draft.id) || uuid() });
+    if (TURNSTILE_SITE_KEY) this.loadTurnstile();
+  }
+
+  componentDidUpdate() {
+    if (this._lastF !== this.state.f && this.state.status !== 'success') {
+      this._lastF = this.state.f;
+      const { website, ...keep } = this.state.f;
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ f: keep, id: this.state.id })); } catch (e) {}
+    }
+  }
+
+  loadTurnstile() {
+    const render = () => {
+      if (!window.turnstile || !this.turnstileRef.current || this._tsId !== undefined) return;
+      this._tsId = window.turnstile.render(this.turnstileRef.current, {
+        sitekey: TURNSTILE_SITE_KEY, theme: 'light', appearance: 'always',
+        callback: (token) => this.setState({ token, status: this.state.status === 'captcha' ? 'idle' : this.state.status }),
+        'expired-callback': () => this.setState({ token: '' }),
+        'error-callback': () => this.setState({ token: '' }),
+      });
+    };
+    if (window.turnstile) return setTimeout(render, 0);
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true; s.defer = true; s.onload = () => setTimeout(render, 0);
+    document.head.appendChild(s);
+  }
+
+  resetTurnstile() {
+    if (window.turnstile && this._tsId !== undefined) window.turnstile.reset(this._tsId);
+    this.setState({ token: '' });
+  }
+
+  setField(k, v) {
+    this.setState((s) => ({ f: { ...s.f, [k]: v }, serverErr: s.serverErr && s.serverErr.field === k ? null : s.serverErr }));
+  }
+
+  mailto() {
+    const f = this.state.f;
+    const subject = `[${TOPICS[f.category] || 'Other'}] ${f.subject.trim() || 'MamaLead support'}`;
+    const body = `${f.message.trim()}\n\n\u2014\nReply to: ${f.email.trim()}${f.name.trim() ? '\nName: ' + f.name.trim() : ''}${f.last4 ? '\nLicence key ending: ' + f.last4.toUpperCase() : ''}`;
+    return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  async submit(e) {
+    e.preventDefault();
+    const s = this.state;
+    if (this._sending || s.status === 'sending') return;
+    const errs = validate(s.f);
+    this.setState({ submitted: true, serverErr: null });
+    if (Object.keys(errs).length) {
+      this.setState({ status: 'idle' }, () => requestAnimationFrame(() => this.summaryRef.current && this.summaryRef.current.focus()));
+      return;
+    }
+    if (s.f.website) return this.setState({ status: 'success', ticket: '' });
+    if (TURNSTILE_SITE_KEY && !s.token) return this.setState({ status: 'captcha' });
+    this._sending = true;
+    this.setState({ status: 'sending' });
+    const f = s.f;
+    try {
+      const data = await window.MamaLeadBilling.support({
+          clientMessageId: s.id, name: f.name.trim(), email: f.email.trim(), category: f.category,
+          subject: f.subject.trim(), message: f.message.trim(), licenseLast4: f.last4 ? f.last4.toUpperCase() : null,
+          page: 'website', website: f.website, turnstileToken: s.token,
+      });
+      if (data.ok && /^ML-S-[A-Z0-9]{6}$/.test(data.ticketId || '')) {
+        try { localStorage.removeItem(DRAFT_KEY); } catch (err) {}
+        return this.setState({ status: 'success', ticket: data.ticketId || '', copied: false });
+      }
+      this.setState({ status: 'error' });
+    } catch (err) {
+      if (err.status === 409) this.setState({id:uuid()});
+      if (err.status === 400 || err.status === 413) return this.setState({ status: 'idle', serverErr: { field: err.field || '', message: err.message || 'Check the highlighted field.' } });
+      if (err.status === 429) {
+        const secs = Number(err.retryAfterSeconds || 60);
+        return this.setState({ status: 'rate', retryMin: Math.max(1, Math.ceil(secs / 60)) });
+      }
+      this.setState({ status: 'error' });
+    } finally {
+      this._sending = false;
+    }
+  }
+
+  renderVals() {
+    const preview = this.props.previewState ?? 'Live';
+    let { f, status, submitted, touched, ticket, retryMin, serverErr } = this.state;
+    if (preview === 'Validation') { submitted = true; status = 'idle'; }
+    if (preview === 'Sending') status = 'sending';
+    if (preview === 'Success') { status = 'success'; ticket = ticket || 'ML-S-7Q4K2D'; }
+    if (preview === 'Rate limited') { status = 'rate'; retryMin = retryMin || 12; }
+    if (preview === 'Error / offline') status = 'error';
+    if (preview === 'Captcha failed') status = 'captcha';
+
+    const errs = validate(f);
+    if (serverErr && serverErr.field && ['email', 'message', 'last4'].includes(serverErr.field)) errs[serverErr.field] = serverErr.message;
+    const shown = (k) => (submitted || touched[k] || (serverErr && serverErr.field === k)) ? (errs[k] || '') : '';
+    const mk = (k, opts = {}) => {
+      const err = shown(k);
+      const ids = [opts.help, err ? `f-${k}-err` : ''].filter(Boolean).join(' ');
+      return {
+        value: f[k], err, invalid: err ? 'true' : 'false', described: ids,
+        border: err ? '#9D2F22' : '#C9D1C3',
+        onChange: (e) => this.setField(k, k === 'last4' ? e.target.value.toUpperCase() : e.target.value),
+        onBlur: () => this.setState((s) => ({ touched: { ...s.touched, [k]: true } })),
+      };
+    };
+    const fx = {
+      name: mk('name'), email: mk('email'), category: mk('category'), last4: mk('last4', { help: 'f-last4-help' }),
+      subject: mk('subject'), message: mk('message', { help: 'f-message-count' }), website: mk('website'),
+    };
+    const order = [['email', 'f-email'], ['last4', 'f-last4'], ['message', 'f-message']];
+    const summaryItems = submitted ? order.filter(([k]) => errs[k]).map(([k, id]) => ({ text: errs[k], href: '#' + id })) : [];
+    const valid = Object.keys(validate(f)).length === 0 && (!TURNSTILE_SITE_KEY || !!this.state.token);
+    const sending = status === 'sending';
+    const bannerText = status === 'rate'
+      ? `You've sent several messages recently. Please try again in ${retryMin} ${retryMin === 1 ? 'minute' : 'minutes'}, or email ${SUPPORT_EMAIL}.`
+      : status === 'error'
+        ? `We couldn't send your message right now. Your draft is saved. Try again, or email ${SUPPORT_EMAIL}.`
+        : status === 'captcha'
+          ? 'Please complete the security check again.'
+          : (serverErr && !['email', 'message', 'last4'].includes(serverErr.field) ? serverErr.message : '');
+
+    return {
+      fx,
+      count: f.message.length.toLocaleString('en-US'),
+      summaryRef: this.summaryRef,
+      turnstileRef: this.turnstileRef,
+      hasTurnstile: !!TURNSTILE_SITE_KEY,
+      noTurnstile: !TURNSTILE_SITE_KEY,
+      showSummary: summaryItems.length > 0,
+      summaryItems,
+      isForm: status !== 'success',
+      isSuccess: status === 'success',
+      sending,
+      banner: !!bannerText,
+      bannerText,
+      bannerActions: status === 'error',
+      mailtoHref: this.mailto(),
+      btnLabel: sending ? 'Sending\u2026' : 'Send message \u2192',
+      btnAriaDisabled: String(sending || !valid),
+      btnBg: sending || !valid ? '#6E726C' : '#1C1C1C',
+      btnCursor: sending ? 'progress' : 'pointer',
+      liveText: sending ? 'Sending your message\u2026' : status === 'success' ? 'Message sent.' : '',
+      ticket: ticket || '\u2014',
+      replyEmail: f.email.trim() || 'you@example.com',
+      copyLabel: this.state.copied ? 'Ticket ID copied' : 'Copy ticket ID',
+      copyTicket: () => { if (ticket && navigator.clipboard) navigator.clipboard.writeText(ticket).then(() => this.setState({ copied: true })).catch(() => {}); },
+      sendAnother: () => {
+        this.resetTurnstile();
+        this.setState((s) => ({ f: { ...EMPTY, name: s.f.name, email: s.f.email }, id: uuid(), touched: {}, submitted: false, status: 'idle', ticket: '', copied: false, serverErr: null }));
+      },
+      onSubmit: (e) => this.submit(e),
+    };
+  }
+}
+</script>
+</body>
+</html>
