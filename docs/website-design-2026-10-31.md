@@ -20,7 +20,7 @@ The owner explicitly selected replacement of the current website and asked that 
 - Production API: `https://api.mamalead.com`, implemented by `billing-server/` on the current server. The legacy website-local Vercel functions are not the active deployment target.
 - Deploy the updated billing server, website (including `billing.js`) and matching signed desktop release together when authorized. `APP_PUBLIC_URL` must be the intended HTTPS website origin, normally `https://mamalead.com`; the existing allowed-origin and email settings must include this site.
 - Preview-only API override: `?billingApi=http://127.0.0.1:PORT`, accepted only when the page itself runs on loopback. Test suites intercept API requests and send no real email/payment.
-- The supplied November 30, 2026 campaign deadline is retained as a configurable design property. The illustrative “37 left / 463 claimed” counters are disabled by default because they are not connected to sales records. The 50% offer remains visible.
+- The supplied November 30, 2026 campaign deadline is retained as a configurable design property. The owner confirmed “463 of 500” is a design sample. On loopback previews the compact 470 px hero card reproduces that exact sample text with a 92.6% bar and a separate “Design preview · sample sales count” note. Public hosts keep sample counters disabled; real count configuration can replace them. The 50% offer remains visible.
 - Website Lookup no longer offers email validity. Its details and screenshots are described separately from Email Finder, where optional verification remains available.
 - Decision Makers remains absent from the public website and app. Archived implementation is retained in the repository.
 

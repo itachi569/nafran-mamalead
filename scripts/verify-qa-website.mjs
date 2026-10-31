@@ -36,6 +36,8 @@ try{
   assert.equal(await page.locator('.zip-search-demo [data-demo-slot]').count(),10)
   assert.ok(await page.locator('.zip-search-demo [data-demo-slot]').first().evaluate(el=>getComputedStyle(el).animationName.includes('zipHeroDemoSlot')))
   assert.match(await page.locator('#top').innerText(),/Save Rs 10,000/)
+  assert.match(await page.locator('.zip-offer-card').innerText(),/463 of 500 launch licenses claimed/)
+  assert.ok(await page.locator('[data-offer-sample]').isVisible())
   assert.doesNotMatch(await page.locator('#top').innerText(),/Launch window.*gone|v1\.4\.0/)
   if(viewport.width<=640){
    const offer=await page.locator('.zip-offer-main').boundingBox(),badge=await page.locator('.zip-offer-main>span:last-child').boundingBox()
@@ -65,5 +67,16 @@ try{
  const visibleSlots=await reduced.locator('.zip-search-demo [data-demo-slot]').evaluateAll(els=>els.filter(el=>getComputedStyle(el).opacity==='1').map(el=>el.textContent))
  assert.deepEqual(visibleSlots,['dentists','Lahore'],'reduced motion keeps a readable static demo')
  await reduced.close()
+ const published=await browser.newPage({viewport:{width:1440,height:1000}})
+ await published.route('https://published-preview.example/**',async route=>{
+  const url=new URL(route.request().url()),response=await route.fetch({url:base+url.pathname+url.search})
+  await route.fulfill({response})
+ })
+ await published.goto('https://published-preview.example/',{waitUntil:'networkidle'})
+ await published.locator('.zip-offer-card').waitFor()
+ assert.doesNotMatch(await published.locator('.zip-offer-card').innerText(),/463 of 500/,'sample sales count stays in local design previews')
+ assert.match(await published.locator('.zip-offer-card').innerText(),/Save 50% on Lifetime/)
+ assert.equal(await published.locator('[data-offer-sample]').count(),0)
+ await published.close()
  console.log('PASS desktop/mobile homepage and Terms; support/terms links; no retired subscription CTA; no overflow or JS errors')
 }finally{await browser?.close();child.kill()}
