@@ -79,6 +79,8 @@ try {
   check('email greeting reads a clean name from Gmail-style addresses', greetingNameFromEmail('jane.doe+trial@gmail.com') === 'Jane Doe')
   const escapedGreeting = buildLicenseEmail({ to: 'amy.<script>@gmail.com', licenseKey: 'NF-TEST', kind: 'trial', download: 'https://mamalead.com/#download' })
   check('email greeting cannot inject HTML into the template', escapedGreeting.html.includes('Hey Amy Script,') && !escapedGreeting.html.includes('<script>') && !escapedGreeting.html.includes('{{'))
+  const currentLifetimeTemplate = buildLicenseEmail({ to: 'buyer@example.test', licenseKey: 'NF-TEST', kind: 'lifetime', download: 'https://mamalead.com/#download' })
+  check('current Lifetime email uses the selected support inbox and current product features', currentLifetimeTemplate.html.includes('mamaleads997@gmail.com') && !/Decision Makers|Decision Maker searches/.test(currentLifetimeTemplate.html + currentLifetimeTemplate.text))
   const optionsBeforeMac = await call('/v1/download-options', null)
   check('download choices show Windows ready and both Mac builds unavailable before upload', optionsBeforeMac.status === 200 && optionsBeforeMac.body.windows === true && optionsBeforeMac.body.macArm64 === false && optionsBeforeMac.body.macX64 === false)
   const missingMac = await call('/v1/download?platform=mac', null)

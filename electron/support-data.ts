@@ -3,7 +3,7 @@ export type SupportCategory='licence'|'bug'|'feature'|'other'
 export interface SupportPayload {name:string;email:string;category:SupportCategory;subject:string;message:string;diagnostics:boolean;page:string}
 export interface SupportResult {ok?:boolean;ticketId?:string;duplicate?:boolean;emailQueued?:boolean;error?:string;field?:string;retryAfterSeconds?:number;cancelled?:boolean;offline?:boolean}
 export interface SupportConfig {configured:boolean;email:string;slaText:string;replyEmail?:string}
-export const SUPPORT_EMAIL_FALLBACK='billing@nafran.co'
+export const SUPPORT_EMAIL_FALLBACK='mamaleads997@gmail.com'
 export function formatSupportWait(seconds:number):string {
  const wait=Math.max(0,Math.ceil(seconds))
  return wait<60?plural(wait,'second'):[Math.floor(wait/60)+' min',wait%60?(wait%60)+' s':''].filter(Boolean).join(' ')

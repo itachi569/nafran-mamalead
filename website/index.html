@@ -7,6 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/png" href="img/mamalead-favicon.png?v=2">
 <script src="./billing.js"></script>
+<script src="./vendor/react.production.min.js"></script>
+<script src="./vendor/react-dom.production.min.js"></script>
+<script src="./vendor/babel.min.js"></script>
 <script src="./support.js"></script>
 <style id="zip-hero-design">
 /* Animation and layout for the user-supplied first screen only. */
@@ -1630,7 +1633,7 @@ class Component extends DCLogic {
         if (!returning || paid) return;
         if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 1800));
       }
-      this.setState({ checkoutNotice: 'Payment or email delivery is not confirmed yet. Retry the check, or contact billing@nafran.co if you have already paid.' });
+      this.setState({ checkoutNotice: 'Payment or email delivery is not confirmed yet. Retry the check, or contact mamaleads997@gmail.com if you have already paid.' });
     } catch (error) { if (this._mounted) this.setState({ checkoutNotice: returning ? error.message : '' }); }
   }
 

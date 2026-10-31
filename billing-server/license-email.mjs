@@ -22,11 +22,11 @@ export function buildLicenseEmail({ to, licenseKey, kind, download }) {
   const intro = trial
     ? 'Your 1-day trial is ready. Activate this key in the desktop app to start 24 hours and capture up to 300 Google Maps leads across any keywords.'
     : decision ? 'Your Decision Makers pass is ready. Activate this key in the desktop app to use 1,000 Decision Maker searches during your 30-day pass.'
-      : 'Here is your lifetime license key. Activate it in the desktop app to unlock unlimited Maps, email, phone and social lookups, plus your first 30 days of Decision Makers.'
+      : 'Here is your lifetime license key. Activate it in the desktop app to unlock unlimited Maps, email, phone and social lookups.'
   const features = trial
     ? ['Up to 300 Google Maps leads', 'Search any keywords and cities within that total', '24 hours from first activation on one device', 'Export and save your captured leads']
     : decision ? ['1,000 Decision Maker searches across your licensed devices', 'Your pass lasts 30 days from payment', 'A new pass can be bought when searches run out or the 30 days end', 'Payment is manual; no automatic renewal']
-      : ['Unlimited Google Maps leads', 'Unlimited email, phone and social lookups', '1,000 Decision Maker searches in the first 30 days after activation', 'Export every run and keep your saved lists']
+      : ['Unlimited Google Maps leads', 'Unlimited email, phone and social lookups', 'Pay once with no monthly subscription', 'Export every run and keep your saved lists']
   const replacements = {
     TITLE: subject,
     PREHEADER: trial ? 'Your one-day trial license key is inside. Activate it in Settings & Billing → Account.' : decision ? 'Your Decision Makers key is inside. Activate it in Settings & Billing → Account.' : 'Your lifetime license key is inside. Activate it in Settings & Billing → Account.',
@@ -36,7 +36,7 @@ export function buildLicenseEmail({ to, licenseKey, kind, download }) {
     INTRO_COPY: intro,
     LICENSE_KEY: licenseKey,
     DONE_TITLE: trial ? 'Done! Your trial starts now' : decision ? 'Done! Decision Makers is ready' : 'Done! Lifetime is active',
-    DONE_COPY: trial ? 'Your 24-hour trial and 300-lead allowance start at activation.' : decision ? 'Your 1,000-search pass lasts 30 days from payment. Your remaining count appears in Settings → Usage.' : 'Unlimited lookups and your first 30 Decision Makers days start at activation.',
+    DONE_COPY: trial ? 'Your 24-hour trial and 300-lead allowance start at activation.' : decision ? 'Your 1,000-search pass lasts 30 days from payment. Your remaining count appears in Settings → Usage.' : 'Your unlimited Maps, email, phone and social lookups start at activation.',
     IMPORTANT_COPY: trial
       ? 'The 24 hours begin when you first activate this key. Keep it private; one trial is available per email and device.'
       : decision ? 'Keep this key private. This pass started at payment and renews only when you manually buy another pass.' : 'Keep this key private and save this email. You may need it again if you reinstall the app.',

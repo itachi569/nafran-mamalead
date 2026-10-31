@@ -1,4 +1,4 @@
-export const SUPPORT_EMAIL = 'billing@nafran.co'
+export const SUPPORT_EMAIL = 'mamaleads997@gmail.com'
 export const categories = ['licence', 'bug', 'feature', 'other']
 export const ticketPattern = /^ML-S-[A-Z0-9]{6}$/
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
