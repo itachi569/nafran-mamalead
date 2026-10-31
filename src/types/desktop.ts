@@ -489,7 +489,8 @@ export interface DesktopApi {
     checkout: (product: 'lifetime', email: string) => Promise<{ opened: boolean }>
     activate: (licenseKey: string) => Promise<{ active: boolean; kind?: 'trial' | 'lifetime' | 'decision'; email?: string; last4?: string; activatedAt?: string | null }>
     portal: () => Promise<{ opened: boolean }>
-    invoices: () => Promise<{ id: string; number: string; issued: string; total: number; currency: string; status: string; url: string }[]>
+    paymentDetails: () => Promise<{ card: { brand: string; last4: string; expiryMonth: number | null; expiryYear: number | null; holder: string } | null }>
+    invoices: () => Promise<{ id: string; number: string; issued: string; total: number; currency: string; status: string; url: string; pdfUrl?: string; amountPaid?: number; description?: string }[]>
     openInvoice: (url: string) => Promise<{ opened: boolean }>
   }
   getInfo: () => Promise<{ version: string; platform: string; isPackaged: boolean; electron: string }>

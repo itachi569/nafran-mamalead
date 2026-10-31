@@ -230,6 +230,7 @@ const desktop = {
     activate: (licenseKey: string) => call('billing:activate', licenseKey),
     portal: () => call('billing:portal'),
     invoices: () => call('billing:invoices'),
+    paymentDetails: () => call('billing:paymentDetails'),
     openInvoice: (url: string) => call('billing:openInvoice', url),
   },
   assist: {

@@ -18,7 +18,7 @@ import { isUsableEmail } from './enrichment/website'
 import { readApifyCredential, readMailVerifierCredential } from './runtime-config'
 import { askAssist, type AssistChatRequest } from './assist'
 import { readLeadsAngelBundle, verifyEmailAddressesWithLeadsAngel, type LeadsAngelCredentials } from './leadsangel'
-import { billingAssistStatus, billingActivate, billingCheckout, billingHeartbeatMaps, billingInvoices, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
+import { billingAssistStatus, billingActivate, billingCheckout, billingHeartbeatMaps, billingInvoices, billingPaymentDetails, billingPortal, billingRequestTrial, billingReserveMaps, billingSettleMaps, billingStatus, requireActiveLicense } from './billing/client'
 import {
   DEFAULT_APIFY_EMAIL_ACTOR,
   parseApifyEmailResult,
@@ -35,7 +35,7 @@ const devUrl = process.env.VITE_DEV_SERVER_URL
 const billingReturnLink = 'mamalead://billing'
 let pendingBillingReturn = process.argv.includes(billingReturnLink)
 
-const ownsInstance = app.requestSingleInstanceLock()
+const ownsInstance = app.hasSingleInstanceLock() || app.requestSingleInstanceLock()
 if (!ownsInstance) app.quit()
 if (ownsInstance) {
   const receiveSubscribeLink = (url: string) => {
@@ -462,6 +462,7 @@ ipcMain.handle('billing:portal', async () => {
   return { opened: true }
 })
 ipcMain.handle('billing:invoices', () => billingInvoices())
+ipcMain.handle('billing:paymentDetails', () => billingPaymentDetails())
 ipcMain.handle('billing:openInvoice', async (_event, raw: string) => {
   const url = stripePage(raw, ['invoice.stripe.com', 'pay.stripe.com'])
   await shell.openExternal(url)

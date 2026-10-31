@@ -1,0 +1,154 @@
+/* Account and invoice layouts from the supplied Workspace Settings designs. */
+.settings-page { container-name:workspace-settings; }
+.settings-header { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:22px; }
+.settings-heading { min-width:0; }
+.settings-heading p { margin:16px 0 0; font-size:15px; color:var(--settings-muted); }
+.settings-header-status { gap:9px; margin:0; padding:6px 6px 6px 17px; border-radius:28px; background:var(--settings-surface); max-width:100%; }
+.settings-header-status > [data-billing-status] { flex:1; min-width:100px; max-width:340px; overflow-wrap:anywhere; font-size:13px; }
+.settings-header-status button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:10px 17px; }
+.settings-header .settings-billing-message { flex-basis:100%; margin:0; }
+.settings-connection-dot { flex:none; width:7px; height:7px; border-radius:50%; background:#949891; }
+.settings-connection-dot.is-connected { background:#6f8a62; }
+.settings-spin { animation:settings-spin .9s linear infinite; }
+.settings-layout { grid-template-columns:minmax(210px,260px) minmax(0,1fr); gap:24px; margin-top:36px; }
+.settings-tabs { border-radius:28px; padding:12px; }
+.settings-page .settings-tabs [data-stab] { display:flex; align-items:center; gap:14px; border-radius:18px; padding:14px 16px; }
+.settings-tab-label { display:block; font-size:16px; font-weight:500; }
+.settings-tabs small { display:block; font-size:12px; color:var(--settings-muted); margin-top:3px; font-weight:400; line-height:1.4; }
+.settings-tab-dot { width:7px; height:7px; border-radius:50%; background:var(--settings-line); flex:none; }
+.settings-tabs [aria-current] .settings-tab-dot { background:#1c1c1c; }
+body[data-theme="dark"] .settings-tabs [aria-current] small { color:#3d4937; }
+.settings-content { gap:20px; }
+.account-surface { padding:clamp(22px,2.7vw,36px); border-radius:28px; background:var(--settings-surface); color:var(--settings-text); }
+.account-surface h2 { margin:0; font-size:26px; font-weight:400; letter-spacing:-.02em; }
+.account-surface p { margin:10px 0 0; font-size:14px; line-height:1.6; color:var(--settings-muted); overflow-wrap:anywhere; }
+.settings-page .account-button { display:inline-flex; justify-content:center; align-items:center; border:0; border-radius:999px; min-height:44px; padding:11px 22px; background:var(--settings-pill); color:var(--settings-text); font:inherit; font-size:14px; font-weight:500; cursor:pointer; }
+.settings-page .account-button:hover { background:var(--settings-active); color:#1c1c1c; }
+.settings-page button:focus-visible, .settings-page input:focus-visible { outline:2px solid #6c825d; outline-offset:3px; }
+.settings-page button:disabled { cursor:default; opacity:.6; }
+.account-support { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:20px; }
+.account-support > div { flex:1 1 260px; min-width:0; }
+.account-license { position:relative; overflow:hidden; padding:clamp(24px,3vw,36px); border-radius:28px; background:#1c1c1c; color:#f0f0f0; }
+.account-license::before { content:''; position:absolute; inset:0 auto 0 0; width:40%; pointer-events:none; background:linear-gradient(100deg,transparent,rgba(200,213,187,.06),transparent); animation:account-sheen 9s ease-in-out infinite; }
+.account-license > * { position:relative; }
+.account-license-top { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:16px; }
+.account-eyebrow { margin:0; color:#c8d5bb; font-size:11px; font-weight:500; letter-spacing:.18em; text-transform:uppercase; }
+.account-license h2 { margin:12px 0 0; font-size:clamp(28px,3.4vw,40px); font-weight:400; letter-spacing:-.025em; }
+.account-license-badge { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; font-size:12px; font-weight:500; background:#333833; color:#e0e7da; }
+.account-license-badge.is-active { background:#c8d5bb; color:#1c1c1c; }
+.account-license-badge > span { width:7px; height:7px; border-radius:50%; background:currentColor; }
+.account-masked-key { margin-top:28px; font-family:Consolas,'SFMono-Regular',Menlo,monospace; font-size:clamp(20px,2.3vw,28px); letter-spacing:.11em; overflow-wrap:anywhere; }
+.account-license-description { margin:12px 0 0; color:#b9bdb8; font-size:14px; line-height:1.65; overflow-wrap:anywhere; }
+.account-license-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
+.account-license-actions:empty { display:none; }
+.account-license button { border:0; border-radius:999px; padding:12px 22px; min-height:44px; background:#f0f0f0; color:#1c1c1c; font:inherit; font-size:14px; font-weight:500; cursor:pointer; }
+.account-license button:hover { background:#dde6d5; }
+.account-license button:focus-visible, .account-license input:focus-visible { outline-color:#c8d5bb; }
+.account-license-form { margin-top:22px; }
+.account-license-form > label { display:block; font-size:13px; color:#c8d5bb; margin:0 4px 8px; }
+.account-key-entry { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px; background:#2a2c2b; border-radius:22px; }
+.account-key-entry input { flex:1 1 240px; width:100%; min-width:0; min-height:46px; padding:10px 17px; border:1px solid #4d534a; border-radius:99px; background:#1c1c1c; color:#f0f0f0; font:15px Consolas,monospace; letter-spacing:.06em; }
+.account-key-entry input::placeholder { color:#b4bbb0; opacity:1; }
+.account-key-entry button { padding:11px 17px; }
+.account-key-entry .account-activate { background:#c8d5bb; }
+.account-license-form p { margin:10px 4px 0; font-size:13px; line-height:1.6; color:#b9bdb8; }
+.account-license-note { padding:12px 14px; border-radius:14px; background:#30382b; color:#e0ebd8; font-size:13px; line-height:1.6; }
+.account-key-error { color:#ffc3b9; font-size:13px; line-height:1.6; }
+.account-key-error button { padding:5px 10px; margin-left:6px; min-height:32px; }
+.account-local dl { margin:18px 0 0; }
+.account-local dl > div { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px 22px; border-top:1px solid var(--settings-line); padding:14px 0; font-size:14px; }
+.account-local dt { color:var(--settings-muted); }
+.account-local dd { flex:1 1 210px; min-width:0; margin:0; text-align:right; overflow-wrap:anywhere; }
+.invoices-heading { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:14px; }
+.invoices-heading > div { flex:1 1 250px; }
+.invoices-connection { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:99px; background:var(--settings-subtle); font-size:13px; }
+.invoice-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)); gap:10px; margin-top:24px; }
+.invoice-summary > div { padding:16px 18px; border-radius:18px; background:var(--settings-subtle); }
+.invoice-summary > .invoice-summary-paid { background:#c8d5bb; color:#1c1c1c; }
+.invoice-summary span { display:block; font-size:12px; }
+.invoice-summary strong { display:block; margin-top:6px; font-size:clamp(22px,2.4vw,28px); font-weight:400; letter-spacing:-.02em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.invoice-list { display:flex; flex-direction:column; gap:12px; margin-top:22px; }
+.invoice-ticket { border-radius:22px; background:var(--settings-subtle); overflow:hidden; container-type:inline-size; }
+.settings-page button.invoice-toggle { display:flex; flex-wrap:wrap; align-items:center; gap:14px; width:100%; padding:16px 18px; border:0; background:transparent; color:var(--settings-text); text-align:left; font:inherit; cursor:pointer; }
+.invoice-toggle:hover { box-shadow:inset 0 0 0 2px var(--settings-line); border-radius:22px; }
+.invoice-date { display:flex; flex:none; flex-direction:column; align-items:center; justify-content:center; width:54px; height:58px; border-radius:16px; background:#1c1c1c; color:#f0f0f0; }
+.invoice-date > span { font-size:10px; text-transform:uppercase; letter-spacing:.14em; color:#c8d5bb; }
+.invoice-date strong { margin-top:2px; font-size:21px; font-weight:400; }
+.invoice-name { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+.invoice-name > strong { display:block; font-size:15px; font-weight:500; }
+.invoice-name small { display:block; color:var(--settings-muted); font-size:12px; margin-top:4px; line-height:1.5; }
+.invoice-status { padding:5px 12px; border-radius:99px; background:var(--settings-pill); color:var(--settings-text); font-size:12px; }
+.invoice-status.is-paid { background:#dde3d6; color:#3c5233; }
+.invoice-amount { font-size:17px; font-weight:500; font-variant-numeric:tabular-nums; }
+.invoice-toggle > svg { transition:transform .2s; flex:none; }
+.invoice-toggle > svg.is-open { transform:rotate(180deg); }
+.invoice-perforation { position:relative; height:20px; }
+.invoice-perforation::before { content:''; position:absolute; top:9px; left:20px; right:20px; border-top:2px dashed var(--settings-line); }
+.invoice-perforation::after { content:''; position:absolute; left:-10px; top:0; width:20px; height:20px; border-radius:50%; background:var(--settings-surface); box-shadow:100cqw 0 var(--settings-surface); }
+.invoice-detail-body { padding:6px 22px 22px; }
+.invoice-detail-body dl { margin:0; }
+.invoice-detail-body dl > div { display:flex; justify-content:space-between; gap:16px; padding:8px 0; font-size:14px; }
+.invoice-detail-body dt { min-width:0; overflow-wrap:anywhere; }
+.invoice-detail-body dd { margin:0; flex:none; font-variant-numeric:tabular-nums; }
+.invoice-detail-body dl > .invoice-total { margin-top:6px; border-top:1px solid var(--settings-line); padding-top:14px; align-items:baseline; }
+.invoice-total dd { font-size:26px; letter-spacing:-.02em; }
+.invoice-detail-body p { font-size:13px; }
+.invoice-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.settings-page .invoice-download { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:11px 20px; border:0; border-radius:99px; background:#1c1c1c; color:#f0f0f0; font:inherit; font-size:14px; cursor:pointer; }
+.settings-page .invoice-download:hover { background:#394432; }
+.invoice-refresh { margin-top:22px; }
+.invoice-empty { display:flex; flex-direction:column; align-items:center; gap:14px; padding:40px 16px 16px; margin-top:22px; border-top:1px solid var(--settings-line); text-align:center; }
+.invoice-empty-icon { display:grid; place-items:center; width:72px; height:72px; border-radius:24px; background:#c8d5bb; color:#1c1c1c; }
+.invoice-empty h3 { margin:0; font-size:19px; font-weight:500; }
+.invoice-empty p { margin:0; max-width:38ch; }
+.invoice-error { padding:13px 16px; margin-top:20px; border-radius:14px; background:#f9e8e5; color:#73342b; font-size:14px; line-height:1.6; overflow-wrap:anywhere; }
+.payment-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:14px; margin-top:24px; }
+.payment-card-column { min-width:0; }
+.payment-card { position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:space-between; gap:26px; min-height:200px; padding:22px 24px; border-radius:24px; background:#1c1c1c; color:#f0f0f0; container-type:inline-size; }
+.payment-card::before { content:''; position:absolute; inset:0 auto 0 0; width:45%; background:linear-gradient(100deg,transparent,rgba(200,213,187,.08),transparent); animation:account-sheen 9s ease-in-out infinite; pointer-events:none; }
+.payment-card > div { position:relative; }
+.payment-card-top { display:flex; justify-content:space-between; align-items:center; }
+.payment-card-top strong { font-size:15px; letter-spacing:.06em; }
+.payment-card-mask { font-family:Consolas,monospace; font-size:clamp(12px,6.3cqw,21px); letter-spacing:.08em; white-space:nowrap; }
+.payment-card-footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; font-size:12px; color:#b9bdb8; }
+.payment-card-footer > span { min-width:0; overflow-wrap:anywhere; }
+.payment-panel .payment-security { display:flex; align-items:flex-start; gap:10px; padding:0 4px; margin-top:14px; font-size:13px; }
+.payment-security svg { flex:none; margin-top:3px; }
+.payment-purchase { display:flex; flex-direction:column; padding:22px 24px; border-radius:24px; background:var(--settings-subtle); }
+.payment-panel .payment-eyebrow { margin:0; font-size:11px; letter-spacing:.16em; text-transform:uppercase; }
+.payment-price { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 12px; margin-top:10px; }
+.payment-price strong { font-size:clamp(32px,3.1vw,44px); font-weight:400; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.payment-price > span { color:var(--settings-muted); font-size:13px; }
+.payment-timeline { display:flex; flex-direction:column; margin:22px 0 0; padding:0; list-style:none; }
+.payment-timeline li { display:flex; align-items:flex-start; gap:14px; position:relative; min-height:58px; padding-bottom:16px; }
+.payment-timeline li:last-child { padding-bottom:0; }
+.payment-timeline li:not(:last-child)::before { content:''; position:absolute; left:11px; width:2px; top:28px; bottom:4px; background:var(--settings-line); }
+.payment-step-icon { display:grid; place-items:center; flex:none; width:24px; height:24px; border-radius:50%; background:var(--settings-pill); color:var(--settings-muted); }
+.is-complete > .payment-step-icon { background:#c8d5bb; color:#1c1c1c; }
+.payment-timeline strong { display:block; font-size:14px; font-weight:500; }
+.payment-timeline small { display:block; margin-top:3px; font-size:12px; line-height:1.5; color:var(--settings-muted); overflow-wrap:anywhere; }
+.payment-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:20px; }
+.payment-panel .payment-footnote { font-size:12px; margin-top:14px; }
+body[data-theme="dark"] .invoice-download { background:#c8d5bb; color:#1c1c1c; }
+body[data-theme="dark"] .invoice-download:hover { background:#dde6d5; }
+@keyframes settings-spin { to { transform:rotate(360deg); } }
+@keyframes account-sheen { from { transform:translateX(-120%); } to { transform:translateX(280%); } }
+@container workspace-settings (max-width:880px) {
+  .settings-layout { grid-template-columns:minmax(0,1fr); }
+  .settings-tabs { flex-direction:row; overflow-x:auto; }
+  .settings-page .settings-tabs [data-stab] { width:auto; flex:1 0 auto; gap:9px; padding:12px 14px; }
+  .settings-tabs small { display:none; }
+}
+@container workspace-settings (max-width:540px) {
+  .settings-tab-dot { display:none; }
+  .settings-tab-label { font-size:14px; }
+  .account-local dd { flex-basis:100%; text-align:left; }
+  .invoice-toggle .invoice-name { flex-basis:calc(100% - 72px); }
+  .invoice-toggle > svg { margin-left:auto; }
+  .invoice-detail-body dl > div { flex-wrap:wrap; }
+  .account-license-top { flex-direction:column; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .account-license::before, .payment-card::before, .settings-spin { animation:none; }
+  .invoice-toggle > svg { transition:none; }
+}

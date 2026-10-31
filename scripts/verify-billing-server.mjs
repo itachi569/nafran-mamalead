@@ -44,13 +44,16 @@ const fakeStripe = async (raw, request) => {
     result = { id, url }
   } else if (/\/checkout\/sessions\/cs_test_\w+\/line_items$/.test(path)) {
     result = { data: [{ price: path.includes('decision') || path.includes('standalone') ? { currency: 'pkr', unit_amount: 100000, recurring: null } : { id: 'price_lifetime' }, quantity: 1 }] }
-  } else if (/\/checkout\/sessions\/cs_test_\w+$/.test(path)) result = sessions.get(path.split('/').at(-1))
+  } else if (/\/checkout\/sessions\/cs_test_\w+$/.test(path)) {
+    result = sessions.get(path.split('/').at(-1))
+    if (result && url.searchParams.getAll('expand[]').includes('payment_intent.payment_method')) result = { ...result, payment_intent: { payment_method: { customer: result.customer, type: 'card', card: {brand:'visa',last4:'4242',exp_month:8,exp_year:2029,fingerprint:'private-fixture'}, billing_details:{name:'Review User'} }, client_secret:'private-fixture' } }
+  }
   else if (path.endsWith('/payment_intents/pi_mock')) result = { status: 'succeeded', latest_charge: 'ch_mock' }
   else if (path.endsWith('/charges/ch_mock')) result = { paid: true, refunded: chargeRefunded, amount_refunded: chargeRefunded ? 1000000 : 0, disputed: false, created: Math.floor(Date.now() / 1000) }
   else if (path.endsWith('/subscriptions/sub_mock')) result = subscriptions.get('sub_mock')
   else if (path.endsWith('/invoices/in_decision')) result = { id: 'in_decision', subscription: 'sub_mock', status: 'paid' }
   else if (path.endsWith('/billing_portal/sessions')) result = { url: 'https://billing.stripe.com/p/session/mock' }
-  else if (path.endsWith('/invoices')) result = { data: [{ id: 'in_mock', number: 'M-1', created: 1_700_000_000, total: 1000000, currency: 'pkr', status: 'paid', hosted_invoice_url: 'https://invoice.stripe.com/i/mock' }] }
+  else if (path.endsWith('/invoices')) result = { data: [{ id: 'in_mock', number: 'M-1', created: 1_700_000_000, total: 1000000, amount_paid: 1000000, currency: 'pkr', status: 'paid', hosted_invoice_url: 'https://invoice.stripe.com/i/mock', invoice_pdf: 'https://pay.stripe.com/invoice/mock/pdf', lines: {data:[{description:'MamaLead · Lifetime license'}]} }] }
   else throw new Error(`Unexpected Stripe request: ${path}`)
   return { ok: true, json: async () => result }
 }
@@ -362,6 +365,10 @@ try {
   check('device-bound pass ends after 30 days without an automatic charge', !directExpired.body.decisionMaker.active && (await call('/v1/decision-maker/consume', directToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000007' }, directDevice)).status === 403)
   const invoices = await call('/v1/invoices', token, 'GET', undefined, firstDevice)
   check('invoice rows come from Stripe', invoices.body.invoices.length === 1 && invoices.body.invoices[0].number === 'M-1')
+  check('invoice receipt metadata uses the actual Stripe payment and PDF', invoices.body.invoices[0].amountPaid === 1000000 && invoices.body.invoices[0].pdfUrl === 'https://pay.stripe.com/invoice/mock/pdf' && invoices.body.invoices[0].description === 'MamaLead · Lifetime license')
+  const payment = await call('/v1/payment-details', token, 'GET', undefined, firstDevice)
+  check('authenticated payment display contains only safe Stripe metadata', payment.status === 200 && payment.body.card.last4 === '4242' && payment.body.card.holder === 'Review User' && !JSON.stringify(payment.body).includes('private-fixture'))
+  check('payment display requires an installation token', (await call('/v1/payment-details', null)).status === 401)
   const portal = await call('/v1/portal', token, 'POST', undefined, firstDevice)
   check('customer portal is created on the server', portal.body.url.startsWith('https://billing.stripe.com/'))
   const live = createBillingServer({

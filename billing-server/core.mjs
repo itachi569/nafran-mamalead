@@ -5,6 +5,7 @@ import { createAssistService } from './assist.mjs'
 import { billingPage as page } from './payment-page.mjs'
 import {sendSupport,supportConfig} from './support.mjs'
 import {SupportError} from './support-contract.mjs'
+import {paymentDetails} from './payment-details.mjs'
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -846,12 +847,17 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           if (!/^https:\/\/billing\.stripe\.com\//.test(portal.url ?? '')) throw new HttpError(502, 'Stripe did not return a portal URL.')
           return json(200, { url: portal.url })
         }
+        if (method === 'GET' && url.pathname === '/v1/payment-details') {
+          const linked = await store.licenseForInstallation(row.id)
+          const owner = linked?.kind === 'lifetime' && !linked.owner_issued ? await store.byId(linked.installation_id) : row
+          return json(200, await paymentDetails(stripe, owner))
+        }
         if (method === 'GET' && url.pathname === '/v1/invoices') {
           const linked = await store.licenseForInstallation(row.id)
           const owner = linked?.kind === 'lifetime' ? await store.byId(linked.installation_id) : row
           if (!owner?.customer_id) return json(200, { invoices: [] })
           const data = await stripe(`invoices?customer=${encodeURIComponent(owner.customer_id)}&limit=100`)
-          const invoices = (data.data ?? []).map((invoice) => ({ id: invoice.id, number: invoice.number ?? '', issued: invoice.created ? new Date(invoice.created * 1000).toISOString().slice(0, 10) : '', total: invoice.total ?? 0, currency: invoice.currency ?? 'pkr', status: invoice.status ?? '', url: invoice.hosted_invoice_url ?? '' }))
+          const invoices = (data.data ?? []).map((invoice) => ({ id: invoice.id, number: invoice.number ?? '', issued: invoice.created ? new Date(invoice.created * 1000).toISOString().slice(0, 10) : '', total: invoice.total ?? 0, currency: invoice.currency ?? 'pkr', status: invoice.status ?? '', url: invoice.hosted_invoice_url ?? '', pdfUrl: invoice.invoice_pdf ?? '', amountPaid: invoice.amount_paid ?? (invoice.status === 'paid' ? invoice.total ?? 0 : 0), description: invoice.description || invoice.lines?.data?.[0]?.description || 'MamaLead purchase' }))
           return json(200, { invoices })
         }
         if (method === 'POST' && url.pathname === '/v1/license') {

@@ -32,6 +32,9 @@ export interface BillingInvoice {
   currency: string
   status: string
   url: string
+  pdfUrl?: string
+  amountPaid?: number
+  description?: string
 }
 
 export class LicenseAccessError extends Error {
@@ -270,6 +273,10 @@ export async function billingInvoices(): Promise<BillingInvoice[]> {
   if (!billingUrl()) return []
   const result = await request<{ invoices: BillingInvoice[] }>('/v1/invoices', 'GET', undefined, await installationToken())
   return result.invoices
+}
+
+export async function billingPaymentDetails(): Promise<{ card: { brand: string; last4: string; expiryMonth: number | null; expiryYear: number | null; holder: string } | null }> {
+  return request('/v1/payment-details', 'GET', undefined, await installationToken())
 }
 
 /** Server-managed AI reuses the device-bound installation identity. */

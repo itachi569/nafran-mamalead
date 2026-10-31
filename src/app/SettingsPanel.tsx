@@ -2,16 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppValues } from './useAppValues'
 import type { DesktopApi } from '../types/desktop'
 import './settings.css'
+import './account-settings.css'
 import { AppUpdatesCard } from './AppUpdatesCard'
+import { InvoicesPanel } from './InvoicesPanel'
+import { PaymentPanel } from './PaymentPanel'
 
 type BillingStatus = Awaited<ReturnType<DesktopApi['billing']['status']>>
-type BillingInvoice = Awaited<ReturnType<DesktopApi['billing']['invoices']>>[number]
-const money = (amount: number, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(amount / 100)
 const pkr = (amount: number) => new Intl.NumberFormat('en-PK', { maximumFractionDigits: 0 }).format(amount / 100)
 
 const card = { padding: '22px 24px', borderRadius: '22px', background: '#F5F5F4' } as const
 const muted = { color: '#5A5F5C', fontSize: '13px', lineHeight: 1.5 } as const
-const row = { display: 'flex', flexWrap: 'wrap', gap: '12px', padding: '12px 0', borderTop: '1px solid #E4E5E2' } as const
 const button = { border: 0, borderRadius: '999px', padding: '9px 15px', background: '#E5E5E5', color: '#1C1C1C', fontFamily: 'inherit', cursor: 'pointer' } as const
 
 export function SettingsPanel({ V }: { V: AppValues }) {
@@ -19,7 +19,8 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const switchTab=(click:()=>void,id:string)=>{tabScroll.current[V.activeTab]=window.scrollY;click();requestAnimationFrame(()=>window.scrollTo({top:tabScroll.current[id] ?? (document.querySelector('.settings-header')?.getBoundingClientRect().top ?? 0)+window.scrollY,behavior:'instant'}))}
   const billingApi = window.desktop?.billing
   const [billing, setBilling] = useState<BillingStatus>({ configured: false, connected: false, message: 'Checking Stripe billing…' })
-  const [invoices, setInvoices] = useState<BillingInvoice[]>([])
+  const [billingRefreshing, setBillingRefreshing] = useState(false)
+  const [billingRevision, setBillingRevision] = useState(0)
   const [billingBusy, setBillingBusy] = useState(false)
   const [billingError, setBillingError] = useState('')
   const [trialOpen, setTrialOpen] = useState(false)
@@ -64,9 +65,11 @@ export function SettingsPanel({ V }: { V: AppValues }) {
   const refreshBilling = useCallback(async () => {
     setBillingError('')
     if (!billingApi) return setBilling({ configured: false, connected: false, message: 'Desktop billing bridge is unavailable.' })
+    setBillingRefreshing(true)
     try {
       const status = await billingApi.status()
       setBilling(status)
+      setBillingRevision(value => value + 1)
       if (status.trialRequest) {
         setTrialSent(status.trialRequest.requested)
         setTrialChangeBlocked(status.trialRequest.requested && !status.trialRequest.canChangeEmail)
@@ -75,6 +78,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       return status
     }
     catch (error) { setBilling({ configured: true, connected: false, message: error instanceof Error ? error.message : 'Billing status could not be loaded.' }) }
+    finally { setBillingRefreshing(false) }
   }, [billingApi])
   useEffect(() => { void refreshBilling() }, [refreshBilling])
   useEffect(() => {
@@ -100,12 +104,6 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       trialEmailInput.current?.select()
     }
   }, [V.tabPlan, trialOpen, trialEmailReset])
-  useEffect(() => {
-    if (!V.tabInv || !billing.connected || !billing.hasCustomer || !billingApi) return
-    let active = true
-    void billingApi.invoices().then((rows) => { if (active) setInvoices(rows) }).catch((error) => { if (active) setBillingError(error instanceof Error ? error.message : 'Invoices could not be loaded.') })
-    return () => { active = false }
-  }, [V.tabInv, billing.connected, billing.hasCustomer, billingApi])
   const openBilling = async (action: () => Promise<{ opened: boolean }>) => {
     setBillingBusy(true)
     setBillingError('')
@@ -217,10 +215,10 @@ export function SettingsPanel({ V }: { V: AppValues }) {
     } finally { setTrialBusy(false) }
   }
   const tabs = [
-    ['plan', 'Usage', V.goTabPlan],
-    ['pay', 'Payment', V.goTabPay],
-    ['inv', 'Invoices', V.goTabInv],
-    ['acct', 'Account', V.goTabAcct],
+    ['plan', 'Usage', V.goTabPlan, 'Leads, runs and lookups'],
+    ['pay', 'Payment', V.goTabPay, 'Payments and Stripe'],
+    ['inv', 'Invoices', V.goTabInv, 'Receipts to download'],
+    ['acct', 'Account', V.goTabAcct, 'License and support'],
   ] as const
   const lookups = [
     ['Email lookups', V.usedEmailLookups, V.meterEmail],
@@ -239,14 +237,13 @@ export function SettingsPanel({ V }: { V: AppValues }) {
       <strong style={{ flex: 1 }}>{licenseNotice.message}</strong><button type="button" aria-label="Dismiss license notice" onClick={() => setLicenseNotice(null)} style={{ border: 0, background: 'transparent', font: 'inherit', cursor: 'pointer', lineHeight: 1 }}>×</button>
     </div>}
     <header className="settings-header">
-      <h1>Workspace &amp; Settings</h1>
-      <p>{V.workspaceName} · local workspace on this device</p>
-      <div className="settings-header-status"><span data-billing-status="1">{billing.connected ? `Stripe ${billing.mode} mode connected` : billing.message}</span><button type="button" onClick={() => void refreshBilling()}>Refresh billing</button></div>
+      <div className="settings-heading"><h1>Workspace &amp; Settings</h1><p>{V.workspaceName} · local workspace on this device</p></div>
+      <div className="settings-header-status"><span className={`settings-connection-dot${billing.connected ? ' is-connected' : ''}`} aria-hidden="true"/><span data-billing-status="1">{billing.connected ? `Stripe ${billing.mode ? `${billing.mode} mode ` : ''}connected` : billing.message}</span><button type="button" disabled={billingRefreshing} onClick={() => void refreshBilling()}><svg className={billingRefreshing ? 'settings-spin' : undefined} viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4h-4"/></svg>{billingRefreshing ? 'Refreshing…' : 'Refresh billing'}</button></div>
       {billingError && <p className="settings-billing-message" role="status">{billingError}</p>}
     </header>
     <div data-settings="1" className="settings-layout">
       <nav data-tabs="1" data-active={V.activeTab} aria-label="Settings sections" className="settings-tabs">
-        {tabs.map(([id, label, click]) => <button key={id} data-stab={id} type="button" onClick={()=>switchTab(click,id)} aria-current={V.activeTab === id ? 'page' : undefined}>{label}</button>)}
+        {tabs.map(([id, label, click, hint]) => <button key={id} data-stab={id} type="button" aria-label={label} onClick={()=>switchTab(click,id)} aria-current={V.activeTab === id ? 'page' : undefined}><span className="settings-tab-dot" aria-hidden="true"/><span><span className="settings-tab-label">{label}</span><small>{hint}</small></span></button>)}
       </nav>
       <div className="settings-content">
         {V.tabPlan && <>
@@ -327,29 +324,29 @@ export function SettingsPanel({ V }: { V: AppValues }) {
             {lookups.map(([label, count, width]) => <div key={label} style={{ marginTop: '16px' }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}><span>{label}</span><strong>{count.toLocaleString('en-GB')}</strong></div><div style={{ height: '8px', marginTop: '7px', borderRadius: '8px', background: '#E4E6E1' }}><span style={{ display: 'block', width, height: '100%', borderRadius: '8px', background: '#8FA382' }} /></div></div>)}
           </section>
         </>}
-        {V.tabPay && <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Payment</h2><p style={muted}>{billing.connected ? 'Your lifetime purchase and payment method are managed securely on Stripe.' : 'Connect the billing server to manage Stripe payments.'}</p>{billing.hasCustomer ? <button type="button" disabled={billingBusy || !billingApi} onClick={() => void openBilling(() => billingApi!.portal())} style={button}>Open Stripe billing portal</button> : <div style={row}>No Stripe customer connected to this installation.</div>}</section>}
-        {V.tabInv && <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Invoices</h2><p style={muted}>Invoices shown here come from Stripe for this installation.</p>{invoices.length ? <ul style={{ listStyle: 'none', padding: 0 }}>{invoices.map((invoice) => <li key={invoice.id} style={row}><span style={{ flex: 1 }}>{invoice.number || invoice.id} · {invoice.issued}</span><strong>{money(invoice.total, invoice.currency)}</strong><span>{invoice.status}</span>{invoice.url && <button type="button" onClick={() => void openBilling(() => billingApi!.openInvoice(invoice.url))} style={button}>Open invoice</button>}</li>)}</ul> : <div style={row}>No invoices found in Stripe.</div>}</section>}
+        {V.tabPay && <PaymentPanel billing={billing} revision={billingRevision} busy={billingBusy || !billingApi} onPortal={() => { if (billingApi) void openBilling(() => billingApi.portal()) }} onAccount={V.goTabAcct} onInvoices={V.goTabInv}/>}
+        {V.tabInv && <InvoicesPanel billing={billing} revision={billingRevision} refreshing={billingRefreshing} onRefresh={() => void refreshBilling()} onSupport={message => V.openSupport({category:'licence',message})}/>}
         {V.tabAcct && <>
-          <section id="help-support" data-card="1" style={card}><h2 style={{margin:0,fontSize:19,fontWeight:500}}>Help & support</h2><p style={muted}>Send our team a message about your licence, a problem or an idea.</p><button type="button" style={button} onClick={()=>V.openSupport()}>Contact support</button></section>
-          <section id="license-section" data-card="1" style={card}>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>MamaLead license</h2>
-            <p style={muted}>{billing.coreLicenseActive && billing.license?.active ? `${billing.license.kind === 'trial' ? '1-day trial' : 'Lifetime license'} active on this machine${billing.license.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license.email ? ` · ${billing.license.email}` : ''}.` : 'Paste a trial or lifetime key from your email to unlock this machine.'}</p>
-            {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" style={{ ...muted, margin: '10px 0', color: '#315F2D' }}>{licenseStepNotice || V.licenseNextStep}</p>}
-            {trialSent && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy} onClick={changeTrialEmail} style={{ ...button, marginBottom: '10px' }}>Change email</button>}
-            {activeLicense && !changeKey && <button type="button" onClick={()=>setChangeKey(true)} style={button}>Use a different key</button>}
-            {licenseNotice?.kind==='error' && <button type="button" className="support-entry" onClick={()=>V.openSupport({category:'licence',message:'Activation failed: '+licenseNotice.message})}>Contact support</button>}
-            {changeKey && <p role="status">A different key replaces this device’s active license. <button type="button" onClick={()=>{setChangeKey(false);setLicenseKey('');setLicenseNotice(null)}} style={button}>Cancel key change</button></p>}
-            {(!activeLicense || changeKey) && <form onSubmit={(event) => { event.preventDefault(); void activateLicense() }} style={row}><label htmlFor="nafran-license-key">License key</label><input id="nafran-license-key" ref={licenseKeyInput} type={showKey ? "text" : "password"} value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value.toUpperCase().replace(/\s/g,'')); setLicenseNotice(null) }} autoComplete="off" placeholder="NF-XXXX-XXXX-…" style={{ flex: '1 1 280px', minWidth: 0, padding: '10px', border: 0, borderRadius: '10px', background: '#EAEAE8' }} /><button type="button" aria-pressed={showKey} onClick={()=>setShowKey(value=>!value)} style={button}>{showKey?'Hide key':'Show key'}</button><button type="submit" disabled={licenseBusy} style={button}>{licenseBusy ? 'Activating…' : 'Activate'}</button></form>}
+          <section id="license-section" className="account-license" aria-labelledby="account-license-title">
+            <div className="account-license-top"><div><p className="account-eyebrow">MamaLead license</p><h2 id="account-license-title">{activeLicense ? billing.license?.kind === 'trial' ? '1-day trial' : 'Lifetime' : 'Activate MamaLead'}</h2></div><span className={`account-license-badge${activeLicense ? ' is-active' : ''}`}><span aria-hidden="true"/>{activeLicense ? 'Active on this machine' : billingRefreshing ? 'Checking license…' : billing.connected ? 'Activation needed' : 'Status unavailable'}</span></div>
+            {activeLicense && billing.license?.last4 && <div className="account-masked-key" aria-label={`License key ending ${billing.license.last4}`}>NF-••••-••••-{billing.license.last4}</div>}
+            <p className="account-license-description">{activeLicense ? `${billing.license?.kind === 'trial' ? '1-day trial' : 'Lifetime license'} active on this machine${billing.license?.expiresAt ? ` until ${new Date(billing.license.expiresAt).toLocaleString()}` : ''}${billing.license?.last4 ? ` · ending ${billing.license.last4}` : ''}${billing.license?.email ? ` · ${billing.license.email}` : ''}.` : 'Paste a trial or lifetime key from your email to unlock this machine.'}</p>
+            {(licenseStepNotice || V.licenseNextStep) && <p data-license-next-step="1" role="status" className="account-license-note">{licenseStepNotice || V.licenseNextStep}</p>}
+            <div className="account-license-actions">
+              {trialSent && !trialChangeBlocked && !billing.trial?.active && <button type="button" data-trial-change-email="1" disabled={trialBusy || licenseBusy} onClick={changeTrialEmail}>Change email</button>}
+              {activeLicense && !changeKey && <button type="button" onClick={()=>setChangeKey(true)}>Use a different key</button>}
+              {changeKey && <button type="button" disabled={licenseBusy} onClick={()=>{setChangeKey(false);setLicenseKey('');setShowKey(false);setLicenseNotice(null)}}>Cancel key change</button>}
+            </div>
+            {(!activeLicense || changeKey) && <form className="account-license-form" onSubmit={(event) => { event.preventDefault(); if (!licenseBusy) void activateLicense() }}><label htmlFor="nafran-license-key">{changeKey ? 'New license key' : 'License key'}</label><div className="account-key-entry"><input id="nafran-license-key" ref={licenseKeyInput} type={showKey ? 'text' : 'password'} disabled={licenseBusy} value={licenseKey} onChange={(event) => { setLicenseKey(event.target.value.toUpperCase().replace(/\s/g,'')); setLicenseNotice(null) }} autoComplete="off" spellCheck={false} placeholder="NF-XXXX-XXXX-…" aria-describedby="account-key-help"/><button type="button" aria-pressed={showKey} onClick={()=>setShowKey(value=>!value)}>{showKey?'Hide key':'Show key'}</button><button className="account-activate" type="submit" disabled={licenseBusy}>{licenseBusy ? 'Activating…' : 'Activate'}</button></div><p id="account-key-help">{changeKey && activeLicense ? 'Your current access stays active until the new key is accepted.' : 'Paste the complete key from your email. Your trial starts when you activate it.'}</p></form>}
+            {licenseNotice?.kind==='error' && <p className="account-key-error" role="alert">{licenseNotice.message} <button type="button" onClick={()=>V.openSupport({category:'licence',message:'Activation failed: '+licenseNotice.message})}>Contact support</button></p>}
           </section>
-          <section data-card="1" style={card}>
-            <h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Local account</h2>
-            <div style={row}><span>Workspace name</span><strong style={{ marginLeft: 'auto' }}>{V.workspaceName}</strong></div>
-            <div style={row}><span>Time zone</span><strong style={{ marginLeft: 'auto' }}>{V.localTimeZone}</strong></div>
-            <div style={row}><span>Data location</span><span style={{ marginLeft: 'auto', overflowWrap: 'anywhere' }}>{V.localDataPath}</span></div>
-            <div style={row}><span>Session</span><span style={{ marginLeft: 'auto' }}>Local workspace on this device</span></div>
+          <section id="help-support" className="account-support account-surface"><div><h2>Help &amp; support</h2><p>Send our team a message about your licence, a problem or an idea.</p></div><button type="button" className="account-button" onClick={()=>V.openSupport()}>Contact support</button></section>
+          <section className="account-local account-surface">
+            <h2>Local account</h2>
+            <dl><div><dt>Workspace name</dt><dd>{V.workspaceName}</dd></div><div><dt>Time zone</dt><dd>{V.localTimeZone}</dd></div><div><dt>Data location</dt><dd data-account-data-path="1">{V.localDataPath}</dd></div><div><dt>Session</dt><dd>Local workspace on this device</dd></div></dl>
           </section>
           <AppUpdatesCard V={V}/>
-          <section data-card="1" style={card}><h2 style={{ margin: 0, fontSize: '19px', fontWeight: 500 }}>Your data</h2><p style={muted}>Export your saved leads and lists from this device.</p><button type="button" onClick={V.openExpAll} style={button}>Export everything</button></section>
+          <section className="account-support account-surface"><div><h2>Your data</h2><p>Export your saved leads and lists from this device.</p></div><button type="button" onClick={V.openExpAll} className="account-button">Export everything</button></section>
         </>}
       </div>
     </div>
