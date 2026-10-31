@@ -8,8 +8,18 @@ export const assistDestinations = {
   reports: {label:'Reports',view:'dashboard'}, settings: {label:'Settings & Billing',view:'settings'},
   account: {label:'Account',view:'settings',tab:'acct'}, payment: {label:'Payment',view:'settings',tab:'pay'},
   invoices: {label:'Invoices',view:'settings',tab:'inv'}, updates: {label:'App updates',view:'settings',tab:'acct'},
+  support: {label:'Contact Support',view:'settings',tab:'acct'},
 } as const
 export type AssistDestination = keyof typeof assistDestinations
+
+/** Contacting our team is different from extracting a business's contact details. */
+export function isSupportContactQuestion(text:string):boolean {
+  return /\b(?:contact|customer|technical)\s+support\b|\bsupport\s+(?:team|email|phone|form)\b|\bhelp\s*desk\b/i.test(text)
+    || /\b(?:contact|reach|speak to|talk to|get in touch with|rabta|raabta)\b.{0,45}\b(?:you|your|mamalead|nafran|aap|apki|aapki|tum)\b/i.test(text)
+    || /\b(?:your|apka|aapka|apki|aapki|tumhara|tumhari)\b.{0,40}\b(?:email|phone|number|contact|support|rabta|raabta)\b(?!\s+(?:finder|scan|scraper|validity|feature))/i.test(text)
+    || /\b(?:mamalead|nafran)\s+(?:company\s+)?(?:support|contact|email|phone)\b/i.test(text)
+    || /(?:آپ|مامالیڈ).{0,25}(?:رابطہ|سپورٹ)|(?:رابطہ|سپورٹ).{0,25}(?:آپ|مامالیڈ)/.test(text)
+}
 
 function topics(text:string):AssistDestination[] {
   const result:AssistDestination[]=[]
@@ -33,8 +43,19 @@ function topics(text:string):AssistDestination[] {
 }
 
 export function assistShortcuts(question:string,answer:string,currentPage:string):AssistDestination[] {
+  if(isSupportContactQuestion(question))return ['support']
   if(/decision[ -]?makers?|owner.{0,30}(?:email|gmail)|(?:email|gmail).{0,30}owner/i.test(question))return []
-  const requested=topics(question),described=topics(answer)
+  const requested=topics(question)
+  // Only exact page names in an answer imply navigation. Incidental words such as email,
+  // phone, number or social must not create unrelated Finder links.
+  const described=(Object.keys(assistDestinations) as AssistDestination[]).filter(key=>{
+    const label=assistDestinations[key].label.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\$&')
+    return new RegExp('\\b'+label+'\\b','i').test(answer)
+  })
+  if(described.includes('support'))described.splice(0,described.length,'support')
+  else if(described.includes('account')||described.includes('payment')||described.includes('invoices')||described.includes('updates')){
+    const settings=described.indexOf('settings');if(settings>=0)described.splice(settings,1)
+  }
   // Explicit user topics take priority over incidental module names in the explanation.
   if(requested.includes('reports'))return ['reports']
   if(requested.length)return requested.slice(0,3)

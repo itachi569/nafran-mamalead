@@ -44,23 +44,44 @@ export function parseLeadsAngelResult(email: string, value: unknown): EmailValid
   const data = record(value)
   const status = string(data.status).toLowerCase()
   const reason = string(data.reason).toLowerCase()
+  const readableReason = reason.replace(/[_-]+/g, ' ')
+  // A rejected random recipient rules OUT catch-all delivery. It is not a risk flag.
+  const riskReason = readableReason.replace(/\b(?:catch all|accept all) (?:rejected|negative|false)\b/g, '').replace(/\bnot (?:a )?(?:catch all|accept all)\b/g, '')
+  const attempts = record(data.details).attempts
+  const recipientReplies = (Array.isArray(attempts) ? attempts : []).map(record)
+    .filter(attempt => attempt.catch_all_test !== true && (!attempt.stage || attempt.stage === 'rcpt_to'))
+  const rejectedReplies = recipientReplies.filter(attempt => Number(attempt.code) >= 500 && attempt.accepted !== true)
+  const policyBlocked = rejectedReplies.some(attempt => /\b5\.7\.\d+\b|\b(?:policy|blacklist|blocklist|spam|access denied|blocked)\b/i.test(string(attempt.message)))
+  const mailboxMissing = rejectedReplies.some(attempt => /\b5\.1\.1\b|user does not exist|no such (?:user|mailbox)|mailbox (?:not found|does not exist)/i.test(string(attempt.message)))
   const rawScore = Number(data.score)
   const score = data.score === null || data.score === undefined || !Number.isFinite(rawScore)
     ? null : Math.max(0, Math.min(100, Math.round(rawScore)))
   let verdict: EmailValidityResult['status'] = 'unknown'
-  if (['disposable','isDisposable','isCatchAll','catchAll','catch_all','role','isRole','isRoleBased'].some(key=>data[key]===true) || /disposable|catch[ _-]?all|accept[ _-]?all|role(?:[ _-]?based)?/.test(reason)) verdict = 'risky'
+  if (policyBlocked) verdict = 'unknown'
+  else if (['disposable','isDisposable','isCatchAll','catchAll','catch_all','role','isRole','isRoleBased'].some(key=>data[key]===true) || /\b(?:disposable|catch all|accept all|role(?: based)?)\b/.test(riskReason)) verdict = 'risky'
   else if (status === 'safe' || status === 'valid' || status === 'deliverable') verdict = 'valid'
   else if (status === 'risky' || status === 'catch_all' || status === 'accept_all') verdict = 'risky'
   // Preserve this explicit provider verdict; an inconclusive SMTP 550 stays Unknown.
   else if (status === 'invalid' && reason === 'rcpt_rejected_550') verdict = 'invalid'
   else if ((status === 'unsafe' || status === 'invalid' || status === 'undeliverable')
     && (reason === 'syntax' || /invalid_syntax|no_mx|recipient_rejected|mailbox_not_found|does_not_exist|domain_not_found/.test(reason))) verdict = 'invalid'
+  const message = policyBlocked
+    ? 'The mail server blocked the verification check (SMTP policy rejection). Mailbox validity is unknown; try again later.'
+    : verdict === 'invalid' && mailboxMissing
+      ? 'The mail server reports that this mailbox does not exist (550 / 5.1.1). Check the address or use another published contact.'
+      : reason === 'rcpt_rejected_550'
+        ? verdict === 'invalid'
+          ? 'The mail server rejected this recipient (SMTP 550). LeadsAngel marked it Invalid; check the address.'
+          : 'The mail server rejected the check (SMTP 550). Mailbox validity could not be confirmed.'
+        : verdict === 'valid' && /\bcatch all rejected\b/.test(readableReason)
+          ? 'The mail server accepted this address and rejected a random address. Mailbox check passed.'
+          : `LeadsAngel SMTP: ${verdict==='risky'?'risky — ':''}${readableReason || (verdict==='risky'?'disposable, catch-all or role-mailbox flag':status || 'inconclusive')}`
   return {
     email: email.trim().toLowerCase(),
     status: verdict,
     verified: verdict === 'valid',
     score: verdict==='risky'?Math.min(score ?? 35,35):score,
-    message: `LeadsAngel SMTP: ${verdict==='risky'?'risky — ':''}${reason ? reason.replace(/_/g, ' ') : verdict==='risky'?'disposable, catch-all or role-mailbox flag':status || 'inconclusive'}`,
+    message,
     provider: 'leadsangel',
   }
 }

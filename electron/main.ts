@@ -613,7 +613,9 @@ ipcMain.handle(
       validation_provider?: string | null
     }[]
     const scoped = all.filter((row) => !contactIds.size || contactIds.has(String(row.id)))
-    const selected = scoped.filter((row) => payload.recheckUnknown ? row.validation_status === 'unknown' : payload.force || !row.validation_status || row.validation_status==='unknown'&&row.validation_provider==='local')
+    // Unknown is inconclusive, including SMTP/provider failures. A normal user-requested check
+    // should retry it, while retaining completed verdicts and the selected import's scope.
+    const selected = scoped.filter((row) => payload.recheckUnknown ? row.validation_status === 'unknown' : payload.force || !row.validation_status || row.validation_status === 'unknown')
     const skipped = scoped.length - selected.length
     const byAddress = new Map<string, typeof selected>()
     for (const row of selected) {
@@ -780,6 +782,10 @@ ipcMain.handle(
       batchSize: 0,
       message: summary.cancelled
         ? `Stopped after ${summary.checked} of ${queue.length} emails. Remaining emails can be checked again.`
+        : !queue.length
+          ? scoped.length
+            ? 'No pending emails to check in this selection. Saved validity results are shown below.'
+            : 'No email addresses found in this selection.'
         : summary.failed
           ? `Checked ${summary.checked} of ${queue.length}. ${summary.failed} failed and remain Not checked for the next pass.`
           : `Checked ${summary.checked} of ${queue.length} emails.`,

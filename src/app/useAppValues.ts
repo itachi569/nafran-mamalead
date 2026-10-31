@@ -2725,8 +2725,9 @@ export function useAppValues() {
   useEffect(()=>{
     if(priorFinderPage.current===view)return
     priorFinderPage.current=view
-    if(view==='email'){emailFinder.exit();void email.refresh()}
-    if(view==='phone'){phoneFinder.exit();void refreshPhone()}
+    // Returning to a finder opens its saved ledger; an old query/filter must not hide imports.
+    if(view==='email'){emailFinder.reset();void email.refresh()}
+    if(view==='phone'){phoneFinder.reset();void refreshPhone()}
     if(view==='social'){if(scan.phase!=='scanning')exitScan();social.refresh()}
     if(['leads','email','phone','social','dashboard'].includes(view))void refreshLists()
   },[view])
@@ -3705,6 +3706,7 @@ export function useAppValues() {
       if(!Object.hasOwn(assistDestinations,key))return
       const target=assistDestinations[key]
       setChatOpen(false)
+      if(key==='support'){setSupportPreset({});return}
       if(key==='reports'){setMapsPrompt(null);setReportsOpen(true);void refreshReports();return}
       go(target.view)
       if(target.view==='settings')setStab('tab' in target?target.tab:'plan')

@@ -28,6 +28,28 @@ async function main() {
   assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unknown', reason: 'rcpt_rejected_550' }).status, 'unknown')
   assert.equal(parseLeadsAngelResult('a@example.com', { status: 'unsafe', reason: 'rcpt_rejected_550' }).status, 'unknown')
   assert.equal(parseLeadsAngelResult('a@example.com', { status: 'catch_all', reason: 'recipient_and_random_address_accepted' }).status, 'risky')
+  const accepted = { status: 'safe', reason: 'recipient_accepted_catch_all_rejected', score: 92, details: { attempts: [
+    { code: 250, stage: 'rcpt_to', accepted: true, message: '2.1.5 OK' },
+    { code: 550, stage: 'rcpt_to', accepted: false, catch_all_test: true, message: '5.1.1 user does not exist' },
+  ] } }
+  const valid = parseLeadsAngelResult('yes@example.com', accepted)
+  assert.equal(valid.status, 'valid')
+  assert.equal(valid.score, 92)
+  assert.match(valid.message, /accepted this address and rejected a random address/)
+  assert.equal(parseLeadsAngelResult('yes@example.com', { ...accepted, isDisposable: true }).status, 'risky')
+  assert.equal(parseLeadsAngelResult('yes@example.com', { ...accepted, isCatchAll: true }).status, 'risky')
+  const rejected = { status: 'invalid', reason: 'rcpt_rejected_550', score: 5, details: { attempts: [
+    { code: 550, stage: 'rcpt_to', accepted: false, message: '5.1.1 <missing@example.com>: user does not exist' },
+  ] } }
+  const missing = parseLeadsAngelResult('missing@example.com', rejected)
+  assert.equal(missing.status, 'invalid')
+  assert.match(missing.message, /mailbox does not exist \(550 \/ 5\.1\.1\)/)
+  const blocked = parseLeadsAngelResult('blocked@example.com', { ...rejected, details: { attempts: [
+    { code: 550, stage: 'rcpt_to', accepted: false, message: '5.7.1 Rejected by policy' },
+  ] } })
+  assert.equal(blocked.status, 'unknown')
+  assert.match(blocked.message, /policy rejection/)
+  console.log('PASS  recipient/catch-all probes distinguished, mailbox absence explained, policy rejection stays Unknown')
 
   const originalFetch = global.fetch
   const calls = []

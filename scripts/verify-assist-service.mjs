@@ -22,6 +22,15 @@ test('truncated answers are not presented as complete; actual scan errors reach 
 test('server AI exposes configuration without exposing credentials', () => {
   assert.deepEqual(fixture().service.configuration(), { configured: true, savedOnDevice: false, mode: 'server' })
 })
+
+test('support instructions describe the real contact form and prohibit invented company contacts', async () => {
+  let sent
+  const {service}=fixture({providerFetch:async(_,request)=>{sent=JSON.parse(request.body);return Response.json({choices:[{message:{content:'Open Contact Support to message our team.'}}]})}})
+  await service.chat(row,{}, {messages:[{role:'user',content:'How can I contact your company?'}]})
+  assert.match(sent.messages[0].content,/CONTACTING MAMALEAD/)
+  assert.match(sent.messages[0].content,/Contact Support in the sidebar/)
+  assert.match(sent.messages[0].content,/Do not claim email or phone details are listed there/)
+})
 test('AI uses onboarding/trial/paid allowances from server status', async () => {
   for (const [status, limit] of [[{}, 5], [{ trial: { active: true } }, 25], [{ coreLicenseActive: true, lifetime: { active: true } }, 100], [{ decisionMaker: { active: true, status: 'paid' } }, 100]]) {
     const { service, buckets } = fixture()
