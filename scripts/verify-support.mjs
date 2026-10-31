@@ -44,6 +44,15 @@ try {
  assert.equal(userSent.status,200)
  const userRow=service.db.prepare('select message,subject from billing_support_messages where id=?').get(userSent.body.ticketId)
  assert.equal(userRow.message,userText);assert.equal(userRow.subject,'Purchase with x@y.com')
+ const credentialInstall=(await call('/v1/installations',{})).body
+ const token43='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',apiKey='sk-proj-'+token43
+ const safeMessage='Please use ali@gmail.com. My token [redacted]; API key [redacted].'
+ const credentialSent=await call('/v1/support',{...payload(998),subject:'token '+token43,message:'Please use ali@gmail.com. My token '+token43+'; API key '+apiKey+'.'},credentialInstall.token)
+ assert.equal(credentialSent.status,200)
+ const credentialRow=service.db.prepare('select message,subject from billing_support_messages where id=?').get(credentialSent.body.ticketId)
+ assert.equal(credentialRow.message,safeMessage);assert.equal(credentialRow.subject,'token [redacted]')
+ const delivered=JSON.stringify(mail.at(-1).payload)
+ assert.ok(!delivered.includes(token43)&&!delivered.includes(apiKey));assert.ok(delivered.includes('ali@gmail.com'))
  assert.throws(()=>validateSupport({...payload(),clientMessageId:'fake'}))
  const metadata=cleanMeta({app:{version:'1',token:'secret'},lastErrors:[{text:'NF-ABCD-EFGH-IJKL-MNOP-QRST-UVWX Bearer abcdefgh https://example.test/?key=secret C:\\Users\\Someone\\file.txt',at:new Date().toISOString()}],counts:{leads:3,runs:2},leadData:[1]},true)
  const text=JSON.stringify(metadata);assert.ok(!text.includes('secret'));assert.ok(!text.includes('Someone'));assert.ok(!text.includes('ABCD'));assert.ok(!text.includes('leadData'));assert.ok(!text.includes('abcdefgh'));assert.equal(cleanMeta(metadata,false).lastErrors,undefined)

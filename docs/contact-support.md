@@ -1,4 +1,4 @@
-# Contact support — MamaLead 1.4.25
+# Contact support — MamaLead 1.4.26
 
 The desktop app has one support form, reachable from the sidebar, Settings → Account, the licence lock and failed Assist answers. It works without an active licence. The form keeps a local draft, creates one ticket per send, preserves its retry identifier, and offers a mail-app fallback when the server is unavailable. Website checkout and trial forms are unchanged.
 
@@ -34,7 +34,7 @@ Without a writer or Resend configuration, tickets remain readable and replies sh
 - Only version/OS/build context, installation identity, page and licence type/status/last four are included by default.
 - Optional diagnostics contain total counts, provider name, locale/time zone and five scrubbed user-facing errors. No lead records, full keys, tokens, cookies or files are collected.
 - Draft text stays on the device until submitted and clears after success or discard. Retry state stores only a hash and UUID.
-- Subject/message text preserves deliberately entered contact emails and paths. A light scrub removes credential-shaped tokens and sensitive URL parts; automatic diagnostics still use full email/path/token redaction. Ordinary words such as “re-installed” remain readable.
+- Subject/message text preserves deliberately entered contact emails and paths. The scrubber removes credential-shaped tokens (including `sk-` / `sk-proj-` keys and standalone installation tokens) and sensitive URL parts; automatic diagnostics still use full email/path/token redaction. Ordinary words such as “re-installed” remain readable. Labelled long secrets and unlabelled mixed-case/digit tokens are redacted; the 43-character mixed-case token from QA is covered even without digits. Heuristics cannot identify every possible secret, so the form also asks users not to paste keys or passwords.
 - A conflicting request UUID returns 409 and clears the retry UUID; a new send gets a fresh identifier. Actual rate limits still return 429 with a compact, correctly pluralized wait time.
 - Installation limits: 1 message/minute, 5/hour and 20/day; reply email: 10/day; hashed IP: 30/day. Admin replies are limited to 30/hour per owner identity.
 - Authenticated request limits: 32 KB support submission, 16 KB admin action, 5,000-character message/reply. HTML is escaped in emails and rendered as text in the dashboard.
@@ -48,3 +48,28 @@ The UI tests use isolated profiles and fixture mail delivery; they do not send c
 Deploy the billing and admin changes together before publishing the desktop update. Verify a real message and reply with an authorized test mailbox after rollout. Until that deployment, the public server does not provide the new support endpoint. Local review and GitHub source updates do not publish a production release.
 
 The 31 October read-only production check confirmed systemd services running the self-hosted billing/admin entry points under `/opt/billing`, plus the authenticated writer listening only on `127.0.0.1:38749`. Current production is the SQLite deployment, not Vercel/Neon. The protected environment files were not readable by the developer account, so live Support/Resend configuration and delivery still require verification at rollout. The Vercel adapter does not yet provide admin support writes or a scheduled retry worker; do not migrate Support there without implementing those paths.
+
+## Hosting support matrix (ML-93 / ML-99)
+
+The supported deployment for the complete Support workflow is the current
+self-hosted SQLite billing/admin pair. The owner explicitly confirmed on
+31 October 2026 that MamaLead must keep using that existing server, not Vercel.
+Vercel/Neon is **read-only for the admin
+Support inbox**: list/detail/search can read existing tickets, but reply, internal
+note, status and read/unread writes require the authenticated SQLite writer and
+are unavailable without it. The dashboard reports that configuration limitation.
+
+| Capability | Self-hosted SQLite | Vercel/Neon adapter |
+| --- | --- | --- |
+| Save a customer ticket and attempt its notification | Supported | Supported |
+| Read the owner inbox | Supported | Supported |
+| Reply, note, status and read/unread writes | Authenticated loopback writer | Unavailable; read-only admin support |
+| Retry failed inbox notifications automatically | Every minute after grace period | No scheduled worker configured |
+
+The Neon path is not a complete alternative production Support deployment.
+Before any migration, implement a Neon writer with equivalent authorization and
+idempotency guarantees, plus a scheduled retry endpoint authenticated by a
+server-side secret. Do not add a cron pointing at an unimplemented route or move
+the live Support service there as part of a website-only deployment. This resolves
+ML-99 using the report's documented-hosting-limitation option; it does not claim
+that Neon writes or cron support have been implemented.

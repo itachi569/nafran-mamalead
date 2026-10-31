@@ -13,6 +13,17 @@ export function scrubSupportMessage(value) {
     .replace(/\bre_[A-Za-z0-9]{16,}\b/g,'[redacted]')
     .replace(/\bapify_api_[A-Za-z0-9]{20,}\b/g,'[redacted]')
     .replace(/\bcsk[_-][A-Za-z0-9]{20,}\b/g,'[redacted]')
+    .replace(/\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}/g,'[redacted]')
+    .replace(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{32,}(?![A-Za-z0-9_-])/g,(token,offset,text)=>{
+      // Keep intentional contact details; redact standalone credential-shaped values.
+      const before=text.slice(0,offset),after=text.slice(offset)
+      const word=(before.match(/[^\s"'<>]*$/)?.[0]||'')+(after.match(/^[^\s"'<>]*/)?.[0]||'')
+      if(/[@/\\]/.test(word))return token
+      const labelled=/\b(?:token|secret|api[ _-]?key|password|authorization)\s*(?:[:=]\s*)?["']?\s*$/i.test(before.slice(-80))
+      const mixed=/[a-z]/.test(token)&&/[A-Z]/.test(token)
+      const opaque43=token.length===43&&(token.match(/[A-Z]/g)||[]).length>=6&&(token.match(/[a-z]/g)||[]).length>=6
+      return labelled||(mixed&&(/\d/.test(token)||opaque43))?'[redacted]':token
+    })
 }
 export function scrubSupportText(value) {
   return scrubSupportMessage(value).replace(/\b[\w.+-]+@([\w.-]+\.[a-z]{2,})\b/gi,'***@$1')

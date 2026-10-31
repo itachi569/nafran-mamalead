@@ -1,4 +1,4 @@
-// ML-91..97: fixture-only tests, no external mail or database.
+// ML-91..98: fixture-only tests, no external mail or database.
 import assert from 'node:assert/strict'
 import {createRequire} from 'node:module'
 import {mkdtempSync,readFileSync,writeFileSync,existsSync} from 'node:fs'
@@ -14,6 +14,11 @@ const {buildSupportMeta}=require('../dist-electron/support-meta.js')
 const ordinary='I re-installed the app and store-locations broke. Pre-activation failed.'
 const contact=ordinary+' Please use ali@gmail.com; licence bought with x@y.com. C:\\Users\\Ali Khan\\report.txt'
 const secrets=['sk_live_'+'A'.repeat(24),'rk_test_'+'B'.repeat(24),'re_'+'C'.repeat(24),'apify_api_'+'D'.repeat(24),'csk-'+'E'.repeat(24),'NF-ABCD-EFGH-IJKL-MNOP-QRST-UVWX','Bearer '+ 'X'.repeat(32),'https://example.test/help?token=private#code']
+const token43='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ'
+const mixedToken='x7Rk2vNm8Qa4Tz9Ls5Wy3Bc6Hd0Ef1Gp2Ju8Ko4Pn6M'
+const genericSecrets=[token43,mixedToken,'_'+mixedToken.slice(1,-1)+'-','sk-proj-'+mixedToken,'sk-'+mixedToken]
+const benignLong='pneumonoultramicroscopicsilicovolcanoconiosis'
+const contactContexts=[mixedToken+'@example.test','https://example.test/'+mixedToken,'C:\\Users\\Ali Khan\\'+mixedToken+'.txt','/home/ali/'+mixedToken+'.csv',benignLong,'SupportInstallationTroubleshootingInstructions']
 for(const implementation of [desktop,server]){
  assert.equal(implementation.scrubSupportMessage(contact),contact)
  assert.equal(implementation.scrubSupportText(ordinary),ordinary)
@@ -21,10 +26,20 @@ for(const implementation of [desktop,server]){
  const diagnostics=implementation.scrubSupportText(contact)
  assert.ok(!diagnostics.includes('ali@gmail.com')&&!diagnostics.includes('Ali Khan'))
  assert.match(diagnostics,/re-installed/)
+ for(const secret of genericSecrets){
+  assert.equal(implementation.scrubSupportMessage('my token '+secret),'my token [redacted]')
+  assert.equal(implementation.scrubSupportMessage('Value: '+secret),'Value: [redacted]')
+ }
+ assert.equal(implementation.scrubSupportMessage('token="'+benignLong+'"'),'token="[redacted]"')
+ for(const text of contactContexts)assert.equal(implementation.scrubSupportMessage(text),text)
+ assert.equal(implementation.scrubSupportMessage('Use '+mixedToken+'@example.test; token '+token43),'Use '+mixedToken+'@example.test; token [redacted]')
 }
 const value=server.validateSupport({clientMessageId:randomUUID(),name:'',email:'reply@example.test',category:'licence',subject:'Purchase with x@y.com',message:contact+' '+secrets.join(' '),page:'settings:acct',diagnostics:false})
 assert.equal(value.subject,'Purchase with x@y.com');assert.ok(value.message.startsWith(contact))
 for(const key of secrets.slice(0,7))assert.ok(!value.message.includes(key))
+const tokenPayload=server.validateSupport({clientMessageId:randomUUID(),name:'',email:'reply@example.test',category:'bug',subject:'my token '+token43,message:'Please check '+genericSecrets.join(' '),page:'settings:acct',diagnostics:false})
+assert.equal(tokenPayload.subject,'my token [redacted]')
+for(const token of genericSecrets)assert.ok(!tokenPayload.message.includes(token))
 const meta=buildSupportMeta({app:{version:'1.4.25'},diagnostics:true,lastErrors:[{at:new Date().toISOString(),text:contact}],counts:{leads:0,runs:0}})
 assert.ok(!JSON.stringify(meta).includes('ali@gmail.com'))
 assert.equal(desktop.formatSupportWait(1),'1 second')
@@ -48,4 +63,4 @@ sql.transaction=async(_queries,options)=>{assert.equal(options.isolationLevel,'R
 const neon=createNeonSupportStore(sql),row={id:'ML-S-NEON01',client_message_id:randomUUID(),installation_id:'test-installation',message_hash:'fixture-hash',email:'a@example.test',meta:{},created_at:new Date().toISOString()}
 await assert.rejects(neon.reserveSupportMessage(row),e=>e.status===409&&!e.retryAfterSeconds)
 limited=true;assert.ok((await neon.reserveSupportMessage(row)).retryAfterSeconds>0)
-console.log('PASS ML-91/92 scrubbers, metadata isolation, ML-94 cooldown, ML-96 Neon conflict and ML-97 persistent contact config')
+console.log('PASS ML-91/92/98 scrubbers and secret-safe contact details, metadata isolation, ML-94 cooldown, ML-96 Neon conflict and ML-97 persistent contact config')

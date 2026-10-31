@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),{mkdtempSync,mkdirSync}=require('node:fs'),{tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{_electron}=require('playwright')
 async function main(){
- const out=resolve('screenshots/support-1.4.25');mkdirSync(out,{recursive:true})
+ const out=resolve('screenshots/support-'+require('../package.json').version);mkdirSync(out,{recursive:true})
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
  const packaged=process.argv.includes('--packaged'),profile=mkdtempSync(join(tmpdir(),'mamalead-support-ui-'))
  const options={...(packaged?{executablePath:process.env.MAMALEAD_TEST_EXE}:{cwd:process.cwd()}),args:[...(packaged?[]:['.']),'--user-data-dir='+profile],env,timeout:60000}
@@ -22,7 +22,9 @@ async function main(){
   let dialog=page.getByRole('dialog',{name:'How can we help?'})
   await dialog.getByLabel('Reply email').fill('review@example.test');await dialog.getByLabel('What is this about?').selectOption('bug')
   assert.equal(await dialog.getByLabel('Attach diagnostics').isChecked(),true)
-  await dialog.getByLabel('Message',{exact:true}).fill('The support form should keep this draft after restarting.')
+  const token43='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',apiKey='sk-proj-'+token43
+  await dialog.getByLabel(/^Subject/).fill('token '+token43)
+  await dialog.getByLabel('Message',{exact:true}).fill('The support form should keep this draft after restarting. Email ali@gmail.com; token '+token43+'; API key '+apiKey+'.')
   await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0)
   await app.close();app=await _electron.launch(options);page=await setup(true)
   assert.equal(await page.evaluate(async()=>(await window.desktop.support.status()).email),'support@example.test')
@@ -33,6 +35,8 @@ async function main(){
   await dialog.getByRole('button',{name:'Send message',exact:false}).click();await dialog.getByRole('button',{name:'Retry message'}).waitFor()
   await dialog.getByRole('button',{name:'Copy message & open email'}).waitFor();assert.ok(await page.evaluate(()=>localStorage.getItem('mamalead.supportDraft.v1')))
   const first=await app.evaluate(()=>__support.payloads.at(-1));assert.equal(first.meta.app.isPackaged,packaged);assert.equal(first.meta.license.last4,null);assert.ok(first.meta.counts);assert.equal(first.meta.counts.runs,0);assert.equal(first.meta.counts.leads,0)
+  assert.equal(first.subject,'token [redacted]');assert.ok(first.message.includes('ali@gmail.com'))
+  assert.ok(!first.message.includes(token43)&&!first.message.includes(apiKey),'desktop must redact tokens before transport')
   await app.evaluate(()=>{__support.mode='cancel'});await dialog.getByRole('button',{name:'Retry message'}).click();await dialog.getByRole('button',{name:'Cancel send'}).waitFor();await dialog.getByRole('button',{name:'Cancel send'}).click()
   await page.getByRole('complementary').getByRole('button',{name:'Contact support',exact:true}).click();dialog=page.getByRole('dialog',{name:'How can we help?'})
   await app.evaluate(()=>{__support.mode='conflict'})
