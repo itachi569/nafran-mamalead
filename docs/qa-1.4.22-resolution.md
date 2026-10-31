@@ -34,7 +34,7 @@ Input: `MamaLead-All-Bugs-v1.4.21.md`, 31 October 2026. The report contains 12 a
 - Existing core suites: database, auto-update state, Assist navigation/service, validity reliability, main-email selection, social profiles, contact crawl, Maps limits/browser/website filtering, exports, packaging and update metadata.
 - Desktop regression suites: notifications, validity controls/filters, 2,000 leads, import counts, saved Maps searches and Website Lookup.
 - Social batch regression: 50 sites, out-of-order completion, partial failure, timeout and cancellation (8 checks).
-- Billing integration: 132 checks with fake Stripe and email transport, including the new browser-to-desktop flow.
+- Billing integration: 135 checks with fake Stripe and email transport, including direct website-to-Stripe checkout, Stripe-collected email, duplicate-payment protection and the browser-to-desktop flow.
 - Website: 1440, 768, 390 and 375 px; support/Terms, mobile menu/tap targets, text, overflow, trial dialog and checkout recovery. Download GET/HEAD behavior is covered by the billing suite.
 
 Screenshots and machine-readable artifacts are regenerated under ignored `screenshots/qa-1.4.22/`. Tests use isolated temporary profiles, fixture services and synthetic contacts. The previously reported public-site reproductions are in `screenshots/qa-1.4.21/live-websites.json`.

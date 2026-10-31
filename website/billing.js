@@ -45,8 +45,8 @@
       if (data.emailSent !== true) throw new Error('Email delivery has not been confirmed. Please try again.');
       return data;
     },
-    async checkout(email) {
-      const data = await request('/v1/checkout', {product:'lifetime',email,channel:'website'}, await identity());
+    async checkout() {
+      const data = await request('/v1/checkout', {product:'lifetime',channel:'website'}, await identity());
       if (!/^https:\/\/checkout\.stripe\.com\//.test(data.url || '')) throw new Error('Secure Checkout could not be opened.');
       return data.url;
     }

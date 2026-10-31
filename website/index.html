@@ -166,7 +166,7 @@
   <sc-if value="{{ checkoutNotice }}" hint-placeholder-val="{{ false }}">
     <aside role="status" aria-live="polite" style="position:fixed;top:78px;right:20px;left:20px;margin:auto;max-width:620px;z-index:100;padding:20px;border-radius:20px;background:#FFFFFF;color:#1C1C1C;box-shadow:0 15px 60px #0003;">
       <p style="margin:0 0 12px;">{{ checkoutNotice }}</p>
-      <button type="button" onClick="{{ retryBilling }}" style="min-height:44px;padding:8px 18px;border-radius:24px;background:#1C1C1C;color:white;border:0;cursor:pointer;">Check status</button>
+      <button type="button" onClick="{{ retryBilling }}" disabled="{{ checkoutBusy }}" style="min-height:44px;padding:8px 18px;border-radius:24px;background:#1C1C1C;color:white;border:0;cursor:pointer;">{{ checkoutNoticeAction }}</button>
       <button type="button" aria-label="Dismiss checkout message" onClick="{{ dismissCheckoutNotice }}" style="min-height:44px;margin-left:10px;padding:8px 16px;border:0;border-radius:24px;cursor:pointer;">Close</button>
     </aside>
   </sc-if>
@@ -242,7 +242,7 @@
         </sc-if>
         <sc-if value="{{ trialSent }}" hint-placeholder-val="{{ false }}">
           <span aria-hidden="true" style="display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #C8D5BB;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#1C1C1C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
-          <h2 id="trial-title" style="margin: 16px 0 0; font-size: 28px; line-height: 1.1; letter-spacing: -.035em; font-weight: 700; text-wrap: pretty;">Your license key has been emailed to you</h2>
+          <h2 id="trial-title" role="status" aria-live="polite" style="margin: 16px 0 0; font-size: 28px; line-height: 1.1; letter-spacing: -.035em; font-weight: 700; text-wrap: pretty;">Your license key has been emailed to you</h2>
           <p style="margin: 10px 0 0; font-size: 15px; line-height: 1.55; color: #42473F; overflow-wrap: anywhere;">We sent your 1-day trial license key to <strong style="color: #1C1C1C;">{{ trialEmail }}</strong>. Download the app, paste the key and continue your work.</p>
           <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="margin: 22px 0 0; display: flex; align-items: center; justify-content: center; gap: 10px; height: 54px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF; font-size: 15.5px; font-weight: 700; text-decoration: none;" style-hover="background: #34502F;">Download for Windows<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#C8D5BB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"></path><path d="M7 11l5 5 5-5"></path><path d="M5 19.5h14"></path></svg></a>
           <ol style="margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px;">
@@ -276,7 +276,7 @@
         <a href="#pricing" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">Pricing</a>
         <a href="#faq" style="padding: 7px 14px; border-radius: 999px; font-size: 13px; color: #42473F; white-space: nowrap; transition: background .25s ease;" style-hover="background: #FFFFFF; color: #1C1C1C;">FAQ</a>
       </nav>
-      <a class="desktop-pricing" href="#pricing" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #B8281F; color: #FFFFFF; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 22px -12px rgba(184,40,31,.8); transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF; background: #9C2019;">Lifetime · 50% off</a>
+      <a class="desktop-pricing" href="#pricing" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" style="flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px; padding: 9px 17px; border-radius: 999px; background: #B8281F; color: #FFFFFF; font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 22px -12px rgba(184,40,31,.8); transition: transform .3s cubic-bezier(.16,1,.3,1);" style-hover="transform: translateY(-1px); color: #FFFFFF; background: #9C2019;">Lifetime · 50% off</a>
       <a class="mobile-download" href="#download">Download</a>
       <button class="mobile-menu-button" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>
@@ -1175,11 +1175,15 @@ class Component extends DCLogic {
 
   async restoreBilling() {
     const returning = new URLSearchParams(location.search).get('checkout') === 'success';
-    if (returning) this.setState({ checkoutNotice: 'Checking your payment and email delivery…' });
+    if (returning) this.setState({ checkoutNotice: 'Checking your payment and email delivery…', checkoutRetry: false });
     try {
       for (let attempt = 0; attempt < (returning ? 5 : 1); attempt++) {
         const status = await window.MamaLeadBilling.status();
         if (!this._mounted) return;
+        if (returning && status?.purchaseError) {
+          this.setState({paid:false,paidUser:false,checkoutNotice:status.purchaseError,checkoutRetry:false});
+          return;
+        }
         const paid = !!(status?.lifetime?.active && status?.purchaseEmail);
         this.setState({ paidUser: paid, ...(paid && returning ? {paid:true, checkoutNotice:''} : {}),
           ...(status?.trialRequest?.emailSent ? {trialEmail:status.trialRequest.email, trialDone:true, trialCanChange:status.trialRequest.canChangeEmail} : {}) });
@@ -1191,20 +1195,19 @@ class Component extends DCLogic {
   }
 
   async checkout(e) {
-    e.preventDefault();
+    e?.preventDefault();
     if (this._checkoutBusy) return;
-    const email = (this.state.lifetimeEmail || '').trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return this.setState({trialError:'Enter a valid email address.'});
     this._checkoutBusy = true;
-    this.setState({checkoutBusy:true,trialError:''});
-    try { location.assign(await window.MamaLeadBilling.checkout(email)); }
-    catch (error) { this.setState({checkoutBusy:false,trialError:error.message}); }
+    this.closeTrial();
+    this.setState({checkoutBusy:true,checkoutRetry:false,checkoutNotice:'Opening secure Stripe Checkout…'});
+    try { location.assign(await window.MamaLeadBilling.checkout()); }
+    catch (error) { this.setState({checkoutBusy:false,checkoutRetry:true,checkoutNotice:error.message || 'Checkout could not be opened. Please try again.'}); }
     finally { this._checkoutBusy = false; }
   }
 
   openTrial(mode) {
     this._returnFocus = document.activeElement;
-    this.setState((s) => ({ trial: mode, trialFrom: mode, trialStep: mode === 'choose' ? 'choose' : mode === 'lifetime' ? 'form' : (s.trialDone ? 'sent' : 'form'), trialError: '' }));
+    this.setState((s) => ({ trial: mode, trialFrom: mode, trialStep: mode === 'choose' ? 'choose' : (s.trialDone ? 'sent' : 'form'), trialError: '' }));
     document.documentElement.style.overflow = 'hidden';
     setTimeout(() => document.querySelector('[aria-labelledby="trial-title"] button')?.focus(), 80);
   }
@@ -1313,11 +1316,12 @@ class Component extends DCLogic {
       modules, cur, faqs,
       checkoutBusy: !!this.state.checkoutBusy,
       checkoutNotice: this.state.checkoutNotice || '',
-      onLifetimeCheckout: (e) => { e.preventDefault(); this.openTrial('lifetime'); },
-      retryBilling: () => this.restoreBilling(),
+      onLifetimeCheckout: (e) => this.checkout(e),
+      checkoutNoticeAction: this.state.checkoutBusy ? 'Opening Stripe…' : this.state.checkoutRetry ? 'Try again' : 'Check status',
+      retryBilling: () => this.state.checkoutRetry ? this.checkout() : this.restoreBilling(),
       dismissCheckoutNotice: () => this.setState({checkoutNotice:''}),
       trialCanChange: this.state.trialCanChange !== false,
-      trialPolicy: this.state.trial === 'lifetime' ? 'One Lifetime key per email. Pay once: Rs 10,000 PKR. Use the key on up to two machines.' : 'One trial per email and one machine. Runs 24 hours from activation.',
+      trialPolicy: 'One trial per email and one machine. Runs 24 hours from activation.',
       showModal: open,
       showTrial: !!this.state.trial,
       trialChoose: this.state.trialStep === 'choose',
@@ -1326,19 +1330,19 @@ class Component extends DCLogic {
       trialBack: () => this.setState({ trial: 'choose', trialStep: 'choose', trialError: '' }),
       trialForm: this.state.trialStep === 'form',
       trialSent: this.state.trialStep === 'sent',
-      trialEyebrow: this.state.trial === 'lifetime' ? 'LIFETIME ACCESS · RS 10,000' : this.state.trial === 'required' ? 'BEFORE YOU DOWNLOAD' : 'FREE 1-DAY TRIAL',
-      trialTitle: this.state.trial === 'lifetime' ? 'Get Lifetime access' : this.state.trial === 'required' ? 'Enter your email first' : 'Get your free 1-day trial',
-      trialLead: this.state.trial === 'lifetime' ? 'Enter the email for your Lifetime key. We check it before opening secure Stripe Checkout.' : this.state.trial === 'required'
+      trialEyebrow: this.state.trial === 'required' ? 'BEFORE YOU DOWNLOAD' : 'FREE 1-DAY TRIAL',
+      trialTitle: this.state.trial === 'required' ? 'Enter your email first' : 'Get your free 1-day trial',
+      trialLead: this.state.trial === 'required'
         ? 'Your 1-day trial license key is sent by email. Enter your email, then download MamaLead.'
         : "Enter your email and we'll send your trial license key. Then download MamaLead and start.",
-      trialEmail: this.state.trial === 'lifetime' ? (this.state.lifetimeEmail || '') : this.state.trialEmail,
+      trialEmail: this.state.trialEmail,
       trialError: this.state.trialError,
-      trialSending: this.state.trialSending || this.state.checkoutBusy,
-      trialCta: this.state.trial === 'lifetime' ? (this.state.checkoutBusy ? 'Checking email…' : 'Continue to secure payment') : this.state.trialSending ? 'Sending…' : 'Send my trial key',
+      trialSending: this.state.trialSending,
+      trialCta: this.state.trialSending ? 'Sending…' : 'Send my trial key',
       inputBorder: this.state.trialError ? '#A23B2A' : 'rgba(28,28,28,.14)',
       emailRef: this.emailRef,
-      onTrialEmail: (e) => this.setState({ [this.state.trial === 'lifetime' ? 'lifetimeEmail' : 'trialEmail']: e.target.value, trialError: '' }),
-      onTrialSubmit: (e) => this.state.trial === 'lifetime' ? this.checkout(e) : this.submitTrial(e),
+      onTrialEmail: (e) => this.setState({ trialEmail: e.target.value, trialError: '' }),
+      onTrialSubmit: (e) => this.submitTrial(e),
       closeTrial: () => this.closeTrial(),
       onTrialOverlay: (e) => { if (e.target === e.currentTarget) this.closeTrial(); },
       changeTrialEmail: () => {

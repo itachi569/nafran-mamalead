@@ -10,7 +10,7 @@ The owner explicitly selected replacement of the current website and asked that 
 1. Free trial scrolls to Downloads and opens the email popup. A browser installation identity is created and persisted before requesting a trial.
 2. The existing billing service sends the trial key. The sent state appears only after confirmed delivery. Failed delivery stays on the form. Refresh recovers the server-confirmed status without sending another key.
 3. Before activation, the email can be corrected through the existing replacement-key API. A used trial cannot restart by changing email or browser identity on the same device.
-4. Lifetime first asks for the buyer's email in the supplied popup style. The server rejects an existing Lifetime email before opening Stripe Checkout for Rs 10,000 PKR; Stripe receives the checked email. The browser never receives a Stripe secret or license key.
+4. Every Lifetime purchase button opens Stripe Checkout directly for Rs 10,000 PKR. The website has no Lifetime email form; Stripe collects the buyer's email. The existing billing service enforces one Lifetime key per normalized email when reconciling the verified payment. A duplicate payment is refunded through the existing protection and the website displays the server's notice instead of a success banner. The browser never receives a Stripe secret or license key.
 5. Checkout returns to the website. Authenticated status reconciles Stripe's payment, checks the purchase, and emails the key. Query parameters or local flags alone cannot show payment success. Undelivered paid keys can be retried through status reconciliation.
 6. After confirmed email delivery, the popup offers the Windows download. The first launch of a new desktop profile opens Settings & Billing → Account for activation. Existing profiles retain their usual start screen.
 7. The browser purchase does not consume either of the two desktop Lifetime activation slots. The trial clock starts on desktop activation.
@@ -26,8 +26,8 @@ The owner explicitly selected replacement of the current website and asked that 
 
 ## Verification
 
-- `node scripts/verify-billing-server.mjs`: 132 checks, including website trial delivery, correction/activation rules, Rs 10,000 checkout, unpaid returns, delivery retry, idempotence and both desktop activation slots.
-- `node scripts/verify-website-billing.mjs`: real page UI with an intercepted API; failed delivery, retry, correction, refresh recovery, download choices, forged return rejection and verified checkout handoff.
+- `node scripts/verify-billing-server.mjs`: 135 checks, including website trial delivery, correction/activation rules, direct Rs 10,000 checkout with Stripe-collected email, session reuse, duplicate-payment protection, unpaid returns, delivery retry, idempotence and both desktop activation slots.
+- `node scripts/verify-website-billing.mjs`: real page UI with an intercepted API; all Lifetime buttons navigate directly to Stripe, double clicks and retry, trial delivery/correction/duplicate notices, refresh recovery, download choices, forged/duplicate return rejection and verified checkout handoff.
 - `node scripts/verify-qa-website.mjs`: desktop, tablet and mobile layouts, navigation, Terms/support links, trial popup, readable mobile text, overflow, resources and renderer errors.
 - `node scripts/verify-qa-1.4.22-ui.cjs --packaged`: new-profile Account landing plus existing activation and app regression scenarios.
 

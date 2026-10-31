@@ -14,19 +14,19 @@ try {
  browser=await chromium.launch({headless:true})
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
  const errors=[];page.on('pageerror',e=>errors.push(e.message))
- let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0
+ let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null
  await page.route('https://api.mamalead.com/**',async route=>{
   const req=route.request(), path=new URL(req.url()).pathname, body=req.postDataJSON()
   if(path==='/v1/installations'){registrations++;return route.fulfill({json:{token:'t'.repeat(43)}})}
   assert.equal(req.headers().authorization,'Bearer '+'t'.repeat(43))
-  if(path==='/v1/status')return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?'paid@example.test':null,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})
+  if(path==='/v1/status')return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?'paid@example.test':null,purchaseError,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})
   if(path==='/v1/trial'){
    trialCalls++
    if(failDelivery)return route.fulfill({status:503,json:{error:'Email delivery is unavailable. Please retry.'}})
    if(trialEmail)assert.equal(body.replaceExisting,true)
    trialEmail=body.email;return route.fulfill({json:{emailSent:true}})
   }
-  if(path==='/v1/checkout'){checkoutCalls++;assert.equal(body.product,'lifetime');assert.equal(body.channel,'website');if(body.email==='already@example.test')return route.fulfill({status:409,json:{error:'This email is already used for Lifetime access. Use the key already emailed to you.'}});assert.equal(body.email,'paid@example.test');return route.fulfill({json:{url:'https://checkout.stripe.com/c/pay/website_fixture'}})}
+  if(path==='/v1/checkout'){checkoutCalls++;assert.deepEqual(body,{product:'lifetime',channel:'website'});assert.equal(await page.locator('#trial-email').count(),0,'Lifetime must not open a website email form');if(failCheckout)return route.fulfill({status:503,json:{error:'Secure checkout is temporarily unavailable. Please retry.'}});return route.fulfill({json:{url:'https://checkout.stripe.com/c/pay/website_fixture'}})}
   throw new Error('Unexpected request '+path)
  })
  await page.goto(base,{waitUntil:'networkidle'})
@@ -65,17 +65,33 @@ try {
  await page.goto(base+'/?checkout=success&session_id=forged',{waitUntil:'networkidle'})
  assert.equal(await page.getByText('Payment successful',{exact:true}).count(),0,'query string must not grant access')
  await page.getByRole('button',{name:'Dismiss checkout message'}).click()
- const navigation=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
+ await page.goto(base,{waitUntil:'networkidle'})
  await page.route('https://checkout.stripe.com/**',route=>route.fulfill({body:'Fixture secure checkout'}))
+ failCheckout=true
  await page.locator('.hero-buy').click()
- await dialog.getByText('Get Lifetime access',{exact:true}).waitFor()
- await page.locator('#trial-email').fill('already@example.test')
- await dialog.getByRole('button',{name:'Continue to secure payment'}).click()
- await dialog.getByRole('alert').filter({hasText:'This email is already used'}).waitFor()
- await page.screenshot({path:out+'/duplicate-lifetime-email.png'})
- await page.locator('#trial-email').fill('paid@example.test')
- await dialog.getByRole('button',{name:'Continue to secure payment'}).click();await navigation
+ await page.getByText('Secure checkout is temporarily unavailable. Please retry.',{exact:true}).waitFor()
+ assert.equal(await dialog.count(),0)
+ failCheckout=false
+ const navigation=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
+ await page.getByRole('button',{name:'Try again',exact:true}).click();await navigation
  assert.equal(checkoutCalls,2)
+ for(const selector of ['.hero-buy','.desktop-pricing','.pricing-lifetime .pricing-action','#top a:has-text("Buy now")','download-choice']){
+  await page.goto(base,{waitUntil:'networkidle'})
+  let cta
+  if(selector==='download-choice'){
+   await page.locator('#download a').filter({hasText:'Download for Windows'}).first().click()
+   await dialog.getByText('How do you want to start?',{exact:true}).waitFor()
+   cta=dialog.getByRole('link',{name:/Claim lifetime access/})
+  }else cta=page.locator(selector)
+  const before=checkoutCalls,next=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
+  await cta.evaluate(el=>{el.click();el.click()});await next
+  assert.equal(checkoutCalls,before+1,'double click creates one checkout request: '+selector)
+ }
+ purchaseError='This email already has a lifetime account. The duplicate payment was refunded; use the original license key.'
+ await page.goto(base+'/?checkout=success&session_id=duplicate',{waitUntil:'networkidle'})
+ await page.getByText(purchaseError,{exact:true}).waitFor()
+ assert.equal(await page.getByText('Payment successful',{exact:true}).count(),0)
+ purchaseError=null
  paid=true
  await page.goto(base+'/?checkout=success&session_id=verified',{waitUntil:'networkidle'})
  await page.getByText('Payment successful',{exact:true}).waitFor()
@@ -85,5 +101,5 @@ try {
  await page.getByRole('button',{name:'Close',exact:true}).click()
  assert.equal(new URL(page.url()).search,'')
  assert.deepEqual(errors,[])
- console.log('PASS website trial validation, failed delivery, correction, refresh recovery, download choices, forged return rejection and verified Stripe handoff; no real payments or email')
+ console.log('PASS direct Stripe from all Lifetime buttons, retry/double-click protection, trial email/download/duplicate notice, forged and duplicate return rejection and verified payment; no real payments or email')
 }finally{await browser?.close();child.kill()}

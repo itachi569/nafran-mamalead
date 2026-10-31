@@ -18,6 +18,7 @@ const sessions = new Map()
 const customers = new Map()
 const subscriptions = new Map()
 const emails = []
+const refunds = []
 let chargeRefunded = false
 let failNextLicenseEmail = false
 const fakeStripe = async (raw, request) => {
@@ -27,6 +28,7 @@ const fakeStripe = async (raw, request) => {
   let result
   if (path.endsWith('/prices/price_lifetime')) result = { active: true, currency: 'pkr', unit_amount: 1000000, recurring: null }
   else if (path.endsWith('/prices/price_decision')) result = { active: true, currency: 'pkr', unit_amount: 100000, recurring: { interval: 'month' } }
+  else if (path.endsWith('/refunds') && request.method === 'POST') { refunds.push(Object.fromEntries(body)); result = {id:'re_fixture'+refunds.length,status:'succeeded'} }
   else if (path.endsWith('/customers') && request.method === 'POST') {
     const id = `cus_mock${customers.size + 1}`
     customers.set(id, body.get('email'))
@@ -374,16 +376,25 @@ try {
     const forbidden = await fetch(liveBase + '/v1/checkout', { method: 'POST', headers: { authorization: `Bearer ${liveToken}`, 'content-type': 'application/json' }, body: JSON.stringify({ product: 'lifetime' }) })
     check('live Checkout refuses a local HTTP return URL', forbidden.status === 503)
     const websiteToken = (await call('/v1/installations', null, 'POST')).body.token
-  const webCheckout = await call('/v1/checkout', websiteToken, 'POST', {product:'lifetime',channel:'website',email:'website@example.test'})
+  const webCheckout = await call('/v1/checkout', websiteToken, 'POST', {product:'lifetime',channel:'website'})
   const webSession = sessions.get(webCheckout.body.url?.split('/').at(-1))
-  check('website Lifetime checkout uses the checked email and returns to the website', webCheckout.status === 200 && webSession.metadata.checkoutFlow === 'website' && webSession.success_url.startsWith('https://mamalead.com/?checkout=success') && webSession.cancel_url === 'https://mamalead.com/?checkout=cancelled#pricing')
+  check('website Lifetime checkout collects email on Stripe and returns to the website', webCheckout.status === 200 && !webSession.customer_details.email && webSession.metadata.checkoutFlow === 'website' && webSession.success_url.startsWith('https://mamalead.com/?checkout=success') && webSession.cancel_url === 'https://mamalead.com/?checkout=cancelled#pricing')
+  check('direct website checkout reuses an open session', (await call('/v1/checkout',websiteToken,'POST',{product:'lifetime',channel:'website'})).body.url===webCheckout.body.url)
   check('website unpaid checkout cannot claim success', !(await call('/v1/status',websiteToken)).body.lifetime.active)
-  Object.assign(webSession,{status:'complete',payment_status:'paid',customer_details:{email:'website@example.test'}})
+  Object.assign(webSession,{status:'complete',payment_status:'paid',customer:'cus_website',customer_details:{email:'website@example.test'}})
   const webPaid = await call('/v1/status',websiteToken)
   check('verified website payment emails a key before reporting delivery', webPaid.status === 200 && webPaid.body.lifetime.active && webPaid.body.purchaseEmail === 'website@example.test' && emails.at(-1).to === 'website@example.test')
   const webKey = emails.at(-1).licenseKey, emailCount = emails.length
   await call('/v1/status',websiteToken)
   check('repeat website status is idempotent', emails.length === emailCount)
+  const repeatWebToken=(await call('/v1/installations',null,'POST')).body.token
+  const repeatWebCheckout=await call('/v1/checkout',repeatWebToken,'POST',{product:'lifetime',channel:'website'})
+  const repeatWebSession=sessions.get(repeatWebCheckout.body.url.split('/').at(-1))
+  Object.assign(repeatWebSession,{status:'complete',payment_status:'paid',customer:'cus_repeat_website',customer_details:{email:' WEBSITE@EXAMPLE.TEST '}})
+  const beforeRefunds=refunds.length,repeatWebStatus=await call('/v1/status',repeatWebToken)
+  check('Stripe-entered duplicate email is refunded without issuing another Lifetime key',repeatWebStatus.status===200 && !repeatWebStatus.body.lifetime.active && /duplicate payment was refunded/.test(repeatWebStatus.body.purchaseError) && emails.length===emailCount && refunds.length===beforeRefunds+1)
+  await call('/v1/status',repeatWebToken)
+  check('duplicate website return is idempotent',refunds.length===beforeRefunds+1 && emails.length===emailCount)
   for (const device of ['c'.repeat(64),'d'.repeat(64)]) {
     const installation=(await call('/v1/installations',null,'POST')).body.token
     const result=await call('/v1/activate',installation,'POST',{licenseKey:webKey},device)
