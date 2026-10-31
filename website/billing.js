@@ -39,6 +39,12 @@
     return pending;
   }
   async function status() { return token ? request('/v1/status', undefined, token) : null; }
+  // Warm only the browser identity on purchase intent. Stripe sessions are still
+  // created only after a click; hovering never sends email or starts a payment.
+  const prepareCheckout = event => {
+    if (event.target?.closest?.('[data-lifetime-checkout]')) identity().catch(() => {});
+  };
+  for (const type of ['pointerover', 'focusin', 'touchstart']) document.addEventListener(type, prepareCheckout, {passive:true});
   window.MamaLeadBilling = {
     status,
     async support(input) {

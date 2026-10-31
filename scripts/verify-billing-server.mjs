@@ -19,11 +19,13 @@ const customers = new Map()
 const subscriptions = new Map()
 const emails = []
 const refunds = []
+const stripeRequests = []
 let chargeRefunded = false
 let failNextLicenseEmail = false
 const fakeStripe = async (raw, request) => {
   const url = new URL(raw)
   const path = url.pathname
+  stripeRequests.push(path)
   const body = request.body ? new URLSearchParams(request.body) : null
   let result
   if (path.endsWith('/prices/price_lifetime')) result = { active: true, currency: 'pkr', unit_amount: 1000000, recurring: null }
@@ -46,6 +48,7 @@ const fakeStripe = async (raw, request) => {
     result = { data: [{ price: path.includes('decision') || path.includes('standalone') ? { currency: 'pkr', unit_amount: 100000, recurring: null } : { id: 'price_lifetime' }, quantity: 1 }] }
   } else if (/\/checkout\/sessions\/cs_test_\w+$/.test(path)) {
     result = sessions.get(path.split('/').at(-1))
+    if (result && url.searchParams.getAll('expand[]').includes('line_items')) result = {...result, line_items:{data:[{price:{id:'price_lifetime'},quantity:1}]}}
     if (result && url.searchParams.getAll('expand[]').includes('payment_intent.payment_method')) result = { ...result, payment_intent: { payment_method: { customer: result.customer, type: 'card', card: {brand:'visa',last4:'4242',exp_month:8,exp_year:2029,fingerprint:'private-fixture'}, billing_details:{name:'Review User'} }, client_secret:'private-fixture' } }
   }
   else if (path.endsWith('/payment_intents/pi_mock')) result = { status: 'succeeded', latest_charge: 'ch_mock' }
@@ -388,7 +391,9 @@ try {
   const webCheckout = await call('/v1/checkout', websiteToken, 'POST', {product:'lifetime',channel:'website'})
   const webSession = sessions.get(webCheckout.body.url?.split('/').at(-1))
   check('website Lifetime checkout collects email on Stripe and returns to the website', webCheckout.status === 200 && !webSession.customer_details.email && webSession.metadata.checkoutFlow === 'website' && webSession.success_url.startsWith('https://mamalead.com/?checkout=success') && webSession.cancel_url === 'https://mamalead.com/?checkout=cancelled#pricing')
+  const beforeReopen = stripeRequests.length
   check('direct website checkout reuses an open session', (await call('/v1/checkout',websiteToken,'POST',{product:'lifetime',channel:'website'})).body.url===webCheckout.body.url)
+  check('reopening checkout retrieves its current session only once with expanded items', JSON.stringify(stripeRequests.slice(beforeReopen))===JSON.stringify(['/v1/checkout/sessions/'+webSession.id]))
   check('website unpaid checkout cannot claim success', !(await call('/v1/status',websiteToken)).body.lifetime.active)
   Object.assign(webSession,{status:'complete',payment_status:'paid',customer:'cus_website',customer_details:{email:'website@example.test'}})
   const webPaid = await call('/v1/status',websiteToken)

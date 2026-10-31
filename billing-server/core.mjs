@@ -108,10 +108,21 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     return row
   }
 
+  // Cache only catalogue prices, never payment status, refunds or licence access.
+  const priceCache = new Map(), pendingPrices = new Map()
   async function price(id) {
-    const item = await stripe(`prices/${encodeURIComponent(id)}`)
-    if (!item.active || item.currency !== 'pkr') throw new HttpError(502, 'The configured Stripe Price is not active in PKR.')
-    return { amount: item.unit_amount, currency: item.currency, interval: item.recurring?.interval ?? null }
+    const cached = priceCache.get(id)
+    if (cached?.expiresAt > Date.now()) return cached.value
+    if (pendingPrices.has(id)) return pendingPrices.get(id)
+    const pending = (async () => {
+      const item = await stripe(`prices/${encodeURIComponent(id)}`)
+      if (!item.active || item.currency !== 'pkr') throw new HttpError(502, 'The configured Stripe Price is not active in PKR.')
+      const value = { amount: item.unit_amount, currency: item.currency, interval: item.recurring?.interval ?? null }
+      priceCache.set(id, {value, expiresAt: Date.now() + 60_000})
+      return value
+    })()
+    pendingPrices.set(id, pending)
+    try { return await pending } finally { pendingPrices.delete(id) }
   }
 
   async function verifiedCheckoutCharge(session, installationId) {
@@ -166,10 +177,11 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     return { key: `included:${license.id}:${new Date(activated).toISOString()}`, renewsAt: new Date(ends).toISOString(), source: 'included' }
   }
 
-  async function verifiedStatus(row) {
+  async function verifiedStatus(row, checkoutSessions) {
     for (const sessionId of [row.pending_lifetime_session_id, row.pending_decision_session_id]) {
       if (!sessionId) continue
-      const pending = await stripe(`checkout/sessions/${encodeURIComponent(sessionId)}`)
+      const pending = await stripe(`checkout/sessions/${encodeURIComponent(sessionId)}${checkoutSessions ? '?expand[]=line_items' : ''}`)
+      checkoutSessions?.set(sessionId, pending)
       if (pending.status === 'complete' && pending.payment_status === 'paid') {
         const purchase = await reconcile(sessionId)
         if (purchase.product === 'lifetime' && !purchase.duplicate && ['desktop', 'website'].includes(pending.metadata?.checkoutFlow)) await issueLicense(purchase)
@@ -753,13 +765,14 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
           if (product !== 'lifetime') throw new HttpError(400, 'Only the Rs 10,000 PKR Lifetime Deal is available.')
           const email = String(rawEmail ?? '').trim().toLowerCase()
           if (!email) {
-            const current = await verifiedStatus(row)
+            const checkoutSessions = new Map()
+            const current = await verifiedStatus(row, checkoutSessions)
             if (current.lifetime.active) throw new HttpError(409, 'The Lifetime Deal is already purchased for this installation.')
             const fresh = await store.byId(row.id)
             if (fresh.pending_lifetime_session_id) {
-              const pending = await stripe(`checkout/sessions/${encodeURIComponent(fresh.pending_lifetime_session_id)}`)
+              const pending = checkoutSessions.get(fresh.pending_lifetime_session_id) ?? await stripe(`checkout/sessions/${encodeURIComponent(fresh.pending_lifetime_session_id)}?expand[]=line_items`)
               if (pending.status === 'open') {
-                const items = await stripe(`checkout/sessions/${encodeURIComponent(pending.id)}/line_items?limit=1`)
+                const items = pending.line_items ?? await stripe(`checkout/sessions/${encodeURIComponent(pending.id)}/line_items?limit=1`)
                 if (items.data?.[0]?.price?.id === prices.lifetime && /^https:\/\/checkout\.stripe\.com\//.test(pending.url ?? '')) return json(200, { url: pending.url })
                 await stripe(`checkout/sessions/${encodeURIComponent(pending.id)}/expire`, {})
               }

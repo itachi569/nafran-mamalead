@@ -14,20 +14,20 @@ try {
  browser=await chromium.launch({headless:true})
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
  const errors=[];page.on('pageerror',e=>errors.push(e.message))
- let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null
+ let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null, checkoutGate=null, statusCalls=0
  await page.route('https://api.mamalead.com/**',async route=>{
   const req=route.request(), path=new URL(req.url()).pathname, body=req.postDataJSON()
   if(path==='/v1/download')return route.fulfill({headers:{'content-type':'application/octet-stream','content-disposition':'attachment; filename="MamaLead Setup QA.exe"'},body:'QA download fixture — not an executable'})
   if(path==='/v1/installations'){registrations++;return route.fulfill({json:{token:'t'.repeat(43)}})}
   assert.equal(req.headers().authorization,'Bearer '+'t'.repeat(43))
-  if(path==='/v1/status')return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?'paid@example.test':null,purchaseError,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})
+  if(path==='/v1/status'){statusCalls++;return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?'paid@example.test':null,purchaseError,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})}
   if(path==='/v1/trial'){
    trialCalls++
    if(failDelivery)return route.fulfill({status:503,json:{error:'Email delivery is unavailable. Please retry.'}})
    if(trialEmail)assert.equal(body.replaceExisting,true)
    trialEmail=body.email;return route.fulfill({json:{emailSent:true}})
   }
-  if(path==='/v1/checkout'){checkoutCalls++;assert.deepEqual(body,{product:'lifetime',channel:'website'});assert.equal(await page.locator('#trial-email').count(),0,'Lifetime must not open a website email form');if(failCheckout)return route.fulfill({status:503,json:{error:'Secure checkout is temporarily unavailable. Please retry.'}});return route.fulfill({json:{url:'https://checkout.stripe.com/c/pay/website_fixture'}})}
+  if(path==='/v1/checkout'){checkoutCalls++;assert.deepEqual(body,{product:'lifetime',channel:'website'});assert.equal(await page.locator('#trial-email').count(),0,'Lifetime must not open a website email form');if(checkoutGate)await checkoutGate;if(failCheckout)return route.fulfill({status:503,json:{error:'Secure checkout is temporarily unavailable. Please retry.'}});return route.fulfill({json:{url:'https://checkout.stripe.com/c/pay/website_fixture'}})}
   throw new Error('Unexpected request '+path)
  })
  await page.goto(base,{waitUntil:'networkidle'})
@@ -90,13 +90,35 @@ try {
   await cta.evaluate(el=>{el.click();el.click()});await next
   assert.equal(checkoutCalls,before+1,'double click creates one checkout request: '+selector)
  }
- const appCheckout=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
+ const statusBeforeAction=statusCalls, appCheckout=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
  await page.goto(base+'/?action=lifetime#pricing');await appCheckout
+ assert.equal(statusCalls,statusBeforeAction,'app checkout skips redundant status request')
  await page.goto(base,{waitUntil:'networkidle'});await page.evaluate(()=>localStorage.clear());trialEmail=''
  await page.reload({waitUntil:'networkidle'})
  await page.locator('#download a').filter({hasText:'Download for Windows'}).first().click()
- await dialog.getByRole('heading',{name:'Enter your email first'}).waitFor()
+ await dialog.getByRole('heading',{name:'How do you want to start?'}).waitFor()
+ assert.ok(await dialog.getByRole('link',{name:/Claim lifetime access/}).isVisible())
+ assert.ok(await dialog.getByRole('button',{name:/Free.*24 hours/}).isVisible())
  assert.equal(await dialog.getByRole('link',{name:'Download for Windows'}).count(),0)
+ await page.screenshot({path:out+'/download-chooser.png'})
+ const registerBefore=registrations, checkoutBefore=checkoutCalls
+ await dialog.getByRole('link',{name:/Claim lifetime access/}).hover()
+ await page.waitForFunction(()=>Object.keys(localStorage).some(k=>k.startsWith('mamalead.website.installation:')))
+ assert.equal(registrations,registerBefore+1,'Lifetime intent warms browser identity once')
+ assert.equal(checkoutCalls,checkoutBefore,'hover does not create a Stripe checkout')
+ let releaseCheckout;checkoutGate=new Promise(resolve=>{releaseCheckout=resolve})
+ const chooserNavigation=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
+ await dialog.getByRole('link',{name:/Claim lifetime access/}).click()
+ await page.getByText('Opening secure Stripe Checkout…',{exact:true}).waitFor({timeout:1500})
+ assert.equal(await dialog.count(),0,'chooser closes and shows checkout feedback immediately')
+ releaseCheckout();checkoutGate=null;await chooserNavigation
+ await page.goto(base,{waitUntil:'networkidle'})
+ await page.locator('#download a').filter({hasText:'Download for Windows'}).first().click()
+ await dialog.getByRole('button',{name:/Free.*24 hours/}).click()
+ await dialog.getByRole('heading',{name:'Get your free 1-day trial'}).waitFor()
+ assert.ok(await page.locator('#trial-email').isVisible())
+ await dialog.getByRole('button',{name:/Back/}).click()
+ await dialog.getByRole('heading',{name:'How do you want to start?'}).waitFor()
  await page.keyboard.press('Escape')
  await page.goto(base+'/?action=trial#download',{waitUntil:'networkidle'})
  await dialog.getByRole('heading',{name:'Get your free 1-day trial'}).waitFor()
@@ -118,5 +140,5 @@ try {
  await page.getByRole('button',{name:'Close',exact:true}).click()
  assert.equal(new URL(page.url()).search,'')
  assert.deepEqual(errors,[])
- console.log('PASS direct Stripe from all Lifetime buttons, retry/double-click protection, trial email/download/duplicate notice, forged and duplicate return rejection and verified payment; no real payments or email')
+ console.log('PASS download chooser, both choices/back, immediate checkout feedback, identity prewarm, fast app handoff, all Lifetime buttons, retry/double-click protection, trial download/recovery and verified payment; no real payments or email')
 }finally{await browser?.close();child.kill()}
