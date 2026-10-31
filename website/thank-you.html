@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your payment — MamaLead</title>
+<link rel="icon" href="img/mamalead-favicon.png?v=2">
+<style>
+@font-face{font-family:Satoshi;src:url(fonts/satoshi-400.woff2) format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:Satoshi;src:url(fonts/satoshi-500.woff2) format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:Satoshi;src:url(fonts/satoshi-700.woff2) format('woff2');font-weight:700;font-display:swap}
+*{box-sizing:border-box}body{margin:0;color:#20251e;background:#f4f5ef;font-family:Satoshi,system-ui,sans-serif;-webkit-font-smoothing:antialiased}button,a{-webkit-tap-highlight-color:transparent}button{font:inherit}a{color:inherit}button,a:focus-visible{outline-offset:5px}button:focus-visible,a:focus-visible{outline:3px solid #718b5e}::selection{background:#cbd9bc}
+.page{position:relative;isolation:isolate;min-height:100svh;overflow:hidden;background:radial-gradient(ellipse at 95% 20%,#dce5d1aa,transparent 48%)}
+.watermark{position:absolute;z-index:-1;pointer-events:none;left:-225px;top:90px;width:1040px;max-width:none;opacity:.11;mix-blend-mode:multiply;transform:rotate(-13deg)}
+.wrap{width:min(1180px,calc(100% - 80px));margin:0 auto}.top{min-height:105px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #d7ddcf;gap:16px}.brand{display:flex;gap:11px;align-items:center;text-decoration:none;font-size:23px;font-weight:700;letter-spacing:-.8px}.brand img{width:46px;height:46px;border-radius:13px}.preview{font-size:12px;color:#526147;border:1px solid #c9d4be;padding:7px 12px;border-radius:30px;background:#eaf0e3}.preview b{font-weight:500}
+.hero{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(350px,.95fr);gap:70px;align-items:center;padding:62px 0 52px}.eyebrow{display:inline-flex;align-items:center;gap:9px;color:#3f5533;font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase}.eyebrow svg{width:22px;height:22px;background:#d8e4ca;border-radius:50%;padding:4px}.headline{font-size:clamp(42px,4.6vw,64px);letter-spacing:-3px;line-height:1.06;font-weight:500;margin:24px 0}.headline span{display:block;color:#526943}.message{max-width:460px;color:#4f5848;font-size:17px;line-height:1.65;margin:0}.email-note{display:flex;align-items:flex-start;gap:13px;max-width:460px;margin:27px 0 0;padding:17px 0;border-top:1px solid #cdd6c4;border-bottom:1px solid #cdd6c4}.email-note svg{flex:none;width:22px;height:22px;margin-top:3px;color:#536a42}.email-note strong{display:block;font-size:15px;font-weight:700}.email-note p{font-size:14px;line-height:1.6;margin:4px 0 0;color:#56614e}.signature{display:flex;gap:11px;align-items:center;font-size:13px;color:#55634b;margin-top:22px}.signature img{width:30px;height:30px;border-radius:9px}.signature b{color:#283322;font-weight:500}
+.access-card{position:relative;background:#20291e;color:#f6f8f0;border-radius:28px;box-shadow:0 30px 65px -35px #20321f88;overflow:hidden}.card-main{position:relative;padding:30px 30px 27px;background:radial-gradient(ellipse at 110% -20%,#61744780,transparent 65%)}.card-top{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:11px;font-weight:700;letter-spacing:1.8px;color:#d0ddc0}.card-top svg{width:23px;height:23px;color:#c3d6ab}.check-stamp{margin:29px 0 21px;width:64px;height:64px;display:grid;place-items:center;border-radius:20px;background:#d0dfbe;box-shadow:0 0 0 7px #b4ca9620}.check-stamp svg{width:30px;height:30px;color:#283e21}.access-card h2{font-size:31px;font-weight:500;line-height:1.15;letter-spacing:-1px;margin:0 0 10px}.card-description{font-size:14px;color:#cad4c1;line-height:1.65;margin:0 0 25px}.receipt-line{display:flex;justify-content:space-between;align-items:center;gap:14px;border-top:1px solid #71816360;padding-top:20px;font-size:13px;color:#c0cdb6}.amount{font-size:23px;color:#f4f8ef;letter-spacing:-.6px;font-weight:500}.amount small{font-size:13px;letter-spacing:0;margin-right:3px;color:#c0cdb6}.receipt-line .paid{display:block;color:#d8e5ca;font-size:11px;letter-spacing:1.2px;margin-top:5px;text-align:right}.card-action{position:relative;border-top:1px dashed #a5b79160;padding:26px 30px;background:#1c241b}.card-action:before,.card-action:after{content:'';position:absolute;width:20px;height:20px;background:#f1f4e9;border-radius:50%;top:-10px;left:-10px}.card-action:after{left:auto;right:-10px}.download{display:flex;align-items:center;justify-content:center;gap:11px;background:#d1dfbf;border:0;width:100%;min-height:58px;padding:16px 20px;border-radius:100px;cursor:pointer;color:#1e2a18;font-size:15px;font-weight:700;box-shadow:0 6px 12px #0001;transition:transform .18s,background .18s}.download:hover{background:#e1ecd5;transform:translateY(-2px)}.download svg{width:20px;height:20px}.card-hint{text-align:center;font-size:12px;color:#bbc9b1;margin:13px 0 0}.card-hint a{text-underline-offset:3px}
+.next{padding:26px 0 30px;border-top:1px solid #d0d8c8}.next-title{display:flex;align-items:center;gap:12px;font-size:11px;letter-spacing:1.8px;font-weight:700;color:#4c5b40}.next-title span{width:26px;height:1px;background:#798a69}.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:38px;list-style:none;margin:22px 0 0;padding:0}.step{display:flex;gap:14px;align-items:flex-start}.number{width:34px;height:34px;flex:none;display:grid;place-items:center;border:1px solid #bccaad;border-radius:50%;font-size:12px;color:#50633e}.step strong{font-size:15px;font-weight:700}.step p{margin:5px 0 0;font-size:13px;line-height:1.55;color:#56604d}.step:first-child .number{background:#d2dfc3;border-color:#d2dfc3}.bottom{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 0 24px;border-top:1px solid #d7ddcf;font-size:12px;color:#5a6651}.bottom a{text-underline-offset:4px}.bottom p{margin:0}.bottom a:hover{color:#25391e}
+.toast{position:fixed;z-index:5;left:50%;bottom:25px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);padding:16px 24px;background:#24351e;color:white;font-size:14px;line-height:1.5;border-radius:18px;box-shadow:0 15px 40px #0003}.toast[hidden]{display:none}
+@media(min-width:1600px){.wrap{width:min(1240px,calc(100% - 100px))}.hero{padding-top:85px;padding-bottom:70px;gap:95px}.headline{font-size:72px}}
+@media(max-width:1000px){.wrap{width:calc(100% - 48px)}.hero{gap:32px;grid-template-columns:minmax(0,1fr) minmax(300px,.95fr)}.headline{font-size:49px;letter-spacing:-2px}.card-main,.card-action{padding-left:24px;padding-right:24px}.steps{gap:20px}}
+@media(max-width:720px){.wrap{width:calc(100% - 40px)}.top{min-height:85px}.brand{font-size:21px}.brand img{width:39px;height:39px}.preview{font-size:11px;padding:6px 10px}.preview b{display:none}.hero{grid-template-columns:1fr;padding:37px 0 34px;gap:30px}.headline{font-size:48px;letter-spacing:-2.5px;margin:19px 0}.message{font-size:16px}.email-note{margin-top:20px;padding:14px 0}.signature{display:none}.card-main{padding-top:25px}.check-stamp{width:52px;height:52px;margin:23px 0 18px}.access-card h2{font-size:29px}.card-description{margin-bottom:20px}.card-action{padding-top:23px;padding-bottom:23px}.watermark{width:810px;top:65px;left:-255px;opacity:.1}.steps{grid-template-columns:1fr;gap:23px}.next{padding:26px 0}.step p{font-size:14px}.bottom{align-items:flex-start;flex-direction:column;gap:12px;font-size:12px}.bottom a{display:inline-flex;align-items:center;min-height:36px}.toast{bottom:12px}.download{min-height:58px}}
+@media(prefers-reduced-motion:no-preference){.hero{animation:arrive .6s ease both}.access-card{animation:arrive .75s .07s ease both}@keyframes arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}}
+[hidden]{display:none!important}.download{text-decoration:none}.payment-pending{padding:100px 0;min-height:62vh;max-width:650px}.payment-pending h1{font-size:clamp(32px,5vw,52px);letter-spacing:-1.6px;line-height:1.15;font-weight:500}.payment-pending p{font-size:16px;line-height:1.7;color:#4f5848}.payment-pending .download{width:auto;margin:24px 0;background:#25351f;color:#fff}.payment-pending .download:disabled{cursor:wait;opacity:.75}.payment-pending [role=alert]{color:#8a2f23}.card-hint a{display:inline-flex;min-height:36px;align-items:center}.top .preview{color:#45533b}body:has(#payment-confirmed[hidden]) .watermark{opacity:.06}
+</style>
+</head>
+<body>
+<div class="page">
+ <img class="watermark" src="img/mamalead-thank-you-logo.png" alt="" aria-hidden="true">
+ <div class="wrap">
+  <header class="top"><a class="brand" href="/" aria-label="MamaLead website"><img src="img/mamalead-favicon.png?v=2" alt="">MamaLead</a><span class="preview">Payment confirmation</span></header>
+  <section class="payment-pending" id="payment-pending" aria-labelledby="payment-state-title">
+   <div class="eyebrow">MAMALEAD LIFETIME</div><h1 id="payment-state-title">Confirming your payment.</h1>
+   <p id="payment-state-message" role="status" aria-live="polite">Please wait while we verify your payment and license-key delivery.</p>
+   <button type="button" class="download" id="payment-retry" disabled>Checking…</button>
+   <p>Already paid? You can retry safely. No additional payment will be made.</p>
+   <noscript><p>Enable JavaScript to check your payment, or contact mamaleads997@gmail.com for help.</p></noscript>
+  </section>
+  <main id="payment-confirmed" hidden>
+   <section class="hero" aria-labelledby="thank-you-title">
+    <div>
+     <div class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>Payment successful</div>
+     <h1 class="headline" id="thank-you-title">Thank you for<br>choosing <span>MamaLead.</span></h1>
+     <p class="message">Your Lifetime access is ready. Let's turn your next search into your next opportunity.</p>
+     <div class="email-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/></svg><div><strong>Your license key is in your inbox.</strong><p>We sent it to <span id="delivery-email">the email you used at checkout</span>. Keep it safe—you'll use it to activate the app.</p></div></div>
+     <div class="signature"><img src="img/mamalead-favicon.png?v=2" alt=""><span>Thanks for being part of our story.<br><b>The MamaLead team</b></span></div>
+    </div>
+    <section class="access-card" aria-label="Your purchase and download">
+     <div class="card-main">
+      <div class="card-top"><span>YOUR MAMALEAD PASS</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6l8-4Z"/><path d="m8 12 3 3 5-6"/></svg></div>
+      <div class="check-stamp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></div>
+      <h2>Lifetime access.<br>Yours to keep.</h2>
+      <p class="card-description">One payment. No monthly subscription.<br>Your leads, saved on your computer.</p>
+      <div class="receipt-line"><span>Lifetime plan</span><div><span class="amount"><small>Rs</small> 10,000</span><span class="paid">PAID · ONE TIME</span></div></div>
+     </div>
+     <div class="card-action">
+      <a class="download" id="download-app" data-public-download="windows" href="https://api.mamalead.com/v1/download?platform=windows"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg>Download for Windows</a>
+      <p class="card-hint">Already installed? <a href="mamalead://billing" id="open-app">Open MamaLead to activate ↗</a></p>
+     </div>
+    </section>
+   </section>
+   <section class="next" aria-labelledby="next-title"><div class="next-title" id="next-title"><span></span>THREE SMALL STEPS. YOUR NEXT BIG OPPORTUNITY.</div>
+    <ol class="steps">
+     <li class="step"><span class="number">01</span><div><strong>Download &amp; install</strong><p>Download MamaLead above, then run the Windows installer.</p></div></li>
+     <li class="step"><span class="number">02</span><div><strong>Activate your key</strong><p>Open MamaLead—it starts on Account. Paste your emailed license key and select Activate.</p></div></li>
+     <li class="step"><span class="number">03</span><div><strong>Find your first leads</strong><p>Choose a business category and location in Google Maps, then start your search.</p></div></li>
+    </ol>
+   </section>
+  </main>
+  <footer class="bottom"><p>Can't find your key? Check spam, then <a href="support.html?topic=licence">contact our team ↗</a></p><a href="/">Back to MamaLead ↗</a></footer>
+ </div>
+</div>
+<script src="./billing.js"></script>
+<script src="./thank-you.js"></script>
+</body></html>

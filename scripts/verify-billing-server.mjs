@@ -390,7 +390,7 @@ try {
     const websiteToken = (await call('/v1/installations', null, 'POST')).body.token
   const webCheckout = await call('/v1/checkout', websiteToken, 'POST', {product:'lifetime',channel:'website'})
   const webSession = sessions.get(webCheckout.body.url?.split('/').at(-1))
-  check('website Lifetime checkout collects email on Stripe and returns to the website', webCheckout.status === 200 && !webSession.customer_details.email && webSession.metadata.checkoutFlow === 'website' && webSession.success_url.startsWith('https://mamalead.com/?checkout=success') && webSession.cancel_url === 'https://mamalead.com/?checkout=cancelled#pricing')
+  check('website Lifetime checkout collects email on Stripe and returns to the website', webCheckout.status === 200 && !webSession.customer_details.email && webSession.metadata.checkoutFlow === 'website' && webSession.success_url.startsWith('https://mamalead.com/thank-you.html?checkout=success') && webSession.cancel_url === 'https://mamalead.com/?checkout=cancelled#pricing')
   const beforeReopen = stripeRequests.length
   check('direct website checkout reuses an open session', (await call('/v1/checkout',websiteToken,'POST',{product:'lifetime',channel:'website'})).body.url===webCheckout.body.url)
   check('reopening checkout retrieves its current session only once with expanded items', JSON.stringify(stripeRequests.slice(beforeReopen))===JSON.stringify(['/v1/checkout/sessions/'+webSession.id]))

@@ -211,30 +211,6 @@
     </aside>
   </sc-if>
 
-  <sc-if value="{{ showPaid }}" hint-placeholder-val="{{ false }}">
-    <div role="status" aria-live="polite" style="position: fixed; top: 76px; left: 0; right: 0; z-index: 70; display: flex; justify-content: center; padding: 0 16px; pointer-events: none;">
-      <div style="pointer-events: auto; width: 100%; max-width: 760px; max-height: calc(100vh - 92px); overflow: auto; display: grid; gap: 18px; padding: 22px; border-radius: 26px; background: #1C1C1C; color: #FFFFFF; box-shadow: 0 34px 70px -30px rgba(28,28,28,.75); animation: zipHeroModalIn .6s cubic-bezier(.16,1,.3,1) both;">
-        <div style="display: flex; align-items: flex-start; gap: 14px;">
-          <span aria-hidden="true" style="flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #C8D5BB;"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#1C1C1C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
-          <div style="flex: 1; min-width: 0;">
-            <p style="margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.02em;">Payment successful</p>
-            <p style="margin: 4px 0 0; font-size: 15px; line-height: 1.5; color: #D9DDD5; text-wrap: pretty;">Your license key has been emailed to you. Download MamaLead and continue your work.</p>
-          </div>
-          <button type="button" aria-label="Close" onClick="{{ closePaid }}" style="flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -6px -6px 0 0; border: 0; border-radius: 50%; background: transparent; color: #FFFFFF; cursor: pointer;" style-hover="background: rgba(255,255,255,.1);"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
-        </div>
-        <ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px;">
-          <li style="display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.07);"><span style="font-size: 12px; font-weight: 500; letter-spacing: .14em; color: #C8D5BB;">STEP 1</span><span style="font-size: 15px; font-weight: 700;">Download &amp; install</span><span style="font-size: 13.5px; line-height: 1.5; color: #D9DDD5;">Run the Windows installer.</span></li>
-          <li style="display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.07);"><span style="font-size: 12px; font-weight: 500; letter-spacing: .14em; color: #C8D5BB;">STEP 2</span><span style="font-size: 15px; font-weight: 700;">Open MamaLead</span><span style="font-size: 13.5px; line-height: 1.5; color: #D9DDD5;">It opens on Settings &amp; Billing → Account.</span></li>
-          <li style="display: grid; gap: 4px; padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,.07);"><span style="font-size: 12px; font-weight: 500; letter-spacing: .14em; color: #C8D5BB;">STEP 3</span><span style="font-size: 15px; font-weight: 700;">Paste your key</span><span style="font-size: 13.5px; line-height: 1.5; color: #D9DDD5;">Copy it from the email, paste in License key and press Activate.</span></li>
-        </ol>
-        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;">
-          <a href="https://api.mamalead.com/v1/download?platform=windows" data-public-download="windows" style="display: inline-flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 26px; border-radius: 999px; background: #C8D5BB; color: #1C1C1C; font-size: 15px; font-weight: 700; white-space: nowrap; text-decoration: none;" style-hover="background: #DCE5D2;">Download for Windows<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5v11"></path><path d="M7 11l5 5 5-5"></path><path d="M5 19.5h14"></path></svg></a>
-          <span style="font-size: 13px; line-height: 1.5; color: #B9BEB4;">No email? Check spam, or <a href="support.html?topic=licence" style="color: #FFFFFF; text-decoration: underline; text-underline-offset: 3px;">contact support</a></span>
-        </div>
-      </div>
-    </div>
-  </sc-if>
-
   <sc-if value="{{ showTrial }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ onTrialOverlay }}" style="position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(28,28,28,.42); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: zipHeroFadeIn .3s ease both;">
       <div role="dialog" aria-modal="true" aria-labelledby="trial-title" style="position: relative; width: 100%; max-width: 460px; max-height: calc(100vh - 40px); overflow: auto; padding: 30px 28px 26px; border-radius: 28px; background: #F7F7F5; color: #1C1C1C; box-shadow: 0 40px 90px -40px rgba(28,28,28,.7); animation: zipHeroModalIn .5s cubic-bezier(.16,1,.3,1) both;">
@@ -1629,6 +1605,7 @@ class Component extends DCLogic {
           return;
         }
         const paid = !!(status?.lifetime?.active && status?.purchaseEmail);
+        if (paid && returning) { location.replace(new URL('thank-you.html', location.href).href); return; }
         this.setState({ paidUser: paid, ...(paid && returning ? {paid:true, checkoutNotice:''} : {}),
           ...(status?.trialRequest?.emailSent ? {trialEmail:status.trialRequest.email, trialDone:true, trialCanChange:status.trialRequest.canChangeEmail} : {}) });
         if (!returning || paid) return;
@@ -2257,11 +2234,6 @@ class Component extends DCLogic {
         }
       },
       ...this.fomo(),
-      showPaid: !this.state.paidClosed && this.state.paid,
-      closePaid: () => {
-        this.setState({ paid: false, paidClosed: true });
-        const u = new URL(location.href); u.searchParams.delete('checkout'); u.searchParams.delete('session_id'); history.replaceState(null, '', u);
-      },
       showPainting: this.props.showPainting !== false,
       heroSrc: hero.src, heroAlt: hero.alt, heroCaption: hero.caption,
       heroRatio: '3 / 2',

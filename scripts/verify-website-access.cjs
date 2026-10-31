@@ -19,6 +19,10 @@ const assert=require('node:assert/strict'),{mkdtempSync}=require('node:fs'),{joi
   await page.getByRole('button',{name:'Get 1-day trial ↗',exact:true}).click()
   await page.getByRole('button',{name:'Get Lifetime ↗',exact:true}).click()
   assert.deepEqual(await app.evaluate(()=>__access.urls),['https://mamalead.com/?action=trial#download','https://mamalead.com/?action=lifetime#pricing'])
+  await app.evaluate(({app})=>app.emit('second-instance',{},[process.execPath,'mamalead://billing']))
+  await page.locator('#nafran-license-key').waitFor()
+  await page.waitForFunction(()=>document.activeElement?.id==='nafran-license-key')
+  await page.locator('[data-stab="plan"]').click()
   await page.getByRole('button',{name:'I already have a key',exact:true}).click()
   await page.locator('#nafran-license-key').fill('NF'+('-ABCD'.repeat(10)))
   await page.getByRole('button',{name:'Activate',exact:true}).click()
@@ -26,6 +30,6 @@ const assert=require('node:assert/strict'),{mkdtempSync}=require('node:fs'),{joi
   await page.getByText('1-day trial started',{exact:true}).first().waitFor()
   assert.match(await page.locator('.account-license-description').innerText(),/until/)
   assert.deepEqual(errors,[])
-  console.log('PASS '+(packaged?'packaged':'source')+' fresh launch opens key activation, website trial/Lifetime actions, no obsolete billing warning or email form, and trial-start notification after activation')
+  console.log('PASS '+(packaged?'packaged':'source')+' fresh launch and installed-app link open key activation, website trial/Lifetime actions, no obsolete billing warning or email form, and trial-start notification after activation')
  }finally{await app.close()}
 })().catch(e=>{console.error(e);process.exitCode=1})

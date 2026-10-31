@@ -784,7 +784,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
               'line_items[0][price]': prices.lifetime, 'line_items[0][quantity]': '1',
               client_reference_id: row.id, 'metadata[product]': product, 'metadata[checkoutFlow]': channel === 'website' ? 'website' : 'desktop',
               'invoice_creation[enabled]': 'true',
-              success_url: channel === 'website' ? new URL('/?checkout=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/return?session_id={CHECKOUT_SESSION_ID}', publicUrl).toString(),
+              success_url: channel === 'website' ? new URL('/thank-you.html?checkout=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/return?session_id={CHECKOUT_SESSION_ID}', publicUrl).toString(),
               cancel_url: channel === 'website' ? new URL('/?checkout=cancelled#pricing', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/cancel', publicUrl).toString(),
             })
             if (!/^https:\/\/checkout\.stripe\.com\//.test(session.url ?? '')) throw new HttpError(502, 'Stripe did not return a Checkout URL.')
@@ -834,7 +834,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
             'line_items[0][price]': prices.lifetime, 'line_items[0][quantity]': '1',
             client_reference_id: row.id, 'metadata[product]': product,
             ...(channel === 'website' ? { 'metadata[checkoutFlow]': 'website' } : {}),
-            success_url: new URL(channel === 'website' ? '/?checkout=success&session_id={CHECKOUT_SESSION_ID}' : '/?purchase=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || (channel === 'website' ? 'https://mamalead.com' : publicUrl)).toString(),
+            success_url: new URL(channel === 'website' ? '/thank-you.html?checkout=success&session_id={CHECKOUT_SESSION_ID}' : '/?purchase=success&session_id={CHECKOUT_SESSION_ID}', env.APP_PUBLIC_URL || (channel === 'website' ? 'https://mamalead.com' : publicUrl)).toString(),
             cancel_url: channel === 'website' ? new URL('/?checkout=cancelled#pricing', env.APP_PUBLIC_URL || 'https://mamalead.com').toString() : new URL('/cancel', publicUrl).toString(),
           }
           try {

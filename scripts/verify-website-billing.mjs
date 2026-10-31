@@ -14,13 +14,13 @@ try {
  browser=await chromium.launch({headless:true})
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
  const errors=[];page.on('pageerror',e=>errors.push(e.message))
- let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null, checkoutGate=null, statusCalls=0
+ let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null, checkoutGate=null, statusCalls=0, purchaseEmail='paid@example.test', failStatus=false
  await page.route('https://api.mamalead.com/**',async route=>{
   const req=route.request(), path=new URL(req.url()).pathname, body=req.postDataJSON()
   if(path==='/v1/download')return route.fulfill({headers:{'content-type':'application/octet-stream','content-disposition':'attachment; filename="MamaLead Setup QA.exe"'},body:'QA download fixture — not an executable'})
   if(path==='/v1/installations'){registrations++;return route.fulfill({json:{token:'t'.repeat(43)}})}
   assert.equal(req.headers().authorization,'Bearer '+'t'.repeat(43))
-  if(path==='/v1/status'){statusCalls++;return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?'paid@example.test':null,purchaseError,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})}
+  if(path==='/v1/status'){statusCalls++;if(failStatus)return route.fulfill({status:503,json:{error:'Payment verification temporarily unavailable.'}});return route.fulfill({json:{lifetime:{active:paid},purchaseEmail:paid?purchaseEmail:null,purchaseError,trialRequest:{requested:!!trialEmail,emailSent:!!trialEmail,email:trialEmail,canChangeEmail:true}}})}
   if(path==='/v1/trial'){
    trialCalls++
    if(failDelivery)return route.fulfill({status:503,json:{error:'Email delivery is unavailable. Please retry.'}})
@@ -131,13 +131,38 @@ try {
  await page.getByText(purchaseError,{exact:true}).waitFor()
  assert.equal(await page.getByText('Payment successful',{exact:true}).count(),0)
  purchaseError=null
+ await page.goto(base+'/thank-you.html?checkout=success&session_id=forged',{waitUntil:'networkidle'})
+ await page.getByRole('alert').filter({hasText:'still being confirmed'}).waitFor()
+ assert.equal(await page.locator('#payment-confirmed').isVisible(),false,'return URL alone never shows paid/download state')
+ paid=true;purchaseEmail=null
+ await page.getByRole('button',{name:'Check payment again'}).click()
+ await page.getByRole('alert').filter({hasText:'still being confirmed'}).waitFor()
+ assert.equal(await page.locator('#payment-confirmed').isVisible(),false,'payment without emailed key does not show delivery confirmation')
+ purchaseError='This email already has a lifetime account. The duplicate payment was refunded; use the original license key.'
+ await page.reload({waitUntil:'networkidle'});await page.getByRole('alert').filter({hasText:purchaseError}).waitFor()
+ assert.equal(await page.locator('#payment-confirmed').isVisible(),false,'duplicate refund never shows success')
+ purchaseError=null;purchaseEmail='paid@example.test';failStatus=true
+ await page.reload({waitUntil:'networkidle'});await page.getByRole('alert').filter({hasText:'Payment verification temporarily unavailable'}).waitFor()
+ assert.equal(await page.locator('#payment-confirmed').isVisible(),false)
+ failStatus=false
+ await page.getByRole('button',{name:'Check payment again'}).click()
+ await page.getByRole('heading',{name:'Thank you for choosing MamaLead.'}).waitFor()
+ assert.ok(await page.getByText('paid@example.test',{exact:true}).isVisible())
+ assert.equal(await page.locator('#open-app').getAttribute('href'),'mamalead://billing')
+ const paidDownload=page.waitForEvent('download');await page.locator('#download-app').click()
+ assert.equal((await paidDownload).suggestedFilename(),'MamaLead Setup QA.exe')
+ assert.ok(await page.locator('#payment-confirmed').isVisible(),'direct download retains activation instructions')
+ for(const width of [1440,768,390]){
+  await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
+  assert.ok(await page.locator('img').evaluateAll(imgs=>imgs.every(img=>img.complete&&img.naturalWidth>0)))
+  await page.screenshot({path:out+'/thank-you-'+width+'.png',fullPage:true})
+ }
+ await page.reload({waitUntil:'networkidle'});await page.locator('#payment-confirmed').waitFor()
  paid=true
  await page.goto(base+'/?checkout=success&session_id=verified',{waitUntil:'networkidle'})
  await page.getByText('Payment successful',{exact:true}).waitFor()
- assert.ok(await page.getByText('Your license key has been emailed to you. Download MamaLead and continue your work.',{exact:true}).isVisible())
- await page.waitForTimeout(1200)
- await page.screenshot({path:out+'/payment-confirmed.png'})
- await page.getByRole('button',{name:'Close',exact:true}).click()
+ assert.equal(new URL(page.url()).pathname,'/thank-you.html','old checkout returns also use the new thank-you page')
+ await page.getByRole('link',{name:'Back to MamaLead'}).click()
  assert.equal(new URL(page.url()).search,'')
  assert.deepEqual(errors,[])
  console.log('PASS download chooser, both choices/back, immediate checkout feedback, identity prewarm, fast app handoff, all Lifetime buttons, retry/double-click protection, trial download/recovery and verified payment; no real payments or email')
