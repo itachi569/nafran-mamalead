@@ -187,9 +187,9 @@ try {
   Object.assign(sessions.get('cs_test_decision'), { status: 'complete', payment_status: 'paid' })
   await fetch(base + '/return?session_id=cs_test_decision')
   const addonSummary = await call('/admin/api/summary', { cookie })
-  check('dashboard counts the paid Decision Makers pass separately', addonSummary.body.counts.addons === 1 && addonSummary.body.counts.purchases === 1 && addonSummary.body.counts.trials === 2)
+  check('retired pass counters are absent while Lifetime and trial totals remain', !('addons' in addonSummary.body.counts) && addonSummary.body.counts.purchases === 1 && addonSummary.body.counts.trials === 2)
   const addonRevenue = await call('/admin/api/revenue?refresh=1', { cookie })
-  check('Stripe confirms a PKR 1,000 manual payment without automatic renewal', addonRevenue.body.activeSubs === 0 && addonRevenue.body.mrr === 0 && addonRevenue.body.net === 1100000 && addonRevenue.body.payments.some((payment) => payment.amount === 100000))
+  check('historical payments remain recorded without a retired plan system', !('activeSubs' in addonRevenue.body) && !('mrr' in addonRevenue.body) && addonRevenue.body.otherNet === 100000 && addonRevenue.body.net === 1100000 && addonRevenue.body.payments.some((payment) => payment.amount === 100000))
 
   const all = bodies.join('\n')
   const db = new DatabaseSync(database, { readOnly: true })

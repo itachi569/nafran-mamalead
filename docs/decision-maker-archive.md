@@ -42,3 +42,22 @@ Phone Finder, Social Profiles and Website Lookup.
 
 This change does not deploy the website, billing server, or production update feed.
 Older installed clients retain their existing server compatibility.
+
+## Admin dashboard archive (31 October 2026)
+
+The admin system before its Decision Maker controls were removed is also preserved:
+
+- Branch: `archive/admin-decision-maker-2026-10-31`
+- Commit: `fbdf1ce82402301e676874e96a84576847163a67`
+- Link: https://github.com/itachi569/nafran-mamalead/tree/archive/admin-decision-maker-2026-10-31
+
+This snapshot includes the admin page, server queries, revenue calculations and
+verification fixtures. Restore it in a separate checkout, using the same worktree
+approach above with this branch name. Review `admin-dashboard/index.html`,
+`admin-dashboard/server/admin-core.mjs` and `admin-dashboard/server/stores.mjs`
+when merging the functionality back; retain newer Support fixes.
+
+In 1.4.25 the admin dashboard no longer exposes Decision Maker activity, pass
+allowances, customer filters, subscription counters or purchase columns. Existing
+financial history is retained as “Other payment”; old records and compatibility
+for installed clients are not deleted. Lifetime cancellation remains available.

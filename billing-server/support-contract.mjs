@@ -5,12 +5,17 @@ export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]
 export class SupportError extends Error {
   constructor(status, message, field, retryAfterSeconds) { super(message); Object.assign(this, {status, field, retryAfterSeconds}) }
 }
-export function scrubSupportText(value) {
+export function scrubSupportMessage(value) {
   return String(value ?? '').replace(/https?:\/\/[^\s<>]+/gi, raw => {try {const u=new URL(raw);u.search='';u.hash='';u.username='';u.password='';return u.toString()} catch{return '[URL]'}})
     .replace(/NF(?:[-\s]?[A-Z0-9]{4}){5,}\b/gi,'NF-****')
     .replace(/(?:Bearer\s+)[\w.\-]+/gi,'Bearer [redacted]')
-    .replace(/(?:sk|rk|re|apify_api|csk)[_-][\w-]{8,}/gi,'[redacted]')
-    .replace(/\b[\w.+-]+@([\w.-]+\.[a-z]{2,})\b/gi,'***@$1')
+    .replace(/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g,'[redacted]')
+    .replace(/\bre_[A-Za-z0-9]{16,}\b/g,'[redacted]')
+    .replace(/\bapify_api_[A-Za-z0-9]{20,}\b/g,'[redacted]')
+    .replace(/\bcsk[_-][A-Za-z0-9]{20,}\b/g,'[redacted]')
+}
+export function scrubSupportText(value) {
+  return scrubSupportMessage(value).replace(/\b[\w.+-]+@([\w.-]+\.[a-z]{2,})\b/gi,'***@$1')
     .replace(/([A-Z]:[\\/]Users[\\/])[^\\/\s]+(?: [^\\/\s]+)*/gi,'$1***')
     .replace(/(\/(?:home|Users)\/)[^/\s]+/g,'$1***')
     .replace(/\b[A-Za-z0-9_-]{32,}\b/g,'[redacted]')
@@ -32,7 +37,7 @@ export function validateSupport(input) {
   if(!uuidPattern.test(input.clientMessageId || ''))throw new SupportError(400,'Please reopen the support form.')
   if((message.match(/https?:\/\//gi)||[]).length>5)throw new SupportError(400,'Too many links. Include at most 5 URLs.','message')
   const page=/^(dashboard|maps|social|email|phone|website|leads|lists|runs|settings(?::(?:acct|plan|inv|pay))?)$/.test(input.page || '')?input.page:'unknown'
-  return {client_message_id:input.clientMessageId,name,email,category:input.category,subject:(subject || `${input.category}: ${message.slice(0,60)}`).replace(/[\r\n]/g,' '),message,page,meta:cleanMeta(input.meta,input.diagnostics===true)}
+  return {client_message_id:input.clientMessageId,name,email,category:input.category,subject:scrubSupportMessage(subject || `${input.category}: ${message.slice(0,60)}`).replace(/[\r\n]/g,' '),message:scrubSupportMessage(message),page,meta:cleanMeta(input.meta,input.diagnostics===true)}
 }
 export function validateSupportAction(kind,input) {
   if(!input||!ticketPattern.test(input.id || '')||!uuidPattern.test(input.clientActionId || ''))throw new SupportError(400,'Choose a valid support ticket and action.')

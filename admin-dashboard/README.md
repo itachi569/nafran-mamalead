@@ -19,10 +19,7 @@ Already cancelled keys show the cancellation date instead of another button.
 This is a licence revocation, not a Stripe refund or subscription cancellation.
 There is no restore action in the dashboard.
 
-All devices bound to that Lifetime key lose core access and Decision Maker
-access attached to it at their next server licence check. The desktop main
-process caches a successful check for up to 15 seconds; ongoing work may
-finish. A separately licensed Decision Maker plan is not revoked.
+All devices bound to that Lifetime key lose access at their next server licence check. The desktop main process caches a successful check for up to 15 seconds; ongoing work may finish.
 
 The admin database connection remains read-only. A narrow authenticated
 writer in the billing process listens only on `127.0.0.1:38749`. The two
@@ -47,4 +44,4 @@ the feature. It does not undo any licence cancellations already recorded.
 
 ## Support inbox
 
-MamaLead 1.4.24 adds the Support tab: filtered tickets, unread counts, replies, notes and status history. The admin database remains read-only; writes use the authenticated loopback billing writer and its existing private key file. Configure `SUPPORT_INBOX`, `EMAIL_FROM` and `RESEND_API_KEY` in billing; `SUPPORT_REPLY_FROM` and `SUPPORT_SIGNATURE` are optional. Full licence keys are never included. Customer replies arrive in the support mailbox; there is no inbound-email synchronization. See [contact-support rollout and verification](../docs/contact-support.md).
+MamaLead 1.4.25 adds the Support tab: filtered tickets, unread counts, replies, notes and status history. The admin database remains read-only; writes use the authenticated loopback billing writer and its existing private key file. Configure `SUPPORT_INBOX`, `EMAIL_FROM` and `RESEND_API_KEY` in billing; `SUPPORT_REPLY_FROM` and `SUPPORT_SIGNATURE` are optional. Full licence keys are never included. Customer replies arrive in the support mailbox; there is no inbound-email synchronization. See [contact-support rollout and verification](../docs/contact-support.md).

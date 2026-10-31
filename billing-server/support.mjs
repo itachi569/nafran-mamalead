@@ -18,7 +18,7 @@ export async function sendSupport({env,store,installation,input,ip,fetcher=fetch
  const row={...value,id:'ML-S-'+randomInt(2176782336).toString(36).padStart(6,'0').toUpperCase(),installation_id:installation.id,license_last4:value.meta.license.last4,license_kind:value.meta.license.kind,
   message_hash:createHash('sha256').update(value.message).digest('hex'),ip_hash:ip?createHash('sha256').update(ip+'|'+secret).digest('hex'):null,email_status:'pending',status:'open',created_at:created,last_activity_at:created}
  let saved
- try{saved=await store.reserveSupportMessage(row)}catch{throw new SupportError(503,'Support could not save your message. Your draft is safe; please retry.')}
+ try{saved=await store.reserveSupportMessage(row)}catch(e){if(e instanceof SupportError)throw e;throw new SupportError(503,'Support could not save your message. Your draft is safe; please retry.')}
  if(saved.retryAfterSeconds)throw new SupportError(429,`You've sent several messages recently. Try again in ${Math.ceil(saved.retryAfterSeconds/60)} minute${saved.retryAfterSeconds>60?'s':''}.`,null,saved.retryAfterSeconds)
  const ticket=saved.row
  if(ticket.email_status!=='sent') {

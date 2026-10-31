@@ -1,4 +1,5 @@
 // Support writes live in billing; admin uses only the read methods below.
+import {SupportError} from './support-contract.mjs'
 export const supportSchema = [
  `create table if not exists billing_support_messages (
  id text primary key, client_message_id text not null unique, installation_id text not null,
@@ -34,6 +35,7 @@ export function createSqliteSupportStore(db) {
    try {
     const prior=db.prepare(`select ${columns} from billing_support_messages where installation_id=? and (client_message_id=? or (message_hash=? and created_at>=?)) order by created_at desc limit 1`).get(row.installation_id,row.client_message_id,row.message_hash,new Date(Date.parse(row.created_at)-DAY).toISOString())
     if(prior){db.exec('COMMIT');return {row:parse(prior),duplicate:true}}
+    if(db.prepare('select 1 from billing_support_messages where client_message_id=? or id=?').get(row.client_message_id,row.id))throw new SupportError(409,'Please retry your message; a new request ID is needed.')
     let wait=0
     for(const l of limits(row)){const r=db.prepare(`select count(*) as n,min(created_at) as oldest from billing_support_messages where ${l.column}=? and created_at>?`).get(l.value,l.since);if(r.n>=l.cap)wait=Math.max(wait,Math.ceil((Date.parse(r.oldest)+l.ms-Date.parse(row.created_at))/1000))}
     if(wait){db.exec('COMMIT');return {retryAfterSeconds:wait}}
@@ -61,9 +63,10 @@ export function createNeonSupportStore(sql) {
     sql.query(`select ${columns} from billing_support_messages where installation_id=$1 and (client_message_id=$2 or (message_hash=$3 and created_at>=$4)) order by created_at desc limit 1`,[row.installation_id,row.client_message_id,row.message_hash,new Date(Date.parse(row.created_at)-DAY).toISOString()])
    ],{isolationLevel:'ReadCommitted'})
    if(result[2][0])return {row:parse(result[2][0]),duplicate:!result[1].length}
-   let wait=60
+   let wait=0
    for(const l of limits(row)){const [r]=await sql.query(`select count(*) as n,min(created_at) as oldest from billing_support_messages where ${l.column}=$1 and created_at>$2`,[l.value,l.since]);if(Number(r.n)>=l.cap)wait=Math.max(wait,Math.ceil((Date.parse(r.oldest)+l.ms-Date.parse(row.created_at))/1000))}
-   return {retryAfterSeconds:wait}
+   if(wait)return {retryAfterSeconds:wait}
+   throw new SupportError(409,'Please retry your message; a new request ID is needed.')
   },
   async pendingSupportMessages(before){await ready();return (await sql.query(`select ${columns} from billing_support_messages where email_status != 'sent' and created_at < $1 order by created_at limit 10`,[before])).map(parse)},
   async markSupportEmail(id,status){await ready();await sql`update billing_support_messages set email_status=${status} where id=${id}`},

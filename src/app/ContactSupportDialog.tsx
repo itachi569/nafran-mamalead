@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react'
-import {SUPPORT_EMAIL_FALLBACK,supportValidation,type SupportPayload,type SupportResult,type SupportConfig,type SupportCategory} from '../../electron/support-data'
+import {SUPPORT_EMAIL_FALLBACK,supportValidation,formatSupportWait,type SupportPayload,type SupportResult,type SupportConfig,type SupportCategory} from '../../electron/support-data'
 import logo from '../../build/mamalead-icon.png'
 import './contact-support.css'
 const draftKey='mamalead.supportDraft.v1',lastSentKey='mamalead.supportLastSent.v1',emailKey='mamalead.supportEmail.v1'
@@ -55,9 +55,9 @@ export function ContactSupportDialog({page,preset,onClose,onSent}:{page:string;p
     <label>Subject <span>optional</span><input value={data.subject} maxLength={120} disabled={busy} onChange={e=>change('subject',e.target.value)} placeholder="A short summary"/></label>
     <label>Message<textarea aria-label="Message" value={data.message} maxLength={5000} disabled={busy} rows={5} aria-invalid={Boolean(touched.message&&errors.message)} onChange={e=>change('message',e.target.value)} placeholder="What were you trying to do? What happened?"/><span className="support-counter">{data.message.length.toLocaleString()} / 5,000</span>{touched.message&&errors.message&&<small role="alert">{errors.message}</small>}</label>
     <div className="support-diagnostics"><label><input type="checkbox" checked={data.diagnostics} disabled={busy} onChange={e=>change('diagnostics',e.target.checked)}/>Attach diagnostics</label><details><summary>What’s included?</summary><p>Always: app and Electron versions, operating system and architecture, packaged-build status, current page, installation identity and licence type/status/last 4.</p><p>With diagnostics: language, time zone, up to 5 scrubbed error messages, total lead/run counts and email-validity provider name. No lead records, full keys, credentials, cookies or files are attached.</p></details></div>
-    <p className="support-privacy">We send your message plus app version, OS and licence last 4. No leads, keys or files are attached automatically.</p>
+    <p className="support-privacy">We send your message plus app version, OS and licence last 4. No leads, keys or files are attached automatically. Don’t paste licence keys or passwords.</p>
     {result?.error&&<div className="support-error" role="alert">{result.offline?`Couldn’t reach MamaLead support. Your message is saved — try again, or email ${config.email}.`:result.error}{result.offline&&<button type="button" onClick={()=>void window.desktop?.support.openMail(`${data.subject}\n\n${data.message}`).catch(()=>setResult({error:`Could not open your mail app. Email ${config.email}.`,offline:true}))}>Copy message & open email</button>}</div>}
-    {wait>0&&<p role="status">You can send another message in {wait} seconds.</p>}
+    {wait>0&&<p role="status">You can send another message in {formatSupportWait(wait)}.</p>}
     </div><footer><button type="button" disabled={busy} className="support-discard" onClick={()=>{localStorage.removeItem(draftKey);setData(d=>({...d,name:'',subject:'',message:'',category:'other',diagnostics:false}));setTouched({});setResult(null)}}>Discard draft</button><button type="button" onClick={close}>{busy?'Cancel send':'Cancel'}</button><button type="submit" className="support-primary" disabled={busy||wait>0||Object.keys(errors).length>0}>{busy?'Sending…':result?.offline?'Retry message':'Send message →'}</button></footer>
    </form></>}
   </section>

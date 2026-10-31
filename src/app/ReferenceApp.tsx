@@ -218,7 +218,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
               </span>
               <span aria-hidden="true" style={{fontSize: "13px", color: "#4A4F4B"}}>→</span>
             </button>
-            <button type="button" className="support-entry" onClick={()=>V.openSupport()}>Email support ↗</button>
+            <button type="button" className="support-entry" onClick={()=>V.openSupport()}>Contact support</button>
           </aside>
           <div style={{display: "flex", flexDirection: "column", gap: "clamp(12px,1.5vw,20px)", minWidth: "0"}}>
             <header style={{display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap"}}>

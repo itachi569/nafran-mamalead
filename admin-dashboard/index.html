@@ -112,7 +112,7 @@
           </span>
           <span style="font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1;">{{ revenueCard.value }}</span>
           <span style="font-size: 12.5px; line-height: 1.45;">{{ revenueCard.sub }}</span>
-          <span style="margin-top: auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding-top: 10px; border-top: 1px solid rgba(28,28,28,.14); font-size: 12px;"><span>{{ revenueCard.foot }}</span><span style="font-weight: 600;">{{ revenueCard.mrr }}</span></span>
+          <span style="margin-top: auto; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding-top: 10px; border-top: 1px solid rgba(28,28,28,.14); font-size: 12px;"><span>{{ revenueCard.foot }}</span><span style="font-weight: 600;">{{ revenueCard.lifetime }}</span></span>
         </button>
         <sc-for list="{{ stats }}" as="s" hint-placeholder-count="3">
           <button type="button" onClick="{{ s.go }}" style="text-align: left; border: 0; cursor: pointer; color: #1C1C1C; padding: 20px 22px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px; min-height: 164px;" style-hover="background: #FBFBFA;">
@@ -132,7 +132,7 @@
           <span style="font-size: 12px; color: #5F645C;">{{ customerActivityUpdated }}</span>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px;">
-          <sc-for list="{{ customerActivity }}" as="a" hint-placeholder-count="4">
+          <sc-for list="{{ customerActivity }}" as="a" hint-placeholder-count="3">
             <div style="min-width: 0; padding: 18px; border-radius: 18px; background: #F4F5F2; border: 1px solid #E6E8E3;">
               <span style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;"><span style="font-size: 13px; font-weight: 500;">{{ a.label }}</span><span style="font-size: 10px; color: #4E534C; text-align: right;">{{ a.tag }}</span></span>
               <strong style="display: block; margin: 14px 0 9px; font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -.04em;">{{ a.value }}</strong>
@@ -140,7 +140,7 @@
             </div>
           </sc-for>
         </div>
-        <p style="margin: 14px 2px 0; font-size: 12px; line-height: 1.5; color: #5F645C;">Free downloads count installer downloads, not unique people. Trial counts begin when a key email is sent; Lifetime and Decision Makers payments are shown separately.</p>
+        <p style="margin: 14px 2px 0; font-size: 12px; line-height: 1.5; color: #5F645C;">Free downloads count installer downloads, not unique people. Trial counts begin when a key email is sent; Lifetime purchases are shown separately from trial activity.</p>
       </section>
       <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch;">
         <section aria-labelledby="chart-title" style="flex: 2 1 480px; min-width: 0; padding: 24px; border-radius: 26px; background: #FFFFFF; display: flex; flex-direction: column; gap: 16px;">
@@ -461,7 +461,7 @@
       <section id="cancel-lifetime-panel" aria-label="Cancel Lifetime plan" style="padding: 24px; border-radius: 22px; border: 1px solid #C0574B; background: #FFF8F6; display: flex; flex-direction: column; gap: 14px;">
         <h2 style="margin: 0; font-size: 22px;">Cancel Lifetime plan</h2>
         <p style="margin: 0; font-size: 14px;">{{ cancellation.customer }}</p>
-        <p style="margin: 0; font-size: 13px; line-height: 1.6;">This cancels this key on every linked device, including Decision Maker access attached to this Lifetime licence. Access stops at the next server licence check; work already running may finish. This does not issue a Stripe refund or cancel a separately licensed plan. Cancellation cannot be undone here.</p>
+        <p style="margin: 0; font-size: 13px; line-height: 1.6;">This cancels this key on every linked device. Access stops at the next server licence check; work already running may finish. This does not issue a Stripe refund or cancel a separately licensed plan. Cancellation cannot be undone here.</p>
         <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">Reason (3–300 characters)
           <textarea id="cancel-lifetime-reason" value="{{ cancellation.reason }}" onChange="{{ cancellation.onReason }}" disabled="{{ cancellation.busy }}" maxLength="300" rows="2" style="font: inherit; padding: 12px; border: 1px solid #C7CBC3; border-radius: 10px;"></textarea>
         </label>
@@ -735,7 +735,7 @@ class Component extends DCLogic {
   static fixtureChecks(live) {
     const base = [
       { id: 'stripe_key', label: 'Stripe secret key', state: 'ok', detail: 'Test-mode key is set.' },
-      { id: 'stripe_prices', label: 'Stripe Price IDs', state: 'ok', detail: 'Lifetime and Decision Maker prices are set.' },
+      { id: 'stripe_prices', label: 'Stripe Price IDs', state: 'ok', detail: 'The Lifetime price is set.' },
       { id: 'webhook', label: 'Stripe webhook secret', state: 'ok', detail: 'Signed webhooks can be verified.' },
       { id: 'public_url', label: 'Billing public URL', state: 'warn', detail: 'Localhost only. Fine for local testing.' },
       { id: 'signing', label: 'Download signing key', state: 'ok', detail: 'Short-lived download grants can be signed.' },
@@ -754,24 +754,24 @@ class Component extends DCLogic {
     const seen = new Date(Date.now() - 2 * 3600000).toISOString();
     const email = 'b••••@example.test';
     return {
-      support:['open','replied','closed'].map((status,i)=>({id:['ML-S-DEMO01','ML-S-DEMO02','ML-S-DEMO03'][i],status,category:['bug','licence','feature'][i],subject:['Export needs a second try','Help activating my licence','An idea for saved searches'][i],message:'This is a sample support ticket for reviewing the inbox. No email will be sent.',preview:'This is a sample support ticket for reviewing the inbox.',email:'s••••@example.test',name:'Sample customer',created:at,lastActivity:seen,unread:i===0,licenseLast4:'4F99',licenseKind:'lifetime',appVersion:'1.4.24',platform:'win32',installation:'demo1234',meta:{app:{version:'1.4.24',platform:'win32'}}})),
+      support:['open','replied','closed'].map((status,i)=>({id:['ML-S-DEMO01','ML-S-DEMO02','ML-S-DEMO03'][i],status,category:['bug','licence','feature'][i],subject:['Export needs a second try','Help activating my licence','An idea for saved searches'][i],message:'This is a sample support ticket for reviewing the inbox. No email will be sent.',preview:'This is a sample support ticket for reviewing the inbox.',email:'s••••@example.test',name:'Sample customer',created:at,lastActivity:seen,unread:i===0,licenseLast4:'4F99',licenseKind:'lifetime',appVersion:'1.4.25',platform:'win32',installation:'demo1234',meta:{app:{version:'1.4.25',platform:'win32'}}})),
       summary: {
         mode: 'test', cap: 2,
-        counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, addons: 0, licenses: 1, revoked: 0, trials: 0, trialActivated: 0, trialActive: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
+        counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, licenses: 1, revoked: 0, trials: 0, trialActivated: 0, trialActive: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
         usage: { tracking: true, registered: 4, desktop: 2, checkout: 1, unseen: 1, licensed: 2, active24h: 1, active7d: 1, active30d: 1 },
         downloads: { tracking: true, total: 1, public: 0, buyers: 1, last30d: 1, last: at },
         webhooks: { count: 0, last: null },
         installer: { storage: 'local-url', filename: 'Nafran-Leads-Scraper-Setup.exe', signing: true, ready: false, detail: 'DOWNLOAD_URL is only honoured while billing runs on localhost.' },
         email: { provider: 'none' },
       },
-      purchases: [{ id: '3f9c2a71', created: at, status: 'paid', session: '…fetime', customer: '…s_mock', addon: 'none', license: { last4: '9K2D', revoked: false }, email }],
+      purchases: [{ id: '3f9c2a71', created: at, status: 'paid', session: '…fetime', customer: '…s_mock', license: { last4: '9K2D', revoked: false }, email }],
       licenses: [{ id: 'a71e0c44', last4: '9K2D', email, created: at, sentAt: null, revokedAt: null, activatedAt: at, slotsUsed: 2, cap: 2 }],
       activations: [{ license: '9K2D', email, revoked: false, created: at, slots: [{ slot: 1, installation: 'c02d91be', since: at, lastSeen: seen }, { slot: 2, installation: '5e7a13f0', since: at, lastSeen: null }] }],
       users: [
-        { id: 'e81b6d29', kind: 'unseen', created: at, lastSeen: null, licensed: false, license: null, slot: null, buyer: false, addon: false, email: null },
-        { id: '5e7a13f0', kind: 'desktop', created: at, lastSeen: null, licensed: true, license: '9K2D', slot: 2, buyer: false, addon: false, email },
-        { id: 'c02d91be', kind: 'desktop', created: at, lastSeen: seen, licensed: true, license: '9K2D', slot: 1, buyer: false, addon: false, email },
-        { id: '3f9c2a71', kind: 'checkout', created: at, lastSeen: null, licensed: false, license: '9K2D', slot: null, buyer: true, addon: false, email },
+        { id: 'e81b6d29', kind: 'unseen', created: at, lastSeen: null, licensed: false, license: null, slot: null, buyer: false, email: null },
+        { id: '5e7a13f0', kind: 'desktop', created: at, lastSeen: null, licensed: true, license: '9K2D', slot: 2, buyer: false, email },
+        { id: 'c02d91be', kind: 'desktop', created: at, lastSeen: seen, licensed: true, license: '9K2D', slot: 1, buyer: false, email },
+        { id: '3f9c2a71', kind: 'checkout', created: at, lastSeen: null, licensed: false, license: '9K2D', slot: null, buyer: true, email },
       ],
       checks: Component.fixtureChecks(false),
     };
@@ -785,7 +785,7 @@ class Component extends DCLogic {
     if (hit) hit.net = 1000000;
     return {
       available: true, mode: 'test', currency: 'pkr', gross: 1000000, refunded: 0, net: 1000000, lifetimeSales: 1, lifetimeNet: 1000000,
-      addonCharges: 0, addonNet: 0, disputed: 0, otherCurrency: 0, activeSubs: 0, mrr: 0, months, paymentCount: 1, partial: false, truncated: false,
+      otherCharges: 0, otherNet: 0, disputed: 0, otherCurrency: 0, months, paymentCount: 1, partial: false, truncated: false,
       payments: [{ id: '…h_mock', created: at.toISOString(), product: 'lifetime', amount: 1000000, refunded: 0, currency: 'pkr', status: 'paid', email: 'b••••@example.test' }],
     };
   }
@@ -834,7 +834,7 @@ class Component extends DCLogic {
     return [
       ['all', 'All', () => true], ['paid', 'Paid', (r) => r.status === 'paid'],
       ['checkout_started', 'Checkout started', (r) => r.status === 'checkout_started'],
-      ['unlicensed', 'No license', (r) => r.status === 'paid' && !r.license], ['addon', 'Add-on active', (r) => r.addon === 'active'],
+      ['unlicensed', 'No license', (r) => r.status === 'paid' && !r.license],
     ];
   }
   within(v, days) { return Boolean(v) && Date.now() - Date.parse(v) <= days * DAY; }
@@ -872,12 +872,12 @@ class Component extends DCLogic {
     const live = (r?.mode ?? s?.mode) === 'live';
 
     const revenueCard = r
-      ? { value: this.money(r.net), tag: live ? 'Stripe live' : 'Stripe test', sub: `Gross ${this.money(r.gross)} · Refunds ${this.money(r.refunded)}`, foot: live ? `${r.paymentCount} charges` : 'Test mode. Not real money.', mrr: `Decision passes ${this.money(r.addonNet)}` }
-      : { value: '—', tag: s ? (s.mode === 'missing' ? 'Stripe not set' : `Stripe ${s.mode}`) : 'Stripe', sub: this.revText(), foot: '', mrr: '' };
+      ? { value: this.money(r.net), tag: live ? 'Stripe live' : 'Stripe test', sub: `Gross ${this.money(r.gross)} · Refunds ${this.money(r.refunded)}`, foot: live ? `${r.paymentCount} charges` : 'Test mode. Not real money.', lifetime: `Lifetime ${this.money(r.lifetimeNet)}` }
+      : { value: '—', tag: s ? (s.mode === 'missing' ? 'Stripe not set' : `Stripe ${s.mode}`) : 'Stripe', sub: this.revText(), foot: '', lifetime: '' };
     revenueCard.go = nav.revenue.go;
 
     const stats = [
-      { label: 'Paying customers', tag: 'Lifetime', go: nav.purchases.go, ...(c ? { value: String(c.customers ?? c.purchases), of: '', pct: pct(c.addons, c.customers), sub: `${c.addons} with Decision Maker add-on` } : off) },
+      { label: 'Paying customers', tag: 'Lifetime', go: nav.purchases.go, ...(c ? { value: String(c.customers ?? c.purchases), of: '', pct: pct(c.customers ?? c.purchases, c.purchases), sub: 'One-time Lifetime purchases' } : off) },
       { label: 'Active users · 7 days', tag: 'Desktop app', go: nav.users.go, ...(u ? (u.tracking ? { value: String(u.active7d), of: `/ ${u.desktop}`, pct: pct(u.active7d, u.desktop), sub: `Last 24h ${u.active24h} · last 30 days ${u.active30d}` } : { value: '—', of: '', pct: '0%', sub: 'Needs the billing-server update' }) : off) },
       { label: 'Licensed machines', tag: `Max ${cap} each`, go: nav.activations.go, ...(c ? { value: String(c.slotsUsed), of: `/ ${c.slotsTotal}`, pct: pct(c.slotsUsed, c.slotsTotal), sub: `${c.licenses} license${c.licenses === 1 ? '' : 's'} issued` } : off) },
     ];
@@ -886,7 +886,6 @@ class Component extends DCLogic {
       { label: 'Free downloads', tag: 'Installer', value: dl?.tracking ? String(dl.public ?? 0) : '—', sub: dl?.tracking ? `${dl.total ?? 0} total downloads, including licensed links` : 'Download tracking unavailable' },
       { label: '1-day trial keys', tag: 'Free', value: c ? String(c.trials ?? 0) : '—', sub: c ? `${c.trialActivated ?? 0} activated · ${c.trialActive ?? 0} active now` : 'Trial data unavailable' },
       { label: 'Lifetime buyers', tag: 'Checkout records', value: c ? String(c.purchases) : '—', sub: 'Completed checkouts; check Revenue for refunds' },
-      { label: 'Decision Makers', tag: 'Paid passes', value: c ? String(c.addons) : '—', sub: '30-day passes recorded after payment' },
     ];
 
     const chart = this.chart();
@@ -910,7 +909,7 @@ class Component extends DCLogic {
       const t = TONE[tone];
       return {
         initial: (p.email || '#').slice(0, 1).toUpperCase(), title: p.email || 'Email not on file',
-        meta: `${p.product === 'lifetime' ? 'Lifetime Deal' : 'Decision Maker add-on'} · ${this.date(p.created)}`,
+        meta: `${p.product === 'lifetime' ? 'Lifetime Deal' : 'Other payment'} · ${this.date(p.created)}`,
         amount: this.money(p.amount), pill: word, pillBg: t.bg, pillFg: t.fg,
       };
     });
@@ -1000,7 +999,7 @@ class Component extends DCLogic {
       const r = rev.data;
       const defs = [
         ['all', 'All', () => true], ['lifetime', 'Lifetime Deal', (p) => p.product === 'lifetime'],
-        ['addon', 'Decision Maker', (p) => p.product !== 'lifetime'], ['refunded', 'Refunds & disputes', (p) => ['refunded', 'partial_refund', 'disputed'].includes(p.status)],
+        ['other', 'Other payments', (p) => p.product !== 'lifetime'], ['refunded', 'Refunds & disputes', (p) => ['refunded', 'partial_refund', 'disputed'].includes(p.status)],
       ];
       const all = r?.payments ?? [];
       const rows = this.filtered('revenue', all, defs, ['email', 'id']);
@@ -1017,7 +1016,7 @@ class Component extends DCLogic {
           kpi('Gross', this.money(r.gross), `${r.paymentCount} charge${r.paymentCount === 1 ? '' : 's'}`),
           kpi('Refunds', this.money(r.refunded), r.disputed ? `${r.disputed} disputed` : 'No disputes'),
           kpi('Lifetime sales', String(r.lifetimeSales), `${this.money(r.lifetimeNet)} net at Rs 10,000`),
-          kpi('Decision pass revenue', this.money(r.addonNet), 'Manual 30-day payments'),
+          kpi('Other payment revenue', this.money(r.otherNet), 'Recorded payment history'),
         ] : [],
         showChart: Boolean(r),
         chips: this.chips('revenue', defs, all, Boolean(r)),
@@ -1027,7 +1026,7 @@ class Component extends DCLogic {
           const [word, tone] = PAY[p.status] ?? ['Unknown', 'neutral'];
           return { cells: [
             this.cell(this.date(p.created)), this.cell(p.email || 'Email not on file', `Charge ${p.id}`),
-            this.cell(p.product === 'lifetime' ? 'Lifetime Deal' : 'Decision Maker pass', p.product === 'lifetime' ? 'One-time' : '30 days'),
+            this.cell(p.product === 'lifetime' ? 'Lifetime Deal' : 'Other payment', p.product === 'lifetime' ? 'One-time' : 'Recorded payment'),
             this.cell(this.money(p.amount)), this.cell(p.refunded ? this.money(p.refunded) : '—'), this.pill(word, tone),
           ] };
         }),
@@ -1055,7 +1054,7 @@ class Component extends DCLogic {
           kpi('Active · 24 hours', u.tracking ? String(u.active24h) : '—', 'Desktop app'),
           kpi('Active · 30 days', u.tracking ? String(u.active30d) : '—', 'Desktop app'),
           kpi('Licensed machines', String(u.licensed), 'Holding a license slot'),
-          kpi('Paying customers', String(s.counts.customers ?? s.counts.purchases), `${s.counts.addons} with add-on`),
+          kpi('Paying customers', String(s.counts.customers ?? s.counts.purchases), 'One-time Lifetime purchases'),
           kpi('Registered', String(u.registered), 'All billing identities'),
         ] : [],
         chips: this.chips('users', defs, all, Boolean(data)),
@@ -1067,7 +1066,7 @@ class Component extends DCLogic {
             this.cell(`Install ${x.id}`, x.email || ''),
             this.cell(KIND[x.kind]),
             this.cell(x.license ? `…${x.license}` : '—', x.slot ? `Slot ${x.slot}` : x.buyer ? 'Purchased here' : ''),
-            this.cell(x.buyer ? 'Lifetime buyer' : x.licenseType === 'trial' ? '1-day trial' : x.licensed ? 'Licensed seat' : '—', x.addon ? '+ Decision Maker' : ''),
+            this.cell(x.buyer ? 'Lifetime buyer' : x.licenseType === 'trial' ? '1-day trial' : x.licensed ? 'Licensed seat' : '—'),
             this.cell(this.date(x.created)),
             this.cell(x.kind === 'checkout' ? 'n/a' : this.ago(x.lastSeen)),
             x.kind !== 'desktop' ? this.pill(x.kind === 'checkout' ? 'Web' : 'Unseen', 'neutral') : this.pill(active ? 'Active' : 'Idle', active ? 'ok' : 'neutral'),
@@ -1086,8 +1085,8 @@ class Component extends DCLogic {
         title: mode === 'live' ? 'Stripe purchases' : 'Stripe test purchases',
         intro: 'Lifetime Deal checkouts recorded by the billing server. Verify asks Stripe for the amount, payment and refund state of one purchase.',
         chips: this.chips('purchases', defs, all, Boolean(data)),
-        columns: ['Customer', 'Checkout', 'Created', 'License', 'Add-on', 'Status', 'Stripe'],
-        grid: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.2fr)',
+        columns: ['Customer', 'Checkout', 'Created', 'License', 'Status', 'Stripe'],
+        grid: 'minmax(0,1.5fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.2fr)',
         rows: rows.map((r) => {
           const v = this.state.verify[r.id];
           let stripeCell;
@@ -1101,7 +1100,6 @@ class Component extends DCLogic {
             this.cell('Lifetime Deal', `${r.session ?? '—'} · ${r.customer ?? 'no customer'}`),
             this.cell(this.date(r.created)),
             r.license ? this.cell(`…${r.license.last4}`, r.license.revoked ? 'Revoked' : 'Issued') : this.cell('—', 'None issued'),
-            this.pill({ active: 'Active', checkout_started: 'Started', none: 'None' }[r.addon], r.addon === 'active' ? 'ok' : r.addon === 'none' ? 'neutral' : 'warn'),
             this.pill(r.status === 'paid' ? 'Paid' : 'Checkout started', r.status === 'paid' ? 'ok' : 'warn'),
             stripeCell,
           ] };

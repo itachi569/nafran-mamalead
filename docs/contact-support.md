@@ -1,4 +1,4 @@
-# Contact support — MamaLead 1.4.24
+# Contact support — MamaLead 1.4.25
 
 The desktop app has one support form, reachable from the sidebar, Settings → Account, the licence lock and failed Assist answers. It works without an active licence. The form keeps a local draft, creates one ticket per send, preserves its retry identifier, and offers a mail-app fallback when the server is unavailable. Website checkout and trial forms are unchanged.
 
@@ -17,7 +17,7 @@ Use the existing private billing environment; never put these values in the inst
 | `SUPPORT_IP_SALT` | Dedicated random secret for hashing IP addresses; otherwise the existing download-signing secret is used. |
 | `SUPPORT_TRUST_PROXY=1` | Only on the loopback origin behind a reverse proxy that overwrites `X-Forwarded-For`. Otherwise the socket IP is used. |
 
-The app's fallback email is `billing@nafran.co`. The live API can override it through `/v1/support/config`. Tickets are accepted and saved even when delivery is not configured. A failed email notification does not delete a ticket or report a false send failure to the customer.
+The initial fallback email is the existing `billing@nafran.co`; a new mailbox has not been agreed or verified. The live API overrides it through `/v1/support/config`. The app caches the last valid public email and SLA in `userData/support-config.json`, including across restarts, and uses them when the API is offline. No server credentials are cached. Tickets are accepted and saved even when delivery is not configured. A failed email notification does not delete a ticket or report a false send failure to the customer.
 
 SQLite support tables and indexes are additive and created at startup. The Neon adapter creates the same support tables lazily. The local billing service retries pending/failed inbox notifications every minute (up to 10 per pass, after a two-minute grace period). The exported `retrySupportDelivery` helper supports a separately scheduled hosted worker; the Vercel HTTP function does not run a persistent timer. Resend requests reuse the ticket/action idempotency key. Failed admin replies require an explicit Retry in the inbox.
 
@@ -34,13 +34,17 @@ Without a writer or Resend configuration, tickets remain readable and replies sh
 - Only version/OS/build context, installation identity, page and licence type/status/last four are included by default.
 - Optional diagnostics contain total counts, provider name, locale/time zone and five scrubbed user-facing errors. No lead records, full keys, tokens, cookies or files are collected.
 - Draft text stays on the device until submitted and clears after success or discard. Retry state stores only a hash and UUID.
+- Subject/message text preserves deliberately entered contact emails and paths. A light scrub removes credential-shaped tokens and sensitive URL parts; automatic diagnostics still use full email/path/token redaction. Ordinary words such as “re-installed” remain readable.
+- A conflicting request UUID returns 409 and clears the retry UUID; a new send gets a fresh identifier. Actual rate limits still return 429 with a compact, correctly pluralized wait time.
 - Installation limits: 1 message/minute, 5/hour and 20/day; reply email: 10/day; hashed IP: 30/day. Admin replies are limited to 30/hour per owner identity.
 - Authenticated request limits: 32 KB support submission, 16 KB admin action, 5,000-character message/reply. HTML is escaped in emails and rendered as text in the dashboard.
 
 ## Verification and rollout
 
-Run `node scripts/verify-support.mjs`, `node scripts/verify-support-ui.cjs`, `node scripts/verify-admin-support-ui.mjs`, the existing billing/admin/Assist/notification checks, and `npm run package:win`.
+Run `npm run build`, `node scripts/verify-support-qa.mjs`, `node scripts/verify-support.mjs`, `node scripts/verify-support-ui.cjs`, `node scripts/verify-admin-support-ui.mjs`, the relevant billing/admin regression checks, and `npm run package:win`.
 
 The UI tests use isolated profiles and fixture mail delivery; they do not send customer emails. For the packaged check, set `MAMALEAD_TEST_EXE` to the newly built `MamaLead.exe` and run `node scripts/verify-support-ui.cjs --packaged`.
 
 Deploy the billing and admin changes together before publishing the desktop update. Verify a real message and reply with an authorized test mailbox after rollout. Until that deployment, the public server does not provide the new support endpoint. Local review and GitHub source updates do not publish a production release.
+
+The 31 October read-only production check confirmed systemd services running the self-hosted billing/admin entry points under `/opt/billing`, plus the authenticated writer listening only on `127.0.0.1:38749`. Current production is the SQLite deployment, not Vercel/Neon. The protected environment files were not readable by the developer account, so live Support/Resend configuration and delivery still require verification at rollout. The Vercel adapter does not yet provide admin support writes or a scheduled retry worker; do not migrate Support there without implementing those paths.

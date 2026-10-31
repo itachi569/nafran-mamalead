@@ -109,7 +109,6 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       id: short(r.id), created: iso(r.created_at),
       status: r.lifetime_session_id ? 'paid' : 'checkout_started',
       session: tail(r.lifetime_session_id ?? r.pending_lifetime_session_id), customer: tail(r.customer_id),
-      addon: r.decision_pass_session_id ? 'paid_pass' : r.decision_subscription_id ? 'active' : r.pending_decision_session_id ? 'checkout_started' : 'none',
       license: license ? { last4: license.key_last4, revoked: Boolean(license.revoked_at) } : null,
       email: license ? email(license.email) : null,
     }
@@ -134,7 +133,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
   // Only the desktop app calls /v1/status (the website never does), so last_seen_at marks desktop use.
   const userRows = (d) => d.installs.map((r) => {
     const desktop = Boolean(r.license_id || r.last_seen_at)
-    const checkout = Boolean(r.lifetime_session_id || r.pending_lifetime_session_id || r.pending_decision_session_id || r.decision_pass_session_id || r.decision_subscription_id)
+    const checkout = Boolean(r.lifetime_session_id || r.pending_lifetime_session_id)
     const trial = r.license_id ? d.trialById.get(r.license_id) : null
     const license = r.license_id ? (d.licenseById.get(r.license_id) ?? trial) : d.issued.get(r.id)
     const trialActive = trial && trial.sent_at && !trial.revoked_at && trial.bound_installation_id === r.id && (!trial.expires_at || Date.parse(trial.expires_at) > Date.now())
@@ -144,7 +143,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       device: r.device_id ? short(r.device_id) : null, platform: r.device_platform || null,
       licensed: Boolean(trial ? trialActive : r.license_id && license && !license.revoked_at), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
       licenseType: trial ? 'trial' : license ? 'lifetime' : null,
-      buyer: Boolean(r.lifetime_session_id), addon: Boolean(r.decision_pass_session_id || r.decision_subscription_id),
+      buyer: Boolean(r.lifetime_session_id),
       email: license ? email(license.email) : null,
     }
   }).sort(newest)
@@ -268,23 +267,10 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         after = list.data.at(-1).id
       }
     }))
-    let activeSubs = 0
-    let mrr = 0
-    await pool(d.installs.filter((r) => /^sub_[A-Za-z0-9]+$/.test(r.decision_subscription_id ?? '')).slice(0, MAX_STRIPE_OBJECTS), safe(async (r) => {
-      const sub = await stripe(`subscriptions/${encodeURIComponent(r.decision_subscription_id)}`)
-      if (!['active', 'trialing'].includes(sub.status) || sub.livemode !== (mode === 'live')) return
-      activeSubs += 1
-      for (const item of sub.items?.data ?? []) {
-        const price = item.price ?? {}
-        if (price.currency !== 'pkr') continue
-        const perMonth = { year: 1 / 12, week: 52 / 12, day: 365 / 12 }[price.recurring?.interval] ?? 1
-        mrr += Math.round((price.unit_amount ?? 0) * (item.quantity ?? 1) * perMonth / (price.recurring?.interval_count || 1))
-      }
-    }))
     const now = new Date()
     const months = Array.from({ length: 12 }, (_, i) => ({ key: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11 + i, 1)).toISOString().slice(0, 7), net: 0 }))
     const monthIndex = new Map(months.map((m, i) => [m.key, i]))
-    const totals = { gross: 0, refunded: 0, net: 0, lifetimeSales: 0, lifetimeNet: 0, addonCharges: 0, addonNet: 0, disputed: 0, otherCurrency: 0 }
+    const totals = { gross: 0, refunded: 0, net: 0, lifetimeSales: 0, lifetimeNet: 0, otherCharges: 0, otherNet: 0, disputed: 0, otherCurrency: 0 }
     const payments = []
     for (const charge of charges.values()) {
       if (charge.livemode !== (mode === 'live')) continue
@@ -292,11 +278,11 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       const ok = charge.paid === true && charge.status === 'succeeded'
       const captured = ok ? Number(charge.amount_captured ?? charge.amount ?? 0) : 0
       const refunded = ok ? Number(charge.amount_refunded ?? 0) : 0
-      const product = lifetimeIntents.has(charge.payment_intent) ? 'lifetime' : 'addon'
+      const product = lifetimeIntents.has(charge.payment_intent) ? 'lifetime' : 'other'
       if (ok) {
         totals.gross += captured; totals.refunded += refunded; totals.net += captured - refunded
         if (product === 'lifetime') { totals.lifetimeNet += captured - refunded; if (refunded < captured) totals.lifetimeSales += 1 }
-        else { totals.addonCharges += 1; totals.addonNet += captured - refunded }
+        else { totals.otherCharges += 1; totals.otherNet += captured - refunded }
         if (charge.disputed) totals.disputed += 1
         const key = new Date(charge.created * 1000).toISOString().slice(0, 7)
         if (monthIndex.has(key)) months[monthIndex.get(key)].net += captured - refunded
@@ -308,7 +294,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       })
     }
     payments.sort(newest)
-    return { available: true, mode, currency: 'pkr', ...totals, activeSubs, mrr, months, payments: payments.slice(0, 500), paymentCount: payments.length, partial: errors > 0, truncated: customers.length > MAX_STRIPE_OBJECTS, computedAt: new Date().toISOString() }
+    return { available: true, mode, currency: 'pkr', ...totals, months, payments: payments.slice(0, 500), paymentCount: payments.length, partial: errors > 0, truncated: customers.length > MAX_STRIPE_OBJECTS, computedAt: new Date().toISOString() }
   }
 
   async function verifyPurchase(d, id) {
@@ -399,7 +385,6 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         const metrics = d.planMetrics ?? {
           lifetimePurchases: paid.length,
           lifetimeCustomers: new Set(paid.map((r) => r.customer_id || r.id)).size,
-          decisionSubscriptions: d.installs.filter((r) => r.decision_pass_session_id || r.decision_subscription_id).length,
           trialKeysSent: d.trials.filter((r) => r.sent_at).length,
           trialActivated: d.trials.filter((r) => r.bound_installation_id).length,
           trialActive: d.trials.filter((r) => r.sent_at && !r.revoked_at && r.expires_at && Date.parse(r.expires_at) > Date.now()).length,
@@ -411,7 +396,6 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
             purchases: metrics.lifetimePurchases,
             customers: metrics.lifetimeCustomers,
             checkoutsStarted: d.installs.filter((r) => !r.lifetime_session_id && r.pending_lifetime_session_id).length,
-            addons: metrics.decisionSubscriptions,
             licenses: lic.length, revoked: lic.length - live.length, trials: metrics.trialKeysSent,
             trialActivated: metrics.trialActivated, trialActive: metrics.trialActive,
             emailed: lic.filter((l) => l.sentAt).length, activated: live.filter((l) => l.slotsUsed > 0).length,
@@ -443,7 +427,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       if (method === 'GET' && path === '/admin/api/purchases') {
         return respond(200, { rows: pick(purchases(d), url, ['id', 'email', 'session', 'customer'], {
           all: () => true, paid: (r) => r.status === 'paid', checkout_started: (r) => r.status === 'checkout_started',
-          addon: (r) => r.addon === 'active', unlicensed: (r) => r.status === 'paid' && !r.license,
+          unlicensed: (r) => r.status === 'paid' && !r.license,
         }) })
       }
       if (method === 'GET' && path === '/admin/api/licenses') {
