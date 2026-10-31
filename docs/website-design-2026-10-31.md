@@ -21,6 +21,7 @@ The owner explicitly selected replacement of the current website and asked that 
 - Deploy the updated billing server, website (including `billing.js`) and matching signed desktop release together when authorized. `APP_PUBLIC_URL` must be the intended HTTPS website origin, normally `https://mamalead.com`; the existing allowed-origin and email settings must include this site.
 - Preview-only API override: `?billingApi=http://127.0.0.1:PORT`, accepted only when the page itself runs on loopback. Test suites intercept API requests and send no real email/payment.
 - The supplied November 30, 2026 campaign deadline is retained as a configurable design property. The illustrative “37 left / 463 claimed” counters are disabled by default because they are not connected to sales records. The 50% offer remains visible.
+- The launch-offer card uses the supplied compact reference: a 470 px maximum desktop width, outlined lock, separated discount and a red footer label. Until a claimed-license count is confirmed, that label states the actual Rs 10,000 saving instead of a sample sales total.
 - Website Lookup no longer offers email validity. Its details and screenshots are described separately from Email Finder, where optional verification remains available.
 - Decision Makers remains absent from the public website and app. Archived implementation is retained in the repository.
 
