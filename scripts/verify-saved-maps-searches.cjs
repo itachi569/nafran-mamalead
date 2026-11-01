@@ -3,7 +3,7 @@ const root=resolve(__dirname,'..'),{_electron}=createRequire(join(root,'package.
 const sourceMode=!process.argv.includes('--packaged'),out=resolve(root,'screenshots/release-audit/MamaLead-saved-searches');mkdirSync(out,{recursive:true});
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
- const app=await _electron.launch({executablePath:join(root,sourceMode?'node_modules/electron/dist/electron.exe':'release/win-unpacked/MamaLead.exe'),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-saved-searches-'))],env,timeout:60000});
+ const app=await _electron.launch({executablePath:require('./electron-test-executable.cjs').electronTestExecutable(!sourceMode),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-saved-searches-'))],env,timeout:60000});
  try{
   await app.evaluate(({app,ipcMain,dialog,BrowserWindow},{out})=>{
    const path=process.getBuiltinModule('path'),req=process.getBuiltinModule('module').createRequire(path.join(app.getAppPath(),'package.json'));

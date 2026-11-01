@@ -2,7 +2,7 @@ const {createRequire}=require('node:module'),{resolve,join}=require('node:path')
 const root=resolve(__dirname,'..'),{_electron}=createRequire(join(root,'package.json'))('playwright'),sourceMode=!process.argv.includes('--packaged'),out=resolve(root,'screenshots/release-audit/MamaLead-decision-progress');mkdirSync(out,{recursive:true});
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
- const app=await _electron.launch({executablePath:join(root,sourceMode?'node_modules/electron/dist/electron.exe':'release/win-unpacked/MamaLead.exe'),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-saved-lead-count-'))],env,timeout:60000}),checks=[];
+ const app=await _electron.launch({executablePath:require('./electron-test-executable.cjs').electronTestExecutable(!sourceMode),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-saved-lead-count-'))],env,timeout:60000}),checks=[];
  try{
   await app.evaluate(({ipcMain})=>{
    const make=(group,i,website)=>({id:`${group}-${i}`,name:`${group} business ${i}`,website,address:'Example city',phone:'',rating:null,review_count:0,captured_at:'2026-10-28T00:00:00Z',last_scanned_at:null,enrichment_status:'pending'});

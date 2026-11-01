@@ -10,7 +10,7 @@ assert.deepEqual(calls,[['name','MamaLead'],['id',packageJson.build.appId],['mai
 async function main(){
  const userData=fs.mkdtempSync(path.join(os.tmpdir(),'mamalead-notification-'))
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
- const executable=process.env.MAMALEAD_TEST_EXECUTABLE || path.join(root,packaged?'release/win-unpacked/MamaLead.exe':'node_modules/electron/dist/electron.exe')
+ const executable=require('./electron-test-executable.cjs').electronTestExecutable(packaged)
  const app=await _electron.launch({executablePath:executable,args:[...packaged?[]:[root],'--user-data-dir='+userData],env,timeout:60000})
  try{
   const identity=await app.evaluate(({app,shell,Notification})=>{

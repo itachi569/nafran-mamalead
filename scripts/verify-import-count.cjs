@@ -9,7 +9,7 @@ const output=resolve(root,'screenshots/release-audit/MamaLead-import-count');mkd
 
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
- const app=await _electron.launch({executablePath:join(root,sourceMode?'node_modules/electron/dist/electron.exe':'release/win-unpacked/MamaLead.exe'),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-current-import-'))],env,timeout:60000});
+ const app=await _electron.launch({executablePath:require('./electron-test-executable.cjs').electronTestExecutable(!sourceMode),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-current-import-'))],env,timeout:60000});
  const checks=[];
  try{
   await app.evaluate(({ipcMain,dialog,app})=>{

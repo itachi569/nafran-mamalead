@@ -398,7 +398,7 @@ export class Repository {
   constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality(); this.repairPhoneQuality(); this.repairPrivateEmails() }
 
   private repairPrivateEmails():void {
-    const migration='private-emails-1.4.33'
+    const migration='private-emails-1.4.34'
     if(this.db.one('select name from app_data_migrations where name=?',[migration]))return
     this.db.transaction(()=>{
       const changed=new Set<string>()
@@ -407,7 +407,9 @@ export class Repository {
         this.archiveQuality('lead_contacts',row,'Reserved/private email domain')
         this.db.run('delete from lead_contacts where id=?',[row.id]);changed.add(row.lead_id)
       }
-      for(const id of changed)this.recomputeLeadScore(id)
+      // Keep the best remaining public mailbox when a legacy primary was removed.
+      // Alternatives already retired by a later scan stay in their recoverable archive.
+      for(const id of changed)this.retainMainEmail(id)
       this.db.run('insert into app_data_migrations (name,applied_at) values (?,?)',[migration,nowIso()])
     })
   }
@@ -1134,6 +1136,10 @@ export class Repository {
   }
 
   updateContact(id: string, patch: { value?: string; verified?: boolean; score?: number | null }): void {
+    const contact=this.db.one<{kind:string}>('select kind from lead_contacts where id=?',[id])
+    if(patch.value!==undefined && contact?.kind==='email' && !hasPublicEmailDomain(patch.value)) {
+      throw new Error('Enter an email address with a public domain.')
+    }
     const fields: string[] = ['checked_at = ?']
     const params: unknown[] = [nowIso()]
     if (patch.value !== undefined) {

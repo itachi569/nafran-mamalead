@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),{_electron}=require('playwright'),fs=
 const root=path.resolve(__dirname,'..'),packaged=process.argv.includes('--packaged'),out=path.resolve(root,'../../outputs/finder-progress-qa');fs.mkdirSync(out,{recursive:true})
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
- const executable=process.env.MAMALEAD_TEST_EXECUTABLE || path.join(root,packaged?'release/win-unpacked/MamaLead.exe':'node_modules/electron/dist/electron.exe')
+ const executable=require('./electron-test-executable.cjs').electronTestExecutable(packaged)
  const app=await _electron.launch({executablePath:executable,args:[...packaged?[]:[root],'--user-data-dir='+fs.mkdtempSync(path.join(os.tmpdir(),'finder-progress-'))],env,timeout:60000})
  try{
   await app.evaluate(({app,ipcMain,BrowserWindow})=>{

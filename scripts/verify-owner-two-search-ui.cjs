@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),{_electron}=require('playwright'),fs=
 const root=path.resolve(__dirname,'..'),packaged=process.argv.includes('--packaged'),out=path.join(root,'screenshots/release-audit/MamaLead-owner-two-search');fs.mkdirSync(out,{recursive:true})
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
- const app=await _electron.launch({executablePath:path.join(root,packaged?'release/win-unpacked/MamaLead.exe':'node_modules/electron/dist/electron.exe'),args:[...packaged?[]:[root],'--user-data-dir='+fs.mkdtempSync(path.join(os.tmpdir(),'owner-two-search-ui-'))],env,timeout:60000})
+ const app=await _electron.launch({executablePath:require('./electron-test-executable.cjs').electronTestExecutable(packaged),args:[...packaged?[]:[root],'--user-data-dir='+fs.mkdtempSync(path.join(os.tmpdir(),'owner-two-search-ui-'))],env,timeout:60000})
  try{
   await app.evaluate(({app,ipcMain,BrowserWindow,dialog},out)=>{
    ipcMain.removeHandler('notifications:show');ipcMain.handle('notifications:show',()=>({shown:false}))

@@ -36,7 +36,7 @@ test('ML127/128 historical lookup rows are clean on read/export and old private 
   repo.saveWebsiteLookupRow(session.jobId,row)
   const saved=repo.websiteLookupSession(ws.id,session.jobId).rows[0];assert.equal(saved.phones.length,1);assert.equal(saved.address.includes('|'),false);assert.equal(saved.emails.length,0)
   db.run("insert into lead_contacts (id,workspace_id,lead_id,kind,value,source,created_at) values (?,?,?,?,?,?,?)",['bad',ws.id,leadId,'email','ops@gateway.internal','https://coffee.pk/',new Date().toISOString()])
-  db.run('delete from app_data_migrations where name=?',['private-emails-1.4.33'])
+  db.run('delete from app_data_migrations where name=?',['private-emails-1.4.34'])
   new Repository(db);assert.equal(db.one('select id from lead_contacts where id=?',['bad']),null)
   const count=()=>db.one("select count(*) n from data_quality_repairs where row_id='bad'").n
   assert.equal(count(),1);new Repository(db);assert.equal(count(),1)

@@ -9,7 +9,7 @@ const out=resolve(root,'screenshots/release-audit/MamaLead-website-lookup');mkdi
 
 async function main(){
  const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL;
- const app=await _electron.launch({executablePath:join(root,sourceMode?'node_modules/electron/dist/electron.exe':'release/win-unpacked/MamaLead.exe'),args:[...(sourceMode?[root]:[]),'--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-lookup-'))],env,timeout:60000});
+ const app=await _electron.launch({executablePath:require('./electron-test-executable.cjs').electronTestExecutable(!sourceMode),args:[...(sourceMode?[root]:[]),...(process.platform==='linux'&&process.env.CI?['--no-sandbox']:[]),'--disable-features=CalculateNativeWinOcclusion','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding','--user-data-dir='+mkdtempSync(join(tmpdir(),'mamalead-lookup-'))],env,timeout:60000});
  try{
   await app.evaluate(({app,ipcMain,BrowserWindow,dialog},{out})=>{
    const fs=process.getBuiltinModule('fs'),path=process.getBuiltinModule('path');

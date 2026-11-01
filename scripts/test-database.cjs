@@ -374,6 +374,45 @@ check('dashboard 30 days includes recent and earlier leads', last30.total === 2 
 check('dashboard all time includes the complete ledger', allTime.total === 3)
 periodDb.close()
 
+// Upgrade a persisted old database, including a restore with the 1.4.33 marker.
+const legacyFile=join(dir,'legacy-private-emails.db')
+let legacyDb=new LocalDatabase(legacyFile),legacyRepo=new Repository(legacyDb)
+const legacyWs=legacyDb.ensureWorkspace().id,legacyAt='2026-10-20T12:00:00.000Z'
+const legacyRun=legacyRepo.saveRun(legacyWs,{
+  provider:'chromium-maps',status:'done',keywords:['clinic'],location:'Manchester',
+  maxResultsPerKeyword:2,detail:true,durationMs:100,startedAt:legacyAt,finishedAt:legacyAt,error:null,
+  leads:[lead('Legacy Clinic','private-upgrade'),lead('Private Only','private-only')],
+})
+const legacyLeads=legacyRepo.listLeads(legacyWs,{runId:legacyRun.runId}).rows
+const legacyId=legacyLeads.find(row=>row.name==='Legacy Clinic').id,onlyId=legacyLeads.find(row=>row.name==='Private Only').id
+for(const [id,leadId,value,score] of [
+  ['legacy-primary',legacyId,'info@gateway.internal',99],
+  ['legacy-secondary',legacyId,'hello@legacyclinic.com',70],
+  ['legacy-third',legacyId,'sales@legacyclinic.com',80],
+  ['legacy-private-only',onlyId,'desk@office.local',90],
+])legacyDb.run('insert into lead_contacts (id,lead_id,workspace_id,kind,value,source,score,created_at) values (?,?,?,?,?,?,?,?)',[id,leadId,legacyWs,'email',value,'manual',score,legacyAt])
+legacyDb.run('delete from app_data_migrations where name=?',['private-emails-1.4.34'])
+legacyDb.run('insert or ignore into app_data_migrations (name,applied_at) values (?,?)',['private-emails-1.4.33',legacyAt])
+legacyDb.run('pragma user_version=1')
+legacyDb.close()
+legacyDb=new LocalDatabase(legacyFile);legacyRepo=new Repository(legacyDb)
+check('upgrade removes private emails without rescanning',legacyRepo.listContacts(legacyWs,'email').length===1)
+check('upgrade promotes the next public primary mailbox',legacyRepo.listContacts(legacyWs,'email',[legacyId])[0]?.value==='hello@legacyclinic.com')
+check('upgrade preserves invalid originals in the quality archive',legacyDb.one("select count(*) n from data_quality_repairs where row_id in ('legacy-primary','legacy-private-only')").n===2)
+check('upgrade archives remaining public alternatives',legacyDb.one("select count(*) n from email_contact_archive where contact_id='legacy-third'").n===1)
+check('no public alternative leaves the mailbox blank',legacyRepo.listContacts(legacyWs,'email',[onlyId]).length===0)
+check('upgrade preserves the previous repair marker',Boolean(legacyDb.one('select name from app_data_migrations where name=?',['private-emails-1.4.33'])))
+check('upgrade records the new repair marker',Boolean(legacyDb.one('select name from app_data_migrations where name=?',['private-emails-1.4.34'])))
+let rejectedPrivateEdit=false
+try{legacyRepo.updateContact('legacy-secondary',{value:'hello@office.internal',verified:true,score:100})}catch(error){rejectedPrivateEdit=/public domain/.test(error.message)}
+check('editing cannot reintroduce a private email',rejectedPrivateEdit)
+const unchanged=legacyRepo.listContacts(legacyWs,'email',[legacyId])[0]
+check('rejected edit leaves the saved mailbox and score intact',unchanged.value==='hello@legacyclinic.com'&&unchanged.score===70&&unchanged.verified===0)
+const repairsBefore=legacyDb.one('select count(*) n from data_quality_repairs').n
+new Repository(legacyDb)
+check('startup repair is idempotent',legacyDb.one('select count(*) n from data_quality_repairs').n===repairsBefore)
+legacyDb.close()
+
 rmSync(dir, { recursive: true, force: true })
 
 const failed = results.filter((entry) => !entry.ok)

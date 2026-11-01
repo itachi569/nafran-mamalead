@@ -1,0 +1,53 @@
+name: Desktop QA
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      LEADSNAP_BILLING_API_URL: http://127.0.0.1:9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:electron-paths
+      - run: npm run build
+      - name: Database and contact regression tests
+        run: |
+          node scripts/test-database.cjs
+          node --test scripts/test-qa-1432.cjs scripts/test-qa-1433.cjs scripts/test-email-extraction.cjs scripts/test-support-client-ip.mjs
+      - name: Install Linux browser dependencies
+        if: runner.os == 'Linux'
+        run: npx playwright install-deps chromium
+      - name: Website Lookup UI (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run --auto-servernum node scripts/verify-email-upgrade.cjs
+          xvfb-run --auto-servernum node scripts/verify-website-lookup-ui.cjs
+      - name: Website Lookup UI (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          node scripts/verify-email-upgrade.cjs
+          node scripts/verify-website-lookup-ui.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lookup-qa-${{ matrix.os }}
+          path: screenshots/release-audit/MamaLead-website-lookup/
+          if-no-files-found: ignore
