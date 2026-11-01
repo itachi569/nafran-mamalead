@@ -29,6 +29,12 @@
 @media(prefers-reduced-motion:no-preference){.hero{animation:arrive .6s ease both}.access-card{animation:arrive .75s .07s ease both}@keyframes arrive{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}}
 [hidden]{display:none!important}.download{text-decoration:none}.payment-pending{padding:100px 0;min-height:62vh;max-width:650px}.payment-pending h1{font-size:clamp(32px,5vw,52px);letter-spacing:-1.6px;line-height:1.15;font-weight:500}.payment-pending p{font-size:16px;line-height:1.7;color:#4f5848}.payment-pending .download{width:auto;margin:24px 0;background:#25351f;color:#fff}.payment-pending .download:disabled{cursor:wait;opacity:.75}.payment-pending [role=alert]{color:#8a2f23}.card-hint a{display:inline-flex;min-height:36px;align-items:center}.top .preview{color:#45533b}body:has(#payment-confirmed[hidden]) .watermark{opacity:.06}
 </style>
+<style>
+a[href^="mailto:mamaleads997@gmail.com"] { transition: opacity .15s ease; }
+a[href^="mailto:mamaleads997@gmail.com"]:hover { opacity: .78; }
+a[href^="mailto:mamaleads997@gmail.com"]:focus-visible { outline: 2px solid #45693a; outline-offset: 4px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) { a[href^="mailto:mamaleads997@gmail.com"] { transition: none; } }
+</style>
 </head>
 <body>
 <div class="page">
@@ -40,7 +46,7 @@
    <p id="payment-state-message" role="status" aria-live="polite">Please wait while we verify your payment and license-key delivery.</p>
    <button type="button" class="download" id="payment-retry" disabled>Checking…</button>
    <p>Already paid? You can retry safely. No additional payment will be made.</p>
-   <noscript><p>Enable JavaScript to check your payment, or contact mamaleads997@gmail.com for help.</p></noscript>
+   <noscript><p>Enable JavaScript to check your payment, or contact <a href="mailto:mamaleads997@gmail.com?subject=MamaLead%20Support" style="color: inherit;">mamaleads997@gmail.com</a> for help.</p></noscript>
   </section>
   <main id="payment-confirmed" hidden>
    <section class="hero" aria-labelledby="thank-you-title">

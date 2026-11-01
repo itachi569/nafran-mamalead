@@ -1,12 +1,28 @@
 // Isolated public form -> real billing handler -> SQLite inbox. Email delivery is a fixture.
 import assert from 'node:assert/strict'
-import {mkdtempSync,mkdirSync,writeFileSync} from 'node:fs'
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 import {spawn} from 'node:child_process'
 import {createServer} from 'node:net'
 import {chromium} from 'playwright'
 import {createBillingServer} from '../billing-server/server.mjs'
+import {parse} from 'parse5'
+const supportMailto='mailto:mamaleads997@gmail.com?subject=MamaLead%20Support'
+// Catch a plain text email or a missing mailto before the browser runtime mounts.
+for(const file of ['index.html','support.html','privacy.html','terms.html','thank-you.html']){
+ let addresses=0
+ const visit=(node,link=null)=>{
+  if(['script','style'].includes(node.tagName))return
+  if(node.tagName==='a')link=node.attrs.find(a=>a.name==='href')?.value
+  if(node.nodeName==='#text'&&node.value.includes('mamaleads997@gmail.com')){
+   addresses++;assert.equal(link,supportMailto,`${file}: displayed support email must be a mailto with MamaLead Support subject`)
+  }
+  for(const child of node.childNodes||[])visit(child,link)
+ }
+ visit(parse(readFileSync(resolve('website',file),'utf8'),{scriptingEnabled:false}))
+ if(file==='support.html')assert.ok(addresses>0,'Support page must display its linked email address')
+}
 const dir=mkdtempSync(join(tmpdir(),'mamalead-web-support-')),probe=createServer()
 await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r))
 const base='http://127.0.0.1:'+port,mail=[]
@@ -29,6 +45,14 @@ try{
  const url=base+'/support?billingApi='+encodeURIComponent(apiBase)
  await page.goto(url,{waitUntil:'networkidle'})
  assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'),'https://mamalead.com/support')
+ const emailLink=page.getByRole('link',{name:'mamaleads997@gmail.com',exact:true})
+ assert.equal(await emailLink.getAttribute('href'),supportMailto)
+ const emailStyle=await emailLink.evaluate(el=>{const s=getComputedStyle(el);return {color:s.color,weight:s.fontWeight,underline:s.textDecorationLine,font:s.fontFamily}})
+ assert.equal(emailStyle.color,'rgb(28, 28, 28)');assert.equal(emailStyle.weight,'700');assert.match(emailStyle.underline,/underline/);assert.match(emailStyle.font,/Satoshi/)
+ await emailLink.hover();await page.waitForTimeout(180)
+ assert.ok(Number(await emailLink.evaluate(el=>getComputedStyle(el).opacity))<1,'Subtle hover feedback')
+ await emailLink.focus();await page.keyboard.press('Shift+Tab');await page.keyboard.press('Tab')
+ assert.equal(await emailLink.evaluate(el=>el===document.activeElement&&getComputedStyle(el).outlineStyle==='solid'),true,'Email link has a keyboard focus outline')
  await page.locator('button[type="submit"]').click()
  await page.getByRole('link',{name:'Email: Enter a valid email address.'}).waitFor()
  await page.getByRole('link',{name:'Message: Write at least 10 characters.'}).waitFor()
@@ -68,6 +92,6 @@ try{
  await page.reload({waitUntil:'networkidle'})
  await page.getByText('The support form is temporarily unavailable. Please email mamaleads997@gmail.com.',{exact:true}).waitFor()
  assert.equal(await page.locator('button[type="submit"]').getAttribute('aria-disabled'),'true')
- assert.equal(await page.locator('a[href="mailto:mamaleads997@gmail.com"]').count()>0,true)
+ assert.equal(await page.locator(`a[href="${supportMailto}"]`).count()>0,true)
  console.log('PASS public CAPTCHA form, clean routes, validation links, draft recovery, conflict recovery, double-click prevention, no billing installations, inbox + acknowledgment and responsive layouts; no real messages sent')
 }finally{await browser?.close();child.kill();await new Promise(r=>api.server.close(r));api.db.close()}

@@ -68,6 +68,27 @@
  .zip-hero [style*="scaleX(0)"] { transform:none!important; }
 }
 </style>
+<style>
+a[href^="mailto:mamaleads997@gmail.com"] { transition: opacity .15s ease; }
+a[href^="mailto:mamaleads997@gmail.com"]:hover { opacity: .78; }
+a[href^="mailto:mamaleads997@gmail.com"]:focus-visible { outline: 2px solid #45693a; outline-offset: 4px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) { a[href^="mailto:mamaleads997@gmail.com"] { transition: none; } }
+/* Native smooth scrolling, with reduced-motion support and no scroll handler. */
+html:has(#page-start:target) { scroll-behavior: smooth; }
+.back-to-top {
+  position: fixed; right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 60px); z-index: 80;
+  display: grid; place-items: center; width: 48px; height: 48px;
+  border: 1px solid #ffffff80; border-radius: 50%; background: #1c1c1c; color: #fff;
+  box-shadow: 0 8px 20px -8px #1c1c1c66; transition: background .15s ease, transform .15s ease;
+}
+.back-to-top:hover { background: #34502f; color: #fff; transform: translateY(-2px); }
+.back-to-top:focus-visible { outline: 3px solid #45693a; outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  html:has(#page-start:target) { scroll-behavior: auto; }
+  .back-to-top { transition: none; }
+}
+</style>
 </head>
 <body>
 <x-dc>
@@ -205,7 +226,7 @@
   }
 </style>
 </helmet>
-<div style="position: relative; background: #EFEFEF; overflow-x: hidden;">
+<div id="page-start" tabindex="-1" style="position: relative; background: #EFEFEF; overflow-x: hidden;">
   <div style="position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: radial-gradient(60vw 52vh at 4% 6%, rgba(169,188,155,.5), transparent 62%), radial-gradient(56vw 50vh at 96% 34%, rgba(200,213,187,.46), transparent 62%), radial-gradient(62vw 56vh at 20% 88%, rgba(213,222,203,.46), transparent 66%);"></div>
   <div style="position: relative; z-index: 1;">
 
@@ -279,6 +300,10 @@
       </div>
     </div>
   </sc-if>
+
+  <a class="back-to-top" href="#page-start" aria-label="Back to top" title="Back to top">
+    <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m-6 6 6-6 6 6"></path></svg>
+  </a>
 
   <a class="help-launcher" href="support.html" aria-label="Need help? Contact MamaLead support" style="position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 80; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 8px 0 18px; border-radius: 999px; border: 1px solid rgba(28,28,28,.06); background: #FFFFFF; color: #1C1C1C; box-shadow: 0 18px 40px -18px rgba(28,28,28,.45), 0 2px 6px rgba(28,28,28,.06); transition: transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s ease;" style-hover="transform: translateY(-2px); color: #1C1C1C; box-shadow: 0 24px 46px -18px rgba(28,28,28,.55), 0 2px 6px rgba(28,28,28,.06);">
     <span aria-hidden="true" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #2E9E5B; box-shadow: 0 0 0 3px rgba(46,158,91,.16);"></span>
