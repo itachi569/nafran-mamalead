@@ -31,6 +31,8 @@ try {
   throw new Error('Unexpected request '+path)
  })
  await page.goto(base,{waitUntil:'networkidle'})
+ assert.equal(await page.locator('[data-public-download="windows"]').count()>0,true,'Windows download remains available')
+ assert.equal(await page.locator('a[href*="platform=mac"], [data-public-download^="mac-"]').count(),0,'Retired Mac downloads stay off the public site')
  for(const width of [390,768,1440]){
   await page.setViewportSize({width,height:1000})
   await page.evaluate(()=>window.scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}))

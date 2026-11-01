@@ -9,6 +9,12 @@ const sessions = new Map()
 const legacySessions = new Set()
 const refunds = []
 const emails = []
+const realNow = Date.now
+let priceClockOffset = 0
+const expirePriceCache = () => {
+  priceClockOffset += 60_001
+  Date.now = () => realNow() + priceClockOffset
+}
 let lifetimePrice = { currency: 'pkr', unit_amount: 1000000 }
 const stripeFetch = async (raw, request) => {
   const path = new URL(raw).pathname
@@ -97,14 +103,17 @@ try {
 
   const third = (await call('/v1/installations', null, 'POST')).body.token
   lifetimePrice = { currency: 'usd', unit_amount: 3000 }
+  expirePriceCache() // The price cache must expire before a changed provider fixture is observable.
   assert.equal((await call('/v1/checkout', third, 'POST', { product: 'lifetime' })).status, 502)
   assert.equal(sessions.size, 2)
   lifetimePrice = { currency: 'pkr', unit_amount: 830000 }
+  expirePriceCache()
   assert.equal((await call('/v1/checkout', third, 'POST', { product: 'lifetime' })).status, 502)
   assert.equal(sessions.size, 2)
   console.log('PASS  USD and wrong-PKR Stripe prices cannot open Checkout')
 
   lifetimePrice = { currency: 'pkr', unit_amount: 1000000 }
+  expirePriceCache()
   const oldCheckout = await call('/v1/checkout', third, 'POST', { product: 'lifetime' })
   assert.equal(oldCheckout.status, 200)
   legacySessions.add('cs_test_direct3')
@@ -114,6 +123,7 @@ try {
   assert.equal(replacement.body.url, sessions.get('cs_test_direct4').url)
   console.log('PASS  an old USD Checkout is expired before a PKR Checkout opens')
 } finally {
+  Date.now = realNow
   service.close()
   rmSync(directory, { recursive: true, force: true })
 }
