@@ -52,6 +52,26 @@ async function main() {
     assert.deepEqual(errors,[])
     const result={...before,profile,allPagesRender:true,unlicensedActionReturnsToKey:true,rendererErrors:errors,passed:true}
     fs.writeFileSync(path.join(output,'fresh-install.json'),JSON.stringify(result,null,2))
+    if(process.env.MAMALEAD_QA_IDENTITIES_FILE) {
+      // Record only one-way identifiers for our isolated QA installations so release cleanup
+      // can remove those anonymous server rows. Never print or persist their bearer tokens.
+      const hashes=await app.evaluate(({safeStorage},temp)=>{
+        const fs=process.getBuiltinModule('fs'),path=process.getBuiltinModule('path'),crypto=process.getBuiltinModule('crypto')
+        const scope=crypto.createHash('sha256').update('https://api.mamalead.com/').digest('hex').slice(0,20),hashes=[]
+        for(const name of fs.readdirSync(temp)){
+          if(!/^mamalead-(fresh-signed|email-upgrade|sections-ui)-/.test(name))continue
+          const file=path.join(temp,name,'secrets','billing-installation-'+scope+'.enc')
+          if(!fs.existsSync(file))continue
+          // A different profile may have its own encryption key. Leave such records alone.
+          try {
+            const token=safeStorage.decryptString(fs.readFileSync(file))
+            if(/^[A-Za-z0-9_-]{43}$/.test(token))hashes.push(crypto.createHash('sha256').update(token).digest('hex'))
+          } catch {}
+        }
+        return [...new Set(hashes)]
+      },os.tmpdir())
+      fs.writeFileSync(process.env.MAMALEAD_QA_IDENTITIES_FILE,JSON.stringify(hashes),{mode:0o600})
+    }
     console.log(JSON.stringify(result))
   } finally { await app.close() }
 }
