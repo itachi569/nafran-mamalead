@@ -28,8 +28,8 @@ async function main() {
     for (let number = 1; number <= 2000; number += 1) {
       const id = `scale-${String(number).padStart(4, '0')}`
       const at = new Date(Date.UTC(2026, 0, 1, 0, 0, number)).toISOString()
-      insertLead.run(id, workspace.id, `Scale Lead ${String(number).padStart(4, '0')}`, number % 2 === 0 ? `+44 20 ${number}` : '', number % 3 === 0 ? `https://lead-${number}.example.test` : '', 'Manchester', 'chromium-maps', at)
-      if (number % 5 === 0) insertEmail.run(`email-${number}`, id, workspace.id, 'email', `hello${number}@example.test`, at)
+      insertLead.run(id, workspace.id, `Scale Lead ${String(number).padStart(4, '0')}`, number % 2 === 0 ? `+44 20 7946 ${String(number % 1000).padStart(4, '0')}` : '', number % 3 === 0 ? `https://lead-${number}.example.com` : '', 'Manchester', 'chromium-maps', at)
+      if (number % 5 === 0) insertEmail.run(`email-${number}`, id, workspace.id, 'email', `hello${number}@example.com`, at)
       if (number % 7 === 0) insertSocial.run(`social-${number}`, workspace.id, id, 'instagram', `https://instagram.com/lead${number}`, at, at)
     }
   })

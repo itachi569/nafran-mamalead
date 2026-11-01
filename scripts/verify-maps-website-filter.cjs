@@ -7,7 +7,7 @@ async function main(){
   try{
     for(const filter of ['any','has','none']){
       const context=await browser.newContext()
-      await context.route('**/*',route=>route.fulfill({contentType:'text/html',body:`<div role="feed">${Array.from({length:12},(_,i)=>`<div jsaction="card"><a class="hfpxzc" aria-label="Clinic ${i}" href="https://www.google.com/maps/place/clinic-${i}">Clinic</a></div>`).join('')}</div><p>You've reached the end of the list</p>`}))
+      await context.route('**/*',route=>route.fulfill({contentType:'text/html',body:`<main role="main"><div role="feed">${Array.from({length:12},(_,i)=>`<div jsaction="card"><a class="hfpxzc" aria-label="Clinic ${i}" href="https://www.google.com/maps/place/clinic-${i}">Clinic</a></div>`).join('')}</div><p>You've reached the end of the list</p></main>`}))
       const provider=new ChromiumMapsProvider({context});provider.pause=async()=>{}
       provider.readDetail=async(_page,entry)=>({name:entry.name,category:'Clinic',address:entry.name+' Karachi',phone:'',website:['https://clinic.fixture.test','https://facebook.com/clinic',''][Number(entry.name.split(' ').at(-1))%3],plusCode:'',ratingText:'',reviewText:''})
       const progress=[]

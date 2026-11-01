@@ -16,8 +16,8 @@ async function main() {
   const repo = new Repository(db)
   const at = new Date().toISOString()
   for (const [id, name, host, phone, area, email, handle] of [
-    ['one','Cedar Dental','alpha.fixture.test','+92 21 1234 5678','Clifton Karachi','contact@alpha.fixture.test','cedarclinic'],
-    ['two','Maple Studio','beta.fixture.test','+92 42 9876 5432','Gulberg Lahore','hello@beta.fixture.test','mapleteam'],
+    ['one','Cedar Dental','alpha.qa-mamalead.com','+92 21 1234 5678','Clifton Karachi','contact@alpha.qa-mamalead.com','cedarclinic'],
+    ['two','Maple Studio','beta.qa-mamalead.com','+92 42 9876 5432','Gulberg Lahore','hello@beta.qa-mamalead.com','mapleteam'],
   ]) {
     db.run('insert into leads (id,workspace_id,name,website,phone,address,provider,captured_at,last_scanned_at) values (?,?,?,?,?,?,?,?,?)',
       [id,workspace.id,name,`https://${host}`,phone,area,'import',at,at])
@@ -40,8 +40,8 @@ async function main() {
     const errors=[]; page.on('pageerror',e=>errors.push(e.message))
     await page.waitForSelector('[data-view="social"]')
     for (const [view,selector,terms] of [
-      ['social','[data-socq]', ['Cedar Dental','alpha.fixture.test','cedarclinic','https://www.instagram.com/cedarclinic/']],
-      ['email','[data-fq="email"]', ['Cedar Dental','alpha.fixture.test','contact@alpha.fixture.test']],
+      ['social','[data-socq]', ['Cedar Dental','alpha.qa-mamalead.com','cedarclinic','https://www.instagram.com/cedarclinic/']],
+      ['email','[data-fq="email"]', ['Cedar Dental','alpha.qa-mamalead.com','contact@alpha.qa-mamalead.com']],
       ['phone','[data-fq="phone"]', ['Cedar Dental','Clifton','+92 21 1234 5678','922112345678']],
     ]) {
       await page.click(`[data-view="${view}"]`)

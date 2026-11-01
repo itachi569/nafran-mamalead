@@ -28,7 +28,7 @@ const service = createBillingServer({
 })
 const fixture = createServer((req, res) => {
   res.setHeader('content-type', 'text/html')
-  res.end(`<html><body><h1>Audit Clinic</h1><p>Clifton, Karachi</p><a href="mailto:hello@audit.fixture.test">Email</a><a href="tel:+922112345678">Call</a><a href="https://www.facebook.com/profile.php?id=123456789&amp;ref=footer">Facebook</a><script type="application/ld+json">{"sameAs":["https:\\/\\/instagram.com\\/auditclinic\\/"]}</script></body></html>`)
+  res.end(`<html><body><h1>Audit Clinic</h1><p>Clifton, Karachi</p><a href="mailto:hello@audit.qa-mamalead.com">Email</a><a href="tel:+442079460122">Call</a><a href="https://www.facebook.com/profile.php?id=123456789&amp;ref=footer">Facebook</a><script type="application/ld+json">{"sameAs":["https:\\/\\/instagram.com\\/auditclinic\\/"]}</script></body></html>`)
 })
 let desktop, page
 async function launch() {
@@ -43,7 +43,7 @@ async function launch() {
     globalThis.fetch = async (input, init) => {
       const url = new URL(String(input))
       if (url.origin === 'https://api.mamalead.com') return native(billing + url.pathname + url.search, init)
-      if (url.hostname.endsWith('.fixture.test')) {
+      if (url.hostname.endsWith('.qa-mamalead.com')) {
         const response = await native(website + url.pathname, init)
         Object.defineProperty(response, 'url', { value: url.href })
         return response
@@ -77,7 +77,7 @@ try {
   await page.click('[data-theme-btn]')
   await page.waitForFunction(() => document.body.dataset.theme === 'light')
   console.log('PASS light/dark theme toggles across every page')
-  await page.evaluate(() => window.desktop.billing.requestTrial('audit@fixture.test'))
+  await page.evaluate(() => window.desktop.billing.requestTrial('audit@qa-mamalead.com'))
   assert.equal(sent.length, 1)
   await page.evaluate(key => window.desktop.billing.activate(key), sent[0].licenseKey)
   assert.equal((await page.evaluate(() => window.desktop.billing.status())).trial.active, true)
@@ -96,11 +96,11 @@ try {
   for (const view of ['social', 'email', 'phone', 'website']) {
     await page.click(`[data-view="${view}"]`)
     if(view==='website') {
-      await page.getByLabel('Websites to look up').fill(`${view}.fixture.test`)
+      await page.getByLabel('Websites to look up').fill(`${view}.qa-mamalead.com`)
       await page.getByRole('button',{name:/^Start lookup/}).click()
     } else {
       await page.getByRole('button', { name: 'Import websites', exact: true }).first().click()
-      await page.locator('[data-imptext="1"]').fill(`${view}.fixture.test`)
+      await page.locator('[data-imptext="1"]').fill(`${view}.qa-mamalead.com`)
       await page.locator('[data-socimpgo="1"]').click()
       await page.locator('[data-impmodal="1"]').waitFor({ state: 'hidden' })
     }
@@ -108,7 +108,7 @@ try {
       await page.locator('[data-soclist] a[data-social-profile-link*="123456789"]').waitFor({ timeout: 30000 })
       await page.locator('[data-soclist] a[data-social-profile-link*="auditclinic"]').waitFor()
     } else if (view !== 'website') {
-      const expected = view === 'email' ? 'hello@audit.fixture.test' : '+922112345678'
+      const expected = view === 'email' ? 'hello@audit.qa-mamalead.com' : '+442079460122'
       const results = view === 'email' ? page.locator('[data-flistcard="email"]') : page.locator(`[data-fres="${view}"]`).locator('xpath=ancestor::section[1]')
       await results.getByText(expected, { exact: false }).first().waitFor({ timeout: 30000 })
       if (view === 'email') {
@@ -125,13 +125,12 @@ try {
   await page.waitForFunction(async () => { const jobs = await window.desktop.local.jobs.totals(); return jobs.queued === 0 && jobs.running === 0 }, null, { timeout: 60000 })
   const stored = await page.evaluate(() => window.desktop.local.leads.list({ limit: 200 }))
   assert.equal(stored.total, 4)
-  const duplicate = await page.evaluate(() => window.desktop.local.imports.websites(['social.fixture.test']))
+  const duplicate = await page.evaluate(() => window.desktop.local.imports.websites(['social.qa-mamalead.com']))
   assert.equal(duplicate.added, 0)
   console.log('PASS duplicate import keeps one stored business')
 
-  const leadId = stored.rows[0].id
-  await page.evaluate(id => window.desktop.local.leads.bookmark(id, true), leadId)
   await page.click('[data-view="lists"]')
+  await page.getByRole('button', { name: 'Bookmark this lead', exact: true }).first().click()
   assert.equal(await page.getByRole('button', { name: /Manchester Physio|Skin & Derma|Salford & Quays/ }).count(), 0)
   await page.getByLabel('New list name').fill('Audit saved list')
   await page.getByRole('button', { name: /^Save \d+ leads?/ }).first().click()
@@ -139,6 +138,7 @@ try {
   const listId = (await page.evaluate(() => window.desktop.local.lists.list())).find(list => list.name === 'Audit saved list').id
   const listMembers = await page.evaluate(id => window.desktop.local.lists.members(id), listId)
   assert.ok(listMembers.length > 0)
+  const leadId = listMembers[0]
   await page.getByRole('button', { name: /^Save \d+ leads?/ }).first().click()
   assert.deepEqual(await page.evaluate(id => window.desktop.local.lists.members(id), listId), listMembers)
   console.log('PASS bookmark, named list created through UI, real destination counts and duplicate-safe saving')
@@ -170,7 +170,7 @@ try {
     await desktop.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }) }, file)
     const result = await page.evaluate(format => window.desktop.local.exports.write({ kind: 'leads', limit: 200, delimiter: ',', columns: ['Business name', 'Domain', 'Phone', 'Email'], fileName: 'audit', format }), format)
     assert.equal(result.rows, 24); assert.ok(existsSync(file))
-    if (format === 'csv') assert.ok(readFileSync(file, 'utf8').includes('fixture.test'))
+    if (format === 'csv') assert.ok(readFileSync(file, 'utf8').includes('qa-mamalead.com'))
     if (format === 'xlsx') { const book = new ExcelJS.Workbook(); await book.xlsx.readFile(file); assert.ok(book.worksheets[0].getImages().length>0,'Original logo is embedded');assert.equal(book.worksheets[0].getCell('A4').value,'Business name') }
     if (format === 'pdf') assert.ok((await PDFDocument.load(readFileSync(file))).getPageCount() >= 1)
   }
@@ -213,8 +213,8 @@ try {
     const contacts = await page.evaluate(async () => {
       const ids = []
       for (let i = 0; i < 10; i++) {
-        const imported=await window.desktop.local.imports.websites([`verification${i}.fixture.test`],{enqueue:false})
-        ids.push((await window.desktop.local.contacts.upsert({leadId:imported.leadIds[0],kind:'email',value:`audit${i}@fixture.test`,source:'test'})).id)
+        const imported=await window.desktop.local.imports.websites([`verification${i}.qa-mamalead.com`],{enqueue:false})
+        ids.push((await window.desktop.local.contacts.upsert({leadId:imported.leadIds[0],kind:'email',value:`audit${i}@qa-mamalead.com`,source:'test'})).id)
       }
       return ids
     })

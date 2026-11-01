@@ -739,51 +739,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                         </button>
                       </div>
                     </section>
-                    <section data-card="1" style={{padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
-                      <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px"}}>
-                        <div>
-                          <h2 style={{margin: "0", fontSize: "19px", fontWeight: "500", letterSpacing: "-.01em"}}>Scheduled</h2>
-                          <p style={{margin: "4px 0 0", fontSize: "13.5px", color: "#5A5F5C"}}>Upcoming runs and reminders.</p>
-                        </div>
-                        <span data-open="1" aria-hidden="true" style={{display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "999px", background: "#EAEAE8", fontSize: "14px", flex: "none"}}>↗</span>
-                      </div>
-                      <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,190px),1fr))", gap: "18px", marginTop: "18px"}}>
-                        <div>
-                          <div style={{fontSize: "16px", fontWeight: "500"}}>Weekly Maps scrape</div>
-                          <div style={{display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", fontSize: "13.5px", color: "#4A4F4B"}}>
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                              <rect x="4" y="5.5" width="16" height="14" rx="3"></rect>
-                              <path d="M8 3.5v4M16 3.5v4M4 10h16"></path>
-                            </svg>
-                            {' '}12 Sep • 09:00
-                          </div>
-                          <div style={{display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", fontSize: "13.5px", color: "#4A4F4B"}}>
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                              <path d="M12 21s6.5-6 6.5-10.5A6.5 6.5 0 0 0 5.5 10.5C5.5 15 12 21 12 21z"></path>
-                              <circle cx="12" cy="10.5" r="2.2"></circle>
-                            </svg>
-                            {' '}{V.mapsAreas} · {V.mapsRadius}
-                          </div>
-                        </div>
-                        <div style={{borderLeft: "1px solid #E4E5E2", paddingLeft: "18px"}}>
-                          <div style={{fontSize: "16px", fontWeight: "500"}}>Enrichment sweep</div>
-                          <div style={{display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", fontSize: "13.5px", color: "#4A4F4B"}}>
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                              <rect x="4" y="5.5" width="16" height="14" rx="3"></rect>
-                              <path d="M8 3.5v4M16 3.5v4M4 10h16"></path>
-                            </svg>
-                            {' '}Due in 2 days
-                          </div>
-                          <div style={{display: "flex", alignItems: "center", gap: "8px", marginTop: "6px", fontSize: "13.5px", color: "#4A4F4B"}}>
-                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{flex: "none"}}>
-                              <circle cx="12" cy="12" r="7.5"></circle>
-                              <path d="M12 8v4.2l3 1.8"></path>
-                            </svg>
-                            {' '}63 pending leads
-                          </div>
-                        </div>
-                      </div>
-                    </section>
+
                   </div>
                 </div>
               </div>

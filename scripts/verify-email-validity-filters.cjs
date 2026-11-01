@@ -30,15 +30,15 @@ async function main() {
     await page.waitForSelector('[data-view="dashboard"]', { timeout: 30_000 })
     const seeded = await page.evaluate(async () => {
       const imported = await window.desktop.local.imports.websites([
-        'https://invalid.fixture.test', 'https://unknown.fixture.test', 'https://risky.fixture.test', 'https://unchecked.fixture.test', 'https://empty.fixture.test',
+        'https://invalid.qa-mamalead.com', 'https://unknown.qa-mamalead.com', 'https://risky.qa-mamalead.com', 'https://unchecked.qa-mamalead.com', 'https://empty.qa-mamalead.com',
       ], {enqueue:false})
       const add = (leadId, value, source = 'filter-test') => window.desktop.local.contacts.upsert({ leadId, kind: 'email', value, source })
       return {
         imported,
-        invalid: (await add(imported.leadIds[0], 'invalid@alpha.test')).id,
-        unknown: (await add(imported.leadIds[1], 'unknown@alpha.test', 'https://unknown.fixture.test/contact')).id,
-        risky: (await add(imported.leadIds[2], 'risky@beta.test')).id,
-        unchecked: (await add(imported.leadIds[3], 'unchecked@gamma.test')).id,
+        invalid: (await add(imported.leadIds[0], 'invalid@alpha.qa-mamalead.com')).id,
+        unknown: (await add(imported.leadIds[1], 'unknown@alpha.qa-mamalead.com', 'https://unknown.qa-mamalead.com/contact')).id,
+        risky: (await add(imported.leadIds[2], 'risky@beta.qa-mamalead.com')).id,
+        unchecked: (await add(imported.leadIds[3], 'unchecked@gamma.qa-mamalead.com')).id,
       }
     })
     assert.equal(seeded.imported.added, 5)
@@ -73,13 +73,13 @@ async function main() {
 
     await filter.selectOption('invalid')
     await waitRows(1)
-    assert.equal(await addresses.innerText(), 'invalid@alpha.test')
+    assert.equal(await addresses.innerText(), 'invalid@alpha.qa-mamalead.com')
     assert.equal(await page.locator('[data-fq="email"]').inputValue(), '')
     assert.equal(await page.locator('select[aria-label="Filter rows"]').first().inputValue(), 'invalid')
     assert.match(await page.locator('[data-flistcard="email"]').innerText(), /Showing 1 of 5 leads/)
 
     await filter.selectOption('unknown')
-    await page.waitForFunction(() => document.querySelector('[data-email-address]')?.textContent === 'unknown@alpha.test')
+    await page.waitForFunction(() => document.querySelector('[data-email-address]')?.textContent === 'unknown@alpha.qa-mamalead.com')
     assert.equal(await rows.count(), 1)
     assert.equal(await addresses.getAttribute('title'), 'Published on Contact page')
 
@@ -94,10 +94,10 @@ async function main() {
     await page.locator('[data-fq="email"]').fill('')
     await waitRows(1)
     assert.equal(await rows.count(), 1)
-    assert.equal(await addresses.innerText(), 'risky@beta.test')
+    assert.equal(await addresses.innerText(), 'risky@beta.qa-mamalead.com')
 
     await filter.selectOption('unchecked')
-    await page.waitForFunction(() => document.querySelector('[data-email-address]')?.textContent === 'unchecked@gamma.test')
+    await page.waitForFunction(() => document.querySelector('[data-email-address]')?.textContent === 'unchecked@gamma.qa-mamalead.com')
     assert.equal(await rows.count(), 1)
 
     await filter.selectOption('valid')

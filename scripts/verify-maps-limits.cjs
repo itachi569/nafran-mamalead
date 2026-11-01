@@ -8,11 +8,12 @@ const query = { keywords: ['dentist Clifton', 'dentist Saddar', 'clinic DHA'], l
 
 test('Maps provider stops reading cards at the total across areas/keywords', async () => {
   let pageUrl = ''; let reads = 0; let searches = 0
-  const page = { setDefaultTimeout() {}, setDefaultNavigationTimeout() {}, url: () => pageUrl, goto: async url => { pageUrl = url; searches++ } }
+  const panel = { first() { return this }, innerText: async () => 'Dentists in Karachi' }
+  const page = { setDefaultTimeout() {}, setDefaultNavigationTimeout() {}, locator: () => panel, url: () => pageUrl, goto: async url => { pageUrl = url; searches++ } }
   const provider = new ChromiumMapsProvider({ context: { newPage: async () => page } })
   provider.settleConsent = async () => {}; provider.detectBlock = async () => {}; provider.pause = async () => {}
   // Deliberately oversized feed: a provider guard must still stop exactly at 20.
-  provider.collectCards = async () => Array.from({ length: 37 }, (_, i) => ({ name: `Clinic ${i}`, lines: [], website: '', ratingText: '', reviewText: '' }))
+  provider.collectCards = async () => Array.from({ length: 37 }, (_, i) => ({ name: `Dentist Clinic ${i}`, lines: ['Dentist · Clifton, Karachi'], website: '', ratingText: '', reviewText: '' }))
   provider.readDetail = async (_, entry) => { reads++; return { name: entry.name, address: `${reads} Karachi`, phone: '', website: '', category: '', plusCode: '', ratingText: '', reviewText: '' } }
   const progress = []
   const rows = await provider.run(normaliseQuery(query), value => progress.push(value), new AbortController().signal)

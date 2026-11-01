@@ -12,8 +12,8 @@ async function main() {
     ]) {
       const context = await browser.newContext()
       await context.route('**/*', route => {
-        const cards = Array.from({ length: available }, (_, i) => `<div jsaction="card"><a class="hfpxzc" aria-label="Karachi Clinic ${i}" href="https://www.google.com/maps/place/clinic-${i}">Clinic</a><div class="W4Efsd">Clinic · ${i} Clifton, Karachi</div><span class="MW4etd">4.5</span><span class="UY7F9">(20)</span></div>`).join('')
-        return route.fulfill({ contentType: 'text/html', body: `<html><body><div role="feed">${cards}</div><p>You've reached the end of the list</p></body></html>` })
+        const cards = Array.from({ length: available }, (_, i) => `<div jsaction="card"><a class="hfpxzc" aria-label="Karachi Dentist Clinic ${i}" href="https://www.google.com/maps/place/clinic-${i}">Clinic</a><div class="W4Efsd">Dentist · ${i} Clifton, Karachi</div><span class="MW4etd">4.5</span><span class="UY7F9">(20)</span></div>`).join('')
+        return route.fulfill({ contentType: 'text/html', body: `<html><body><main role="main"><div role="feed">${cards}</div><p>You've reached the end of the list</p></main></body></html>` })
       })
       const provider = new ChromiumMapsProvider({ context })
       provider.pause = async () => {} // Test fixture needs no network pacing.
