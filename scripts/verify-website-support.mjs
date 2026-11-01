@@ -1,6 +1,6 @@
 // Isolated public form -> real billing handler -> SQLite inbox. Email delivery is a fixture.
 import assert from 'node:assert/strict'
-import {mkdtempSync,mkdirSync} from 'node:fs'
+import {mkdtempSync,mkdirSync,writeFileSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join,resolve} from 'node:path'
 import {spawn} from 'node:child_process'
@@ -10,7 +10,8 @@ import {createBillingServer} from '../billing-server/server.mjs'
 const dir=mkdtempSync(join(tmpdir(),'mamalead-web-support-')),probe=createServer()
 await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r))
 const base='http://127.0.0.1:'+port,mail=[]
-const api=createBillingServer({env:{STRIPE_SECRET_KEY:'sk_test_fixture',STRIPE_PRICE_LIFETIME:'price_fixture',BILLING_PUBLIC_URL:'http://127.0.0.1:38747',BILLING_DB_PATH:join(dir,'billing.db'),BILLING_ALLOWED_ORIGINS:base,RESEND_API_KEY:'fixture-only',EMAIL_FROM:'QA <qa@example.test>',SUPPORT_INBOX:'support@example.test',DOWNLOAD_SIGNING_KEY:'fixture-signing-key-not-production',TURNSTILE_SITE_KEY:'fixture-public',TURNSTILE_SECRET_KEY:'fixture-private',TURNSTILE_HOSTNAMES:'127.0.0.1'},fetch:async(url,options)=>{if(url==='https://challenges.cloudflare.com/turnstile/v0/siteverify'){assert.equal(JSON.parse(options.body).response,'fixture-token');return Response.json({success:true,hostname:'127.0.0.1',action:'mamalead_support'})}assert.equal(url,'https://api.resend.com/emails');mail.push(JSON.parse(options.body));return Response.json({id:'test-message'})}})
+const captchaFile=join(dir,'turnstile.env');writeFileSync(captchaFile,'TURNSTILE_SITE_KEY=fixture-public\nTURNSTILE_SECRET_KEY=fixture-private\nTURNSTILE_HOSTNAMES=127.0.0.1\n')
+const api=createBillingServer({env:{STRIPE_SECRET_KEY:'sk_test_fixture',STRIPE_PRICE_LIFETIME:'price_fixture',BILLING_PUBLIC_URL:'http://127.0.0.1:38747',BILLING_DB_PATH:join(dir,'billing.db'),BILLING_ALLOWED_ORIGINS:base,RESEND_API_KEY:'fixture-only',EMAIL_FROM:'QA <qa@example.test>',SUPPORT_INBOX:'support@example.test',DOWNLOAD_SIGNING_KEY:'fixture-signing-key-not-production',TURNSTILE_CONFIG_FILE:captchaFile},fetch:async(url,options)=>{if(url==='https://challenges.cloudflare.com/turnstile/v0/siteverify'){assert.equal(JSON.parse(options.body).response,'fixture-token');return Response.json({success:true,hostname:'127.0.0.1',action:'mamalead_support'})}assert.equal(url,'https://api.resend.com/emails');mail.push(JSON.parse(options.body));return Response.json({id:'test-message'})}})
 await new Promise(r=>api.server.listen(0,'127.0.0.1',r))
 const apiBase='http://127.0.0.1:'+api.server.address().port
 const child=spawn(process.execPath,['website/server.mjs'],{env:{...process.env,LANDING_ROOT:resolve('website'),LANDING_PORT:String(port)},windowsHide:true,stdio:'ignore'})

@@ -25,7 +25,8 @@ export function useDataActions(db:LocalApi|null, flash:(text:string)=>void) {
     toggle:(id:string)=>setSelected(ids=>ids.includes(id)?ids.filter(value=>value!==id):[...ids,id]),
     selectPage:(ids:string[])=>setSelected(current=>ids.every(id=>current.includes(id))?current.filter(id=>!ids.includes(id)):[...new Set([...current,...ids])]),
     clear:()=>setSelected([]),
-    removeSelected:()=>{if(db && selected.length)schedule(`${selected.length} selected leads will be deleted in 5 seconds.`,()=>db.leads.remove(selected))},
+    removeSelected:()=>{if(db && selected.length)schedule(`${selected.length} selected ${selected.length===1?'lead':'leads'} will be deleted in 5 seconds.`,()=>db.leads.remove(selected))},
+    removeList:(id:string)=>{if(db)schedule('This list will be deleted in 5 seconds. Its leads will stay in All Leads.',()=>db.lists.remove(id))},
     removeRun:(id:string)=>{if(db)schedule('This run will be removed in 5 seconds. Its leads will stay saved.',()=>db.runs.remove(id))},
   }
 }

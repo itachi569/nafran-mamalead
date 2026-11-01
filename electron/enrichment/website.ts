@@ -1,3 +1,4 @@
+import {normalizePhone} from '../phone-format'
 // Reads a lead's own website to find the contact details a Maps listing does not publish.
 //
 // This is the step that turns a captured business into something worth contacting: a Maps entry
@@ -315,8 +316,8 @@ export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<Web
     }
     for(const raw of Array.isArray(node.telephone)?node.telephone:[node.telephone]) {
       if(typeof raw!=='string')continue
-      const phone=normalisePhone(raw)
-      if(phone.replace(/\D/g,'').length>=9 && phone.replace(/\D/g,'').length<=15 && !phones.some(item=>item.value===phone))phones.push({value:phone,page:pageUrl})
+      const phone=normalisePhone(raw,pageUrl+" "+html)
+      if(phone && !phones.some(item=>item.value===phone))phones.push({value:phone,page:pageUrl})
     }
     Object.values(node).forEach(structuredContacts)
   }
@@ -385,9 +386,9 @@ export function publishedPhonesFromHtml(html: string, page: string): FoundPhone[
   const found=new Map<string,FoundPhone>()
   const contactPage=/\/(?:contact(?:-us)?|contactus|reach-us|get-in-touch)(?:\/|\.[a-z]+$|$)/i.test(new URL(page).pathname)
   const add=(raw:string,score=20)=>{
-    const value=normalisePhone(raw),digits=value.replace(/\D/g,'')
+    const value=normalisePhone(raw,page+' '+html),digits=value.replace(/\D/g,'')
     score=Math.min(100,Math.max(1,score+(contactPage?10:0)))
-    if(digits.length>=9 && digits.length<=15 && score>(found.get(digits)?.score ?? -1))found.set(digits,{value,page,score})
+    if(value && score>(found.get(digits)?.score ?? -1))found.set(digits,{value,page,score})
   }
   const walk=(node:DefaultTreeAdapterMap['node'],inChrome=false):void=>{
     if('tagName' in node){
@@ -422,18 +423,8 @@ export function publishedPhonesFromHtml(html: string, page: string): FoundPhone[
 }
 
 /** Decodes tel links, strips extensions and rejects values beyond phone digit limits. */
-export function normalisePhone(raw: string): string {
-  let value=decodeHtml(raw).replace(/^tel:/i,'')
-  try{value=decodeURIComponent(value)}catch{return ''}
-  value=value.split(/[;?]/)[0].replace(/\s*(?:ext\.?|extension|x)\s*\d+\s*$/i,'').trim()
-  // Four dotted octets are an IPv4 address, not a published phone number.
-  if(/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)&&value.split('.').every(part=>Number(part)<=255))return ''
-  if(value.startsWith('+'))value=value.replace(/\(0\)/g,'')
-  const number=(value.startsWith('+')?'+':'')+value.replace(/\D/g,'')
-  const digits=number.replace(/\D/g,'')
-  if(digits.length<9 || digits.length>15)return ''
-  if(number.startsWith('+44'))return ('+44 '+number.slice(3).replace(/(\d{3})(\d{3})(\d+)/,'$1 $2 $3')).trim()
-  return number
+export function normalisePhone(raw: string, context=''): string {
+  return normalizePhone(decodeHtml(raw),context)
 }
 
 /** Words that mark a phrase as a service or a treatment rather than a person's name. */

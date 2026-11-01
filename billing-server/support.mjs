@@ -36,11 +36,13 @@ async function deliverTicket(env,store,ticket,fetcher) {
  if(ticket.email_status!=='sent')attempts.push((async()=>{
   let delivered=false
   try{delivered=Boolean(await deliverSupportEmail(env,{from:env.EMAIL_FROM,to:[env.SUPPORT_INBOX],reply_to:ticket.email,...buildSupportEmail(ticket)},'nafran-support-'+ticket.id,fetcher))}catch{}
+  if(!delivered)console.warn('[support-delivery]',JSON.stringify({ticketId:ticket.id,phase:'inbox',status:'queued-for-retry'}))
   ticket.email_status=delivered?'sent':'failed';await store.markSupportEmail(ticket.id,ticket.email_status)
  })())
  if(['pending','failed'].includes(ticket.receipt_status))attempts.push((async()=>{
   let delivered=false
   try{delivered=Boolean(await deliverSupportEmail(env,{from:env.SUPPORT_REPLY_FROM || env.EMAIL_FROM,to:[ticket.email],reply_to:env.SUPPORT_INBOX,...buildSupportReceipt(ticket)},'mamalead-support-receipt-'+ticket.id,fetcher))}catch{}
+  if(!delivered)console.warn('[support-delivery]',JSON.stringify({ticketId:ticket.id,phase:'receipt',status:'queued-for-retry'}))
   ticket.receipt_status=delivered?'sent':'failed';await store.markSupportReceipt(ticket.id,ticket.receipt_status)
  })())
  await Promise.all(attempts)

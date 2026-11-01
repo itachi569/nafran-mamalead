@@ -62,8 +62,11 @@ async function main(){
   async function recordScroll(label){await page.waitForTimeout(650);scrollSnapshots.push(await panel.locator('.wl-results').evaluate((element,label)=>({label,scrollY:window.scrollY,headingTop:element.getBoundingClientRect().top,firstRowBottom:element.querySelector('[data-lookup-row]')?.getBoundingClientRect().bottom,viewport:innerHeight}),label));console.log('SCROLL',JSON.stringify(scrollSnapshots.at(-1)))}
   if(!(await panel.locator('[data-lookup-input-count]').innerText()).startsWith('0 ready'))throw Error('Stale count on empty input');
   const start=panel.getByRole('button',{name:/Start lookup/});if(!await start.isDisabled())throw Error('Empty lookup enabled');
-  await input.fill('northstar.test\nhttps://www.northstar.test/team\nharbor.test\nblocked.test\nnot a website');
-  if(!(await panel.locator('[data-lookup-input-count]').innerText()).includes('3 ready · 1 duplicates · 1 skipped'))throw Error('Input count mismatch');
+  await input.fill('https://facebook.com/examplebusiness');
+  if(!await start.isDisabled())throw Error('All-social input must not start a website scan');
+  await panel.getByText(/This is a social website/).waitFor();
+  await input.fill('northstar.test\nhttps://www.northstar.test/team\nharbor.test\nblocked.test\nnot a website\nhttps://facebook.com/examplebusiness');
+  if(!(await panel.locator('[data-lookup-input-count]').innerText()).includes('3 ready · 1 duplicates · 2 skipped'))throw Error('Input count mismatch');
   await panel.screenshot({animations:'disabled',path:join(out,'website-lookup-setup.png')});
   await start.click();await panel.getByRole('heading',{name:'Reading public website pages'}).waitFor();
   await panel.getByRole('heading',{name:'Scan complete with errors'}).waitFor({timeout:20000}).catch(async error=>{console.log(await panel.innerText());console.log(await app.evaluate(()=>{const t=globalThis.__lookupTest;return t.repository.websiteLookupSession(t.ws)}));throw error});

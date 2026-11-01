@@ -331,7 +331,7 @@ check('an address on the business domain outscores a free one', ownDomain > free
 check('a role address outscores a personal one', scoreEmail('info@x.co.uk', 'x.co.uk') > scoreEmail('dave@x.co.uk', 'x.co.uk'))
 
 check('a local number keeps its published prefix without guessing its country', normalisePhone('021 37297209') === '02137297209')
-check('an explicit UK country code is retained', normalisePhone('+44 161 496 0121') === '+44 161 496 0121')
+check('an explicit UK country code is retained', normalisePhone('+44 161 496 0121') === '+441614960121')
 
 // Anything an earlier version stored from a footer is cleared on the next launch.
 repo.upsertContact({ leadId: ledger.rows[1].id, kind: 'email', value: 'mymail@mailservice.com', source: 'website', score: 40 })

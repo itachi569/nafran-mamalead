@@ -6,7 +6,7 @@ import { cleanWebsiteUrl, websiteDomain } from '../website-domain'
 //
 // The shapes returned here are the ones the renderer's service layers consume, so the hooks
 // above them did not change when the storage moved to this machine.
-import { phoneInfo } from '../phone-format'
+import { phoneInfo, normalizePhone } from '../phone-format'
 import { randomUUID } from 'node:crypto'
 import { currentPeriod, nowIso, type LocalDatabase } from './local-db'
 import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFields, type WebsiteLookupRow } from '../enrichment/website-lookup'
@@ -394,7 +394,39 @@ export interface DashboardTotals {
 export function scoreLead(lead: LeadInput): number { return contactQuality(lead) }
 
 export class Repository {
-  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality() }
+  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality(); this.repairPhoneQuality() }
+
+  private phoneContext(leadId:string):string {
+    const lead=this.db.one<{website:string;address:string;area:string;phone:string}>('select website,address,area,phone from leads where id=?',[leadId])
+    const phones=this.db.query<{value:string}>("select value from lead_contacts where lead_id=? and kind='phone' and (value like '+%' or value like '00%') limit 8",[leadId])
+    return lead?[lead.website,lead.address,lead.area,'tel:'+lead.phone,...phones.map(row=>'tel:'+row.value)].filter(Boolean).join(' '):''
+  }
+
+  private repairPhoneQuality():void {
+    const migration='phones-1.4.32'
+    if(this.db.one('select name from app_data_migrations where name=?',[migration]))return
+    this.db.transaction(()=>{
+      const changed=new Set<string>()
+      for(const lead of this.db.query<StoredLead & {area:string}>("select * from leads where phone<>''")){
+        const value=normalizePhone(lead.phone,this.phoneContext(lead.id))
+        if(value!==lead.phone){this.archiveQuality('leads',lead as unknown as Record<string,unknown>,'Canonical phone format');this.db.run('update leads set phone=? where id=?',[value,lead.id]);changed.add(lead.id)}
+      }
+      type Contact=Record<string,unknown>&{id:string;lead_id:string;value:string;source:string}
+      const groups=new Map<string,{value:string;rows:Contact[]}>()
+      for(const row of this.db.query<Contact>("select * from lead_contacts where kind='phone' order by (source='manual') desc, verified desc, coalesce(score,0) desc, created_at")){
+        const value=normalizePhone(row.value,this.phoneContext(row.lead_id)+' '+row.source)
+        const key=row.lead_id+'|'+value,group=groups.get(key)
+        if(group)group.rows.push(row);else groups.set(key,{value,rows:[row]})
+      }
+      for(const {value,rows} of groups.values()){
+        const [winner,...duplicates]=rows
+        for(const row of value?duplicates:rows){this.archiveQuality('lead_contacts',row,value?'Duplicate phone formatting':'Invalid published phone');this.db.run('delete from lead_contacts where id=?',[row.id]);changed.add(row.lead_id)}
+        if(value&&value!==winner.value){this.archiveQuality('lead_contacts',winner,'Canonical phone format');this.db.run('update lead_contacts set value=? where id=?',[value,winner.id]);changed.add(winner.lead_id)}
+      }
+      for(const id of changed)this.recomputeLeadScore(id)
+      this.db.run('insert into app_data_migrations (name,applied_at) values (?,?)',[migration,nowIso()])
+    })
+  }
 
   recomputeLeadScore(id?:string): void {
     const rows=this.db.query<StoredLead>(`select l.*,
@@ -550,7 +582,7 @@ export class Repository {
       const linkRun = this.db.prepare('insert or ignore into scrape_run_leads (run_id, lead_id) values (?, ?)')
 
       for (const input of summary.leads) {
-        const lead={...input,website:input.website&&!directoryScanError(input.website)?cleanWebsiteUrl(input.website):''}
+        const lead={...input,phone:normalizePhone(input.phone || '',[input.website,input.address,summary.location].filter(Boolean).join(' ')),website:input.website&&!directoryScanError(input.website)?cleanWebsiteUrl(input.website):''}
         if (!lead.name) continue
         // A streamed row may be seen again in the final summary, including providers without place IDs.
         if (!lead.placeRef && this.db.one('select l.id from leads l join scrape_run_leads rl on rl.lead_id=l.id where rl.run_id=? and l.name=? and l.address=? and l.website=?', [runId,lead.name,lead.address ?? '',lead.website ?? ''])) continue
@@ -751,6 +783,7 @@ export class Repository {
   fillPublishedBusiness(leadId: string, name: string, phone: string): void {
     const lead=this.db.one<{name:string;website:string}>('select name,website from leads where id = ?',[leadId])
     if (name && lead && (!lead.name.trim() || lead.name.toLowerCase()===normaliseDomain(lead.website))) this.db.run('update leads set name = ? where id = ?',[name,leadId])
+    phone=normalizePhone(phone,this.phoneContext(leadId))
     if (phone) this.db.run("update leads set phone = ? where id = ? and trim(phone) = ''",[phone,leadId])
     this.recomputeLeadScore(leadId)
   }
@@ -1012,8 +1045,8 @@ export class Repository {
   }
 
   private writeContact(input:{leadId:string;kind:'email'|'phone'|'social';value:string;source?:string;verified?:boolean;score?:number|null}):{id:string}{
-    const value = input.value.trim()
-    if (!value) throw new Error('A contact value is required.')
+    const value = input.kind==='phone'?normalizePhone(input.value,this.phoneContext(input.leadId)+' '+(input.source || '')):input.value.trim()
+    if (!value) throw new Error(input.kind==='phone'?'Enter a valid phone number, including its country code.':'A contact value is required.')
     const score=input.score==null||!Number.isFinite(input.score)?null:Math.max(0,Math.min(100,Math.round(input.score)))
 
     const existing = this.db.one<{ id: string;validation_status:string|null;verified:number;score:number|null }>(
@@ -1377,7 +1410,8 @@ export class Repository {
     const updates: string[] = [], values: string[] = []
     for (const column of columns) if (patch[column] !== undefined) {
       if (typeof patch[column] !== 'string') throw new Error('Enter text for lead details.')
-      const value=patch[column]!.trim().slice(0,column==='address'?2000:500)
+      let value=patch[column]!.trim().slice(0,column==='address'?2000:500)
+      if(column==='phone'&&value){value=normalizePhone(value,[patch.website,patch.address,this.phoneContext(id)].filter(Boolean).join(' '));if(!value)throw new Error('Enter a valid phone number, including its country code.')}
       if (column==='name' && !value) throw new Error('Business name is required.')
       if (column==='website' && value && !cleanWebsiteUrl(value)) throw new Error('Enter a valid website URL.')
       updates.push(`${column}=?`); values.push(column==='website' && value ? cleanWebsiteUrl(value)! : value)
@@ -1647,11 +1681,11 @@ export class Repository {
   startWebsiteLookup(workspaceId: string, input: string[], selected: WebsiteLookupFields) {
     const fields = lookupFields(selected)
     const lines=input.map(value=>value.trim()).filter(Boolean)
-    const invalid=lines.filter(value=>!normaliseDomain(value))
-    const valid=lines.map(normaliseDomain).filter(Boolean)
+    const invalid=lines.filter(value=>!normaliseDomain(value) || directoryScanError(value))
+    const valid=lines.filter(value=>normaliseDomain(value) && !directoryScanError(value)).map(normaliseDomain)
     const domains = [...new Set(valid)]
-    const inputReport={invalidCount:invalid.length, discardedSamples:invalid.slice(0,5).map(value=>value.slice(0,120)), mergedCount:valid.length-domains.length}
-    if (!domains.length) throw new Error('Add at least one valid website URL.')
+    const inputReport={invalidCount:invalid.length, discardedSamples:invalid.slice(0,5).map(value=>value.slice(0,120)+(socialWebsite(value)?' (social profile, not a website)':normaliseDomain(value)&&directoryScanError(value)?' (not a business website)':'')), mergedCount:valid.length-domains.length}
+    if (!domains.length) throw new Error(invalid.some(socialWebsite)?'Social profile, not a website. Use Social Profiles for these links, or enter a business website.':'Add at least one valid business website URL.')
     if (domains.length > 500) throw new Error('Scan up to 500 unique websites at a time. Split this list into smaller batches.')
     const active = this.db.one<{ id: string }>("select id from enrichment_jobs where workspace_id = ? and kind = 'website' and status in ('queued','running') and json_extract(options, '$.source') = 'website-lookup'", [workspaceId])
     if (active) throw new Error('A Website Lookup is already running. Wait for it to finish before starting another.')

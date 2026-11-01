@@ -1,3 +1,5 @@
+import {normalizePhone} from '../phone-format'
+import {matchesWebsiteFilter} from '../enrichment/source-policy'
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
 import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './browser'
 import { parseAddress } from './location'
@@ -145,7 +147,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
             address: detail.address,
             area,
             postcode,
-            phone: detail.phone,
+            phone: normalizePhone(detail.phone,detail.address+' '+detail.website+' '+query.location),
             website: detail.website || entry.website,
             rating: toNumber(detail.ratingText || entry.ratingText),
             reviewCount: toCount(detail.reviewText || entry.reviewText),
@@ -158,7 +160,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
             provider: this.id,
             capturedAt: new Date().toISOString(),
           }
-          if ((query.websiteFilter === 'has' && !lead.website) || (query.websiteFilter === 'none' && lead.website)) {
+          if (!matchesWebsiteFilter(lead.website, query.websiteFilter)) {
             await this.pause(query,signal); continue
           }
           leads.push(lead)

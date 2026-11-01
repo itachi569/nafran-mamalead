@@ -3512,7 +3512,7 @@ export function useAppValues() {
     remainingScrapes: Math.max(0, (usage?.limit ?? 2000) - (usage?.used ?? 0)),
     scrapeLimit: mapsAllowance?.kind === 'trial' ? 'of 300 Maps leads' : mapsAllowance?.kind === 'lifetime' ? 'Maps leads · unlimited' : 'Maps runs this month',
     storedLeadCount: storedLeadCount.toLocaleString('en-GB'),
-    listTotals: `${lists.length} ${lists.length === 1 ? 'list' : 'lists'} · ${lists.reduce((sum, list) => sum + list.members, 0)} leads`,
+    listTotals: `${plural(lists.length,'list')} · ${plural(lists.reduce((sum, list) => sum + list.members, 0),'lead')}`,
     // The picks are what the last run brought back, which is a page of the ledger rather than the
     // whole workspace: a card each for hundreds of leads would be a scroll nobody finishes.
     pickCount: `${pickLimit>50 ? 'Captures '+(pickLimit-49)+'–'+Math.min(pickLimit,pickTotal) : 'Latest '+pickRows.length} of ${pickTotal} captures`,

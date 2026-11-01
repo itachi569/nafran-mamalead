@@ -5,6 +5,13 @@ export const SOCIAL_HOSTS = ['youtube.com','youtu.be','facebook.com','fb.com','f
 export function socialWebsite(value:string):boolean {
   try {const host=new URL(cleanWebsiteUrl(value) || value).hostname.toLowerCase();return SOCIAL_HOSTS.some(domain=>host===domain||host.endsWith('.'+domain))}catch{return false}
 }
+export function isRealWebsite(value:string):boolean {
+  return Boolean(cleanWebsiteUrl(value)) && !directoryScanError(value)
+}
+export function matchesWebsiteFilter(value:string, filter?:'has'|'none'|'any'):boolean {
+  const real=isRealWebsite(value)
+  return filter==='has'?real:filter==='none'?!real:true
+}
 export function directoryScanError(website: string): string | null {
   try {
     const host = new URL(cleanWebsiteUrl(website) || website).hostname.toLowerCase().replace(/^www\./, '')

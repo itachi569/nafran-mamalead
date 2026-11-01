@@ -1,3 +1,4 @@
+import {loadTurnstileConfig} from './turnstile-config.mjs'
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
 import { createReadStream, mkdirSync, readFileSync } from 'node:fs'
@@ -13,7 +14,7 @@ import {retrySupportDelivery} from './support.mjs'
 import {createSqliteSupportStore} from './support-store.mjs'
 
 export function createBillingServer(options = {}) {
-  const env = { ...(options.env ?? process.env) }
+  const env = options.env && !options.env.TURNSTILE_CONFIG_FILE ? {...options.env} : loadTurnstileConfig(options.env ?? process.env)
   try {
     const installerPath = readFileSync(new URL('./.installer-path', import.meta.url), 'utf8').trim()
     if (!/^\/opt\/billing\/artifacts\/[A-Za-z0-9._-]+\.exe$/.test(installerPath)) throw new Error('The server installer path file is invalid.')

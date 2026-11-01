@@ -1,4 +1,5 @@
 import {createPortal} from 'react-dom'
+import {SavedListDetails} from './SavedListDetails'
 import {ListRename} from './ListRename'
 import './data-management.css'
 import {MapCoveragePin} from './MapCoveragePin'
@@ -11,7 +12,7 @@ import {MapCoveragePin} from './MapCoveragePin'
 import { LeadDetails } from './LeadDetails'
 import {ContactSupportDialog} from './ContactSupportDialog'
 import { AssistText } from './AssistText'
-import { Fragment, type ReactElement } from 'react'
+import { Fragment, useState, type ReactElement } from 'react'
 import type { AppValues } from './useAppValues'
 import { SettingsPanel } from './SettingsPanel'
 import { ExportDialog } from './ExportDialog'
@@ -43,6 +44,8 @@ function shows(value: unknown): boolean {
 export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
   // The recent-search callbacks: a chip names its own term, so they are held in a map beside the
   // values instead of the values carrying one action per search that was ever made.
+  const [openListId,setOpenListId]=useState<string|null>(null)
+  const openList=V.savedLists?.find(list=>list.id===openListId)
   const socialPicks = V.socialPicks
   return (
     <>
@@ -2352,7 +2355,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,252px),1fr))", gap: "clamp(12px,1.4vw,20px)", alignItems: "stretch"}}>
                   {(V.savedLists ?? []).map((l, __il) => (
                     <Fragment key={__il}>
-                      <section data-card="1" style={{display: "flex", flexDirection: "column", padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
+                      <section data-card="1" onClick={event=>{if(!(event.target as HTMLElement).closest('button,input,label'))setOpenListId(l.id)}} style={{display: "flex", flexDirection: "column", padding: "22px 24px", borderRadius: "22px", background: "#F5F5F4", transition: "transform .5s cubic-bezier(.22,1,.36,1),box-shadow .5s linear"}}>
                         <div style={{display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px"}}>
                           <h3 style={{margin: "0", fontSize: "16.5px", fontWeight: "500", letterSpacing: "-.01em", textWrap: "balance"}}>{l.name}</h3>
                           <span style={{padding: "5px 11px", borderRadius: "999px", background: "#EAEAE8", fontSize: "11.5px", fontWeight: "500", whiteSpace: "nowrap"}}>{l.members}</span>
@@ -2371,13 +2374,13 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                           <span style={{flex: "1", height: "8px", borderRadius: "4px", background: "#8FA382"}}></span>
                         </div>
                         <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginTop: "11px"}}>
-                          <span style={{fontSize: "12px", color: "#5A5F5C"}}>{l.updated}</span><ListRename id={l.id} name={l.name}/>
-                          <span aria-hidden="true" style={{fontSize: "13px", color: "#4A4F4B"}}>→</span>
+                          <span style={{fontSize: "12px", color: "#5A5F5C"}}>{l.updated}</span><ListRename id={l.id} name={l.name}/><button className="data-action" aria-label={`Open list ${l.name}`} onClick={()=>setOpenListId(l.id)}>Open list →</button>
                         </div>
                       </section>
                     </Fragment>
                   ))}
                 </div>
+                {openList && <SavedListDetails key={openList.id} id={openList.id} name={openList.name} onClose={()=>setOpenListId(null)} onLead={V.openLeadDetail} onDelete={()=>V.dataActions.removeList(openList.id)} deleteDisabled={Boolean(V.dataActions.pending)||V.dataActions.busy}/>}
               </div>
               </>
             ) : null}
