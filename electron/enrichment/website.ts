@@ -1,4 +1,7 @@
 import {normalizePhone} from '../phone-format'
+import {hasPublicEmailDomain} from '../email-domain'
+import {uniqueAddresses} from './contact-dedupe'
+export {uniqueAddresses} from './contact-dedupe'
 // Reads a lead's own website to find the contact details a Maps listing does not publish.
 //
 // This is the step that turns a captured business into something worth contacting: a Maps entry
@@ -220,11 +223,6 @@ export function addressesFromHtml(html: string): string[] {
     }
   }
   return uniqueAddresses(Array.from(found))
-}
-
-function uniqueAddresses(addresses: string[]): string[] {
-  const key=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,'')
-  return addresses.filter((value,i)=>!addresses.some((other,j)=>j!==i && key(other).includes(key(value)) && (key(other).length>key(value).length || j<i))).slice(0,12)
 }
 
 /** Parse real navigation anchors, including unquoted HTML attributes, without reading script templates. */
@@ -672,6 +670,7 @@ function cleanEmails(values: string[]): string[] {
  */
 export function isUsableEmail(value: string): boolean {
   value=value.trim().toLowerCase()
+  if (!hasPublicEmailDomain(value)) return false
   if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(value)) return false
   if (EMAIL_NOISE.test(value)) return false
   const [local,domain]=value.split('@')

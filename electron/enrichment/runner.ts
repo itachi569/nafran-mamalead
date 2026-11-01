@@ -14,6 +14,7 @@ import {primarySocialProfiles} from '../social-profile'
 import { userError } from '../user-errors'
 import { directoryScanError } from './source-policy'
 import { WebsiteEnricher } from './website'
+import {uniquePhones,uniqueAddresses} from './contact-dedupe'
 import { DEFAULT_LOOKUP_FIELDS, emptyLookupRow, lookupOptions, lookupRowFromFindings } from './website-lookup'
 
 import {compareEmailContacts} from '../email-ranking'
@@ -294,6 +295,8 @@ export class EnrichmentRunner {
       if (signal.aborted) throw new DOMException('Enrichment cancelled', 'AbortError')
       if (findings.canonicalWebsite) this.repository.saveCanonicalWebsite(leadId, findings.canonicalWebsite)
       findings.socials = primarySocialProfiles(findings.socials,lead.website,findings.businessName || lead.name)
+      findings.phones=uniquePhones(findings.phones,lead.website+' '+(findings.addresses||[]).join(' '))
+      findings.addresses=uniqueAddresses(findings.addresses||[])
       findings.emails.sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page}))
       findings.emails=findings.emails.slice(0,1)
       if (siteFailure) findings.error = siteFailure

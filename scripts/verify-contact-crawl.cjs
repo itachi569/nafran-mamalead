@@ -10,9 +10,9 @@ async function main() {
       '/robots.txt': `Sitemap: ${base}/sitemap_index.xml`,
       '/sitemap_index.xml': `<sitemapindex>${Array.from({length:6},(_,i)=>`<sitemap><loc>${base}/post-sitemap-${i}.xml</loc></sitemap>`).join('')}<sitemap><loc>${base}/page-sitemap.xml</loc></sitemap></sitemapindex>`,
       '/page-sitemap.xml': `<urlset><url><loc>${base}/contact-us/</loc></url><url><loc>http://unrelated.invalid/contact</loc></url></urlset>`,
-      '/': '<h1>Fixture law firm</h1><a href="mailto:office@law.fixture.test">Office</a><a href="/videos/personal-contact-story/">Personal contact story</a><a href="http://[bad">Invalid</a>',
-      '/people/': `<h1>Our people</h1><div class="person"><div class="nm">Irtafa ur Rehman</div><div class="rl">Founder</div><a href="mailto:irtafa@law.fixture.test">Email me</a><a href="tel:02137297209">Call</a></div><article><h2>Anas Habib Magoon, Esq.</h2><p>Attorney</p><p>${'Legal experience and professional expertise. '.repeat(70)}</p><a href="mailto:anas@law.fixture.test">Email me</a></article><p>Mr. Shah has practised as an Advocate since January 2010 and founded the chambers, whose offices are in Karachi.</p><script>const link='<a href="/contact?who=template">Contact</a>'</script>`,
-      '/contact-us/': '<h1>Contact</h1><p>25 Clifton Road, Karachi, Pakistan</p><p>12 Main Street, Lahore, Pakistan</p><p>Ruth Ellery, Founder <a href="mailto:ruth@law.fixture.test">Ruth Ellery</a></p><a href="tel:+922135761234">Call</a><script type="application/ld+json">{"@type":"Person","name":"Ruth Ellery","jobTitle":"Founder","email":"ruth@law.fixture.test"}</script>',
+      '/': '<h1>Fixture law firm</h1><a href="mailto:office@law.qa-mamalead.com">Office</a><a href="/videos/personal-contact-story/">Personal contact story</a><a href="http://[bad">Invalid</a>',
+      '/people/': `<h1>Our people</h1><div class="person"><div class="nm">Irtafa ur Rehman</div><div class="rl">Founder</div><a href="mailto:irtafa@law.qa-mamalead.com">Email me</a><a href="tel:02137297209">Call</a></div><article><h2>Anas Habib Magoon, Esq.</h2><p>Attorney</p><p>${'Legal experience and professional expertise. '.repeat(70)}</p><a href="mailto:anas@law.qa-mamalead.com">Email me</a></article><p>Mr. Shah has practised as an Advocate since January 2010 and founded the chambers, whose offices are in Karachi.</p><script>const link='<a href="/contact?who=template">Contact</a>'</script>`,
+      '/contact-us/': '<h1>Contact</h1><p>25 Clifton Road, Karachi, Pakistan</p><p>12 Main Street, Lahore, Pakistan</p><p>Ruth Ellery, Founder <a href="mailto:ruth@law.qa-mamalead.com">Ruth Ellery</a></p><a href="tel:+922135761234">Call</a><script type="application/ld+json">{"@type":"Person","name":"Ruth Ellery","jobTitle":"Founder","email":"ruth@law.qa-mamalead.com"}</script>',
     }
     res.writeHead(routes[req.url] ? 200 : 404, {'content-type':'text/html'});res.end(routes[req.url] ?? '')
   })
@@ -21,11 +21,11 @@ async function main() {
   try {
     const result=await enricher.inspectContactFast(base)
     assert.equal(result.error,null)
-    assert.deepEqual(result.emails.map(e=>e.value).sort(),['office@law.fixture.test','ruth@law.fixture.test'])
+    assert.deepEqual(result.emails.map(e=>e.value).sort(),['office@law.qa-mamalead.com','ruth@law.qa-mamalead.com'])
     assert.ok(seen.includes('/robots.txt') && seen.includes('/page-sitemap.xml') && seen.includes('/contact-us/'))
     assert.ok(!seen.some(url=>url.startsWith('/post-sitemap-') || url.includes('/videos/')),'Contact sitemap must win over blog sitemaps and unrelated contact keywords')
     assert.equal(result.addresses.length,2)
-    assert.equal(result.people.find(p=>p.fullName==='Ruth Ellery').email,'ruth@law.fixture.test')
+    assert.equal(result.people.find(p=>p.fullName==='Ruth Ellery').email,'ruth@law.qa-mamalead.com')
     assert.equal(result.phones.length,1)
     assert.equal(enricher.inspectPeople,undefined,'Retired owner scan must stay unavailable')
     assert.ok(!seen.some(url=>url.includes('who=template')))

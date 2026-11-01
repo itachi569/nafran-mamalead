@@ -1,4 +1,5 @@
 import {loadTurnstileConfig} from './turnstile-config.mjs'
+import {supportClientIp} from './client-ip.mjs'
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
 import { createReadStream, mkdirSync, readFileSync } from 'node:fs'
@@ -348,7 +349,7 @@ export function createBillingServer(options = {}) {
       deviceId: req.headers['x-nafran-device-id'],
       devicePlatform: req.headers['x-nafran-device-platform'],
       stripeSignature: req.headers['stripe-signature'],
-      ip: env.SUPPORT_TRUST_PROXY === '1' ? String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim() : req.socket.remoteAddress || '',
+      ip: supportClientIp(req,env),
       readBody: async () => {
         let raw = ''
         for await (const chunk of req) {

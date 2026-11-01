@@ -2,6 +2,7 @@ import {Resolver} from 'node:dns/promises'
 import {domainToASCII} from 'node:url'
 import type {EmailValidityResult} from './email-verifier'
 import disposableDomains from './data/disposable-domains.json'
+import {hasPublicEmailDomain} from './email-domain'
 
 const typos:Record<string,string>={'gmial.com':'gmail.com','gmai.com':'gmail.com','gmal.com':'gmail.com','gmail.con':'gmail.com','gmail.co':'gmail.com','hotmial.com':'hotmail.com','hotmai.com':'hotmail.com','hotmal.com':'hotmail.com','yaho.com':'yahoo.com','yahooo.com':'yahoo.com','yahoo.con':'yahoo.com','outlok.com':'outlook.com'}
 const disposable = new Set(disposableDomains)
@@ -16,6 +17,7 @@ const verdict=(email:string,status:EmailValidityResult['status'],message:string)
 export async function precheckEmail(raw:string,signal?:AbortSignal,resolver=new Resolver({timeout:1500,tries:1})):Promise<EmailValidityResult|null> {
   const email=raw.trim().toLowerCase(),domain=domainToASCII(email.split('@')[1] || '')
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!domain)return verdict(email,'invalid','The address format is invalid. Checked locally; no provider credit used.')
+  if(!hasPublicEmailDomain(email))return verdict(email,'invalid','Reserved/private or invalid domain — not a public email address. No provider credit used.')
   if(typos[domain])return verdict(email,'risky',`Possible domain typo. Did you mean ${email.split('@')[0]}@${typos[domain]}? The published address was kept unchanged; no provider credit used.`)
   if(isDisposableDomain(domain))return verdict(email,'risky','Disposable / temporary inbox. Checked locally; no provider credit used.')
   if(signal?.aborted)throw signal.reason

@@ -1,6 +1,8 @@
 import type { LocalDatabase } from '../db/local-db'
 import type { WebsiteFindings } from './website'
 import {compareEmailContacts} from '../email-ranking'
+import {uniquePhones,uniqueAddresses} from './contact-dedupe'
+import {hasPublicEmailDomain} from '../email-domain'
 
 export interface WebsiteLookupFields { email: boolean; phone: boolean; social: boolean; address: boolean }
 export interface WebsiteLookupRow {
@@ -60,7 +62,7 @@ export function readWebsiteLookup(db: LocalDatabase, workspaceId: string, jobId?
     'select position, data, status, error from website_lookup_rows where job_id = ? order by position', [job.id],
   ).map(saved => {
     const data=JSON.parse(saved.data) as WebsiteLookupRow
-    return {position:saved.position,row:{...data,emails:[...data.emails].sort((a,b)=>compareEmailContacts(a,b)).slice(0,1),status:saved.status,error:saved.error}}
+    return {position:saved.position,row:{...data,emails:[...data.emails].filter(item=>hasPublicEmailDomain(item.value)).sort((a,b)=>compareEmailContacts(a,b)).slice(0,1),phones:uniquePhones(data.phones,data.website+' '+data.address),address:uniqueAddresses(data.address.split(/\s*\|\s*/)).join(' | '),status:saved.status,error:saved.error}}
   })
   const rows = [...savedRows,...(options.failedImportRows ?? [])].sort((a,b)=>a.position-b.position).map(saved=>saved.row)
   if (job.status === 'failed') for (const row of rows) {
@@ -74,10 +76,10 @@ export function lookupRowFromFindings(lead: { id: string; name: string; website:
   return {
     ...emptyLookupRow(lead), businessName: findings.businessName || lead.name,
     status: findings.error ? 'failed' : 'done', error: findings.error ?? '',
-    emails: fields.email ? [...findings.emails].sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page})).slice(0,1).map(item => ({ value: item.value, source: item.page })) : [],
-    phones: fields.phone ? findings.phones.map(item => ({ value: item.value, source: item.page })) : [],
+    emails: fields.email ? [...findings.emails].filter(item=>hasPublicEmailDomain(item.value)).sort((a,b)=>compareEmailContacts({...a,source:a.page},{...b,source:b.page})).slice(0,1).map(item => ({ value: item.value, source: item.page })) : [],
+    phones: fields.phone ? uniquePhones(findings.phones,lead.website+' '+(findings.addresses||[]).join(' ')).map(item => ({ value: item.value, source: item.page })) : [],
     socials: fields.social ? Array.from(new Map(findings.socials.map(item => [item.profileUrl, { platform: item.platform, url: item.profileUrl }])).values()) : [],
-    address: fields.address ? [...new Set(findings.addresses ?? [])].join(' | ') : '',
+    address: fields.address ? uniqueAddresses(findings.addresses ?? []).join(' | ') : '',
     sources: [...new Set(findings.pagesRead)],
   }
 }

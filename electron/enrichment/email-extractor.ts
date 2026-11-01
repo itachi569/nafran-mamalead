@@ -1,3 +1,4 @@
+import {hasPublicEmailDomain} from '../email-domain'
 // Pulling addresses out of a search result.
 //
 // The deep pass searches for a business's decision makers and reads the addresses out of the
@@ -65,7 +66,7 @@ export function extractPublishedEmails(text: string): string[] {
     const value=parseInt(code.replace(/^x/i,''),/^x/i.test(code)?16:10)
     return value>0 && value<=0x10ffff ? String.fromCodePoint(value) : ''
   }).replace(/\s*(?:\[\s*at\s*\]|\(\s*at\s*\))\s*/gi,'@').replace(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\))\s*/gi,'.')
-  return [...new Set((decoded.match(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi) ?? []).map(value=>value.toLowerCase()))]
+  return [...new Set((decoded.match(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi) ?? []).map(value=>value.toLowerCase()).filter(hasPublicEmailDomain))]
 }
 
 /** A person named by a result snippet, still a suggestion until somebody confirms it. */

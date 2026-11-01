@@ -1,4 +1,5 @@
 import { contactQuality } from '../lead-quality'
+import {hasPublicEmailDomain} from '../email-domain'
 import { directoryScanError, socialWebsite } from '../enrichment/source-policy'
 import { cleanWebsiteUrl, websiteDomain } from '../website-domain'
 // Reads and writes for the pages, kept in one place so the IPC layer stays thin and the
@@ -394,7 +395,22 @@ export interface DashboardTotals {
 export function scoreLead(lead: LeadInput): number { return contactQuality(lead) }
 
 export class Repository {
-  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality(); this.repairPhoneQuality() }
+  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality(); this.repairPhoneQuality(); this.repairPrivateEmails() }
+
+  private repairPrivateEmails():void {
+    const migration='private-emails-1.4.33'
+    if(this.db.one('select name from app_data_migrations where name=?',[migration]))return
+    this.db.transaction(()=>{
+      const changed=new Set<string>()
+      for(const row of this.db.query<Record<string,unknown>&{id:string;lead_id:string;value:string}>("select * from lead_contacts where kind='email'")){
+        if(hasPublicEmailDomain(row.value))continue
+        this.archiveQuality('lead_contacts',row,'Reserved/private email domain')
+        this.db.run('delete from lead_contacts where id=?',[row.id]);changed.add(row.lead_id)
+      }
+      for(const id of changed)this.recomputeLeadScore(id)
+      this.db.run('insert into app_data_migrations (name,applied_at) values (?,?)',[migration,nowIso()])
+    })
+  }
 
   private phoneContext(leadId:string):string {
     const lead=this.db.one<{website:string;address:string;area:string;phone:string}>('select website,address,area,phone from leads where id=?',[leadId])
@@ -1034,6 +1050,7 @@ export class Repository {
     score?: number | null
   }): { id: string } {
     if(input.kind==='email')return this.db.transaction(()=>{
+      if(!hasPublicEmailDomain(input.value))throw new Error('Enter an email address with a public domain.')
       const incoming={value:input.value.trim().toLowerCase(),source:input.source??'manual',score:input.score??null}
       if(!incoming.value)throw new Error('A contact value is required.')
       const old=this.db.query<{id:string;value:string;source:string;score:number|null}>("select id,value,source,score from lead_contacts where lead_id=? and kind='email'",[input.leadId]).filter(row=>row.value.toLowerCase()!==incoming.value).sort(compareEmailContacts)
@@ -1045,6 +1062,7 @@ export class Repository {
   }
 
   private writeContact(input:{leadId:string;kind:'email'|'phone'|'social';value:string;source?:string;verified?:boolean;score?:number|null}):{id:string}{
+    if(input.kind==='email'&&!hasPublicEmailDomain(input.value))throw new Error('Enter an email address with a public domain.')
     const value = input.kind==='phone'?normalizePhone(input.value,this.phoneContext(input.leadId)+' '+(input.source || '')):input.value.trim()
     if (!value) throw new Error(input.kind==='phone'?'Enter a valid phone number, including its country code.':'A contact value is required.')
     const score=input.score==null||!Number.isFinite(input.score)?null:Math.max(0,Math.min(100,Math.round(input.score)))

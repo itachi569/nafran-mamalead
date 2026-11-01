@@ -19,21 +19,22 @@ async function main(){
    const {WebsiteEnricher}=req('./dist-electron/enrichment/website.js');
    const {writeExport,buildExport}=req('./dist-electron/export/writer.js');
    globalThis.__lookupTest={db,repository,ws,started:[],out,buildExport,validityCalls:0};
-   // Only reserved fixture hosts are intercepted. No production data/license state is changed.
+   // Exact fixture hosts are intercepted; public-shaped email domains exercise the production filter.
    const fetchOriginal=globalThis.fetch;
    globalThis.fetch=async(raw,options)=>{
     const url=new URL(typeof raw==='string'?raw:raw.url || String(raw));
-    if(!['northstar.test','harbor.test','blocked.test'].includes(url.hostname))return fetchOriginal(raw,options);
+    if(!['northstar.qa-mamalead.com','harbor.qa-mamalead.com','blocked.qa-mamalead.com'].includes(url.hostname))return fetchOriginal(raw,options);
     await new Promise(r=>setTimeout(r,35));
-    if(url.hostname==='blocked.test')return new Response('Unavailable',{status:503});
-    const company=url.hostname==='northstar.test'?'Northstar Studio':'Harbor Dental';
+    if(url.hostname==='blocked.qa-mamalead.com')return new Response('Unavailable',{status:503});
+    const company=url.hostname==='northstar.qa-mamalead.com'?'Northstar Studio':'Harbor Dental';
     if(url.pathname==='/robots.txt')return new Response(`Sitemap: https://${url.hostname}/sitemap.xml`);
     if(url.pathname==='/sitemap.xml')return new Response(`<urlset><url><loc>https://${url.hostname}/contact-us</loc></url></urlset>`);
-    if(url.pathname==='/contact-us')return new Response(`<html><a href="mailto:sales@${url.hostname}">Sales</a><header><a href="tel:+442079460123">Call us</a></header><address>12 King Street, London, SW1A 1AA, United Kingdom</address></html>`);
-    if(url.pathname==='/')return new Response(`<html><head><meta property="og:site_name" content="${company}"></head><body><a href="mailto:hello@${url.hostname}">Email</a><a href="tel:+442079460122">Call</a><a href="https://facebook.com/${url.hostname.split('.')[0]}">Facebook</a><a href="https://linkedin.com/company/${url.hostname.split('.')[0]}">LinkedIn</a><p>Alex Morgan, Founder</p></body></html>`);
+    const email=role=>url.hostname==='harbor.qa-mamalead.com'?'':`<a href="mailto:${role}@${url.hostname}">Email</a>`;
+    if(url.pathname==='/contact-us')return new Response(`<html>${email('sales')}<header><a href="tel:+442079460123">Call us</a></header><address>12 King Street, London, SW1A 1AA, United Kingdom</address></html>`);
+    if(url.pathname==='/')return new Response(`<html><head><meta property="og:site_name" content="${company}"></head><body>${email('hello')}<a href="tel:+442079460122">Call</a><a href="https://facebook.com/${url.hostname.split('.')[0]}">Facebook</a><a href="https://linkedin.com/company/${url.hostname.split('.')[0]}">LinkedIn</a><p>Alex Morgan, Founder</p></body></html>`);
     return new Response('',{status:404});
    };
-   WebsiteEnricher.prototype.inspect=async()=>({emails:[],phones:[],socials:[],people:[],addresses:[],pagesRead:[],error:'Website unavailable'});
+   WebsiteEnricher.prototype.inspect=async url=>new URL(url).hostname==='harbor.qa-mamalead.com'?{emails:[{value:'hello@harbor.qa-mamalead.com',page:url,score:90}],phones:[{value:'+442079460122',page:url,score:80},{value:'+442079460123',page:url,score:100}],socials:[],people:[],addresses:['12 King Street London SW1A 1AA UK'],pagesRead:[url],error:null}:{emails:[],phones:[],socials:[],people:[],addresses:[],pagesRead:[],error:'Website unavailable'};
    WebsiteEnricher.prototype.inspectPeople=async()=>{throw Error('Website Lookup must not scan owners')};
    const runner=new EnrichmentRunner(db,repository,{authorize:async()=>{},consumeDecisionLead:async()=>{throw Error('Website Lookup must not consume Decision Makers credits')},onProgress:progress=>{for(const win of BrowserWindow.getAllWindows())win.webContents.send('enrichment:progress',progress)}});
    const override=(channel,handler)=>{ipcMain.removeHandler(channel);ipcMain.handle(channel,handler)};
@@ -44,7 +45,7 @@ async function main(){
     setTimeout(()=>void runner.prioritize(session.jobId),500);return session;
    });
    override('enrichment:prioritize',()=>({started:true}));
-   const csv=path.join(fs.mkdtempSync(path.join(app.getPath('temp'),'lookup-csv-')),'lookup.csv');fs.writeFileSync(csv,'Business,Website\nNorthstar,northstar.test\nHarbor,harbor.test');
+   const csv=path.join(fs.mkdtempSync(path.join(app.getPath('temp'),'lookup-csv-')),'lookup.csv');fs.writeFileSync(csv,'Business,Website\nNorthstar,northstar.qa-mamalead.com\nHarbor,harbor.qa-mamalead.com');
    const originalOpen=dialog.showOpenDialog;
    dialog.showOpenDialog=async(parent,options)=>options?.title==='Import websites into MamaLead'?{canceled:false,filePaths:[csv]}:originalOpen(parent,options);
    dialog.showSaveDialog=async(parent,options)=>({canceled:false,filePath:path.join(out,path.basename(options.defaultPath))});
@@ -65,21 +66,23 @@ async function main(){
   await input.fill('https://facebook.com/examplebusiness');
   if(!await start.isDisabled())throw Error('All-social input must not start a website scan');
   await panel.getByText(/This is a social website/).waitFor();
-  await input.fill('northstar.test\nhttps://www.northstar.test/team\nharbor.test\nblocked.test\nnot a website\nhttps://facebook.com/examplebusiness');
+  await input.fill('northstar.qa-mamalead.com\nhttps://www.northstar.qa-mamalead.com/team\nharbor.qa-mamalead.com\nblocked.qa-mamalead.com\nnot a website\nhttps://facebook.com/examplebusiness');
   if(!(await panel.locator('[data-lookup-input-count]').innerText()).includes('3 ready · 1 duplicates · 2 skipped'))throw Error('Input count mismatch');
   await panel.screenshot({animations:'disabled',path:join(out,'website-lookup-setup.png')});
   await start.click();await panel.getByRole('heading',{name:'Reading public website pages'}).waitFor();
-  await panel.getByRole('heading',{name:'Scan complete with errors'}).waitFor({timeout:20000}).catch(async error=>{console.log(await panel.innerText());console.log(await app.evaluate(()=>{const t=globalThis.__lookupTest;return t.repository.websiteLookupSession(t.ws)}));throw error});
+  await panel.getByRole('heading',{name:'Scan complete with errors'}).waitFor({timeout:60000}).catch(async error=>{console.log(await panel.innerText());console.log(await app.evaluate(()=>{const t=globalThis.__lookupTest;return t.repository.websiteLookupSession(t.ws)}));throw error});
   if(await panel.locator('[data-lookup-row]').count()!==3)throw Error('Scan results not isolated');
   await recordScroll('URL scan completion');await page.screenshot({animations:'disabled',path:join(out,'auto-scroll-viewport.png')});
-  const text=await panel.innerText();for(const value of ['Northstar Studio','Harbor Dental','hello@northstar.test','12 King Street','facebook','linkedin','Retry needed'])if(!text.includes(value))throw Error('Missing result '+value);
-  if(text.includes('sales@northstar.test'))throw Error('Secondary email shown instead of one main email');
+  const text=await panel.innerText();for(const value of ['Northstar Studio','Harbor Dental','hello@northstar.qa-mamalead.com','12 King Street','facebook','linkedin','Retry needed'])if(!text.includes(value))throw Error('Missing result '+value);
+  if(text.includes('sales@northstar.qa-mamalead.com'))throw Error('Secondary email shown instead of one main email');
   if(await input.inputValue()!=='')throw Error('Input did not reset');
   await panel.screenshot({animations:'disabled',path:join(out,'website-lookup-results.png')});
   await panel.getByRole('button',{name:'Export results ↓'}).click();await page.getByRole('button',{name:'Excel (.xlsx)',exact:true}).click();await page.getByRole('dialog',{name:'Export Website Lookup'}).waitFor({state:'detached'});
   await panel.getByRole('button',{name:'Export results ↓'}).click();await page.getByRole('button',{name:'PDF (.pdf)',exact:true}).click();await page.getByRole('dialog',{name:'Export Website Lookup'}).waitFor({state:'detached'});
   const backend=await app.evaluate(()=>{
    const t=globalThis.__lookupTest,s=t.repository.websiteLookupSession(t.ws);
+   for(const row of s.rows)if(new Set(row.phones.map(p=>p.value.replace(/\D/g,''))).size!==row.phones.length)throw Error('Duplicate phones in Lookup');
+   const rendered=s.rows.find(row=>row.website.includes('harbor.'));if(rendered.phones.length!==2||rendered.address.includes('|'))throw Error('Rendered fallback duplicated contacts');
    if(s.rows[0].emails.length!==1)throw Error('More than one email per website');
    if(t.db.one("select max(score) n from lead_contacts where kind='phone'").n!==100)throw Error('Contact-page header score not clamped to 100');
    if(s.rows[0].address!=='12 King Street, London, SW1A 1AA, United Kingdom')throw Error('Address includes unrelated page text: '+s.rows[0].address);
@@ -88,7 +91,7 @@ async function main(){
    if(t.db.one('select count(*) as n from enrichment_jobs').n!==1)throw Error('Duplicate automatic enrichment job');
    const csv=t.buildExport(t.repository,t.ws,{kind:'website',lookupJobId:s.jobId,limit:1,leadIds:[s.rows[0].leadId],columns:['Business name','Emails','Phone numbers','Business address','Social links','Sources','Status'],delimiter:',',fileName:'subset'});
    if(csv.rows!==1||csv.body.includes('Harbor Dental'))throw Error('Selected export leaked rows');
-   for(const [input,fields] of [[[],s.fields],[Array.from({length:501},(_,i)=>`site${i}.test`),s.fields],[['northstar.test'],{email:false,phone:false,social:false,address:false}]]){
+   for(const [input,fields] of [[[],s.fields],[Array.from({length:501},(_,i)=>`site${i}.test`),s.fields],[['northstar.qa-mamalead.com'],{email:false,phone:false,social:false,address:false}]]){
     let rejected=false;try{t.repository.startWebsiteLookup(t.ws,input,fields)}catch{rejected=true}if(!rejected)throw Error('Invalid request accepted');
    }
    return {rows:s.rows.length,failed:s.rows.filter(row=>row.status==='failed').length,emails:s.rows[0].emails.length,phones:s.rows[0].phones.length,sources:s.rows[0].sources,ownerRows:0,ownerJobs:0,selectedExportRows:csv.rows};

@@ -136,15 +136,15 @@ check('a median duration is reported', counts.medianMs > 0, `${counts.medianMs}m
 // ---------------------------------------------------------------- contacts
 
 const target = ledger.rows[0]
-repo.upsertContact({ leadId: target.id, kind: 'email', value: 'hello@deansgate.test', score: 95, verified: true, source: 'website' })
-repo.upsertContact({ leadId: target.id, kind: 'email', value: 'info@deansgate.test', score: 45, source: 'website' })
-const again = repo.upsertContact({ leadId: target.id, kind: 'email', value: 'hello@deansgate.test', score: 96, verified: true })
+repo.upsertContact({ leadId: target.id, kind: 'email', value: 'hello@deansgate.qa-mamalead.com', score: 95, verified: true, source: 'website' })
+repo.upsertContact({ leadId: target.id, kind: 'email', value: 'info@deansgate.qa-mamalead.com', score: 45, source: 'website' })
+const again = repo.upsertContact({ leadId: target.id, kind: 'email', value: 'hello@deansgate.qa-mamalead.com', score: 96, verified: true })
 repo.updateEmailValidation(again.id, { status: 'valid', verified: true, score: 96, message: 'Mailbox confirmed', provider: 'mailverifier' })
 check('re-adding the same address updates it rather than duplicating', Boolean(again.id))
 const emails = repo.listContacts(workspace.id, 'email')
 check('one main business address stays active', emails.length === 1, `${emails.length} addresses`)
-check('the re-added address kept its identity', emails.filter((row) => row.value === 'hello@deansgate.test').length === 1)
-check('and picked up the new score', emails.find((row) => row.value === 'hello@deansgate.test').score === 96)
+check('the re-added address kept its identity', emails.filter((row) => row.value === 'hello@deansgate.qa-mamalead.com').length === 1)
+check('and picked up the new score', emails.find((row) => row.value === 'hello@deansgate.qa-mamalead.com').score === 96)
 
 const afterEmail = repo.listLeads(workspace.id).rows.find((row) => row.id === target.id)
 check('the ledger now reports an email for that lead', afterEmail.has_email === 1)
@@ -265,11 +265,11 @@ const leadCsv = buildExport(repo, workspace.id, {
 const leadLines = leadCsv.body.trim().split('\n')
 check('the leads export has a header and one row per lead', leadCsv.rows === 5 && leadLines.length === 6, `${leadCsv.rows} rows`)
 check('the header names the chosen columns', leadLines[0] === 'Business name,Domain,Phone,Email,Socials,Score,Saved date', leadLines[0])
-check('an address is written into its column', leadCsv.body.includes('hello@deansgate.test'), 'email column')
+check('an address is written into its column', leadCsv.body.includes('hello@deansgate.qa-mamalead.com'), 'email column')
 check('the lead with a social profile carries it', /instagram/.test(leadCsv.body))
 
 // A cell containing the delimiter must be quoted, or the file will not parse.
-repo.upsertContact({ leadId: ledger.rows[1].id, kind: 'email', value: 'a,b@example.test', score: 50 })
+repo.upsertContact({ leadId: ledger.rows[1].id, kind: 'email', value: 'a,b@fixture.qa-mamalead.com', score: 50 })
 const quoted = buildExport(repo, workspace.id, {
   kind: 'leads',
   limit: 100,
@@ -277,7 +277,7 @@ const quoted = buildExport(repo, workspace.id, {
   columns: ['Business name', 'Email'],
   fileName: 'quoted.csv',
 })
-check('a cell containing the delimiter is quoted', quoted.body.includes('"a,b@example.test"'), 'quoting')
+check('a cell containing the delimiter is quoted', quoted.body.includes('"a,b@fixture.qa-mamalead.com"'), 'quoting')
 
 // The tab delimiter must switch the separator, not just the file extension.
 const tabbed = buildExport(repo, workspace.id, {
@@ -334,7 +334,7 @@ check('a local number keeps its published prefix without guessing its country', 
 check('an explicit UK country code is retained', normalisePhone('+44 161 496 0121') === '+441614960121')
 
 // Anything an earlier version stored from a footer is cleared on the next launch.
-repo.upsertContact({ leadId: ledger.rows[1].id, kind: 'email', value: 'mymail@mailservice.com', source: 'website', score: 40 })
+db.run('insert into lead_contacts (id,workspace_id,lead_id,kind,value,source,score,created_at) values (?,?,?,?,?,?,?,?)',['legacy-noise',workspace.id,ledger.rows[1].id,'email','mymail@mailservice.com','website',40,new Date().toISOString()])
 const pruned = repo.pruneNoisyContacts(isUsableEmail)
 check('a noisy stored address is pruned', pruned.removed >= 1, `${pruned.removed} removed`)
 check('and a real one survives', repo.listContacts(workspace.id, 'email').every((row) => isUsableEmail(String(row.value))))
