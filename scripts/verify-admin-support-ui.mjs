@@ -10,6 +10,14 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromiu
 try {
  const page=await browser.newPage({viewport:{width:1440,height:950}}),errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('UI ERROR',e.message)});page.on('console',m=>{if(m.type()==='error')console.log(m.text())})
  await page.goto('http://127.0.0.1:'+server.address().port+'/admin/');
+ await page.getByRole('button',{name:'View previous history',exact:true}).waitFor();
+ assert.match(await page.getByRole('region',{name:'Activity reporting period'}).innerText(),/Activity from/);
+ assert.match(await page.getByRole('region',{name:'Customer activity',exact:true}).innerText(),/0 total downloads/);
+ await page.getByRole('button',{name:'View previous history',exact:true}).click();
+ assert.match(await page.getByRole('region',{name:'Activity reporting period'}).innerText(),/Previous history/);
+ assert.match(await page.getByRole('region',{name:'Customer activity',exact:true}).innerText(),/1 total downloads/);
+ await page.getByRole('button',{name:'Back to current reporting',exact:true}).click();
+ assert.match(await page.getByRole('region',{name:'Customer activity',exact:true}).innerText(),/0 total downloads/);
  for(const section of ['Overview','Revenue','Users','Purchases']){
   await page.getByRole('button',{name:section,exact:true}).click();
   assert.doesNotMatch(await page.locator('body').innerText(),/Decision Maker|Decision pass|Add-on active|with add-on/i);

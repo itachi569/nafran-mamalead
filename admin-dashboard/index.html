@@ -58,7 +58,8 @@
     <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; padding: 8px 4px 0;">
       <div style="flex: 1 1 340px; min-width: 0;">
         <h1 style="margin: 0; font-size: clamp(28px, 3.4vw, 42px); font-weight: 400; letter-spacing: -.035em; line-height: 1.05;">{{ greeting }}</h1>
-        <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; color: #4E534C; max-width: 660px;">Revenue, users, licenses and installer delivery for Nafran Leads Scraper. Customer lead data stays on each customer's PC and never appears here.</p>
+        <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; color: #4E534C; max-width: 660px;">Revenue, users, licenses and installer delivery for MamaLead. Customer lead data stays on each customer's PC and never appears here.</p>
+        <p style="margin: 6px 0 0; font-size: 13px; color: #4E534C;">{{ releaseLabel }}</p>
       </div>
       <div style="flex: 1 1 420px; max-width: 560px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
         <label style="flex: 1 1 240px; display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 6px 0 20px; background: #FFFFFF; border-radius: 999px;">
@@ -107,10 +108,16 @@
     <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
     <div style="display: flex; flex-direction: column; gap: 20px;">
       <button class="support-overview" onClick="{{ nav.support.go }}"><strong>Support</strong><span>{{ support.countLabel }}</span><span>Open inbox ↗</span></button>
+      <sc-if value="{{ reporting.show }}">
+        <section aria-label="Activity reporting period" style="display: flex; align-items: center; flex-wrap: wrap; gap: 14px; padding: 18px 22px; border-radius: 24px; background: #E6EDDF; color: #263323;">
+          <div style="flex: 1 1 300px;"><strong>{{ reporting.title }}</strong><p style="margin: 5px 0 0; font-size: 13px; line-height: 1.5;">{{ reporting.detail }}</p></div>
+          <button type="button" onClick="{{ reporting.toggle }}" style="border: 1px solid #8FA382; background: #FFFFFF; color: #263323; border-radius: 999px; padding: 11px 18px; font: inherit; cursor: pointer;">{{ reporting.button }}</button>
+        </section>
+      </sc-if>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px;">
         <button type="button" onClick="{{ revenueCard.go }}" style="text-align: left; border: 0; cursor: pointer; color: #1C1C1C; padding: 20px 22px; border-radius: 26px; background: linear-gradient(150deg, #CBD8BC, #B3C4A2); display: flex; flex-direction: column; gap: 12px; min-height: 164px;">
           <span style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-            <span style="font-size: 13px; font-weight: 500;">Total revenue</span>
+            <span style="font-size: 13px; font-weight: 500;">Total revenue · all time</span>
             <span style="font-size: 11px; padding: 4px 10px; border-radius: 999px; background: #1C1C1C; color: #FFFFFF;">{{ revenueCard.tag }}</span>
           </span>
           <span style="font-size: 40px; font-weight: 500; letter-spacing: -.04em; line-height: 1;">{{ revenueCard.value }}</span>
@@ -484,7 +491,7 @@
     </sc-if>
     <p role="status" style="margin: 0; color: #2F4A28; font-size: 14px;">{{ cancellation.message }}</p>
     <footer style="padding: 4px 4px 12px; font-size: 12px; color: #5F645C; display: flex; flex-wrap: wrap; gap: 6px 18px;">
-      <span>Nafran Leads Scraper · MamaLead owner dashboard</span>
+      <span>MamaLead · Private owner dashboard</span>
       <span>Owner controls. Full license keys, tokens and API keys never leave the server.</span>
     </footer>
   </main>
@@ -521,7 +528,7 @@ const PKR = new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR',
 
 class Component extends DCLogic {
   state = {
-    view: 'overview', q: '', conn: 'loading', data: null, error: '',
+    view: 'overview', q: '', conn: 'loading', data: null, error: '', activityHistory: false,
     rev: { status: 'idle', data: null, message: '' },
     support: {status:'open',category:'all',from:'',to:'',unread:false,page:1,total:0,rows:[],counts:{open:0,unread:0},busy:false,error:'',detail:null,drafts:{},note:'',closeAfter:false,confirm:false,sending:false,writeError:''},
     filters: { support:'open', revenue: 'all', users: 'all', purchases: 'all', licenses: 'all', activations: 'all', email: 'all', health: 'all' },
@@ -769,9 +776,10 @@ class Component extends DCLogic {
         mode: 'test', cap: 2,
         counts: { installations: 4, purchases: 1, customers: 1, checkoutsStarted: 0, licenses: 1, revoked: 0, trials: 0, trialActivated: 0, trialActive: 0, emailed: 0, activated: 1, slotsUsed: 2, slotsTotal: 2 },
         usage: { tracking: true, registered: 4, desktop: 2, checkout: 1, unseen: 1, licensed: 2, active24h: 1, active7d: 1, active30d: 1 },
+        activity: { since: new Date().toISOString(), usage: { tracking: true, registered: 0, desktop: 0, checkout: 0, unseen: 0, licensed: 0, active24h: 0, active7d: 0, active30d: 0 }, downloads: { total: 0, public: 0, buyers: 0, last30d: 0, last: null }, trials: 0, trialActivated: 0, trialActive: 0 },
         downloads: { tracking: true, total: 1, public: 0, buyers: 1, last30d: 1, last: at },
         webhooks: { count: 0, last: null },
-        installer: { storage: 'local-url', filename: 'Nafran-Leads-Scraper-Setup.exe', signing: true, ready: false, detail: 'DOWNLOAD_URL is only honoured while billing runs on localhost.' },
+        installer: { storage: 'local-url', filename: 'MamaLead-Setup.exe', signing: true, ready: false, detail: 'DOWNLOAD_URL is only honoured while billing runs on localhost.' },
         email: { provider: 'none' },
       },
       purchases: [{ id: '3f9c2a71', created: at, status: 'paid', session: '…fetime', customer: '…s_mock', license: { last4: '9K2D', revoked: false }, email }],
@@ -874,7 +882,8 @@ class Component extends DCLogic {
     const { data, conn, rev } = this.state;
     const s = data?.summary;
     const c = s?.counts;
-    const u = s?.usage;
+    const activity = this.state.activityHistory ? null : s?.activity;
+    const u = activity?.usage ?? s?.usage;
     const cap = s?.cap ?? 2;
     const pct = (a, b) => (b ? `${Math.min(100, Math.round((a / b) * 100))}%` : '0%');
     const off = { value: '—', of: '', pct: '0%', sub: conn === 'loading' ? 'Loading…' : 'Not connected' };
@@ -889,13 +898,14 @@ class Component extends DCLogic {
     const stats = [
       { label: 'Paying customers', tag: 'Lifetime', go: nav.purchases.go, ...(c ? { value: String(c.customers ?? c.purchases), of: '', pct: pct(c.customers ?? c.purchases, c.purchases), sub: 'One-time Lifetime purchases' } : off) },
       { label: 'Active users · 7 days', tag: 'Desktop app', go: nav.users.go, ...(u ? (u.tracking ? { value: String(u.active7d), of: `/ ${u.desktop}`, pct: pct(u.active7d, u.desktop), sub: `Last 24h ${u.active24h} · last 30 days ${u.active30d}` } : { value: '—', of: '', pct: '0%', sub: 'Needs the billing-server update' }) : off) },
-      { label: 'Licensed machines', tag: `Max ${cap} each`, go: nav.activations.go, ...(c ? { value: String(c.slotsUsed), of: `/ ${c.slotsTotal}`, pct: pct(c.slotsUsed, c.slotsTotal), sub: `${c.licenses} license${c.licenses === 1 ? '' : 's'} issued` } : off) },
+      { label: 'Licensed machines', tag: 'Active access', go: nav.users.go, ...(s?.usage ? { value: String(s.usage.licensed), of: '', pct: pct(s.usage.licensed, s.usage.desktop), sub: 'Current Lifetime and trial access, including owner-issued keys' } : off) },
     ];
-    const dl = s?.downloads;
+    const dl = activity?.downloads ? { ...activity.downloads, tracking: true } : s?.downloads;
     const customerActivity = [
       { label: 'Free downloads', tag: 'Installer', value: dl?.tracking ? String(dl.public ?? 0) : '—', sub: dl?.tracking ? `${dl.total ?? 0} total downloads, including licensed links` : 'Download tracking unavailable' },
-      { label: '1-day trial keys', tag: 'Free', value: c ? String(c.trials ?? 0) : '—', sub: c ? `${c.trialActivated ?? 0} activated · ${c.trialActive ?? 0} active now` : 'Trial data unavailable' },
+      { label: '1-day trial keys', tag: 'Free', value: c ? String(activity?.trials ?? c.trials ?? 0) : '—', sub: c ? `${activity?.trialActivated ?? c.trialActivated ?? 0} activated · ${activity?.trialActive ?? c.trialActive ?? 0} active now` : 'Trial data unavailable' },
       { label: 'Lifetime buyers', tag: 'Checkout records', value: c ? String(c.purchases) : '—', sub: 'Completed checkouts; check Revenue for refunds' },
+      { label: 'Owner-issued keys', tag: 'Private grants', value: c ? String(c.ownerKeys ?? 0) : '—', sub: c ? `${c.ownerActive ?? 0} active machines · Not counted as purchases` : 'License data unavailable' },
     ];
 
     const chart = this.chart();
@@ -983,6 +993,7 @@ class Component extends DCLogic {
       .map((x) => { const t = TONE[x.state] ?? TONE.neutral; return { label: x.label, detail: x.detail, dot: t.dot, state: t.word, stateFg: t.fg }; });
 
     return {
+      reporting: { show: Boolean(s?.activity), title: this.state.activityHistory ? 'Previous history · all-time activity' : `Activity from ${s?.activity?.since ? new Date(s.activity.since).toLocaleString('en-GB', { timeZone: 'Asia/Karachi', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''} PKT`, detail: 'Downloads, trial keys and app activity use this period. Customers, payments and active licences are preserved. Users shows the full customer history.', button: this.state.activityHistory ? 'Back to current reporting' : 'View previous history', toggle: () => this.setState({ activityHistory: !this.state.activityHistory }) },
       revenueCard, stats, customerActivity, customerActivityUpdated: s?.generatedAt ? `Updated ${new Date(s.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · refreshes every 30 sec` : 'Refresh to see current counts', chart, chartEmpty, usersBreak,
       payments, paymentsShow: payments.length > 0, paymentsEmpty,
       gauge, licenseLegend, installer,
@@ -1044,7 +1055,7 @@ class Component extends DCLogic {
         actionGo: () => this.loadRevenue(true), actionDisabled: !data || rev.status === 'loading',
         empty: !r ? { show: true, title: rev.status === 'loading' ? 'Reading payments from Stripe…' : 'Revenue is not available', text: this.revText() }
           : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No payments yet', text: 'Complete a test checkout with card 4242 4242 4242 4242, then refresh.' },
-        footnote: ['Amounts come from Stripe, read on the server for customers the billing server knows, and cached for 5 minutes. Other activity on the Stripe account is not counted. Charge ids and emails are masked.', ...notes].join(' '),
+        footnote: ['Amounts come from Stripe, read on the server for customers the billing server knows, and cached for 5 minutes. Other activity on the Stripe account is not counted. Charge ids are shortened. Customer emails are visible only after owner sign-in.', ...notes].join(' '),
       };
     } else if (view === 'users') {
       const u = s?.usage;
@@ -1063,7 +1074,7 @@ class Component extends DCLogic {
           kpi('Active · 7 days', u.tracking ? String(u.active7d) : '—', u.tracking ? `of ${u.desktop} desktop installs` : 'Needs the billing-server update', true),
           kpi('Active · 24 hours', u.tracking ? String(u.active24h) : '—', 'Desktop app'),
           kpi('Active · 30 days', u.tracking ? String(u.active30d) : '—', 'Desktop app'),
-          kpi('Licensed machines', String(u.licensed), 'Holding a license slot'),
+          kpi('Licensed machines', String(u.licensed), 'Active Lifetime or trial access'),
           kpi('Paying customers', String(s.counts.customers ?? s.counts.purchases), 'One-time Lifetime purchases'),
           kpi('Registered', String(u.registered), 'All billing identities'),
         ] : [],
@@ -1076,7 +1087,7 @@ class Component extends DCLogic {
             this.cell(`Install ${x.id}`, x.email || ''),
             this.cell(KIND[x.kind]),
             this.cell(x.license ? `…${x.license}` : '—', x.slot ? `Slot ${x.slot}` : x.buyer ? 'Purchased here' : ''),
-            this.cell(x.buyer ? 'Lifetime buyer' : x.licenseType === 'trial' ? '1-day trial' : x.licensed ? 'Licensed seat' : '—'),
+            this.cell(x.buyer ? 'Lifetime buyer' : x.ownerIssued ? `Owner-issued ${x.licenseType === 'trial' ? 'trial' : 'Lifetime'}` : x.licenseType === 'trial' ? '1-day trial' : x.licensed ? 'Licensed seat' : '—'),
             this.cell(this.date(x.created)),
             this.cell(x.kind === 'checkout' ? 'n/a' : this.ago(x.lastSeen)),
             x.kind !== 'desktop' ? this.pill(x.kind === 'checkout' ? 'Web' : 'Unseen', 'neutral') : this.pill(active ? 'Active' : 'Idle', active ? 'ok' : 'neutral'),
@@ -1115,7 +1126,7 @@ class Component extends DCLogic {
           ] };
         }),
         empty: !data ? notConnected : rows.length ? { show: false } : all.length ? noMatch : { show: true, title: 'No Stripe test purchases yet', text: 'Complete a test checkout with card 4242 4242 4242 4242 to see it here.' },
-        footnote: 'Stripe ids and customer emails are masked by the server. Set ADMIN_SHOW_EMAILS=1 to see full emails. Verification is read-only and limited to test mode.',
+        footnote: 'Stripe ids are shortened. Customer emails are visible only after owner sign-in. Payment verification is read-only.',
       };
     } else if (view === 'licenses') {
       const defs = [
@@ -1125,8 +1136,8 @@ class Component extends DCLogic {
       const all = data?.licenses ?? [];
       const rows = this.filtered('licenses', all, defs, ['id', 'last4', 'email']);
       out = {
-        title: 'Licenses',
-        intro: 'One key per Lifetime purchase. Only a hash and the last four characters are stored; the full key is shown once to the buyer and is never available here.',
+        title: 'Purchased Lifetime licenses',
+        intro: 'One key per Lifetime purchase. Full keys are never displayed here. Private owner-issued access appears under Users and is not counted as a purchase.',
         chips: this.chips('licenses', defs, all, Boolean(data)),
         columns: ['Key', 'Customer', 'Issued', 'Email', 'Activations', 'Status', 'Action'],
         grid: 'minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,.8fr) minmax(125px,1fr)',
@@ -1232,6 +1243,7 @@ class Component extends DCLogic {
       support:this.supportValues(),supportBadge:this.state.support.counts.unread>99?'99+':String(this.state.support.counts.unread||''),isSupport:view==='support'&&conn!=='unauthorized',
       ownerName, ownerInitial: ownerName.slice(0, 1).toUpperCase(),
       greeting: `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}, ${ownerName}`,
+      releaseLabel: this.state.data?.summary?.installer?.filename ? `Current Windows download: ${this.state.data.summary.installer.filename}` : '',
       q: this.state.q, onSearch: (e) => {this.setState({ q: e.target.value });if(this.state.view==='support'){clearTimeout(this.supportSearchTimer);this.supportSearchTimer=setTimeout(()=>this.supportLoad(1),300);}},
       searchPlaceholder: { support:'Search customer name, email or message subject…', overview: 'Search emails, keys, installs…', revenue: 'Search email or charge id…', users: 'Search install id, key ending or email…', purchases: 'Search email, install or Stripe id…', licenses: 'Search key ending or email…', activations: 'Search key ending or install id…', email: 'Search email or key ending…', health: 'Search checks…' }[view],
       modeLabel: mode ? `STRIPE · ${mode === 'missing' ? 'NOT SET' : mode.toUpperCase()}` : 'NOT CONNECTED',

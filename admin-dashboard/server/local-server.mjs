@@ -24,7 +24,8 @@ const baseHeaders = {
 }
 
 function privateRuntimeEnv(base) {
-  const env = { ...base }
+  // The owner requested complete customer emails in this authenticated dashboard.
+  const env = { ...base, ADMIN_SHOW_EMAILS: '1' }
   const ownerConfig = new URL('../.owner-login.env', import.meta.url)
   try {
     for (const line of readFileSync(ownerConfig, 'utf8').split(/\r?\n/)) {

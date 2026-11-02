@@ -26,22 +26,26 @@ export async function createSqliteAdminStore(path) {
       return all(`select ${INSTALL_COLS}, ${columns.has('last_seen_at') ? 'last_seen_at' : 'null as last_seen_at'}, ${columns.has('device_id') ? 'device_id' : 'null as device_id'}, ${columns.has('device_platform') ? 'device_platform' : 'null as device_platform'} from installations order by created_at desc limit ${LIMIT}`)
     },
     licenses: async () => all(`select ${LICENSE_COLS} from licenses order by created_at desc limit ${LIMIT}`),
-    trialLicenses: async () => all(`select id, key_last4, email, sent_at, revoked_at, expires_at, bound_installation_id from trial_licenses order by created_at desc limit ${LIMIT}`),
-    planMetrics: async () => {
+    trialLicenses: async () => all(`select id, installation_id, key_last4, email, sent_at, revoked_at, expires_at, bound_installation_id from trial_licenses order by created_at desc limit ${LIMIT}`),
+    ownerLicenses: async () => {
+      if (!optional("select 1 from sqlite_master where type = 'table' and name = 'owner_licenses'")) return []
+      return all(`select id, kind, key_last4, email, created_at, activated_at, expires_at, revoked_at, bound_installation_id from owner_licenses order by created_at desc limit ${LIMIT}`)
+    },
+    planMetrics: async (since = '') => {
       const lifetime = all(`select count(*) as purchases, count(distinct coalesce(customer_id, id)) as customers from installations where lifetime_session_id is not null`)[0]
       const trials = optional(`select count(*) filter (where sent_at is not null) as issued,
         count(*) filter (where activated_at is not null) as activated,
         count(*) filter (where sent_at is not null and revoked_at is null and expires_at > ?) as active
-        from trial_licenses`, new Date().toISOString())
+        from trial_licenses where sent_at >= ?`, new Date().toISOString(), since)
       return { lifetimePurchases: Number(lifetime.purchases), lifetimeCustomers: Number(lifetime.customers),
         trialKeysSent: Number(trials?.issued ?? 0),
         trialActivated: Number(trials?.activated ?? 0), trialActive: Number(trials?.active ?? 0) }
     },
     webhooks: async () => optional('select count(*) as count, max(received_at) as last from billing_events'),
-    downloads: async () => {
+    downloads: async (since = '') => {
       const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString()
-      const protectedDownloads = optional('select count(*) as total, count(distinct installation_id) as buyers, sum(case when created_at >= ? then 1 else 0 end) as last30d, max(created_at) as last from billing_downloads', cutoff)
-      const publicDownloads = optional('select count(*) as total, sum(case when created_at >= ? then 1 else 0 end) as last30d, max(created_at) as last from billing_public_downloads', cutoff)
+      const protectedDownloads = optional('select count(*) as total, count(distinct installation_id) as buyers, sum(case when created_at >= ? then 1 else 0 end) as last30d, max(created_at) as last from billing_downloads where created_at >= ?', cutoff, since)
+      const publicDownloads = optional('select count(*) as total, sum(case when created_at >= ? then 1 else 0 end) as last30d, max(created_at) as last from billing_public_downloads where created_at >= ?', cutoff, since)
       if (!protectedDownloads) return null
       return { total: Number(protectedDownloads.total || 0) + Number(publicDownloads?.total || 0), public: Number(publicDownloads?.total || 0),
         buyers: Number(protectedDownloads.buyers || 0), last30d: Number(protectedDownloads.last30d || 0) + Number(publicDownloads?.last30d || 0),
@@ -81,21 +85,21 @@ export async function createNeonAdminStore(databaseUrl) {
       return rows.map((row) => ({ ...row, device_id: byId.get(row.id)?.device_id ?? null, device_platform: byId.get(row.id)?.device_platform ?? null }))
     },
     licenses: async () => sql`select id, installation_id, key_last4, email, created_at, sent_at, revoked_at, activated_at from billing_licenses order by created_at desc limit 2000`,
-    trialLicenses: async () => sql`select id, key_last4, email, sent_at, revoked_at, expires_at, bound_installation_id from billing_trial_licenses order by created_at desc limit 2000`,
-    planMetrics: async () => {
+    trialLicenses: async () => sql`select id, installation_id, key_last4, email, sent_at, revoked_at, expires_at, bound_installation_id from billing_trial_licenses order by created_at desc limit 2000`,
+    planMetrics: async (since = '') => {
       const [lifetime] = await sql`select count(*)::int as purchases, count(distinct coalesce(customer_id, id))::int as customers from billing_installations where lifetime_session_id is not null`
       const [trials] = await sql`select count(*) filter (where sent_at is not null)::int as issued,
         count(*) filter (where activated_at is not null)::int as activated,
         count(*) filter (where sent_at is not null and revoked_at is null and expires_at > now())::int as active
-        from billing_trial_licenses`
+        from billing_trial_licenses where (${since || null}::timestamptz is null or sent_at >= ${since || null}::timestamptz)`
       return { lifetimePurchases: Number(lifetime.purchases), lifetimeCustomers: Number(lifetime.customers),
         trialKeysSent: Number(trials.issued),
         trialActivated: Number(trials.activated), trialActive: Number(trials.active) }
     },
     webhooks: () => optional(() => sql`select count(*)::int as count, max(received_at) as last from billing_events`),
-    downloads: async () => {
-      const protectedDownloads = await optional(() => sql`select count(*)::int as total, count(distinct installation_id)::int as buyers, count(*) filter (where created_at >= now() - interval '30 days')::int as last30d, max(created_at) as last from billing_downloads`)
-      const publicDownloads = await optional(() => sql`select count(*)::int as total, count(*) filter (where created_at >= now() - interval '30 days')::int as last30d, max(created_at) as last from billing_public_downloads`)
+    downloads: async (since = '') => {
+      const protectedDownloads = await optional(() => sql`select count(*)::int as total, count(distinct installation_id)::int as buyers, count(*) filter (where created_at >= now() - interval '30 days')::int as last30d, max(created_at) as last from billing_downloads where (${since || null}::timestamptz is null or created_at >= ${since || null}::timestamptz)`)
+      const publicDownloads = await optional(() => sql`select count(*)::int as total, count(*) filter (where created_at >= now() - interval '30 days')::int as last30d, max(created_at) as last from billing_public_downloads where (${since || null}::timestamptz is null or created_at >= ${since || null}::timestamptz)`)
       if (!protectedDownloads) return null
       return { total: Number(protectedDownloads.total || 0) + Number(publicDownloads?.total || 0), public: Number(publicDownloads?.total || 0),
         buyers: Number(protectedDownloads.buyers || 0), last30d: Number(protectedDownloads.last30d || 0) + Number(publicDownloads?.last30d || 0),

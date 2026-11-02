@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { normalizeOwnerEmail, validOwnerPasswordHash, verifyOwnerPassword } from './owner-password.mjs'
 import {supportApi} from './support-api.mjs'
+import { ACTIVITY_REPORTING_SINCE } from './reporting-period.mjs'
 
 // Owner API with read-only views and an optional narrow Lifetime cancellation bridge.
 // Never returns token_hash / key_hash / full license keys, and never sends email.
@@ -58,6 +59,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
   const cap = Math.max(1, Math.min(20, Number(env.LICENSE_MAX_ACTIVATIONS ?? 2)))
   const email = (value) => (env.ADMIN_SHOW_EMAILS === '1' ? String(value ?? '') : maskEmail(value))
   const pricesSet = /^price_[A-Za-z0-9]+$/.test(env.STRIPE_PRICE_LIFETIME ?? '')
+  const reportingSince = new Date(env.ADMIN_REPORTING_SINCE ?? ACTIVITY_REPORTING_SINCE).toISOString()
   const stripeReadsAllowed = mode === 'test' || (mode === 'live' && env.ADMIN_ALLOW_LIVE_READS === '1')
   const failures = new Map()
   let revenueCache = null
@@ -89,10 +91,11 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
 
   // ---- data views built from existing tables ----
   async function snapshot() {
-    let installs, licenses, trials, webhooks, downloads, tracking, planMetrics
+    let installs, licenses, trials, ownerLicenses, webhooks, downloads, tracking, planMetrics
     try {
-      [installs, licenses, trials, webhooks, downloads, tracking, planMetrics] = await Promise.all([
+      [installs, licenses, trials, ownerLicenses, webhooks, downloads, tracking, planMetrics] = await Promise.all([
         store.installations(), store.licenses(), store.trialLicenses ? store.trialLicenses() : [],
+        store.ownerLicenses ? store.ownerLicenses() : [],
         store.webhooks ? store.webhooks() : null, store.downloads ? store.downloads() : null,
         store.seenTracking ? store.seenTracking() : false,
         store.planMetrics ? store.planMetrics() : null,
@@ -100,7 +103,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     } catch { throw new AdminError(503, 'The billing tables could not be read yet.') }
     const attached = new Map()
     for (const row of installs) if (row.license_id) attached.set(row.license_id, [...(attached.get(row.license_id) ?? []), row])
-    return { installs, licenses, trials, webhooks, downloads, planMetrics, tracking: Boolean(tracking), attached, licenseById: new Map(licenses.map((row) => [row.id, row])), trialById: new Map(trials.map((row) => [row.id, row])), issued: new Map(licenses.map((row) => [row.installation_id, row])) }
+    return { installs, licenses, trials, ownerLicenses, ownerById: new Map(ownerLicenses.map((row) => [row.id, row])), webhooks, downloads, planMetrics, tracking: Boolean(tracking), attached, licenseById: new Map(licenses.map((row) => [row.id, row])), trialById: new Map(trials.map((row) => [row.id, row])), requestedTrials: new Map(trials.map((row) => [row.installation_id, row])), issued: new Map(licenses.map((row) => [row.installation_id, row])) }
   }
 
   const purchases = (d) => d.installs.filter((r) => r.lifetime_session_id || r.pending_lifetime_session_id).map((r) => {
@@ -134,28 +137,32 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
   const userRows = (d) => d.installs.map((r) => {
     const desktop = Boolean(r.license_id || r.last_seen_at)
     const checkout = Boolean(r.lifetime_session_id || r.pending_lifetime_session_id)
-    const trial = r.license_id ? d.trialById.get(r.license_id) : null
-    const license = r.license_id ? (d.licenseById.get(r.license_id) ?? trial) : d.issued.get(r.id)
-    const trialActive = trial && trial.sent_at && !trial.revoked_at && trial.bound_installation_id === r.id && (!trial.expires_at || Date.parse(trial.expires_at) > Date.now())
+    const trial = r.license_id ? d.trialById.get(r.license_id) : d.requestedTrials.get(r.id)
+    const owner = r.license_id ? d.ownerById.get(r.license_id) : null
+    const license = r.license_id ? (d.licenseById.get(r.license_id) ?? trial ?? owner) : d.issued.get(r.id) ?? trial
+    const trialActive = trial && r.license_id === trial.id && trial.sent_at && !trial.revoked_at && trial.bound_installation_id === r.id && (!trial.expires_at || Date.parse(trial.expires_at) > Date.now())
+    const ownerActive = owner && !owner.revoked_at && owner.activated_at && owner.bound_installation_id === r.id &&
+      (owner.kind === 'lifetime' || owner.kind === 'trial' && Date.parse(owner.expires_at) > Date.now())
     return {
       id: short(r.id), kind: desktop ? 'desktop' : checkout ? 'checkout' : 'unseen',
       created: iso(r.created_at), lastSeen: iso(r.last_seen_at),
       device: r.device_id ? short(r.device_id) : null, platform: r.device_platform || null,
-      licensed: Boolean(trial ? trialActive : r.license_id && license && !license.revoked_at), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
-      licenseType: trial ? 'trial' : license ? 'lifetime' : null,
+      licensed: Boolean(owner ? ownerActive : trial ? trialActive : r.license_id && license && !license.revoked_at), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
+      licenseType: owner?.kind ?? (trial ? 'trial' : license ? 'lifetime' : null),
+      ownerIssued: Boolean(owner),
       buyer: Boolean(r.lifetime_session_id),
       email: license ? email(license.email) : null,
     }
   }).sort(newest)
 
-  function usage(d) {
-    const rows = userRows(d)
+  function usage(d, since = null) {
+    const rows = userRows(d).filter((row) => !since || row.created >= since || row.lastSeen >= since)
     const count = (test) => rows.filter(test).length
     return {
       tracking: d.tracking, registered: rows.length,
       desktop: count((r) => r.kind === 'desktop'), checkout: count((r) => r.kind === 'checkout'), unseen: count((r) => r.kind === 'unseen'),
       licensed: count((r) => r.licensed),
-      active24h: count((r) => within(r.lastSeen, 1)), active7d: count((r) => within(r.lastSeen, 7)), active30d: count((r) => within(r.lastSeen, 30)),
+      active24h: count((r) => within(r.lastSeen, 1) && (!since || r.lastSeen >= since)), active7d: count((r) => within(r.lastSeen, 7) && (!since || r.lastSeen >= since)), active30d: count((r) => within(r.lastSeen, 30) && (!since || r.lastSeen >= since)),
     }
   }
 
@@ -169,7 +176,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
   function installer() {
     const blob = env.BLOB_DOWNLOAD_PATH?.trim()
     const localPath = env.LOCAL_DOWNLOAD_PATH?.trim()
-    const filename = env.LOCAL_DOWNLOAD_FILENAME?.trim() || env.BLOB_DOWNLOAD_FILENAME?.trim() || 'Nafran-Leads-Scraper-Setup.exe'
+    const filename = env.LOCAL_DOWNLOAD_FILENAME?.trim() || env.BLOB_DOWNLOAD_FILENAME?.trim() || 'MamaLead-Setup.exe'
     const signing = Boolean(env.DOWNLOAD_SIGNING_KEY?.trim())
     if (blob) return { storage: 'blob', filename, signing, ready: signing, detail: signing ? 'Private Blob path is set. Run live checks to confirm the upload.' : 'Blob path is set, but DOWNLOAD_SIGNING_KEY is missing.' }
     if (localPath) return { storage: 'local-file', filename, signing, ready: signing, detail: signing ? 'Private installer path is set on the billing server.' : 'Private installer path is set, but DOWNLOAD_SIGNING_KEY is missing.' }
@@ -379,6 +386,10 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       }
       const d = await snapshot()
       if (method === 'GET' && path === '/admin/api/summary') {
+        const [periodDownloads, periodPlans] = await Promise.all([
+          store.downloads ? store.downloads(reportingSince) : null,
+          store.planMetrics ? store.planMetrics(reportingSince) : null,
+        ])
         const lic = licenseRows(d)
         const live = lic.filter((l) => !l.revokedAt)
         const paid = d.installs.filter((r) => r.lifetime_session_id)
@@ -398,10 +409,13 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
             checkoutsStarted: d.installs.filter((r) => !r.lifetime_session_id && r.pending_lifetime_session_id).length,
             licenses: lic.length, revoked: lic.length - live.length, trials: metrics.trialKeysSent,
             trialActivated: metrics.trialActivated, trialActive: metrics.trialActive,
+            ownerKeys: d.ownerLicenses.length, ownerActive: userRows(d).filter((r) => r.ownerIssued && r.licensed).length,
             emailed: lic.filter((l) => l.sentAt).length, activated: live.filter((l) => l.slotsUsed > 0).length,
             slotsUsed: live.reduce((sum, l) => sum + Math.min(l.slotsUsed, cap), 0), slotsTotal: live.length * cap,
           },
           usage: usage(d),
+          activity: { since: reportingSince, usage: usage(d, reportingSince), downloads: periodDownloads,
+            trials: periodPlans?.trialKeysSent ?? 0, trialActivated: periodPlans?.trialActivated ?? 0, trialActive: periodPlans?.trialActive ?? 0 },
           downloads: d.downloads ? { tracking: true, total: Number(d.downloads.total ?? 0), public: Number(d.downloads.public ?? 0), buyers: Number(d.downloads.buyers ?? 0), last30d: Number(d.downloads.last30d ?? 0), last: iso(d.downloads.last) } : { tracking: false },
           webhooks: d.webhooks ? { count: Number(d.webhooks.count ?? 0), last: iso(d.webhooks.last) } : null,
           revenueReadable: stripeReadsAllowed,

@@ -191,9 +191,50 @@ try {
   const addonRevenue = await call('/admin/api/revenue?refresh=1', { cookie })
   check('historical payments remain recorded without a retired plan system', !('activeSubs' in addonRevenue.body) && !('mrr' in addonRevenue.body) && addonRevenue.body.otherNet === 100000 && addonRevenue.body.net === 1100000 && addonRevenue.body.payments.some((payment) => payment.amount === 100000))
 
+  // Private keys use single-machine binding and must not inflate paid purchases.
+  const privateKeys = [
+    { id: 'owner-live', kind: 'lifetime', last4: 'P001', active: true },
+    { id: 'owner-trial', kind: 'trial', last4: 'P002', active: true },
+    { id: 'owner-expired', kind: 'trial', last4: 'P003', expired: true },
+    { id: 'owner-revoked', kind: 'lifetime', last4: 'P004', revoked: true },
+    { id: 'owner-wrong-binding', kind: 'lifetime', last4: 'P005', wrongBinding: true },
+    { id: 'owner-unused', kind: 'lifetime', last4: 'P006', unactivated: true },
+  ]
+  for (const entry of privateKeys) {
+    const token = (await bill('/v1/installations', null, 'POST')).body.token
+    const installation = billing.db.prepare('select id from installations where token_hash = ?').get(createHash('sha256').update(token).digest('hex')).id
+    const at = new Date().toISOString()
+    billing.db.prepare(`insert into owner_licenses (id,kind,key_hash,key_last4,email,label,created_by,reason,created_at,activated_at,expires_at,revoked_at,bound_installation_id)
+      values (?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(entry.id, entry.kind, createHash('sha256').update(entry.id).digest('hex'), entry.last4,
+      'private@example.test', 'Private QA grant', 'operator', 'Test only', at, entry.unactivated ? null : at,
+      entry.kind === 'trial' ? new Date(Date.now() + (entry.expired ? -1 : 1) * 86400000).toISOString() : null,
+      entry.revoked ? at : null, entry.wrongBinding ? 'different-installation' : installation)
+    billing.db.prepare('update installations set license_id = ?, license_slot = 1 where id = ?').run(entry.id, installation)
+  }
+  const privateSummary = (await call('/admin/api/summary', { cookie })).body
+  const privateUsers = (await call('/admin/api/users', { cookie })).body.rows.filter((r) => r.ownerIssued)
+  check('owner-issued Lifetime and unexpired trials are counted as active access', privateSummary.counts.ownerKeys === 6 && privateSummary.counts.ownerActive === 2 && privateSummary.usage.licensed === 5)
+  check('private keys do not inflate purchased licenses, revenue or emailed trials', privateSummary.counts.licenses === 1 && privateSummary.counts.purchases === 1 && privateSummary.counts.customers === 1 && privateSummary.counts.trials === 2)
+  check('revoked, expired, unused and incorrectly bound private keys cannot count as licensed', privateUsers.length === 6 && privateUsers.filter((r) => r.licensed).map((r) => r.license).sort().join(',') === 'P001,P002')
+  check('private key holders retain masked email and the correct grant type', privateUsers.every((r) => r.email === 'p••••••@example.test') && privateUsers.find((r) => r.license === 'P002').licenseType === 'trial')
+
+  const futureCutoff = new Date(Date.now() + 3600000).toISOString()
+  const freshAdmin = createAdminHandler({ env: { ...adminEnv, ADMIN_REPORTING_SINCE: futureCutoff, ADMIN_SHOW_EMAILS: '1' }, store, fetch: fakeStripe })
+  const freshCall = async (url, auth = `Bearer ${ownerToken}`) => freshAdmin.handle({ method: 'GET', url, authorization: auth, ip: '127.0.0.3' })
+  const fresh = JSON.parse((await freshCall('/admin/api/summary')).body)
+  check('fresh activity reporting starts at zero without resetting customers or licences', fresh.activity.since === futureCutoff && fresh.activity.usage.registered === 0 && fresh.activity.usage.active7d === 0 && fresh.activity.downloads.total === 0 && fresh.activity.trials === 0 && fresh.counts.purchases === 1 && fresh.counts.ownerKeys === 6 && fresh.usage.licensed === 5)
+  check('previous activity remains available in the same authenticated summary', fresh.downloads.total === 2 && fresh.counts.trials === 2 && fresh.usage.registered > 0)
+  billing.db.prepare('update billing_public_downloads set created_at = ?').run(futureCutoff)
+  const period = JSON.parse((await freshCall('/admin/api/summary')).body)
+  check('a download on the new reporting boundary is counted exactly once', period.activity.downloads.total === 1 && period.activity.downloads.public === 1 && period.downloads.total === 2)
+  const fullUsers = JSON.parse((await freshCall('/admin/api/users')).body).rows
+  check('owner can see full customer and private-grant emails after sign-in', fullUsers.some((r) => r.email === 'buyer@example.test') && fullUsers.some((r) => r.email === 'private@example.test'))
+  check('a requested trial email is visible before activation, without granting access', fullUsers.some((r) => r.email === 'second-trial@example.test' && r.licenseType === 'trial' && !r.licensed))
+  check('complete emails and activity history remain unavailable without owner authentication', (await freshCall('/admin/api/users', '')).status === 401 && (await freshCall('/admin/api/summary', '')).status === 401)
+
   const all = bodies.join('\n')
   const db = new DatabaseSync(database, { readOnly: true })
-  const hashes = [...db.prepare('select token_hash as h from installations').all(), ...db.prepare('select key_hash as h from licenses').all()].map((r) => r.h)
+  const hashes = [...db.prepare('select token_hash as h from installations').all(), ...db.prepare('select key_hash as h from licenses').all(), ...db.prepare('select key_hash as h from owner_licenses').all()].map((r) => r.h)
   check('no license key, tokens, hashes, Stripe ids or secrets appear in any admin response', ![licenseKey, trialKey, secondTrialKey, trialInstall, secondTrialInstall, buyer, desktopA, desktopB, desktopC, ownerToken, ownerEmail, ownerPassword, ownerPasswordHash, sessionSecret, grant, ...Object.values(secrets), ...hashes, 'token_hash', 'key_hash', 'buyer@example.test', 'trial@example.test', 'second-trial@example.test', 'cus_mock', 'ch_mock', 'pi_mock', 'cs_test_lifetime'].some((value) => all.includes(value)))
   check('the admin store cannot write to the billing database', (() => { try { db.exec("update licenses set revoked_at = 'x'"); return false } catch { return true } })())
   db.close()
