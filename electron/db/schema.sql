@@ -430,3 +430,15 @@ create table if not exists website_lookup_rows (
   error text not null default '',
   primary key (job_id, lead_id)
 );
+-- Shared-cache retries contain only whitelisted public Maps/website observations.
+create table if not exists lead_cache_outbox (
+  id text primary key,kind text not null check(kind in ('contribute','enrichment')),
+  payload text not null,attempts integer not null default 0,created_at text not null,next_attempt_at text not null
+);
+create table if not exists lead_cache_origins (
+  lead_id text primary key references leads(id) on delete cascade,place_key text not null,website text not null
+);
+create table if not exists lead_cache_seeded (
+  lead_id text primary key references leads(id) on delete cascade,
+  email integer not null default 0,phone integer not null default 0,social integer not null default 0,seeded_at text not null
+);

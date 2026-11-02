@@ -46,8 +46,17 @@ const TIMELINE_HEIGHTS = [16, 9, 34, 12, 8, 22, 58, 14, 26, 9, 40, 88, 18, 11, 3
 
 function gridColumns(selector: string, narrow: boolean, wide: string): void {
   const element = document.querySelector<HTMLElement>(selector)
-  if (element) element.style.gridTemplateColumns = narrow ? 'minmax(0,1fr)' : wide
+  const template = narrow ? 'minmax(0,1fr)' : wide
+  if (element && element.dataset.layoutColumns !== template) {
+    element.style.gridTemplateColumns = template
+    element.dataset.layoutColumns = template
+  }
 }
+
+// Captures arrive throughout a scan, but existing table cells retain the same responsive
+// layout. Only new rows or a changed breakpoint need these DOM writes. WeakMap entries
+// disappear with unmounted pages, so this does not retain a growing saved-lead table.
+const fittedRows = new WeakMap<HTMLElement, RowConfig | null>()
 
 function measureRows(headSelector: string, configs: RowConfig[]) {
   const head = document.querySelector<HTMLElement>(headSelector)
@@ -64,6 +73,8 @@ function fitRows(measurement: ReturnType<typeof measureRows>): void {
   if (!measurement) return
   const { head, block, pick } = measurement
   block.querySelectorAll<HTMLElement>('[data-rowgrid]').forEach((row) => {
+    if (fittedRows.has(row) && fittedRows.get(row) === (pick ?? null)) return
+    fittedRows.set(row, pick ?? null)
     row.style.display = pick ? 'grid' : 'flex'
     if (pick) row.style.gridTemplateColumns = pick.tpl
     Array.from(row.children).forEach((child) => {
@@ -78,7 +89,8 @@ function fitRows(measurement: ReturnType<typeof measureRows>): void {
     const inline = row.querySelector<HTMLElement>('[data-inline-addr]')
     if (inline) inline.style.display = pick && pick.hide.includes('addr') ? 'block' : 'none'
   })
-  head.style.display = pick ? 'grid' : 'none'
+  const display = pick ? 'grid' : 'none'
+  if (head.style.display !== display) head.style.display = display
 }
 
 export function layout(): void {
@@ -87,7 +99,7 @@ export function layout(): void {
   if (!shell || !side) return
   const width = window.innerWidth
   const narrow = width < 940
-  shell.style.gridTemplateColumns = narrow ? 'minmax(0,1fr)' : '262px minmax(0,1fr)'
+  gridColumns('[data-shell]', narrow, '262px minmax(0,1fr)')
 
   gridColumns('[data-hero]', width < 1080, 'minmax(0,1.7fr) minmax(0,1fr)')
   gridColumns('[data-setup]', width < 780, 'minmax(0,1.05fr) minmax(0,1fr)')
@@ -104,7 +116,8 @@ export function layout(): void {
   const wide = width >= 1080
   for (const selector of ['[data-results]', '[data-hero]', '[data-socialtop]', '[data-podium]', '[data-emailtop]', '[data-phonetop]', '[data-dmbody]', '[data-lookuptop]']) {
     const group = document.querySelector<HTMLElement>(selector)
-    if (group) group.style.alignItems = wide ? 'stretch' : 'start'
+    const alignment = wide ? 'stretch' : 'start'
+    if (group && group.style.alignItems !== alignment) group.style.alignItems = alignment
   }
 
   // Read all geometry together before changing rows. Interleaving each table's reads and
@@ -114,12 +127,13 @@ export function layout(): void {
   const reachWidth = reach?.clientWidth
   const tables = [measureRows('[data-mailhead]', MAIL_ROWS), measureRows('[data-phhead]', PHONE_ROWS),
     measureRows('[data-rowhead]', LEAD_ROWS), measureRows('[data-sochead]', SOCIAL_ROWS)]
-  side.style.position = !narrow && window.innerHeight >= sideHeight + 40 ? 'sticky' : 'static'
-  if (reach && reachWidth !== undefined) reach.style.gridTemplateColumns = reachWidth < 460 ? 'minmax(0,1fr)' : 'minmax(0,1fr) minmax(0,1.05fr)'
+  const position = !narrow && window.innerHeight >= sideHeight + 40 ? 'sticky' : 'static'
+  if (side.style.position !== position) side.style.position = position
+  if (reach && reachWidth !== undefined) gridColumns('[data-reach]', reachWidth < 460, 'minmax(0,1fr) minmax(0,1.05fr)')
   tables.forEach(fitRows)
 
   const status = document.querySelector<HTMLElement>('[data-status]')
-  if (status) status.style.display = 'flex'
+  if (status && status.style.display !== 'flex') status.style.display = 'flex'
 }
 
 function once(element: HTMLElement, key: string): boolean {

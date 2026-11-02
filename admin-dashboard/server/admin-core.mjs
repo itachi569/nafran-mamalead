@@ -356,6 +356,12 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         throw new AdminError(401, 'Owner sign-in required.')
       }
       if (method !== 'GET' && csrf !== '1') throw new AdminError(403, 'Missing admin request header.')
+      if(method==='GET' && path==='/admin/api/lead-cache/stats'){
+        if(!supportWriter?.cacheStats)throw new AdminError(503,'Cache statistics are unavailable.')
+        const today=new Date().toISOString().slice(0,10),from=url.searchParams.get('from')||today,to=url.searchParams.get('to')||today
+        if(![from,to].every(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d)))||from>to)throw new AdminError(400,'Invalid date range.')
+        return respond(200,await supportWriter.cacheStats(from,to))
+      }
       if(path==='/admin/api/support'||path.startsWith('/admin/api/support/')){
         try{return respond(200,await supportApi({method,url,store,writer:supportWriter,body:()=>body(readBody,16384),email,actor:bearer?'owner-token':ownerEmail||'owner',cap}))}
         catch(e){throw new AdminError([400,404,405,409,413,429,502,503].includes(e.status)?e.status:503,[400,404,405,409,413,429,502,503].includes(e.status)?e.message:'Support is temporarily unavailable.')}

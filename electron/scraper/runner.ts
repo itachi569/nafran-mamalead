@@ -2,6 +2,8 @@ import type { BrowserContext } from 'playwright'
 import { DEFAULT_QUERY, normaliseQuery, type Lead, type ProviderId, type RunProgress, type RunSummary, type ScrapeQuery } from './types'
 import { localeFor } from './location'
 import { statusFromError, type ScraperProvider } from './provider'
+import type {SavedMapsPlaces} from './saved-places'
+import {CachedMapsProvider,type CacheDeps} from './cached-maps'
 
 export interface RunHandle {
   runId: string
@@ -10,6 +12,9 @@ export interface RunHandle {
 }
 
 export interface RunOptions {
+  cacheDeps?: CacheDeps
+  /** Main-process snapshot; never supplied by the renderer or stored in run metadata. */
+  savedPlaces?: SavedMapsPlaces
   provider?: ProviderId
   query?: Partial<ScrapeQuery>
   onProgress?: (progress: RunProgress) => void
@@ -37,10 +42,10 @@ function newRunId(): string {
   return `run_${Date.now().toString(36)}_${counter}`
 }
 
-async function resolveProvider(providerId: ProviderId, context?: BrowserContext): Promise<ScraperProvider> {
+async function resolveProvider(providerId: ProviderId, context?: BrowserContext, savedPlaces?: SavedMapsPlaces): Promise<ScraperProvider> {
   if (providerId === 'chromium-maps') {
     const { ChromiumMapsProvider } = await import('./chromium-maps')
-    return new ChromiumMapsProvider(context ? { context } : {})
+    return new ChromiumMapsProvider({context, savedPlaces})
   }
   const { MockProvider } = await import('./mock')
   return new MockProvider()
@@ -121,7 +126,7 @@ export class ScrapeRunner {
       // executable handed in with it wins. Nothing else about the query is affected.
       ...(options.executablePath ? { executablePath: options.executablePath } : {}),
     })
-    const providerId = options.provider ?? 'mock'
+    const providerId = options.provider ?? (process.env.NODE_ENV === 'test' ? 'mock' : 'chromium-maps')
     const runTarget = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length)
     const startedAt = new Date().toISOString()
     const started = Date.now()
@@ -151,11 +156,13 @@ export class ScrapeRunner {
 
     const result = (async (): Promise<RunSummary> => {
       const collected: Lead[] = []
+      const collectionNotes = new Set<string>()
       let error: string | null = null
       let status: RunSummary['status'] = 'done'
       try {
         if (!query.keywords.length) throw new Error('Add at least one keyword before starting a run.')
-        const provider = await resolveProvider(providerId, options.context)
+        const inner = await resolveProvider(providerId, options.context, options.savedPlaces)
+        const provider = providerId==='chromium-maps' && options.cacheDeps?.enabled ? new CachedMapsProvider(inner,options.cacheDeps,runId) : inner
         if (controller.signal.aborted) throw new DOMException('Scrape cancelled', 'AbortError')
         this.activeProvider = provider
         emit('running', `${provider.label} starting · ${query.keywords.length} keyword${query.keywords.length === 1 ? '' : 's'}`, 0)
@@ -163,6 +170,7 @@ export class ScrapeRunner {
           query,
           (progress) => {
             if (controller.signal.aborted) return
+            if (progress.collectionNote) collectionNotes.add(progress.collectionNote)
             if (progress.lead) {
               if (collected.length >= runTarget) return
               collected.push(progress.lead)
@@ -178,6 +186,7 @@ export class ScrapeRunner {
               status: progress.status ?? 'running',
               at: new Date().toISOString(),
               message: progress.message,
+              collectionNote: progress.collectionNote,
               // Carried through so the window can pin each place as it lands instead of waiting for
               // the whole run to finish.
               lead: progress.lead,
@@ -206,6 +215,7 @@ export class ScrapeRunner {
         provider: providerId,
         query,
         leads: collected,
+        collectionNotes: [...collectionNotes],
         startedAt,
         finishedAt,
         durationMs: Date.now() - started,

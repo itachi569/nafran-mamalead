@@ -89,6 +89,56 @@ html:has(#page-start:target) { scroll-behavior: smooth; }
   .back-to-top { transition: none; }
 }
 </style>
+<style id="mamalead-footer-design">
+.ml-footer { padding: 16px 24px 112px; }
+.ml-footer-panel { max-width: 1180px; margin: 0 auto; padding: 44px; border: 1px solid rgba(255,255,255,.9); border-radius: 32px; background: #FAFBF8; color: #1C1C1C; box-shadow: 0 22px 60px -36px rgba(53,69,43,.3); }
+.ml-footer-main { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1.3fr); gap: 64px; }
+.ml-footer-brand { display: flex; align-items: center; gap: 13px; }
+.ml-footer-brand img { width: 48px; height: 48px; flex-shrink: 0; border-radius: 13px; object-fit: contain; }
+.ml-footer-brand strong { display: block; font-size: 24px; line-height: 1.2; letter-spacing: -.04em; }
+.ml-footer-brand small { display: block; margin-top: 4px; font-size: 12px; color: #586050; }
+.ml-footer-headline { margin: 24px 0 12px; max-width: 350px; font-size: 28px; line-height: 1.25; font-weight: 500; letter-spacing: -.035em; }
+.ml-footer-headline span { color: #4D6540; }
+.ml-footer-description { margin: 0; max-width: 370px; font-size: 14px; line-height: 1.7; color: #596052; }
+.ml-footer-email { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 20px; font-size: 14px; font-weight: 700; color: #30422A; text-decoration: underline; text-underline-offset: 4px; overflow-wrap: anywhere; }
+.ml-footer-email svg { flex-shrink: 0; }
+.ml-footer-nav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 28px; padding-top: 10px; }
+.ml-footer-nav h3 { margin: 0 0 17px; color: #1C1C1C; font-size: 14px; font-weight: 700; }
+.ml-footer-nav ul { list-style: none; padding: 0; margin: 0; }
+.ml-footer-nav a { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; line-height: 1.45; color: #596052; text-decoration: none; }
+.ml-footer a:hover { color: #30422A; text-decoration: underline; text-underline-offset: 4px; }
+.ml-footer a:focus-visible { outline: 2px solid #45693A; outline-offset: 4px; border-radius: 4px; }
+.ml-footer-features { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 36px; padding-top: 30px; border-top: 1px solid #DFE4D9; }
+.ml-footer-feature { display: flex; align-items: center; gap: 12px; padding: 16px 14px; border: 1px solid #E0E5D9; border-radius: 16px; background: #F0F3EA; }
+.ml-footer-feature-icon { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #E1E7D9; border-radius: 11px; background: #FAFBF8; color: #47603B; flex-shrink: 0; }
+.ml-footer-feature strong { display: block; font-size: 13px; line-height: 1.4; font-weight: 700; }
+.ml-footer-feature small { display: block; margin-top: 3px; color: #596052; font-size: 12px; line-height: 1.45; }
+.ml-footer-bottom { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding-top: 25px; margin-top: 28px; border-top: 1px solid #DFE4D9; }
+.ml-footer-bottom p { margin: 0; font-size: 12px; color: #596052; }
+.ml-footer-signoff { display: flex; align-items: center; gap: 8px; color: #3E5433!important; font-weight: 500; }
+.ml-footer-signoff span { width: 7px; height: 7px; border-radius: 50%; background: #789468; }
+@media(max-width:1000px) {
+ .ml-footer-panel { padding: 32px; }
+ .ml-footer-main { grid-template-columns: minmax(0,1fr) minmax(0,1.2fr); gap: 32px; }
+ .ml-footer-nav { gap: 16px; }
+ .ml-footer-features { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:700px) {
+ .ml-footer { padding: 8px 16px 116px; }
+ .ml-footer-panel { padding: 28px 22px; border-radius: 26px; }
+ .ml-footer-main { grid-template-columns: minmax(0,1fr); gap: 30px; }
+ .ml-footer-headline { font-size: 26px; }
+ .ml-footer-nav { border-top: 1px solid #DFE4D9; padding-top: 26px; }
+ .ml-footer-nav h3 { margin-bottom: 10px; }
+ .ml-footer-features { gap: 10px; margin-top: 26px; padding-top: 26px; }
+ .ml-footer-feature { align-items: flex-start; flex-direction: column; gap: 10px; padding: 14px; }
+ .ml-footer-bottom { align-items: flex-start; flex-direction: column; gap: 10px; }
+}
+@media(max-width:360px) {
+ .ml-footer-nav { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 22px; }
+ .ml-footer-email { font-size: 13px!important; gap: 7px; }
+}
+</style>
 </head>
 <body>
 <x-dc>
@@ -993,27 +1043,60 @@ html:has(#page-start:target) { scroll-behavior: smooth; }
     </div>
   </section>
 
-  <footer data-screen-label="Footer" style="padding: 0 0 40px;">
-    <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px;">
-      <div style="display: flex; flex-wrap: wrap; gap: 26px; padding: 30px; border-radius: 26px; background: #1C1C1C; color: #F0F0F0;">
-        <div style="flex: 1 1 300px; min-width: 0;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <img data-footer-brand-logo="mamalead" src="img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="36" height="36" style="display: block; flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; object-fit: contain;">
-            <span style="font-size: 17px; font-weight: 700; letter-spacing: -.02em;">MamaLead</span>
+  <footer id="footer" class="ml-footer" data-screen-label="Footer">
+    <div class="ml-footer-panel">
+      <div class="ml-footer-main">
+        <div>
+          <div class="ml-footer-brand">
+            <img data-footer-brand-logo="mamalead" src="img/mamalead-favicon.png?v=2" alt="" aria-hidden="true" width="48" height="48">
+            <div><strong>MamaLead</strong><small>Your lead workspace for Windows</small></div>
           </div>
-          <p style="margin: 14px 0 0; max-width: 340px; font-size: 13px; line-height: 1.6; color: #B9BEB6;">A local-first desktop lead generation app. It finds and organises business data; it does not contact anyone on your behalf.</p>
-          <p style="margin: 18px 0 0; font-size: 11.5px; color: #8E948B;">Windows desktop app &middot; &copy; 2026 Nafran</p>
+          <p class="ml-footer-headline">Find the right businesses.<br><span>Make your next move.</span></p>
+          <p class="ml-footer-description">Turn Google Maps searches into organised business contacts. Find published emails, phones and social profiles, then save and export your results.</p>
+          <a class="ml-footer-email" href="mailto:mamaleads997@gmail.com?subject=MamaLead%20Support">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="m4 7 8 6 8-6"></path></svg>
+            mamaleads997@gmail.com
+          </a>
         </div>
-        <nav style="flex: 1 1 300px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 20px; align-content: start; font-size: 13.5px;">
-          <a href="#how" style="color: #E9EBE7;">How it works</a>
-          <a href="#modules" style="color: #E9EBE7;">Modules</a>
-          <a href="privacy.html" style="color: #E9EBE7;">Privacy policy</a>
-          <a href="terms.html" style="color: #E9EBE7;">Terms of use</a>
-          <a href="support.html" style="color: #E9EBE7;">Contact support</a>
-          <a href="#pricing" style="color: #E9EBE7;">Pricing</a>
-          <a href="#download" style="color: #E9EBE7;">Download</a>
-          <a href="#faq" style="color: #E9EBE7;">FAQ</a>
+        <nav class="ml-footer-nav" aria-label="Footer">
+          <div><h3>Explore</h3><ul>
+            <li><a href="#how">How it works</a></li>
+            <li><a href="#modules">Modules</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#download">Download</a></li>
+          </ul></div>
+          <div><h3>Resources</h3><ul>
+            <li><a href="#latest">Latest updates</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="support.html">Contact support</a></li>
+          </ul></div>
+          <div><h3>Legal</h3><ul>
+            <li><a href="privacy.html">Privacy policy</a></li>
+            <li><a href="terms.html">Terms of use</a></li>
+          </ul></div>
         </nav>
+      </div>
+      <div class="ml-footer-features" aria-label="Made for your workflow">
+        <div class="ml-footer-feature">
+          <span class="ml-footer-feature-icon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="13" rx="2"></rect><path d="M8 21h8m-4-5v5"></path></svg></span>
+          <div><strong>Windows desktop</strong><small>Made for your PC</small></div>
+        </div>
+        <div class="ml-footer-feature">
+          <span class="ml-footer-feature-icon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="M3 10h18M7 15h3m5 0h2"></path></svg></span>
+          <div><strong>Stripe checkout</strong><small>Secure payment page</small></div>
+        </div>
+        <div class="ml-footer-feature">
+          <span class="ml-footer-feature-icon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zm0 0v6h6M8 14h8m-8 3h5"></path></svg></span>
+          <div><strong>PDF &amp; Excel</strong><small>Export your results</small></div>
+        </div>
+        <div class="ml-footer-feature">
+          <span class="ml-footer-feature-icon"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z"></path><path d="M8 11h8m-8 4h5"></path></svg></span>
+          <div><strong>In-app support</strong><small>Help when you need it</small></div>
+        </div>
+      </div>
+      <div class="ml-footer-bottom">
+        <p>&copy; 2026 Nafran &middot; MamaLead for Windows</p>
+        <p class="ml-footer-signoff"><span aria-hidden="true"></span>Find. Save. Make your next move.</p>
       </div>
     </div>
   </footer>

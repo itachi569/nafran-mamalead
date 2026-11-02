@@ -18,7 +18,7 @@ async function main() {
       const provider = new ChromiumMapsProvider({ context })
       provider.pause = async () => {} // Test fixture needs no network pacing.
       const progress = []
-      const leads = await provider.run(normaliseQuery({ keywords, location: 'Karachi', maxResultsPerKeyword: cap, maxResultsTotal: cap, detail: false }), event => progress.push(event), new AbortController().signal)
+      const leads = await provider.run(normaliseQuery({ keywords, relevanceKeywords: keywords.map(()=> 'dentist'), location: 'Karachi', maxResultsPerKeyword: cap, maxResultsTotal: cap, detail: false }), event => progress.push(event), new AbortController().signal)
       assert.equal(leads.length, expected)
       assert.equal(new Set(leads.map(lead => lead.id)).size, expected)
       assert.ok(progress.every(event => (event.found ?? 0) <= cap))

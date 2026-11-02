@@ -136,6 +136,8 @@ export class LocalDatabase {
    * column is absent, which keeps upgrading in place safe.
    */
   private addMissingColumns(): void {
+    const runColumns=this.db.prepare('pragma table_info(scrape_runs)').all() as {name:string}[]
+    if(!runColumns.some(c=>c.name==='cache_hits'))this.db.exec('alter table scrape_runs add column cache_hits integer not null default 0')
     const additions: [table: string, column: string, definition: string][] = [
       ['enrichment_jobs', 'options', "text not null default '{}'"],
       ['decision_makers', 'email_evidence', "text not null default 'page'"],

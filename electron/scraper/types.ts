@@ -4,6 +4,8 @@ export type ProviderId = 'mock' | 'chromium-maps'
 
 export interface ScrapeQuery {
   keywords: string[]
+  /** Original subjects before district suffixes are added to the Google query. */
+  relevanceKeywords?: string[]
   location: string
   maxResultsPerKeyword: number
   /** Whole-run ceiling, limited by both the user's selection and server allowance. */
@@ -61,6 +63,7 @@ export interface Lead {
 }
 
 export interface RunProgress {
+  collectionNote?: string
   runId: string
   status: RunStatus
   provider: ProviderId
@@ -76,6 +79,7 @@ export interface RunProgress {
 }
 
 export interface RunSummary {
+  collectionNotes?: string[]
   runId: string
   status: RunStatus
   provider: ProviderId
@@ -117,12 +121,13 @@ export const HARD_LIMITS = {
 
 export function normaliseQuery(input: Partial<ScrapeQuery> = {}): ScrapeQuery {
   const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, Math.round(value)))
-  const keywords = (input.keywords ?? DEFAULT_QUERY.keywords)
-    .map((k) => String(k).trim())
-    .filter(Boolean)
+  const searches = (input.keywords ?? DEFAULT_QUERY.keywords)
+    .map((k, index) => ({keyword: String(k).trim(), subject: String(input.relevanceKeywords?.[index] ?? k).trim()}))
+    .filter(entry => entry.keyword)
     .slice(0, HARD_LIMITS.maxKeywords)
   return {
-    keywords,
+    keywords: searches.map(entry => entry.keyword),
+    relevanceKeywords: searches.map(entry => entry.subject || entry.keyword),
     websiteFilter: input.websiteFilter === "has" || input.websiteFilter === "none" ? input.websiteFilter : "any",
     location: String(input.location ?? DEFAULT_QUERY.location).trim() || DEFAULT_QUERY.location,
     maxResultsPerKeyword: clamp(input.maxResultsPerKeyword ?? DEFAULT_QUERY.maxResultsPerKeyword, 1, HARD_LIMITS.maxResultsPerKeyword),

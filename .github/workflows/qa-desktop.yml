@@ -32,6 +32,8 @@ jobs:
         run: |
           node scripts/test-database.cjs
           node --test scripts/test-qa-1432.cjs scripts/test-qa-1433.cjs scripts/test-email-extraction.cjs scripts/test-support-client-ip.mjs
+      - name: Shared Maps cache and repeat-scan regressions
+        run: npm run lead-cache:test
       - name: Install Linux browser dependencies
         if: runner.os == 'Linux'
         run: npx playwright install-deps chromium
@@ -39,6 +41,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           xvfb-run --auto-servernum node scripts/verify-email-upgrade.cjs
+          xvfb-run --auto-servernum node scripts/verify-lead-cache-ui.cjs
           xvfb-run --auto-servernum node scripts/verify-website-lookup-ui.cjs
       - name: Website Lookup UI (Windows)
         if: runner.os == 'Windows'

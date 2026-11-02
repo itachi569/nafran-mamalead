@@ -1,7 +1,7 @@
 {
   "name": "nafran-leads-scraper",
   "private": true,
-  "version": "1.4.35",
+  "version": "1.4.36",
   "description": "Local-first Google Maps lead scraper and enrichment desktop app.",
   "author": {
     "name": "Nafran Leads",
@@ -24,6 +24,7 @@
     "local-ui:test": "npm run build && node scripts/verify-local-settings-phone.cjs",
     "billing:dev": "node --env-file=.secrets/stripe-test.env billing-server/server.mjs",
     "billing:test": "node scripts/verify-billing-server.mjs",
+    "lead-cache:test": "node --test scripts/verify-lead-cache-server.mjs scripts/verify-lead-cache-client.cjs scripts/verify-lead-cache-contracts.cjs && node scripts/verify-lead-cache-persistence.cjs && node scripts/verify-lead-cache-http.mjs",
     "verify": "node scripts/verify-all.mjs",
     "debug": "node scripts/dev-debug.mjs",
     "preview": "vite preview",
@@ -53,7 +54,8 @@
     "pdf-lib": "^1.17.1",
     "playwright": "^1.50.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "tldts": "^7.4.19"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

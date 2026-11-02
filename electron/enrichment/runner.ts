@@ -14,6 +14,7 @@ import {primarySocialProfiles} from '../social-profile'
 import { userError } from '../user-errors'
 import { directoryScanError } from './source-policy'
 import { WebsiteEnricher } from './website'
+import type {WebsiteFindings} from './website'
 import {uniquePhones,uniqueAddresses} from './contact-dedupe'
 import { DEFAULT_LOOKUP_FIELDS, emptyLookupRow, lookupOptions, lookupRowFromFindings } from './website-lookup'
 
@@ -41,6 +42,7 @@ export interface EnrichmentProgress {
 }
 
 export interface EnrichmentOptions {
+  onPublicFindings?:(leadId:string,website:string,findings:WebsiteFindings,kinds:('email'|'phone'|'social')[])=>void
   onProgress?: (progress: EnrichmentProgress) => void
   authorize?: (kind: JobKind, fresh: boolean) => Promise<void>
 
@@ -121,6 +123,9 @@ export class EnrichmentRunner {
         try {
           if (!JOB_KINDS.includes(job.kind as JobKind)) { this.repository.markJob(job.id,'failed',0,'This scan module is no longer available.'); continue }
           const kind = job.kind as JobKind
+          // Claim the queued snapshot before awaiting licence/network work. New Maps leads
+          // can then append to a separate queued batch without being lost from this snapshot.
+          this.repository.markJob(job.id,'running')
           let total = 0
           try { total = new Set(JSON.parse(job.lead_ids) as string[]).size } catch { /* runJob reports malformed input */ }
           this.emit({jobId:job.id,kind,status:'running',processed:0,total,found:0,failed:0,leadName:'',message:'Preparing website scan…'})
@@ -351,6 +356,10 @@ export class EnrichmentRunner {
       // The site has now been read, whatever came back. The finder pages show the leads that are
       // covered so far, so this is written before the next lead is started rather than at the end.
       this.repository.markLeadScanned(leadId)
+      if(!findings.error && !siteFailure){
+        const scannedKinds=(['email','phone','social'] as const).filter(k=>kind===k||(kind==='website'&&fields[k]))
+        try{this.options.onPublicFindings?.(leadId,lead.website,structuredClone(findings),scannedKinds)}catch{/* Public cache is optional. */}
+      }
       if (kind === 'website') this.fieldFindings[leadId] = {
         ...(fields.email ? {email:findings.emails.length > 0} : {}),
         ...(fields.phone ? {phone:findings.phones.length > 0} : {}),

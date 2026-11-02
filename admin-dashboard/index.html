@@ -106,6 +106,20 @@
     </sc-if>
 
     <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <section style="padding: 24px; border-radius: 28px; background: #fff; margin-bottom: 24px;">
+        <h2 style="margin:0 0 12px;">Shared lead cache</h2>
+        <p style="color:#52604A;">Public business details reused for exact searches. Customer workspaces stay private.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" onClick="{{ cacheToday }}" style="padding:10px 18px;border:0;border-radius:24px;">Today</button>
+          <button type="button" onClick="{{ cacheWeek }}" style="padding:10px 18px;border:0;border-radius:24px;">7 days</button>
+          <button type="button" onClick="{{ cacheMonth }}" style="padding:10px 18px;border:0;border-radius:24px;">30 days</button>
+        </div>
+        <p role="status">{{ cacheSummary }}</p>
+        <div style="overflow:auto;"><table style="width:100%;text-align:left;border-collapse:collapse;">
+          <thead><tr><th>Keyword</th><th>Location</th><th>Searches</th><th>Cache hit rate</th><th>Places saved</th></tr></thead>
+          <tbody><sc-for list="{{ cacheRows }}" as="item"><tr><td>{{ item.keyword }}</td><td>{{ item.location }}</td><td>{{ item.lookups }}</td><td>{{ item.rate }}</td><td>{{ item.places }}</td></tr></sc-for></tbody>
+        </table></div>
+      </section>
     <div style="display: flex; flex-direction: column; gap: 20px;">
       <button class="support-overview" onClick="{{ nav.support.go }}"><strong>Support</strong><span>{{ support.countLabel }}</span><span>Open inbox ↗</span></button>
       <sc-if value="{{ reporting.show }}">
@@ -568,6 +582,15 @@ class Component extends DCLogic {
     if (res.status === 401) throw fail('unauthorized', body.error || 'Owner sign-in required.');
     if (!res.ok) throw fail(res.status === 503 ? 'unavailable' : 'error', body.error || `Admin API returned ${res.status}.`);
     return body;
+  }
+
+  async loadCache(days) {
+    this.setState({cacheMessage:'Loading cache statistics…'});
+    const to=new Date().toISOString().slice(0,10),from=new Date(Date.now()-(days-1)*86400000).toISOString().slice(0,10);
+    try {
+      const data=await this.api('/admin/api/lead-cache/stats?'+new URLSearchParams({from,to}));
+      this.setState({cacheData:data,cacheMessage:`${days===1?'Today':days+' days'} · ${data.lookups} searches · ${Math.round(data.hitRate*100)}% cache hit rate · ${data.leadsServed} of ${data.leadsRequested} requested leads served · ${data.partialHits} partial hits · ${data.contributed} contributed · ${data.places} places · ${data.quarantined} quarantined`});
+    }catch{this.setState({cacheData:null,cacheMessage:'Cache statistics are not available on this server yet.'});}
   }
 
   supportSet(patch, callback) { this.setState(s => ({support: {...s.support, ...patch}}), callback); }
@@ -1264,6 +1287,9 @@ class Component extends DCLogic {
       onToggleLoginMethod: () => this.setState((state) => ({ loginMethod: state.loginMethod === 'email' ? 'token' : 'email', loginError: '', loginPassword: '', loginToken: '' })),
       onLogin: (e) => this.login(e),
       isOverview: view === 'overview' && conn !== 'unauthorized',
+      cacheToday:()=>this.loadCache(1),cacheWeek:()=>this.loadCache(7),cacheMonth:()=>this.loadCache(30),
+      cacheSummary:this.state.cacheMessage||'Choose a period to view cache activity.',
+      cacheRows:(this.state.cacheData?.topQueries||[]).map(r=>({...r,rate:Math.round(r.hitRate*100)+'%'})),
       isDetail: view !== 'overview' && view !== 'support' && conn !== 'unauthorized',
       ...this.overview(nav),
       detail: this.detail(),

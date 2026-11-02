@@ -24,6 +24,14 @@ export function createLicenseAdminServer(db, options = {}) {
       const supplied = Buffer.from(String(req.headers.authorization ?? ''))
       const expected = Buffer.from(`Bearer ${key}`)
       if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return reply(401, { error: 'Unauthorized.' })
+      const cacheUrl=new URL(req.url,'http://127.0.0.1')
+      if(req.method==='GET' && cacheUrl.pathname==='/v1/admin/lead-cache/stats'){
+        const today=new Date().toISOString().slice(0,10)
+        const fromDay=cacheUrl.searchParams.get('from')||today,toDay=cacheUrl.searchParams.get('to')||today
+        if(![fromDay,toDay].every(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d)))||fromDay>toDay)return reply(400,{error:'Invalid date range.'})
+        if(!options.cacheStore)return reply(503,{error:'Cache statistics unavailable.'})
+        return reply(200,await options.cacheStore.leadCacheAdminStats({fromDay,toDay}))
+      }
       if(req.method==='POST'&&req.url?.startsWith('/support/')){
         let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>16384)return reply(413,{error:'Request too large.'})}
         let input;try{input=JSON.parse(raw)}catch{return reply(400,{error:'Invalid JSON.'})}

@@ -120,11 +120,11 @@ function tokenPath(): string {
   return join(directory, `billing-installation-${scope}.enc`)
 }
 
-async function request<T>(path: string, method = 'GET', body?: unknown, token?: string, timeoutMs = 20_000): Promise<T> {
+async function request<T>(path: string, method = 'GET', body?: unknown, token?: string, timeoutMs = 20_000, parentSignal?:AbortSignal): Promise<T> {
   const base = billingUrl()
   if (!base) throw new Error('Billing server is not configured for this build.')
   const device = deviceIdentity()
-  const signal = AbortSignal.timeout(timeoutMs)
+  const signal = AbortSignal.any([AbortSignal.timeout(timeoutMs),...(parentSignal?[parentSignal]:[])])
   const attempts = path === '/v1/assist/chat' ? 2 : 1
   for (let attempt=0;attempt<attempts;attempt++) {
   const response = await fetch(new URL(path, base), {
@@ -150,6 +150,17 @@ async function request<T>(path: string, method = 'GET', body?: unknown, token?: 
   return result
   }
   throw new Error('MamaLead service is temporarily unavailable. Please retry shortly.')
+}
+
+/** Uses the same installation and device authentication as Maps quota requests. */
+export async function leadCacheRequest(path:'lookup'|'contribute'|'enrichment',body:unknown,signal:AbortSignal):Promise<unknown>{
+  signal.throwIfAborted()
+  let abort:()=>void=()=>{}
+  const cancelled=new Promise<never>((_,reject)=>{abort=()=>reject(signal.reason);signal.addEventListener('abort',abort,{once:true})})
+  try {
+    const token=await Promise.race([installationToken(),cancelled])
+    return await request('/v1/lead-cache/'+path,'POST',body,token,4000,signal)
+  }finally{signal.removeEventListener('abort',abort)}
 }
 
 let tokenPromise: Promise<string> | null = null

@@ -5,7 +5,9 @@ import { AUTOMATION_ARGS, IGNORED_DEFAULT_ARGS, chromeUserAgent } from './browse
 import { parseAddress } from './location'
 import { leadId, ScraperBlockedError, ScraperUnavailableError, type ProgressSink, type ScraperProvider } from './provider'
 import type { Lead, ScrapeQuery } from './types'
-import {mapsHasNoResults,mapsResultsRelevant} from './relevance'
+import {mapsHasNoResults, mapsBusinessRelevant, mapsCardCategory} from './relevance'
+import {SavedMapsPlaces} from './saved-places'
+import {mapsMessages} from './messages'
 
 interface RawCard {
   href: string
@@ -48,6 +50,10 @@ export class ChromiumMapsProvider implements ScraperProvider {
   readonly id = 'chromium-maps' as const
   readonly label = 'Chromium · Google Maps'
   readonly requiresBrowser = true
+  skip?: (lead: Partial<Lead>) => boolean
+  skipBudget = 0
+  lastRunExhausted = false
+  private preparedPage: Page | null = null
 
   private browser: Browser | null = null
   private context: BrowserContext | null = null
@@ -59,8 +65,11 @@ export class ChromiumMapsProvider implements ScraperProvider {
    * the user is looking at, and the next run would have to open and sign in to it all over again.
    */
   private readonly adopted: boolean
+  private readonly savedPlaces: SavedMapsPlaces
+  private readonly skippedSaved = new Set<string>()
 
-  constructor(options: { context?: BrowserContext } = {}) {
+  constructor(options: { context?: BrowserContext; savedPlaces?: SavedMapsPlaces } = {}) {
+    this.savedPlaces = options.savedPlaces ?? new SavedMapsPlaces()
     if (options.context) {
       this.context = options.context
       this.adopted = true
@@ -70,8 +79,11 @@ export class ChromiumMapsProvider implements ScraperProvider {
   }
 
   async run(query: ScrapeQuery, sink: ProgressSink, signal: AbortSignal): Promise<Lead[]> {
+    this.lastRunExhausted = false
+    this.skippedSaved.clear()
     const leads: Lead[] = []
     const seen = new Set<string>()
+    const seenHrefs = new Set<string>()
     const total = query.keywords.length
     const runTarget = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * total)
     const onAbort = () => void this.close()
@@ -81,7 +93,8 @@ export class ChromiumMapsProvider implements ScraperProvider {
       await this.launch(query)
       const context = this.context
       if (!context) throw new ScraperUnavailableError('Chromium started without a browser context.')
-      const page = await context.newPage()
+      const page = this.preparedPage ?? await context.newPage()
+      this.preparedPage = null
       page.setDefaultTimeout(30_000)
       page.setDefaultNavigationTimeout(45_000)
 
@@ -89,6 +102,8 @@ export class ChromiumMapsProvider implements ScraperProvider {
         this.assertLive(signal)
         if (leads.length >= runTarget) break
         const keyword = query.keywords[index]
+        const keywordStart = leads.length
+        const relevanceKeyword = query.relevanceKeywords?.[index] || keyword
         const term = `${keyword} in ${query.location}`
         sink({
           status: 'running',
@@ -96,7 +111,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
           keywordIndex: index,
           keywordTotal: total,
           target: runTarget,
-          message: `Searching Google Maps for “${term}”`,
+          message: mapsMessages.searching(term),
         })
 
         await page.goto(`${MAPS_SEARCH}${encodeURIComponent(term)}?hl=${query.language}&gl=${query.region}`, {
@@ -107,7 +122,8 @@ export class ChromiumMapsProvider implements ScraperProvider {
 
         const cards = await this.collectCards(page, query, sink, keyword, index, total, leads.length)
         const panel = await page.locator('[role="main"]').first().innerText().catch(()=>page.locator('body').innerText())
-        if(mapsHasNoResults(panel) || (cards.length && !mapsResultsRelevant(keyword,query.location,cards))) {
+        if(mapsHasNoResults(panel)) {
+          this.lastRunExhausted = true
           sink({status:'running',keyword,keywordIndex:index,keywordTotal:total,found:leads.length,target:runTarget,message:'No matching places for this query.'})
           continue
         }
@@ -130,14 +146,33 @@ export class ChromiumMapsProvider implements ScraperProvider {
 
         for (let slot = 0; slot < entries.length; slot += 1) {
           this.assertLive(signal)
-          if (leads.length >= runTarget) break
+          if (leads.length >= runTarget || leads.length-keywordStart >= query.maxResultsPerKeyword) break
           const entry = entries[slot]
+          if (seenHrefs.has(entry.href)) continue
+          if (this.savedPlaces.has({mapsUrl:entry.href}) || this.skip?.({mapsUrl:entry.href,name:entry.name})) {
+            this.skippedSaved.add(entry.href)
+            continue
+          }
+          // An explicit feed category can reject a wrong business before an expensive visit.
+          // Missing/ambiguous categories still get a detail read before making that decision.
+          const feedCategory = mapsCardCategory(entry.lines)
+          if (feedCategory && !mapsBusinessRelevant(relevanceKeyword, query.location, {name:entry.name, category:feedCategory})) {
+            sink({status:'running', keyword, keywordIndex:index, keywordTotal:total, found:leads.length, target:runTarget,
+              message:`Skipped unrelated place · ${entry.name} · ${leads.length} matching leads`})
+            continue
+          }
+          const visitStarted = Date.now()
           const detail = await this.readDetail(page, entry, query)
           const name = detail.name || entry.name
           if (!name) continue
+          if (!mapsBusinessRelevant(relevanceKeyword, query.location, {name, category: detail.category, lines: entry.lines})) {
+            sink({status:'running', keyword, keywordIndex:index, keywordTotal:total, found:leads.length, target:runTarget,
+              message:`Skipped unrelated place · ${name} · ${leads.length} matching leads`})
+            if (slot < entries.length - 1) await this.pause(query, signal, visitStarted)
+            continue
+          }
           const key = `${name.toLowerCase()}|${detail.address || entry.lines.join(' ')}`.toLowerCase()
           if (seen.has(key)) continue
-          seen.add(key)
           const { area, postcode } = parseAddress(detail.address)
           const coords = this.coordsOf(page.url())
           const lead: Lead = {
@@ -153,16 +188,26 @@ export class ChromiumMapsProvider implements ScraperProvider {
             reviewCount: toCount(detail.reviewText || entry.reviewText),
             latitude: coords.latitude,
             longitude: coords.longitude,
-            placeRef: this.placeRefOf(page.url()),
-            mapsUrl: page.url(),
+            placeRef: this.placeRefOf(query.detail ? page.url() : entry.href),
+            mapsUrl: query.detail ? page.url() : entry.href,
             query: term,
             keyword,
             provider: this.id,
             capturedAt: new Date().toISOString(),
           }
-          if (!matchesWebsiteFilter(lead.website, query.websiteFilter)) {
-            await this.pause(query,signal); continue
+          if (this.savedPlaces.has(lead) || this.skip?.(lead)) {
+            this.skippedSaved.add(entry.href || key)
+            sink({status:'running', keyword, keywordIndex:index, keywordTotal:total, found:leads.length, target:runTarget,
+              message:`Skipped saved business · ${name} · ${leads.length} new leads`})
+            if (slot < entries.length - 1) await this.pause(query, signal, visitStarted)
+            continue
           }
+          if (!matchesWebsiteFilter(lead.website, query.websiteFilter)) {
+            if (slot < entries.length - 1) await this.pause(query,signal,visitStarted)
+            continue
+          }
+          seen.add(key)
+          if (entry.href) seenHrefs.add(entry.href)
           leads.push(lead)
           sink({
             status: 'running',
@@ -171,12 +216,16 @@ export class ChromiumMapsProvider implements ScraperProvider {
             keywordTotal: total,
             found: leads.length,
             target: runTarget,
-            message: `Captured ${leads.length} · ${name}`,
+            message: mapsMessages.captured(leads.length,name),
             lead,
           })
           if (leads.length >= runTarget) break
-          if (slot < entries.length - 1) await this.pause(query, signal)
+          if (slot < entries.length - 1) await this.pause(query, signal, visitStarted)
         }
+      }
+      if (this.skippedSaved.size) {
+        const collectionNote = `Skipped ${this.skippedSaved.size} businesses already saved on this device. Only new leads count toward your limit.`
+        sink({status:'running', found:leads.length, target:runTarget, message:collectionNote, collectionNote})
       }
       return leads
     } finally {
@@ -185,11 +234,28 @@ export class ChromiumMapsProvider implements ScraperProvider {
     }
   }
 
+  async prepare(query:ScrapeQuery,signal:AbortSignal):Promise<void> {
+    signal.throwIfAborted()
+    await this.launch(query)
+    if(!this.context)throw new ScraperUnavailableError('Browser context is unavailable.')
+    if(this.preparedPage)await this.preparedPage.close().catch(()=>undefined)
+    const page=await this.context.newPage()
+    this.preparedPage=page
+    const abort=()=>void page.close().catch(()=>undefined)
+    signal.addEventListener('abort',abort,{once:true})
+    try{
+      const term=query.keywords[0]+' in '+query.location
+      await page.goto(`${MAPS_SEARCH}${encodeURIComponent(term)}?hl=${query.language}&gl=${query.region}`,{waitUntil:'domcontentloaded',timeout:15000})
+      signal.throwIfAborted()
+    }finally{signal.removeEventListener('abort',abort)}
+  }
+
   async close(): Promise<void> {
     const browser = this.browser
     const context = this.context
     this.browser = null
-    this.context = null
+    this.context = this.adopted ? context : null
+    if(this.preparedPage){await this.preparedPage.close().catch(()=>undefined);this.preparedPage=null}
     // A browser the caller opened outlives the run: the reference is dropped so nothing here uses
     // it again, and the window itself is left exactly as the user left it.
     if (this.adopted) return
@@ -210,7 +276,7 @@ export class ChromiumMapsProvider implements ScraperProvider {
    * the page the run needs is opened in it.
    */
   private async launch(query: ScrapeQuery): Promise<void> {
-    if (this.adopted) return
+    if (this.context) return
     const executablePath = query.executablePath?.trim()
     const profileDir = query.profileDir?.trim()
     const viewport = { width: 1440, height: 900 }
@@ -277,9 +343,13 @@ export class ChromiumMapsProvider implements ScraperProvider {
     if (signal.aborted) throw new DOMException('Scrape cancelled', 'AbortError')
   }
 
-  private async pause(query: ScrapeQuery, signal: AbortSignal): Promise<void> {
+  private async pause(query: ScrapeQuery, signal: AbortSignal, visitStarted = Date.now()): Promise<void> {
     const span = Math.max(0, query.maxDelayMs - query.minDelayMs)
-    const waitFor = query.minDelayMs + Math.floor(Math.random() * (span + 1))
+    // Count navigation/read time toward the chosen interval instead of adding the full delay
+    // again after every page has already loaded. Network visits remain sequential and paced.
+    const waitFor = Math.max(0, query.minDelayMs + Math.floor(Math.random() * (span + 1)) - (Date.now() - visitStarted))
+    this.assertLive(signal)
+    if (!waitFor) return
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         signal.removeEventListener('abort', onAbort)
@@ -346,14 +416,32 @@ export class ChromiumMapsProvider implements ScraperProvider {
     if (!(await feed.count())) return []
     await page.waitForSelector('a.hfpxzc', { timeout: 20_000 }).catch(() => undefined)
 
-    const limit = query.websiteFilter && query.websiteFilter !== "any" ? 200 : Math.min(query.maxResultsPerKeyword, (query.maxResultsTotal ?? Infinity) - alreadyFound)
+    // Rejected places do not consume the allowance. Consider later candidates in this same
+    // query's feed instead of truncating to the requested number before relevance filtering.
+    // Saved cards with stable Maps IDs do not consume this budget. Extra candidates cover old
+    // records which can only be recognised after reading their name/address detail panel.
+    const limit = 200 + Math.min(this.savedPlaces.size + this.skipBudget, 5000)
+    const allCards = new Map<string,RawCard>()
+    let candidates: RawCard[] = []
+    const relevanceKeyword = query.relevanceKeywords?.[index] || keyword
     let stagnant = 0
     let loaded = 0
-    for (let pass = 0; pass < 40 && loaded < limit && stagnant < 3; pass += 1) {
+    let exhausted = false
+    for (let pass = 0; pass < 90 && candidates.length < limit && stagnant < 3; pass += 1) {
       const next = await this.readFeed(page)
-      if (next.length === loaded) stagnant += 1
+      for (const card of next) allCards.set(card.href,card)
+      if (allCards.size === loaded) stagnant += 1
       else stagnant = 0
-      loaded = next.length
+      loaded = allCards.size
+      candidates = [...allCards.values()].filter(card => {
+        if (card.sponsored) return false
+        if (this.savedPlaces.has({mapsUrl:card.href}) || this.skip?.({mapsUrl:card.href,name:card.name})) {
+          this.skippedSaved.add(card.href)
+          return false
+        }
+        const category = mapsCardCategory(card.lines)
+        return !category || mapsBusinessRelevant(relevanceKeyword,query.location,{name:card.name,category})
+      })
       sink({
         status: 'running',
         keyword,
@@ -361,19 +449,31 @@ export class ChromiumMapsProvider implements ScraperProvider {
         keywordTotal: total,
         found: alreadyFound,
         target: Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * total),
-        message: `Loading results · ${Math.min(loaded, limit)} of ${limit} listed`,
+        message: `Loading results · ${loaded} listed · ${this.skippedSaved.size} saved businesses skipped`,
       })
-      if (loaded >= limit) break
-      const exhausted = await page
+      if (candidates.length >= limit) break
+      exhausted = Boolean(await page
         .locator('text=/You\'ve reached the end of the list/i')
         .count()
-        .catch(() => 0)
+        .catch(() => 0))
       if (exhausted) break
       await feed.evaluate((el) => el.scrollBy(0, el.scrollHeight))
-      await page.waitForTimeout(700 + Math.floor(Math.random() * 500))
+      // Wait for actual new cards instead of assuming a slow response is an exhausted list.
+      await page.waitForFunction(previous => {
+        const list = document.querySelector('div[role="feed"]')
+        const seen = new Set(previous)
+        return Array.from(list?.querySelectorAll<HTMLAnchorElement>('a.hfpxzc') ?? []).some(link => !seen.has(link.href))
+          || /You've reached the end of the list/i.test(document.body.innerText)
+      }, [...allCards.keys()], {timeout: 3500, polling: 200}).catch(error => { if (page.isClosed()) throw error })
     }
-    const cards = (await this.readFeed(page)).filter((card) => !card.sponsored)
-    return cards.slice(0, limit)
+    this.lastRunExhausted = exhausted
+    const collectionNote = exhausted
+      ? `Google Maps reached the end of the list for “${keyword}”.`
+      : candidates.length >= limit ? `Checked up to ${limit} new candidates listed by Google Maps for “${keyword}”.`
+      : `Google Maps stopped loading more places for “${keyword}” after retries. Try a smaller area for more coverage.`
+    sink({status:'running', keyword, keywordIndex:index, keywordTotal:total, found:alreadyFound,
+      target:Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * total), message:collectionNote, collectionNote})
+    return candidates.slice(0, limit)
   }
 
   private async readFeed(page: Page): Promise<RawCard[]> {
@@ -419,10 +519,13 @@ export class ChromiumMapsProvider implements ScraperProvider {
         entry.lines.find((line) => /,/.test(line)) ??
         ''
       const address = infoLine.includes('·') ? infoLine.slice(infoLine.lastIndexOf('·') + 1).trim() : infoLine
-      return { ...empty, address }
+      return { ...empty, address, category: mapsCardCategory(entry.lines) }
     }
     try {
-      await page.goto(entry.href, { waitUntil: 'domcontentloaded' })
+      // A single-place search has already loaded its detail panel.
+      if (page.url() !== entry.href || !(await page.locator(PLACE_HEADING).count())) {
+        await page.goto(entry.href, { waitUntil: 'domcontentloaded' })
+      }
       await this.settleConsent(page)
       await page.waitForSelector(PLACE_HEADING, { timeout: 20_000 }).catch(() => undefined)
       await this.detectBlock(page, page.url())

@@ -5,12 +5,21 @@ import {resolve,join} from 'node:path'
 import {chromium} from 'playwright'
 const out=resolve('screenshots/qa-1.4.31/admin');mkdirSync(out,{recursive:true})
 const html=readFileSync('admin-dashboard/index.html','utf8').replace("return (this.props.dataSource ?? 'live') === 'fixture';","return true;")
-const server=createServer((req,res)=>{res.setHeader('content-type',req.url.endsWith('.js')?'application/javascript':'text/html');res.end(req.url.endsWith('.js')?readFileSync('admin-dashboard/'+req.url.slice('/admin/'.length)):html)})
+const server=createServer((req,res)=>{
+ if(req.url.startsWith('/admin/api/lead-cache/stats')){res.setHeader('content-type','application/json');res.end(JSON.stringify({lookups:10,hitRate:.5,leadsServed:50,leadsRequested:100,partialHits:2,contributed:60,places:60,quarantined:0,topQueries:[{keyword:'dentist',location:'Lahore',lookups:10,hitRate:.5,places:60}]}));return}
+ res.setHeader('content-type',req.url.endsWith('.js')?'application/javascript':'text/html');res.end(req.url.endsWith('.js')?readFileSync('admin-dashboard/'+req.url.slice('/admin/'.length)):html)
+})
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true})
 try {
  const page=await browser.newPage({viewport:{width:1440,height:950}}),errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('UI ERROR',e.message)});page.on('console',m=>{if(m.type()==='error')console.log(m.text())})
  await page.goto('http://127.0.0.1:'+server.address().port+'/admin/');
  await page.getByRole('button',{name:'View previous history',exact:true}).waitFor();
+ const cache=page.getByRole('heading',{name:'Shared lead cache',exact:true}).locator('..')
+ for(const period of ['Today','7 days','30 days']){
+  await cache.getByRole('button',{name:period,exact:true}).click()
+  await page.waitForFunction(()=>document.body.innerText.includes('50% cache hit rate'))
+  assert.match(await cache.locator('tbody').innerText(),/dentist[\s\S]*Lahore[\s\S]*50%/)
+ }
  assert.match(await page.getByRole('region',{name:'Activity reporting period'}).innerText(),/Activity from/);
  assert.match(await page.getByRole('region',{name:'Customer activity',exact:true}).innerText(),/0 total downloads/);
  await page.getByRole('button',{name:'View previous history',exact:true}).click();

@@ -1,3 +1,7 @@
+import {LeadCacheRepository} from './db/lead-cache-repository'
+import {leadCacheEnabled} from './runtime-config'
+import {leadCacheLookup,drainLeadCache,cacheSharingActive} from './billing/lead-cache-client'
+import type {CacheEnrichment} from './scraper/cached-maps'
 import {precheckEmail,isRoleEmail} from './email-precheck'
 import {registerSupportIpc} from './support-ipc'
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from 'electron'
@@ -812,8 +816,8 @@ ipcMain.handle('scraper:last', () => runner.last)
  * Starts a run and wires up everything that has to happen around one.
  *
  * A run has to be written to the local database before the window hears about it, so a crash
- * between the two cannot lose captured leads, and a finished scrape is what queues the enrichment
- * pass over the new leads. Both belong to every run however it was started, so both live here.
+ * between the two cannot lose captured leads. Email checks start as rows arrive; other enrichment
+ * is queued at completion. Both belong to every run however it was started.
  */
 let reservingMapsRun = false
 async function startRun(request: StartRunRequest, context?: BrowserContext, executablePath?: string) {
@@ -825,20 +829,35 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
   let handle: ReturnType<ScrapeRunner['start']>
   const {db: runDb, repository: runRepository} = openDatabase()
   const workspaceId = runDb.ensureWorkspace().id
+  const cacheRepository=new LeadCacheRepository(runDb)
+  const cacheSeeds=new Map<string,CacheEnrichment>()
+  const cachedMapsIds=new Set<string>()
+  void drainLeadCache(cacheRepository)
   const runStartedAt = new Date().toISOString()
   let checkpointSaved = 0
+  let checkpointCreated = false
+  let mapsEmailStarted = false
   try {
     const requestedTotal = Math.min(query.maxResultsTotal ?? Infinity, query.maxResultsPerKeyword * query.keywords.length)
     quota = await billingReserveMaps(requestedTotal)
     if (runner.busy) throw new Error('A scrape is already running.')
     handle = runner.start({
     provider: request?.provider,
+    savedPlaces: runRepository.savedMapsPlaces(workspaceId),
+    cacheDeps:{
+      enabled:leadCacheEnabled,reservationId:quota.reservationId,appVersion:app.getVersion(),
+      known:runRepository.knownIdentities(workspaceId),seeds:cacheSeeds,cachedIds:cachedMapsIds,lookup:leadCacheLookup,
+      enqueue:(kind,body)=>{cacheRepository.enqueue(kind,body);void drainLeadCache(cacheRepository)},
+      diagnostics:(id,hits)=>cacheRepository.diagnostics(id,hits),
+    },
     // A billing allowance can lower the requested limit, never increase it.
     query: { ...request?.query, maxResultsTotal: Math.min(requestedTotal, quota.allowed) },
     context,
     executablePath,
     onProgress: (progress) => {
-      if (progress.status === 'running') {
+      // Persist every accepted lead before displaying it. Loading/skipping notifications do
+      // not change the saved data and should not repeatedly run SQLite write transactions.
+      if (progress.status === 'running' && (progress.lead || !checkpointCreated)) {
         const checkpoint = runRepository.saveRun(workspaceId, {
           runId:progress.runId, provider:progress.provider, status:'running', keywords:query.keywords,
           location:query.location, maxResultsPerKeyword:Math.min(requestedTotal,quota!.allowed), detail:query.detail,
@@ -846,6 +865,28 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
           leads:progress.lead ? [progress.lead] : [],
         })
         checkpointSaved += checkpoint.saved
+        checkpointCreated = true
+        if (progress.lead && checkpoint.leadIds[0]) {
+          const seed=cacheSeeds.get(progress.lead.id)
+          if(seed){
+            cacheRepository.seed(runRepository,workspaceId,checkpoint.leadIds[0],seed)
+            cacheSeeds.delete(progress.lead.id)
+          }else if(progress.provider==='chromium-maps'&&!cachedMapsIds.has(progress.lead.id)){
+            cacheRepository.origin(checkpoint.leadIds[0],progress.lead)
+          }
+          cachedMapsIds.delete(progress.lead.id)
+          // The renderer and contacts table must refer to the same saved identity during the run.
+          progress = {...progress,lead:{...progress.lead,id:checkpoint.leadIds[0]}}
+          if (progress.lead?.website) {
+            try {
+              const queued = runRepository.queueMapsEmails(workspaceId,progress.runId)
+              if (queued.jobId && !mapsEmailStarted) {
+                mapsEmailStarted = true
+                void enricher?.prioritize(queued.jobId)
+              } else void enricher?.drain()
+            } catch { /* The final pass retries queueing without losing the Maps lead. */ }
+          }
+        }
       }
       broadcast('scraper:progress', progress)
     },
@@ -903,9 +944,8 @@ async function startRun(request: StartRunRequest, context?: BrowserContext, exec
     runner.replaceLast(finalSummary)
     broadcast('scraper:done', { ...finalSummary, stored, storeError })
 
-    // A fresh scrape is what creates the work: the newly captured leads have websites and no
-    // addresses yet, which is exactly what enrichment reads. Queued here rather than in the
-    // renderer so a run enriches whether or not a window is watching.
+    // Catch any unqueued emails and queue social profiles. Live email jobs already attempted
+    // in this run must not be duplicated when the final Maps summary is saved.
     if (stored && finalSummary.leads.length) {
       queueEnrichmentForNewLeads(stored.runId)
     }
@@ -1114,8 +1154,10 @@ function queueEnrichmentForNewLeads(runId: string): void {
   try {
     const { db, repository } = openDatabase()
     const workspace = db.ensureWorkspace()
-    for (const kind of ['email', 'social'] as const) {
-      const leads = repository.leadsNeedingContact(workspace.id, kind, 10000, runId)
+    repository.queueMapsEmails(workspace.id,runId)
+    for (const kind of ['social'] as const) {
+      const seeded=repository.cacheSeededIds(kind)
+      const leads = repository.leadsNeedingContact(workspace.id, kind, 10000, runId).filter(lead=>!seeded.has(lead.id))
       if (leads.length) repository.queueJob(workspace.id, kind, leads.map((lead) => lead.id), {runId})
     }
     void enricher?.drain()
@@ -1182,6 +1224,20 @@ if (ownsInstance) app.whenReady().then(() => {
   })
 
   enricher = new EnrichmentRunner(db, repository, {
+    onPublicFindings:(leadId,website,findings,scannedKinds)=>{
+      if(!cacheSharingActive())return
+      const cache=new LeadCacheRepository(db),origin=cache.publicOrigin(leadId)
+      // Only a live Maps origin and the exact original website may publish fresh observations.
+      if(!origin||origin.website!==website)return
+      cache.enqueue('enrichment',{placeKey:origin.place_key,website,scannedKinds,
+        emails:findings.emails.map(e=>({value:e.value,source:e.page,score:e.score})).slice(0,10),
+        phones:findings.phones.map(p=>({value:p.value,source:p.page})).slice(0,10),
+        socials:findings.socials.map(s=>({platform:s.platform,url:s.profileUrl,source:s.page||website})).slice(0,10),
+        address:findings.addresses?.[0]||'',enrichedAt:new Date().toISOString()})
+      // Maps findings can arrive before the run's contribution receipt is uploaded.
+      // Keep them queued until the Maps batch is ready, instead of spending retries early.
+      if(!runner.busy)void drainLeadCache(cache)
+    },
     onProgress: (progress) => broadcast('enrichment:progress', progress),
     authorize: (_kind, fresh) => requireActiveLicense('lifetime', fresh),
 
@@ -1190,6 +1246,7 @@ if (ownsInstance) app.whenReady().then(() => {
   // Resume durable enrichment work after a restart. The runner prioritises fresh one-site scans,
   // so a saved queue cannot make a domain import look frozen while the window is open.
   void enricher.drain()
+  void drainLeadCache(new LeadCacheRepository(db))
 
   updates.start()
   createWindow()

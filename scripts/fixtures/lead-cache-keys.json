@@ -1,0 +1,128 @@
+[
+  {
+    "input": [
+      "dentist",
+      "Lahore",
+      "pk",
+      "en"
+    ],
+    "key": "760b97aec389409eb3a8f5ddf55d80e0bf4179b410ab98432aa8326fab589599"
+  },
+  {
+    "input": [
+      " Dentist\t",
+      " lahore ",
+      "pk",
+      "en"
+    ],
+    "key": "760b97aec389409eb3a8f5ddf55d80e0bf4179b410ab98432aa8326fab589599"
+  },
+  {
+    "input": [
+      "ＤＥＮＴＩＳＴ",
+      "LAHORE",
+      "pk",
+      "en"
+    ],
+    "key": "760b97aec389409eb3a8f5ddf55d80e0bf4179b410ab98432aa8326fab589599"
+  },
+  {
+    "input": [
+      "dentists",
+      "Lahore",
+      "pk",
+      "en"
+    ],
+    "key": "40df0362a2c1dbb210b34679caaa4b7271f58976f90b7932373d2aa4e394f16a"
+  },
+  {
+    "input": [
+      "dental clinic",
+      "Lahore",
+      "pk",
+      "en"
+    ],
+    "key": "8989df2b8b52936613fcd3963c459a62c7c69d016a3790dd1bae49aa0aa99c0e"
+  },
+  {
+    "input": [
+      "dentist lahore",
+      "Lahore",
+      "pk",
+      "en"
+    ],
+    "key": "8c0fb5a73ad71466db44868ed9d5d8ae77638d9009e444ba6b681659c2b76323"
+  },
+  {
+    "input": [
+      "dent",
+      "Lahore",
+      "pk",
+      "en"
+    ],
+    "key": "319b642a75496afe90633762ec7a5bb11db71c5cf9669f7cf9f9533ccc530bc8"
+  },
+  {
+    "input": [
+      "dentist",
+      "Lahore, Pakistan",
+      "pk",
+      "en"
+    ],
+    "key": "56e4910058bba7bc8696a06937583693ad22939b6bc514c5a0ae1b2b94c52a60"
+  },
+  {
+    "input": [
+      "dentist",
+      "LHR",
+      "pk",
+      "en"
+    ],
+    "key": "f25092a80efa814fbe65162a8cf0c55f834df11d9eea20144fc7b675dcc03c45"
+  },
+  {
+    "input": [
+      "dentist",
+      "Lahore Pakistan",
+      "pk",
+      "en"
+    ],
+    "key": "8789dbffc4fd3b315b771b58af3a22f919958be821d6ee540347fd9b584237fb"
+  },
+  {
+    "input": [
+      "dentist",
+      "DHA Lahore",
+      "pk",
+      "en"
+    ],
+    "key": "4d25c7b8839806f7ad723e90aebfa57ef6bbd34ae895fc50ab32a15d2125d744"
+  },
+  {
+    "input": [
+      "dentist",
+      "Karachi",
+      "pk",
+      "en"
+    ],
+    "key": "63ac943af81b3b9df94a0cdd1b19f0c148ea7f72ad4914409d980bc5ab85277c"
+  },
+  {
+    "input": [
+      "dentist",
+      "Lahore",
+      "us",
+      "en"
+    ],
+    "key": "b8e3882baf7d2981a0242436b05d9a6cc1a27eced0086b8404787a64abfbf79f"
+  },
+  {
+    "input": [
+      "dentist",
+      "Lahore",
+      "pk",
+      "ur"
+    ],
+    "key": "17dc9046e6c9a51faae18fa5fd06b1320ecb914710e9be9905bc145a801fe3ca"
+  }
+]

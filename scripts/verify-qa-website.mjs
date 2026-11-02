@@ -58,7 +58,7 @@ try{
   await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click()
   await page.goto(base+'/terms.html',{waitUntil:'networkidle'})
   assert.match(await page.locator('body').innerText(),/10,000/)
-  assert.ok(await page.locator('a[href="mailto:mamaleads997@gmail.com"]').count())
+  assert.ok(await page.locator('a[href="mailto:mamaleads997@gmail.com?subject=MamaLead%20Support"]').count())
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1))
   await page.screenshot({path:out+'/terms-'+viewport.width+'.png'})
   assert.deepEqual(errors,[]);assert.deepEqual(failedResources,[]);await page.close()

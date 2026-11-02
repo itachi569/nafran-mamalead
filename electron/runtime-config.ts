@@ -1,4 +1,7 @@
 import { readFileSync } from 'node:fs'
+export const leadCacheEnabled = process.env.LEADSNAP_LEAD_CACHE !== '0'
+export const leadCacheTimeoutMs = 4000
+export const leadCacheTtlDays = 30
 
 /**
  * Reads the DataForSEO credential at process start without putting it in the renderer bundle,

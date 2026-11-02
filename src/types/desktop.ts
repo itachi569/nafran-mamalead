@@ -32,6 +32,7 @@ export interface Lead {
 }
 
 export interface RunProgress {
+  collectionNote?: string
   runId: string
   status: RunStatus
   provider: ProviderId
@@ -48,6 +49,7 @@ export interface RunProgress {
 
 export interface ScrapeQuery {
   keywords: string[]
+  relevanceKeywords?: string[]
   location: string
   maxResultsPerKeyword: number
   /** Total cap across every keyword and area in this run. */
@@ -68,6 +70,7 @@ export interface ScrapeQuery {
 }
 
 export interface RunSummary {
+  collectionNotes?: string[]
   runId: string
   status: RunStatus
   provider: ProviderId

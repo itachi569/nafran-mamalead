@@ -3,7 +3,7 @@
 // With the local database reachable, which it is whenever the app runs in Electron, the page
 // reads the workspace's leads, their addresses and the coverage totals. Outside Electron it falls
 // back to the reference sample rows, so the page looks identical either way.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createEmailAddress,
   deleteEmailAddress,
@@ -138,6 +138,7 @@ export function useEmailPage(): EmailPage {
   const [validityProgress, setValidityProgress] = useState<EmailValidityProgress>(EMPTY_VALIDITY_PROGRESS)
   const [rows, setRows] = useState<EmailRow[]>([])
   const [coverage, setCoverage] = useState<EmailCoverage>(DEMO_COVERAGE)
+  const loadGeneration = useRef(0)
 
   const load = useCallback(async () => {
     if (!db) {
@@ -147,17 +148,19 @@ export function useEmailPage(): EmailPage {
     }
     setLoading(true)
     setError(null)
+    const generation = ++loadGeneration.current
     try {
       // Validity filters describe the whole local database, so the table must carry the whole
       // workspace too. Otherwise a global "Not checked" count could filter to an empty first page.
       const page = await fetchEmailPage(db, { limit: 500 })
+      if (generation !== loadGeneration.current) return
       setRows(page.rows)
       setCoverage(page.coverage)
       setLive(true)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The addresses could not be loaded.')
+      if (generation === loadGeneration.current) setError(caught instanceof Error ? caught.message : 'The addresses could not be loaded.')
     } finally {
-      setLoading(false)
+      if (generation === loadGeneration.current) setLoading(false)
     }
   }, [db])
 

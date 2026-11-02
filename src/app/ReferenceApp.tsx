@@ -215,7 +215,7 @@ export function ReferenceApp({ V }: { V: AppValues }): ReactElement {
                 </span>
                 <span style={{fontSize: "10px", fontWeight: "500", letterSpacing: ".14em", color: "#C8D5BB"}}>ACTIVE</span>
               </div>
-              <p style={{margin: "8px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#9BA29C", textWrap: "pretty"}}>No cloud — all data on your machine</p>
+              <p style={{margin: "8px 0 0", fontSize: "12px", lineHeight: "1.5", color: "#9BA29C", textWrap: "pretty"}}>Private workspace · saved on this device</p>
             </div>
             <button type="button" onClick={V.openChat} data-assist="1" style={{display: "flex", alignItems: "center", gap: "10px", width: "100%", padding: "10px 14px 10px 8px", border: "0", borderRadius: "20px", fontFamily: "inherit", textAlign: "left", cursor: "pointer", transition: "background .25s linear,transform .3s cubic-bezier(.22,1,.36,1)"}}>
               <span data-chatlottie="1" aria-hidden="true" style={{display: "block", width: "54px", height: "54px", flex: "none"}}></span>

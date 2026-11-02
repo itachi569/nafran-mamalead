@@ -16,6 +16,7 @@ type Phase = 'idle' | 'run'
 export interface StartOptions {
   websiteFilter?: "any" | "has" | "none"
   keywords: string[]
+  relevanceKeywords?: string[]
   location: string
   maxResultsPerKeyword: number
   /** One ceiling shared by all keywords and districts. */
@@ -122,7 +123,7 @@ function friendlyRunError(error: unknown): string {
   return message.replace(/^Error invoking remote method '[^']+':\s*/,'').replace(/^Error:\s*/,'')
 }
 
-export function useScraper(): {
+export function useScraper(showLiveMaps = true): {
   snapshot: ScrapeSnapshot
   start: (options: StartOptions) => void
   stop: () => void
@@ -131,6 +132,9 @@ export function useScraper(): {
 } {
   const [snapshot, setSnapshot] = useState<ScrapeSnapshot>(INITIAL)
   const timers = useRef<number[]>([])
+  const paintInterval = useRef(150)
+  // Other pages only need the small background-scan indicator, not six Maps paints per second.
+  paintInterval.current = showLiveMaps ? 150 : 750
   const bridge = typeof window === 'undefined' ? undefined : window.desktop
   const db = useMemo(() => localDb(), [])
   const desktopAvailable = Boolean(bridge)
@@ -187,7 +191,7 @@ export function useScraper(): {
         revision: current.revision + 1,
         found: current.running ? current.found : firstPage.total,
         target: current.running ? current.target : firstPage.total,
-        message: current.running ? current.message : firstPage.total
+        message: current.running || current.runId ? current.message : firstPage.total
           ? `${firstPage.total} lead${firstPage.total === 1 ? '' : 's'} on file`
           : current.message,
         request:
@@ -206,8 +210,30 @@ export function useScraper(): {
 
   useEffect(() => {
     if (!bridge) return
-    const offProgress = bridge.scraper.onProgress((progress) => {
-      setSnapshot((current) => ({
+    let pending: Parameters<Parameters<typeof bridge.scraper.onProgress>[0]>[0][] = []
+    let progressTimer: number | undefined
+    const clearProgress = () => {
+      window.clearTimeout(progressTimer)
+      progressTimer = undefined
+      pending = []
+    }
+    const flushProgress = () => {
+      const batch = pending
+      clearProgress()
+      const progress = batch.at(-1)
+      if (!progress) return
+      // Scan bursts must not monopolise rendering or delay navigation/Stop. Keep every lead,
+      // but paint progress at most once per 150ms. Commit each batch normally: deferring these
+      // updates in a React transition can leave the live count behind during page navigation.
+      setSnapshot((current) => {
+        const ids = new Set(current.leads.map(lead => lead.id))
+        const refs = new Set(current.leads.map(lead => lead.placeRef).filter(Boolean))
+        const additions: Lead[] = []
+        for (const event of batch) if (event.lead && !ids.has(event.lead.id) && !(event.lead.placeRef && refs.has(event.lead.placeRef))) {
+          additions.push(event.lead); ids.add(event.lead.id)
+          if (event.lead.placeRef) refs.add(event.lead.placeRef)
+        }
+        return {
         ...current,
         // Completion is announced by onDone after billing settles and the run is saved.
         running: progress.status === 'running' || (current.running && progress.runId !== 'google-gate'),
@@ -218,30 +244,24 @@ export function useScraper(): {
         // Each captured place arrives with its own update, which is what lets the running panel
         // and the coverage map pin businesses as they land rather than only at the end. The
         // provider can report the same place more than once, so the list is kept unique.
-        leads: progress.lead
-          ? current.leads.some((lead) => lead.id === progress.lead?.id || (lead.placeRef && lead.placeRef === progress.lead?.placeRef))
-            ? current.leads
-            : [...current.leads, progress.lead]
-          : current.leads,
+        leads: additions.length ? [...current.leads, ...additions] : current.leads,
         message: progress.message,
         activityAt: progress.at,
         error: progress.status === 'failed' || progress.status === 'cancelled' ? progress.message : current.error,
         stSocial: progress.status === 'running' ? 'run' : 'idle',
         stEmail: progress.status === 'running' ? 'run' : 'idle',
         stPhone: progress.status === 'running' ? 'run' : 'idle',
-      }))
+        }
+      })
+    }
+    const offProgress = bridge.scraper.onProgress((progress) => {
+      pending.push(progress)
+      if (progressTimer === undefined) progressTimer = window.setTimeout(flushProgress, paintInterval.current)
     })
     const offDone = bridge.scraper.onDone((summary) => {
+      clearProgress()
       setSnapshot((current) => {
-        // The summary holds what this session's run captured, but the ledger also holds earlier
-        // runs. Merging keeps the map and the tile counts on the whole file while the run's own
-        // places take the newer rows; `reloadFromDatabase` below then re-reads the stored view.
-        const merged = [
-          ...summary.leads,
-          ...current.leads.filter(
-            (lead) => !summary.leads.some((fresh) => fresh.placeRef && fresh.placeRef === lead.placeRef),
-          ),
-        ]
+        // Completion is authoritative, including any leads still waiting in the paint batch.
         const total = summary.leads.length
         return {
           ...current,
@@ -249,9 +269,11 @@ export function useScraper(): {
           total,
           found: total,
           target: total,
-          leads: merged.slice(0, 200),
+          leads: summary.leads.slice(0, 200),
           message: summary.error
             ? summary.error
+            : summary.collectionNotes?.length && summary.leads.length < (summary.query.maxResultsTotal ?? summary.query.maxResultsPerKeyword * summary.query.keywords.length)
+              ? `Finished · ${summary.leads.length} matching leads. ${summary.collectionNotes.join(' ')}`
             : summary.stored
               ? `Finished · ${summary.stored.saved} new of ${summary.leads.length} captured`
               : `Finished · ${summary.leads.length} lead${summary.leads.length === 1 ? '' : 's'} captured`,
@@ -306,6 +328,7 @@ export function useScraper(): {
       })
       .catch(() => undefined)
     return () => {
+      clearProgress()
       offProgress()
       offDone()
     }
@@ -344,6 +367,7 @@ export function useScraper(): {
           provider: 'chromium-maps' as const,
           query: {
             keywords: options.keywords,
+            relevanceKeywords: options.relevanceKeywords,
             location: options.location,
             maxResultsPerKeyword: options.maxResultsPerKeyword,
             maxResultsTotal: options.maxResultsTotal,

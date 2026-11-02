@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import {createNeonSupportStore} from './support-store.mjs'
+import {createNeonLeadCacheStore} from './lead-cache-store.mjs'
 
 /** Persistent installation identity and Stripe references for Vercel Functions. */
 export function createNeonStore(databaseUrl) {
@@ -88,6 +89,7 @@ export function createNeonStore(databaseUrl) {
   }
   return {
     ...createNeonSupportStore(sql),
+    ...createNeonLeadCacheStore(databaseUrl,ready),
     async create(id, tokenHash, createdAt, deviceId, devicePlatform) {
       await ready()
       await sql`insert into billing_installations (id, token_hash, created_at, device_id, device_platform) values (${id}, ${tokenHash}, ${createdAt}, ${deviceId}, ${devicePlatform})`

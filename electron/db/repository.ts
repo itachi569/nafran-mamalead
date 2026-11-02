@@ -1,3 +1,4 @@
+import {IdentitySet} from '../scraper/cache-key'
 import { contactQuality } from '../lead-quality'
 import {hasPublicEmailDomain} from '../email-domain'
 import { directoryScanError, socialWebsite } from '../enrichment/source-policy'
@@ -14,6 +15,7 @@ import { emptyLookupRow, readWebsiteLookup, lookupFields, type WebsiteLookupFiel
 
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity, primarySocialProfiles } from '../social-profile'
 import {compareEmailContacts} from '../email-ranking'
+import {SavedMapsPlaces} from '../scraper/saved-places'
 
 // ---------------------------------------------------------------- scraper
 
@@ -554,11 +556,26 @@ export class Repository {
 
   // ---------------------------------------------------------------- runs
 
+  savedMapsPlaces(workspaceId: string): SavedMapsPlaces {
+    return new SavedMapsPlaces(this.db.query<{name:string;address:string;placeRef:string;mapsUrl:string}>(
+      'select name, address, place_ref as placeRef, maps_url as mapsUrl from leads where workspace_id = ?', [workspaceId],
+    ))
+  }
+
+  knownIdentities(workspaceId:string):IdentitySet {
+    return new IdentitySet(this.db.query<{placeRef:string;mapsUrl:string;phone:string;website:string;address:string}>(
+      'select place_ref as placeRef,maps_url as mapsUrl,phone,website,address from leads where workspace_id=?',[workspaceId]))
+  }
+
+  cacheSeededIds(kind:'email'|'phone'|'social'):Set<string> {
+    return new Set(this.db.query<{lead_id:string}>(`select lead_id from lead_cache_seeded where ${kind}=1 and seeded_at>=?`,[new Date(Date.now()-30*86400000).toISOString()]).map(r=>r.lead_id))
+  }
+
   /**
    * Stores a finished run and its leads. Returns how many leads were newly inserted: a business
    * already on file is skipped rather than duplicated, keyed on Google's place reference.
    */
-  saveRun(workspaceId: string, summary: RunSummaryInput): { runId: string; saved: number } {
+  saveRun(workspaceId: string, summary: RunSummaryInput): { runId: string; saved: number; leadIds: string[] } {
     return this.db.transaction(() => {
       const runId = summary.runId ?? randomUUID()
       const previous = this.db.one<{status:string}>('select status from scrape_runs where id = ?', [runId])
@@ -586,6 +603,7 @@ export class Repository {
       )
 
       let saved = 0
+      const savedLeadIds: string[] = []
       const insert = this.db.prepare(
         `insert into leads
            (id, workspace_id, run_id, name, category, address, area, postcode, phone, website,
@@ -603,7 +621,10 @@ export class Repository {
         const lead={...input,phone:normalizePhone(input.phone || '',[input.website,input.address,summary.location].filter(Boolean).join(' ')),website:input.website&&!directoryScanError(input.website)?cleanWebsiteUrl(input.website):''}
         if (!lead.name) continue
         // A streamed row may be seen again in the final summary, including providers without place IDs.
-        if (!lead.placeRef && this.db.one('select l.id from leads l join scrape_run_leads rl on rl.lead_id=l.id where rl.run_id=? and l.name=? and l.address=? and l.website=?', [runId,lead.name,lead.address ?? '',lead.website ?? ''])) continue
+        if (!lead.placeRef) {
+          const prior = this.db.one<{id:string}>('select l.id from leads l join scrape_run_leads rl on rl.lead_id=l.id where rl.run_id=? and l.name=? and l.address=? and l.website=?', [runId,lead.name,lead.address ?? '',lead.website ?? ''])
+          if (prior) { savedLeadIds.push(prior.id); continue }
+        }
         const capturedAt = lead.capturedAt ?? nowIso()
         const score = scoreLead(lead)
         const leadId = randomUUID()
@@ -631,6 +652,7 @@ export class Repository {
           capturedAt,
         )
         if (changes > 0) {
+          savedLeadIds.push(leadId)
           linkRun.run(runId, leadId)
           saved += 1
           this.saveMapsSocial(workspaceId,leadId,input.website || '')
@@ -641,6 +663,7 @@ export class Repository {
         // a re-run improves an existing row instead of ignoring it.
         const existing = known.get<{ id: string; phone: string; website: string }>(workspaceId, lead.placeRef ?? '')
         if (!existing) continue
+        savedLeadIds.push(existing.id)
         linkRun.run(runId, existing.id)
         if (!existing.phone && lead.phone) {
           this.db.run('update leads set phone = ? where id = ?', [lead.phone, existing.id])
@@ -660,7 +683,7 @@ export class Repository {
         [workspaceId, currentPeriod()],
       )
 
-      return { runId, saved }
+      return { runId, saved, leadIds: savedLeadIds }
     })
   }
 
@@ -1505,6 +1528,27 @@ export class Repository {
 
   // ---------------------------------------------------------------- enrichment jobs
 
+  /** Start emails as Maps rows arrive; merge the backlog instead of making a job per row. */
+  queueMapsEmails(workspaceId: string, runId: string): { jobId: string; queued: number } {
+    return this.db.transaction(() => {
+      const jobs = this.db.query<{id:string;lead_ids:string;status:string}>(
+        "select id, lead_ids, status from enrichment_jobs where workspace_id=? and kind='email' and json_valid(options) and json_extract(options,'$.runId')=?",
+        [workspaceId, runId],
+      )
+      const attempted = new Set(jobs.flatMap(job => JSON.parse(job.lead_ids) as string[]))
+      const seeded=this.cacheSeededIds('email')
+      const fresh = this.leadsNeedingContact(workspaceId,'email',10000,runId).map(lead=>lead.id).filter(id=>!attempted.has(id)&&!seeded.has(id))
+      if (!fresh.length) return {jobId:'',queued:0}
+      const waiting = jobs.find(job=>job.status==='queued')
+      if (waiting) {
+        const ids = [...new Set([...(JSON.parse(waiting.lead_ids) as string[]),...fresh])]
+        this.db.run('update enrichment_jobs set lead_ids=? where id=? and status=\'queued\'', [JSON.stringify(ids),waiting.id])
+        return {jobId:waiting.id,queued:fresh.length}
+      }
+      return this.queueJob(workspaceId,'email',fresh,{runId,source:'maps-live'})
+    })
+  }
+
   queueJob(workspaceId: string, kind: 'email' | 'phone' | 'social' | 'website', leadIds: string[], options: Record<string, unknown> = {}): { jobId: string; queued: number } {
     if (!['email', 'phone', 'social', 'website'].includes(kind)) throw new Error('This scan module is no longer available.')
     leadIds = [...new Set(leadIds.filter(id => typeof id === 'string' && id.trim()))]
@@ -1545,6 +1589,7 @@ export class Repository {
        where status = 'queued'
        order by
          case when id = ? then -1 else 0 end,
+         case when json_valid(options) and json_extract(options,'$.source')='maps-live' then 0 else 1 end,
          case when json_array_length(lead_ids) <= 1 then 0 else 1 end,
          case when kind = 'social' then 0 when kind = 'website' then 1 else 2 end,
          created_at desc

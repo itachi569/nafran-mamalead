@@ -8,5 +8,9 @@ export function createSupportWriter({keyFile=new URL('../../app/.admin-license-k
   if(!response.ok)throw Object.assign(new Error(result.error || 'Support action failed.'),{status:response.status})
   return result
  }
- return {reply:p=>send('reply',p),status:p=>send('status',p),note:p=>send('note',p),config:()=>send('config')}
+ return {reply:p=>send('reply',p),status:p=>send('status',p),note:p=>send('note',p),config:()=>send('config'),
+  cacheStats:async(from,to)=>{
+   const response=await fetcher('http://127.0.0.1:38749/v1/admin/lead-cache/stats?'+new URLSearchParams({from,to}),{redirect:'error',signal:AbortSignal.timeout(10000),headers:{authorization:`Bearer ${key}`}})
+   const result=await response.json();if(!response.ok)throw new Error('Cache statistics are unavailable.');return result
+  }}
 }

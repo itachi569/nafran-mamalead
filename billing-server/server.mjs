@@ -13,6 +13,7 @@ import { createLicenseAdminServer } from './admin-licenses.mjs'
 import { initializeOwnerLicenses, ownerLicense, activateOwnerLicense } from './owner-licenses.mjs'
 import {retrySupportDelivery} from './support.mjs'
 import {createSqliteSupportStore} from './support-store.mjs'
+import {createSqliteLeadCacheStore} from './lead-cache-store.mjs'
 
 export function createBillingServer(options = {}) {
   const env = options.env && !options.env.TURNSTILE_CONFIG_FILE ? {...options.env} : loadTurnstileConfig(options.env ?? process.env)
@@ -114,7 +115,9 @@ export function createBillingServer(options = {}) {
   db.exec('create unique index if not exists installations_license_slot on installations (license_id, license_slot) where license_id is not null and license_slot is not null')
   db.exec('create unique index if not exists installations_decision_license_slot on installations (decision_license_id, decision_license_slot) where decision_license_id is not null and decision_license_slot is not null')
   db.exec('create table if not exists assist_usage (bucket text primary key, used integer not null, expires_at integer)')
+  const cacheStore = createSqliteLeadCacheStore(db)
   const store = {
+    ...cacheStore,
     ...createSqliteSupportStore(db),
     reserveAssistUsage: async (buckets) => {
       db.exec('BEGIN IMMEDIATE')
@@ -354,7 +357,9 @@ export function createBillingServer(options = {}) {
         let raw = ''
         for await (const chunk of req) {
           raw += chunk
-          if (Buffer.byteLength(raw) > (['/v1/support','/v1/support/web'].includes(req.url?.split('?')[0]) ? 32768 : 16384)) throw new HttpError(413, 'Request is too large.')
+          const path=req.url?.split('?')[0]
+          const limit=path==='/v1/lead-cache/lookup'?1500000:path?.startsWith('/v1/lead-cache/')?262144:['/v1/support','/v1/support/web'].includes(path)?32768:16384
+          if (Buffer.byteLength(raw) > limit) throw new HttpError(413, 'Request is too large.')
         }
         return raw
       },
@@ -366,7 +371,9 @@ export function createBillingServer(options = {}) {
   let supportRetryBusy=false
   const supportTimer=setInterval(async()=>{if(supportRetryBusy)return;supportRetryBusy=true;try{await retrySupportDelivery({env,store,fetcher:options.fetch})}catch{}finally{supportRetryBusy=false}},60000)
   supportTimer.unref();server.once('close',()=>clearInterval(supportTimer))
-  const licenseAdmin = createLicenseAdminServer(db, {env, fetch: options.fetch})
+  const cacheTimer=setInterval(()=>{try{cacheStore.leadCachePrune()}catch{}},86400000)
+  cacheTimer.unref();server.once('close',()=>clearInterval(cacheTimer))
+  const licenseAdmin = createLicenseAdminServer(db, {env, fetch: options.fetch, cacheStore})
   if (licenseAdmin) {
     server.once('listening', () => licenseAdmin.listen(38749, '127.0.0.1'))
     server.once('close', () => licenseAdmin.close())

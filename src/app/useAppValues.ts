@@ -2,6 +2,7 @@ import {useDataActions} from './useDataActions'
 import {plural} from '../../electron/plural'
 import { localDate } from '../../electron/local-date'
 import { coveragePins } from './coverage-pins'
+import { mapsEmailText } from './maps-email'
 import {userError} from '../../electron/user-errors'
 import { contactQuality } from '../../electron/lead-quality'
 import {parseBulkKeywords, keywordMergePreview, readMapsDraft, MAX_MAP_KEYWORDS} from './map-keywords'
@@ -326,7 +327,6 @@ function enrichmentForLabel(label: string): 'email' | 'phone' | 'social' | null 
 }
 
 export function useAppValues() {
-  const { snapshot, start, stop, reload } = useScraper()
   // Named explicitly: the values object is built from this, and an inferred page type that is only
   // ever read through `V.` gives the generated component nothing to check its bindings against.
   const social: SocialPage = useSocialPage()
@@ -338,6 +338,7 @@ export function useAppValues() {
   })
   const [supportPreset,setSupportPreset]=useState<{category?:import('../../electron/support-data').SupportCategory;message?:string}|null>(null)
   const [view, setView] = useState(firstAccountVisit ? 'settings' : 'dashboard')
+  const { snapshot, start, stop, reload } = useScraper(view === 'maps')
   const activeView=useRef(view)
   activeView.current=view
   useEffect(() => { if (firstAccountVisit) { try { localStorage.setItem('mamalead.onboarding.accountShown','1') } catch {} } }, [firstAccountVisit])
@@ -526,7 +527,6 @@ export function useAppValues() {
   const assistantContextRef = useRef<Record<string, string | number | boolean | null>>({})
 
   const previousScrapeRunning = useRef(snapshot.running)
-  const enrichmentWasActive = useRef(false)
   const runScrapeRef = useRef<() => void>(() => undefined)
   // actionClick is bound once to the document, so it reaches the current enricher through a ref.
   // The count it reports is what the finder pages put on their coverage card while a pass runs.
@@ -679,6 +679,8 @@ export function useAppValues() {
       setEnrichmentActivity((current) => [progress, ...current.filter((item) => item.jobId !== progress.jobId)].slice(0, 8))
       if(progress.status==='failed' || progress.failed)recentErrors.current=[progress.kind+': '+progress.message,...recentErrors.current].slice(0,20)
       if(progress.status!=='failed' && progress.status!=='done')return
+      // Maps email batches update their rows live; do not pop a completion toast for every batch.
+      if(progress.runId && progress.kind==='email' && progress.status==='done')return
       if(progress.kind==='website' && progress.status==='done')return
       const view=progress.kind==='email'?'email':progress.kind==='phone'?'phone':progress.kind==='social'?'social':'website'
       const label=view==='email'?'Email scan':view==='phone'?'Phone scan':view==='social'?'Social profile scan':'Website scan'
@@ -977,6 +979,7 @@ export function useAppValues() {
     // Account mode uses the saved Google profile; guest mode uses a private session.
     start({
       keywords: capped,
+      relevanceKeywords: (districtSearches.length ? keywords.flatMap(keyword => districtSearches.map(() => keyword)) : keywords).slice(0, 8),
       location: districtSearches.length ? `${town}` : location,
       maxResultsPerKeyword: maxResults,
       maxResultsTotal: maxResults,
@@ -1904,8 +1907,11 @@ export function useAppValues() {
     return ()=>{cancelled=true}
   },[db,mapsRunId,runs,snapshot.running,snapshot.revision,flash])
   const mapsDisplayed = snapshot.running ? snapshot.leads : mapsRunId === 'latest' ? mapsLatestLeads : mapsHistoryLeads ?? []
+  // Names are not unique: two branches/businesses can have the same name and different emails.
+  const mapsEmails = useMemo(() => new Map(email.rows.map(row => [row.leadId, row])), [email.rows])
+  const mapsSocials = useMemo(() => new Map(social.rows.map(row => [row.leadId, row])), [social.rows])
   const mapsWith = (field: 'phone' | 'website' | 'email') => {
-    if(field==='email') return mapsDisplayed.filter(lead=>email.rows.some(row=>row.leadId===lead.id && row.found.length)).length
+    if(field==='email') return mapsDisplayed.filter(lead=>mapsEmails.get(lead.id)?.found.length).length
     return mapsDisplayed.filter(lead=>Boolean(lead[field])).length
   }
   const mapsPct = (field: 'phone' | 'website' | 'email') => mapsDisplayed.length ? Math.min(100, Math.round(mapsWith(field) / mapsDisplayed.length * 100)) : 0
@@ -2133,31 +2139,45 @@ export function useAppValues() {
   // happened to finish while the window was open, and showed zeroes the rest of the time.
 
   /**
-   * The enrichment worker writes while the window is open, so its results have to be pulled in
-   * when it stops. Polling while it runs is cheap: one small IPC call every few seconds, and only
-   * while there is work in flight.
+   * Show contacts as they are saved. A busy progress stream must not keep postponing refreshes
+   * until the entire queue ends. Polling is independent of the bounded UI refresh timer.
    */
   useEffect(() => {
     const bridge = typeof window === 'undefined' ? undefined : window.desktop?.enrichment
     if (!bridge) return
     let cancelled = false
-    let timer: number | undefined
+    let pollTimer: number | undefined
+    let refreshTimer: number | undefined
+    let refreshing = false
+    let refreshAgain = false
+
+    const refreshContacts = async (): Promise<void> => {
+      refreshTimer = undefined
+      if (cancelled) return
+      if (refreshing) { refreshAgain = true; return }
+      refreshing = true
+      await Promise.allSettled([refreshLists(), email.refresh(), social.refresh(), reload()])
+      refreshing = false
+      if (refreshAgain && !cancelled) {
+        refreshAgain = false
+        refreshTimer = window.setTimeout(() => void refreshContacts(), 500)
+      }
+    }
+    const scheduleRefresh = (finished = false) => {
+      if (finished) { window.clearTimeout(refreshTimer); refreshTimer = undefined }
+      if (refreshTimer === undefined) refreshTimer = window.setTimeout(() => void refreshContacts(), finished ? 0 : 750)
+    }
 
     const poll = async (): Promise<void> => {
       try {
         const status = await bridge.status()
         if (cancelled) return
         if (status.running || status.pending > 0) {
-          enrichmentWasActive.current = true
-          timer = window.setTimeout(() => void poll(), 2500)
+          scheduleRefresh()
+          pollTimer = window.setTimeout(() => { pollTimer = undefined; void poll() }, 2500)
           return
         }
-        if (enrichmentWasActive.current) {
-          enrichmentWasActive.current = false
-
-        }
-        // It has stopped, so whatever it found is now on file.
-        await refreshLists()
+        scheduleRefresh(true)
       } catch {
         // A failed poll just means no refresh; the next action will reload anyway.
       }
@@ -2165,16 +2185,18 @@ export function useAppValues() {
 
     const unsubscribe = bridge.onProgress?.(progress => {
       if (progress.status==='idle') return
-      window.clearTimeout(timer)
-      timer=window.setTimeout(()=>{void refreshLists(); email.refresh(); social.refresh(); reload()}, progress.status==='running'?250:0)
+      scheduleRefresh(progress.status !== 'running')
+      // A new queue may have started since the initial idle poll.
+      if (pollTimer === undefined) pollTimer = window.setTimeout(() => { pollTimer = undefined; void poll() }, 2500)
     })
     void poll()
     return () => {
       unsubscribe?.()
       cancelled = true
-      if (timer) window.clearTimeout(timer)
+      window.clearTimeout(pollTimer)
+      window.clearTimeout(refreshTimer)
     }
-  }, [notify, refreshLists, email.refresh, social.refresh, reload])
+  }, [refreshLists, email.refresh, social.refresh, reload])
 
   // Fetch only the first page for All Leads. A search or chip change starts a new query over the
   // whole database; stale responses cannot overwrite a newer query.
@@ -3104,8 +3126,8 @@ export function useAppValues() {
         : 'No places captured yet — run a scrape and they land here.',
     mapsRows: mapsMatches.slice(0, mapsLimit).map((lead) => {
       const row = leadToLedger(lead)
-      const found = email.rows.find((entry) => entry.name === lead.name)
-      const socials = social.rows.find((entry) => entry.name === lead.name)
+      const found = mapsEmails.get(lead.id)
+      const socials = mapsSocials.get(lead.id)
       // The address cell is drawn over two lines: street first, then town and postcode.
       const segments = (lead.address || '').split(',').map((part) => part.trim()).filter(Boolean)
       const postcodeAt = segments.findIndex((part) => /^[A-Z]{1,2}\d/i.test(part))
@@ -3120,7 +3142,7 @@ export function useAppValues() {
         addressLine1: line1 || 'Address pending',
         addressLine2: line2 || lead.area || '',
         phone: lead.phone || 'No phone found',
-        email: found && found.primary !== 'No email found' ? found.primary : 'No email found',
+        email: mapsEmailText(found, Boolean(lead.website), snapshot.running, email.loading),
         rating: lead.rating === null ? 'Not rated' : `${lead.rating} ★`,
         reviews: `${lead.reviewCount ?? 0} reviews`,
         score: row.score,
@@ -3144,7 +3166,7 @@ export function useAppValues() {
         : `No place matches “${mapsQuery.trim()}”.`
       : 'No places captured yet — run a scrape and every business it finds is listed here.',
     mapsMoreOn: mapsMatches.length > mapsLimit ? '1' : '',
-    mapsMoreLabel: `Show all ${mapsMatches.length}`,
+    mapsMoreLabel: `Show ${Math.min(25, Math.max(0, mapsMatches.length - mapsLimit))} more`,
     showMoreMaps: () => setMapsLimit((current) => current + 25),
     mapsQueryText: mapsQuery,
     onMapsInput: (event: React.InputEvent<HTMLInputElement>) => setMapsQuery(event.currentTarget.value),

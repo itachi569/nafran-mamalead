@@ -4,7 +4,7 @@ const { ScrapeRunner } = require('../dist-electron/scraper/runner.js')
 const { MockProvider } = require('../dist-electron/scraper/mock.js')
 const { ChromiumMapsProvider } = require('../dist-electron/scraper/chromium-maps.js')
 const { normaliseQuery } = require('../dist-electron/scraper/types.js')
-const query = { keywords: ['dentist Clifton', 'dentist Saddar', 'clinic DHA'], location: 'Karachi', maxResultsPerKeyword: 20, maxResultsTotal: 20 }
+const query = { keywords: ['dentist Clifton', 'dentist Saddar', 'clinic DHA'], relevanceKeywords:['dentist','dentist','clinic'], location: 'Karachi', maxResultsPerKeyword: 20, maxResultsTotal: 20 }
 
 test('Maps provider stops reading cards at the total across areas/keywords', async () => {
   let pageUrl = ''; let reads = 0; let searches = 0

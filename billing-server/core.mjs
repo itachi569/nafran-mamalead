@@ -1,3 +1,4 @@
+import {handleLeadCache,LeadCacheError} from './lead-cache.mjs'
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { buildLicenseEmail } from './license-email.mjs'
@@ -667,6 +668,15 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
         const row = await installation(authorization, deviceId, devicePlatform)
+        if (method==='POST' && url.pathname.startsWith('/v1/lead-cache/')) {
+          if(!deviceId)throw new HttpError(400,'A device identity is required.')
+          const status=await verifiedStatus(row)
+          if(!status.license?.active || !['trial','lifetime'].includes(status.license.kind))throw new HttpError(403,'Activate an active trial or lifetime license first.')
+          const raw=await readBody()
+          if(Buffer.byteLength(raw)>(url.pathname.endsWith('/lookup')?1500000:262144))throw new HttpError(413,'Request is too large.')
+          let input;try{input=JSON.parse(raw)}catch{throw new HttpError(400,'Invalid cache request.')}
+          return json(200,await handleLeadCache({path:url.pathname.slice('/v1/lead-cache/'.length),input,installationId:row.id,kind:status.license.kind,ip,env,store}))
+        }
         if(method==='GET' && url.pathname==='/v1/support/config')return json(200,supportConfig(env,store))
         if(method==='POST' && url.pathname==='/v1/support'){
           const raw=await readBody()
@@ -939,6 +949,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       throw new HttpError(404, 'Endpoint not found.')
     } catch (error) {
+      if(error instanceof LeadCacheError){const result=json(error.status,{error:error.message});if(error.retryAfter)result.headers['retry-after']=String(error.retryAfter);return result}
       if(error instanceof SupportError){const result=json(error.status,{error:error.status===429?'rate_limited':error.status===503?'support_unavailable':'validation',message:error.message,field:error.field,retryAfterSeconds:error.retryAfterSeconds});if(error.retryAfterSeconds)result.headers['retry-after']=String(error.retryAfterSeconds);return result}
       return json(error instanceof HttpError ? error.status : 500, { error: error instanceof HttpError ? error.message : 'Billing server error.' })
     }
