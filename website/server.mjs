@@ -19,7 +19,7 @@ const types = {
   '.woff2': 'font/woff2',
 }
 
-const allowedFile = /^(?:index\.html|thank-you\.html|thank-you\.js|copy-key\.(?:html|js|css)|privacy\.html|terms\.html|support\.html|support\.js|sales\.js|billing\.js|mama-ai\.(?:js|css)|vendor\/[\w.-]+|uploads\/[\w .-]+|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
+const allowedFile = /^(?:index\.html|thank-you\.html|thank-you\.js|copy-key\.(?:html|js|css)|privacy\.html|terms\.html|support\.html|support\.js|sales\.js|billing\.js|analytics\.js|mama-ai\.(?:js|css)|vendor\/[\w.-]+|uploads\/[\w .-]+|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
 
 const server = createServer(async (request, response) => {
   if (request.method !== 'GET' && request.method !== 'HEAD') {

@@ -1750,7 +1750,11 @@ class Component extends DCLogic {
     this._checkoutBusy = true;
     this.closeTrial();
     this.setState({checkoutBusy:true,checkoutRetry:false,checkoutNotice:'Opening secure Stripe Checkout…'});
-    try { location.assign(await window.MamaLeadBilling.checkout()); }
+    try {
+      const checkoutUrl = await window.MamaLeadBilling.checkout();
+      try { window.MamaLeadAnalytics?.initiateCheckout(); } catch {}
+      location.assign(checkoutUrl);
+    }
     catch (error) { this.setState({checkoutBusy:false,checkoutRetry:true,checkoutNotice:error.message || 'Checkout could not be opened. Please try again.'}); }
     finally { this._checkoutBusy = false; }
   }
@@ -1784,7 +1788,8 @@ class Component extends DCLogic {
     this._trialBusy = true;
     this.setState({ trialSending: true, trialError: '' });
     try {
-      await window.MamaLeadBilling.trial(email, this.state.trialReplace);
+      const trialResult = await window.MamaLeadBilling.trial(email, this.state.trialReplace);
+      if (trialResult?.emailSent === true) { try { window.MamaLeadAnalytics?.lead(); } catch {} }
       if (this._mounted) this.setState({ trialStep: 'sent', trialDone: true, trialEmail: email, trialCanChange:true, trialReplace:false });
     } catch (error) {
       if (this._mounted) this.setState({ trialError: error.message || "We couldn't send your key. Please try again." });
@@ -2385,5 +2390,6 @@ class Component extends DCLogic {
 }
 </script>
 <script src="./sales.js" defer></script>
+<script src="./analytics.js" defer></script>
 </body>
 </html>
