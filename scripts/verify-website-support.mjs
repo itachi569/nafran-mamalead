@@ -36,6 +36,8 @@ try{
  for(let i=0;i<60;i++){try{if((await fetch(base+'/support.html')).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
  browser=await chromium.launch({headless:true})
  const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'}),errors=[]
+ // Automated fixtures must never send fake conversions to the production Pixel.
+ await page.route(/^https:\/\/(?:connect\.facebook\.net|(?:www\.)?facebook\.com)\//, route=>route.abort())
  await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js*',r=>r.fulfill({contentType:'text/javascript',body:`window.turnstile={render(el,o){this.options=o;el.textContent='Security check (local test fixture)';setTimeout(()=>o.callback('fixture-token'),0);return 1},reset(){setTimeout(()=>this.options.callback('fixture-token'),0)}}`}))
  page.on('pageerror',e=>errors.push(e.message))
  for(const path of ['/support','/privacy','/terms','/thank-you'])assert.equal((await fetch(base+path)).status,200,path)

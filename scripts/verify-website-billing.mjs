@@ -15,6 +15,8 @@ try {
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'})
  const errors=[];page.on('pageerror',e=>errors.push(e.message))
  let trialEmail='', trialCalls=0, registrations=0, paid=false, failDelivery=true, checkoutCalls=0, failCheckout=false, purchaseError=null, checkoutGate=null, statusCalls=0, purchaseEmail='paid@example.test', failStatus=false
+ // Automated fixtures must never send fake conversions to the production Pixel.
+ await page.route(/^https:\/\/(?:connect\.facebook\.net|(?:www\.)?facebook\.com)\//, route=>route.abort())
  await page.route('https://api.mamalead.com/**',async route=>{
   const req=route.request(), path=new URL(req.url()).pathname, body=req.postDataJSON()
   if(path==='/v1/download')return route.fulfill({headers:{'content-type':'application/octet-stream','content-disposition':'attachment; filename="MamaLead Setup QA.exe"'},body:'QA download fixture — not an executable'})
