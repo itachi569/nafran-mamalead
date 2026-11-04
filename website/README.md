@@ -2,6 +2,8 @@
 
 Latest local website design snapshot: **4 November 2026**. This branch is for reviewing and improving the website in Claude Design. It includes the new Mama AI chat interface. It is not a production deployment or a new desktop release.
 
+Updated from the user-supplied **Nafran Mamalead website (4).zip**: animated Mama AI showcase, support/email popup and dark footer with working checkout/trial links. The existing ticket form at `/support` remains available. Desktop, tablet and mobile browser checks passed in the integrated project, including the new chat entry points, support popup and checkout/trial/download flows with isolated service fixtures.
+
 ## Files to edit
 
 - `index.html`: homepage, layout, sections, footer and support launcher.
