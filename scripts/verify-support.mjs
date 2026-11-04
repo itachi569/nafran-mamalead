@@ -68,7 +68,7 @@ try {
  assert.equal((await retrySupportDelivery({env,store,fetcher:fakeFetch,now:Date.now()+180000})).sent,1)
  const retry=await sendSupport({env,store,installation:{id:'offline-fixture'},input:{...payload(200),clientMessageId:randomUUID()},fetcher:fakeFetch});assert.equal(retry.ticketId,queued.ticketId);assert.equal(retry.emailQueued,false)
  console.log('PASS server hourly cap and persisted failed delivery retry')
- // 30 independently authenticated installs: page two must contain five rows.
+ // Existing messages remain intact when the former admin routes are called.
  service.db.prepare('delete from billing_support_replies').run();service.db.prepare('delete from billing_support_messages').run()
  const tickets=[]
  for(let i=0;i<30;i++) {const ins=(await call('/v1/installations',{})).body;const row=await call('/v1/support',payload(i),ins.token);assert.equal(row.status,200);tickets.push(row.body.ticketId)}
@@ -79,30 +79,21 @@ try {
  const path='/admin/api/support/'+tickets[0]
  assert.equal((await adminCall('/admin/api/support',null,'GET','')).status,401)
  assert.equal((await adminCall(path,{read:true,clientActionId:randomUUID()},'PATCH',undefined,'')).status,403)
- const list=parse(await adminCall('/admin/api/support?page=2'));assert.equal(list.rows.length,5);assert.equal(list.total,30)
- assert.equal(parse(await adminCall('/admin/api/support?category=licence')).total,0)
- assert.equal(parse(await adminCall('/admin/api/support?q='+tickets[0])).total,1)
- assert.equal(parse(await adminCall('/admin/api/support?q=user0%40example.test')).total,1)
- assert.equal(parse(await adminCall('/admin/api/support?q=Test%20user')).total,30,'Customer names are searchable')
- assert.equal(parse(await adminCall('/admin/api/support?from=2099-01-01')).total,0)
- const detail=parse(await adminCall(path));assert.ok(detail.installation?.id);assert.ok(!JSON.stringify(detail).includes('token_hash'));assert.ok(!JSON.stringify(detail).includes('key_hash'));assert.ok(!JSON.stringify(detail).includes('user0@example.test'))
- assert.equal(parse(await adminCall('/admin/api/support/unread')).unread,30,'GET detail has no write side effect')
- assert.equal((await adminCall(path,{read:true,clientActionId:randomUUID()},'PATCH')).status,200)
- assert.equal(parse(await adminCall('/admin/api/support/unread')).unread,29)
- const mailsBefore=mail.length,reply={body:'Thanks. We can help with your export.',closeAfter:true,clientActionId:randomUUID(),actor:'forged-actor',email:'attacker@example.test'}
- const results=await Promise.all([adminCall(path+'/reply',reply,'POST'),adminCall(path+'/reply',reply,'POST')]);assert.ok(results.every(r=>r.status===200),JSON.stringify(results));assert.equal(mail.length,mailsBefore+1)
- assert.equal(mail.at(-1).payload.to[0],'user0@example.test');assert.equal(mail.at(-1).payload.reply_to,env.SUPPORT_INBOX);assert.equal(mail.at(-1).payload.from,env.SUPPORT_REPLY_FROM);assert.match(mail.at(-1).payload.text,/MamaLead Support team/)
- assert.equal(parse(await adminCall(path)).ticket.status,'closed');assert.equal(parse(await adminCall('/admin/api/support?status=all')).rows[0].status,'open','Needs-reply messages stay first even after a newer reply');assert.ok(!JSON.stringify(parse(await adminCall(path))).includes('forged-actor'))
- const note={body:'Internal investigation, not emailed.',clientActionId:randomUUID()};await adminCall(path+'/notes',note,'POST');assert.equal(mail.length,mailsBefore+1)
- failMail=true;const failed={body:'Second reply after investigating.',clientActionId:randomUUID()};assert.equal((await adminCall(path+'/reply',failed,'POST')).status,502)
- failMail=false;assert.equal((await adminCall(path+'/reply',failed,'POST')).status,200);assert.equal(parse(await adminCall(path)).thread.filter(r=>r.clientActionId===failed.clientActionId).length,1)
- const noWriter=createAdminHandler({env,store:reader});const degraded=parse(await noWriter.handle({url:path,method:'GET',authorization:'Bearer test-owner-credential-only-32chars',csrf:'1'}));assert.equal(degraded.canReply,false);assert.ok(degraded.ticket)
- console.log('PASS admin auth/CSRF, pagination, filters, masked detail, read badge, notes, reply idempotency, failure retry and read-only fallback')
+ const mailCount=mail.length;
+ const rowsBefore=service.db.prepare('select * from billing_support_messages order by id').all();
+ for(const [url,method] of [['/admin/api/support','GET'],['/admin/api/support/unread','GET'],[path,'GET'],[path,'PATCH'],[path+'/reply','POST'],[path+'/notes','POST']]){
+  const result=await adminCall(url,{body:'Should not send',read:true,clientActionId:randomUUID()},method);
+  assert.equal(result.status,410);assert.match(parse(result).error,/support email inbox/);
+ }
+ assert.equal(mail.length,mailCount,'Retired admin routes must not send email');
+ assert.deepEqual(service.db.prepare('select * from billing_support_messages order by id').all(),rowsBefore,'Historical messages stay untouched');
+ assert.equal(service.db.prepare('select count(*) n from billing_support_replies').get().n,0);
+ console.log('PASS retired admin inbox: auth/CSRF, HTTP 410, no sends or writes, historical messages preserved')
  const keyFile=join(dir,'writer-key');writeFileSync(keyFile,'a'.repeat(64));writerServer=createLicenseAdminServer(service.db,{env,fetch:fakeFetch,keyFile});await new Promise(r=>writerServer.listen(0,'127.0.0.1',r))
  assert.equal(writerServer.address().address,'127.0.0.1')
  const writerUrl='http://127.0.0.1:'+writerServer.address().port+'/support/reply'
  assert.equal((await fetch(writerUrl,{method:'POST',body:'{}'})).status,401)
  assert.equal((await fetch(writerUrl,{method:'POST',headers:{authorization:'Bearer '+'a'.repeat(64)},body:'{}'})).status,400)
- const emptyStore={supportCounts:async()=>null,supportList:async()=>null};const oldAdmin=createAdminHandler({env,store:emptyStore});const old=parse(await oldAdmin.handle({url:'/admin/api/support',method:'GET',authorization:'Bearer test-owner-credential-only-32chars'}));assert.equal(old.available,false);assert.match(old.message,/billing-server update/);
+ const emptyStore={supportCounts:async()=>null,supportList:async()=>null};const oldAdmin=createAdminHandler({env,store:emptyStore});const old=parse(await oldAdmin.handle({url:'/admin/api/support',method:'GET',authorization:'Bearer test-owner-credential-only-32chars'}));assert.match(old.error,/support email inbox/);
  console.log('PASS loopback writer authentication and validation; no real emails sent')
 }finally {if(writerServer)await new Promise(r=>writerServer.close(r));reader?.close?.();await new Promise(r=>service.server.close(r));service.db.close()}

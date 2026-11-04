@@ -35,6 +35,12 @@ test('ML127/128 historical lookup rows are clean on read/export and old private 
   const row={...lookupRowFromFindings({id:leadId,name:'Coffee',website:'https://coffee.pk'},findings,DEFAULT_LOOKUP_FIELDS),phones:phones.map(p=>({value:p.value,source:p.page})),address:addresses.join(' | '),emails:[{value:'ops@gateway.internal',source:'https://coffee.pk/'}]}
   repo.saveWebsiteLookupRow(session.jobId,row)
   const saved=repo.websiteLookupSession(ws.id,session.jobId).rows[0];assert.equal(saved.phones.length,1);assert.equal(saved.address.includes('|'),false);assert.equal(saved.emails.length,0)
+  // ML132: old lookup snapshots/export must not revive template contacts.
+  row.emails=[{value:'contact@info.com',source:'https://coffee.pk/'},{value:'hello@coffee.pk',source:'https://coffee.pk/contact'}]
+  repo.saveWebsiteLookupRow(session.jobId,row)
+  assert.deepEqual(repo.websiteLookupSession(ws.id,session.jobId).rows[0].emails.map(e=>e.value),['hello@coffee.pk'])
+  const newRow=lookupRowFromFindings({id:leadId,name:'Coffee',website:'https://coffee.pk'},{...findings,emails:row.emails.map(e=>({...e,page:e.source,score:90}))},DEFAULT_LOOKUP_FIELDS)
+  assert.deepEqual(newRow.emails.map(e=>e.value),['hello@coffee.pk'])
   db.run("insert into lead_contacts (id,workspace_id,lead_id,kind,value,source,created_at) values (?,?,?,?,?,?,?)",['bad',ws.id,leadId,'email','ops@gateway.internal','https://coffee.pk/',new Date().toISOString()])
   db.run('delete from app_data_migrations where name=?',['private-emails-1.4.34'])
   new Repository(db);assert.equal(db.one('select id from lead_contacts where id=?',['bad']),null)

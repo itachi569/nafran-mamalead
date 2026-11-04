@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { assistLanguagePolicy } from './assist-language.mjs'
 
-function credential(env) {
+export function assistCredential(env) {
   const direct = (env.CEREBRAS_API_KEY || '').trim()
   if (direct) return direct
   try {
@@ -20,9 +20,9 @@ export function createAssistService({ env, store, ErrorType, providerFetch = fet
   let active = 0
   const busyDevices = new Set()
   const fail = (status, message) => { throw new ErrorType(status, message) }
-  const configuration = () => ({ configured: Boolean(credential(env)), savedOnDevice: false, mode: 'server' })
+  const configuration = () => ({ configured: Boolean(assistCredential(env)), savedOnDevice: false, mode: 'server' })
   async function chat(row, status, payload) {
-    const key = credential(env)
+    const key = assistCredential(env)
     if (!key) fail(503, 'MamaLead Assist is temporarily unavailable. Contact support; no personal API key is needed.')
     if (!row.device_id) fail(400, 'Update MamaLead to connect MamaLead Assist on this device.')
     if (!Array.isArray(payload?.messages) || !payload.messages.length || payload.messages.length > 8) fail(400, 'Send between 1 and 8 chat messages.')

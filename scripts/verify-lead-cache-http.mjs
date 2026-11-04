@@ -24,7 +24,8 @@ try{
  assert.equal((await call('/v1/lead-cache/lookup',input,token)).status,403)
  const id=service.db.prepare('select id from installations').get().id,now=new Date().toISOString()
  service.db.prepare('insert into trial_licenses(id,installation_id,key_hash,key_last4,email,created_at,sent_at,activated_at,expires_at,bound_installation_id) values(?,?,?,?,?,?,?,?,?,?)').run('trial1',id,'fixturehash','TEST','qa@example.test',now,now,now,new Date(Date.now()+86400000).toISOString(),id)
- service.db.prepare('update installations set license_id=? where id=?').run('trial1',id)
+ // Match the record written by real trial activation, including its original device slot.
+ service.db.prepare('update installations set license_id=?,license_slot=1 where id=?').run('trial1',id)
  const reservation=await call('/v1/maps/reserve',{requested:8},token)
  assert.equal(reservation.status,200,JSON.stringify(reservation.body))
  input.reservationId=reservation.body.reservationId

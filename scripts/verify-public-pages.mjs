@@ -11,9 +11,16 @@ try{
   const res=await fetch(base+path);assert.equal(res.status,200,path);const html=await res.text()
   for(const pattern of [/<title>[^<]+<\/title>/,/<meta name="description" content="[^"]+"/,/<link rel="canonical" href="https:\/\/mamalead.com\//,/<meta property="og:title" content="[^"]+"/,/<meta property="og:description"/,/<meta property="og:url"/])assert.match(html,pattern,path)
   const image=html.match(/<meta property="og:image" content="([^"]+)"/)?.[1]
-  if(image)assert.equal((await fetch(base+new URL(image).pathname)).status,200)
+  assert.ok(image,'Open Graph image required on '+path)
+  assert.equal((await fetch(base+new URL(image).pathname)).status,200)
  }
  const redirect=await fetch(base+'/contact?from=test',{redirect:'manual'});assert.equal(redirect.status,301);assert.equal(redirect.headers.get('location'),'/support?from=test')
+ for(const [file,clean] of [['index',''],['support','support'],['privacy','privacy'],['terms','terms'],['thank-you','thank-you']]){
+  for(const method of ['GET','HEAD']){
+   const res=await fetch(base+'/'+file+'.html?from=qa',{method,redirect:'manual'})
+   assert.equal(res.status,301);assert.equal(res.headers.get('location'),'/'+clean+'?from=qa')
+  }
+ }
  for(const path of ['/support/','/privacy/','/terms/','/thank-you/','/contact'])assert.equal((await fetch(base+path)).status,200,path)
  for(const path of ['/.secrets/mamalead-turnstile.env','/mamalead_turnstile.env','/../package.json'])assert.equal((await fetch(base+path)).status,404,path)
  console.log('PASS clean routes, redirects, title/description/canonical/Open Graph on all five pages, image URLs and private-file rejection')

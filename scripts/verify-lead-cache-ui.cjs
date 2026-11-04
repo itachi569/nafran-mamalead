@@ -7,7 +7,7 @@ const {electronTestExecutable}=require('./electron-test-executable.cjs')
 ;(async()=>{
  const dir=mkdtempSync(join(tmpdir(),'mamalead-cache-ui-')),packaged=process.argv.includes('--packaged')
  const env={...process.env,LEADSNAP_BILLING_API_URL:'http://127.0.0.1:1'};delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
- const app=await _electron.launch({executablePath:electronTestExecutable(packaged),args:[...(packaged?[]:['.']),'--user-data-dir='+dir],env,cwd:process.cwd(),timeout:60000})
+ const app=await _electron.launch({executablePath:electronTestExecutable(packaged),args:[...(packaged?[]:['.']),...(process.platform==='linux'&&process.env.CI?['--no-sandbox']:[]),'--user-data-dir='+dir],env,cwd:process.cwd(),timeout:60000})
  try{
   const page=await app.firstWindow({timeout:60000}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(20000)
   await app.evaluate(({app,ipcMain})=>{
@@ -44,11 +44,17 @@ const {electronTestExecutable}=require('./electron-test-executable.cjs')
     this.lastRunExhausted=leads.length<q.maxResultsTotal;return leads
    }
   })
-  await page.evaluate(()=>{
+  // Seed before React reads/persists defaults. Writing after mount can be overwritten
+  // by its pending draft effect while the test reloads the page.
+  await page.addInitScript(()=>{
    localStorage.setItem('mamalead.maps.draft',JSON.stringify({keywords:['dentist'],location:'Lahore',max:8}))
    localStorage.setItem('ls-scraper-settings',JSON.stringify({sessionMode:'guest',visible:false,windowChoiceVersion:1}))
   })
   await page.reload();await page.locator('[data-view="maps"]').click()
+  await page.locator('[data-location]').waitFor({state:'visible'})
+  await page.waitForFunction(()=>document.querySelector('[data-location]')?.value==='Lahore')
+  assert.equal(await page.locator('[data-location]').inputValue(),'Lahore','Maps draft hydrated before Run')
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('mamalead.maps.draft'))),{keywords:['dentist'],max:8,location:'Lahore'})
   await page.evaluate(()=>{window.__cacheEvents=[];window.__cacheDone=[];window.desktop.scraper.onProgress(p=>window.__cacheEvents.push(p));window.desktop.scraper.onDone(p=>window.__cacheDone.push(p))})
   await page.getByRole('button',{name:'Run with filters',exact:true}).click()
   await page.waitForFunction(()=>window.__cacheEvents.some(p=>p.lead),null,{timeout:30000})

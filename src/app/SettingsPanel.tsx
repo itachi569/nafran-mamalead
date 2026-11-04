@@ -221,7 +221,7 @@ export function SettingsPanel({ V }: { V: AppValues }) {
           <section className="account-local account-surface">
             <h2>Local account</h2>
             <dl><div><dt>Workspace name</dt><dd>{V.workspaceName}</dd></div><div><dt>Time zone</dt><dd>{V.localTimeZone}</dd></div><div><dt>Data location</dt><dd data-account-data-path="1">{V.localDataPath}</dd></div><div><dt>Session</dt><dd>Local workspace on this device</dd></div></dl>
-            {validityInfo?.provider==='local' && <p data-email-check-mode="dns" style={muted}>Basic email check — format, temporary inbox and domain checks are available. Mailbox delivery is not verified; a verification provider is needed for that check.</p>}
+            {validityInfo?.managed && <p data-email-check-mode="mailbox" role="status" style={muted}>{validityInfo.message || 'Mailbox verification is provided by MamaLead. No separate API key is needed.'}</p>}
           </section>
           <AppUpdatesCard V={V}/>
           <section className="account-support account-surface"><div><h2>Your data</h2><p>Export your saved leads and lists from this device.</p></div><button type="button" onClick={V.openExpAll} className="account-button">Export everything</button></section>

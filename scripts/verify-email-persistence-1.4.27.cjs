@@ -7,7 +7,7 @@ const {_electron} = require('playwright')
 const userData = mkdtempSync(join(tmpdir(),'mamalead-email1427-'))
 const out = resolve('screenshots/qa-1.4.27')
 mkdirSync(out,{recursive:true})
-const env={...process.env,LEADSNAP_TEST_HOOKS:'1'}
+const env={...process.env,LEADSNAP_TEST_HOOKS:'1',LEADSNAP_BILLING_API_URL:'http://127.0.0.1:9'}
 delete env.VITE_DEV_SERVER_URL
 delete env.ELECTRON_RUN_AS_NODE
 const packaged=process.argv.includes('--packaged')
@@ -40,20 +40,20 @@ async function main(){
   try{
     ids=await app.evaluate(()=>{
       const {repo,db,ws}=__qa1427
-      const old=repo.importWebsites(ws,['old-import.fixture.test','outside-scope.fixture.test'],false)
+      const old=repo.importWebsites(ws,['old-import.qa-mamalead.com','outside-scope.qa-mamalead.com'],false)
       db.run("update leads set captured_at='2020-01-01T00:00:00.000Z' where workspace_id=?",[ws])
-      repo.importWebsites(ws,Array.from({length:523},(_,i)=>'saved-'+i+'.fixture.test'),false)
-      const outside=repo.upsertContact({leadId:old.leadIds[1],kind:'email',value:'outside@outside-scope.fixture.test',source:'https://outside-scope.fixture.test/contact'})
+      repo.importWebsites(ws,Array.from({length:523},(_,i)=>'saved-'+i+'.qa-mamalead.com'),false)
+      const outside=repo.upsertContact({leadId:old.leadIds[1],kind:'email',value:'outside@outside-scope.qa-mamalead.com',source:'https://outside-scope.qa-mamalead.com/contact'})
       repo.updateEmailValidation(outside.id,{status:'unknown',verified:false,score:null,provider:'leadsangel',message:'Temporary SMTP error'})
       return {old:old.leadIds[0],outside:old.leadIds[1]}
     })
     const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message))
     await page.locator('[data-view="email"]').click()
     await page.getByRole('button',{name:'Import websites',exact:true}).click()
-    await page.locator('[data-imptext="1"]').fill('https://old-import.fixture.test\nhttps://new-import.fixture.test')
+    await page.locator('[data-imptext="1"]').fill('https://old-import.qa-mamalead.com\nhttps://new-import.qa-mamalead.com')
     await page.locator('[data-importgo="1"]').click()
-    await page.locator('[data-email-address="contact@new-import.fixture.test"]').waitFor({timeout:30000})
-    await page.locator('[data-email-address="contact@old-import.fixture.test"]').waitFor({timeout:30000})
+    await page.locator('[data-email-address="contact@new-import.qa-mamalead.com"]').waitFor({timeout:30000})
+    await page.locator('[data-email-address="contact@old-import.qa-mamalead.com"]').waitFor({timeout:30000})
     await page.waitForFunction(()=>document.querySelector('[data-finder-progress="email"]')?.textContent.includes('100%'))
     assert.equal(await page.locator('[data-flist="email"] [data-row="1"]').count(),2,'completed import remains scoped')
     await app.evaluate(()=>{
@@ -86,9 +86,9 @@ async function main(){
     await page.waitForFunction(()=>document.querySelectorAll('[data-flist="email"] [data-row="1"]').length===526)
     assert.equal(await page.locator('[data-fq="email"]').inputValue(),'')
     assert.equal(await page.locator('select[aria-label="Filter rows"]').first().inputValue(),'all')
-    assert.equal(await page.locator('[data-email-address="contact@old-import.fixture.test"]').count(),1)
-    assert.equal(await page.locator('[data-email-address="contact@new-import.fixture.test"]').count(),1)
-    await page.locator('[data-fq="email"]').fill('new-import.fixture.test')
+    assert.equal(await page.locator('[data-email-address="contact@old-import.qa-mamalead.com"]').count(),1)
+    assert.equal(await page.locator('[data-email-address="contact@new-import.qa-mamalead.com"]').count(),1)
+    await page.locator('[data-fq="email"]').fill('new-import.qa-mamalead.com')
     await page.locator('[data-flistcard="email"]').scrollIntoViewIfNeeded()
     await page.screenshot({path:join(out,packaged?'packaged-saved-import.png':'saved-import.png')})
     assert.deepEqual(errors,[])
@@ -99,15 +99,15 @@ async function main(){
     const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message))
     await page.locator('[data-view="email"]').click()
     await page.waitForFunction(()=>document.querySelectorAll('[data-flist="email"] [data-row="1"]').length===526)
-    assert.equal(await page.locator('[data-email-address="contact@old-import.fixture.test"]').count(),1)
-    assert.equal(await page.locator('[data-email-address="contact@new-import.fixture.test"]').count(),1)
+    assert.equal(await page.locator('[data-email-address="contact@old-import.qa-mamalead.com"]').count(),1)
+    assert.equal(await page.locator('[data-email-address="contact@new-import.qa-mamalead.com"]').count(),1)
     const state=await app.evaluate(()=>{
       const {repo,ws}=__qa1427
       return repo.listContacts(ws,'email').map(c=>({email:c.value,status:c.validation_status}))
     })
     assert.equal(state.filter(c=>c.status==='valid').length,2)
     assert.equal(state.filter(c=>c.status==='unknown').length,1)
-    const duplicate=await page.evaluate(()=>window.desktop.local.imports.websites(['https://new-import.fixture.test'],{enqueue:false}))
+    const duplicate=await page.evaluate(()=>window.desktop.local.imports.websites(['https://new-import.qa-mamalead.com'],{enqueue:false}))
     assert.equal(duplicate.added,0)
     assert.deepEqual(errors,[])
     console.log('PASS saved imported emails and validity survive process restart; re-import does not duplicate data; no renderer errors')

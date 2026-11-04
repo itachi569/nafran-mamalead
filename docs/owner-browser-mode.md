@@ -1,5 +1,8 @@
 # Decision Makers: local Chrome search
 
+> Archived feature: Decision Makers is absent from the current app. The instructions
+> and test commands below apply to the [restore archive](decision-maker-archive.md).
+
 Owner searches now run in the user's installed Google Chrome, using a dedicated
 `owner-google-chrome` profile inside MamaLead's user-data directory. The normal
 Chrome profile and the Google Maps browser profile are not used or copied.

@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createBillingServer } from '../billing-server/server.mjs'
 import { buildLicenseEmail, greetingNameFromEmail } from '../billing-server/license-email.mjs'
-import { createCloudFunction } from '../billing-server/api/billing.mjs'
 
 const dir = mkdtempSync(join(tmpdir(), 'mamalead-billing-'))
 const database = join(dir, 'billing.db')
@@ -62,7 +61,7 @@ const fakeStripe = async (raw, request) => {
 }
 
 const service = createBillingServer({
-  env: { STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: database, BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38747', LOCAL_DOWNLOAD_PATH: installerPath, MAC_ARM64_LOCAL_DOWNLOAD_PATH: macInstallerPath, MAC_X64_LOCAL_DOWNLOAD_PATH: intelInstallerPath, DOWNLOAD_SIGNING_KEY: 'test-download-secret-with-32-characters', STRIPE_WEBHOOK_SECRET: 'whsec_test', BILLING_ALLOWED_ORIGINS: 'https://mamalead.com' },
+  env: { LICENSE_MAX_ACTIVATIONS: '2', STRIPE_SECRET_KEY: 'sk_test_placeholder', STRIPE_PRICE_LIFETIME: 'price_lifetime', STRIPE_PRICE_DECISION_MAKER: 'price_decision', BILLING_DB_PATH: database, BILLING_PORT: '0', BILLING_PUBLIC_URL: 'http://127.0.0.1:38747', LOCAL_DOWNLOAD_PATH: installerPath, MAC_ARM64_LOCAL_DOWNLOAD_PATH: macInstallerPath, MAC_X64_LOCAL_DOWNLOAD_PATH: intelInstallerPath, DOWNLOAD_SIGNING_KEY: 'test-download-secret-with-32-characters', STRIPE_WEBHOOK_SECRET: 'whsec_test', BILLING_ALLOWED_ORIGINS: 'https://mamalead.com' },
   fetch: fakeStripe,
   sendEmail: async (message) => {
     if (message.kind === 'lifetime' && failNextLicenseEmail) { failNextLicenseEmail = false; return false }
@@ -83,7 +82,7 @@ try {
   const escapedGreeting = buildLicenseEmail({ to: 'amy.<script>@gmail.com', licenseKey: 'NF-TEST', kind: 'trial', download: 'https://mamalead.com/#download' })
   check('email greeting cannot inject HTML into the template', escapedGreeting.html.includes('Hey Amy Script,') && !escapedGreeting.html.includes('<script>') && !escapedGreeting.html.includes('{{'))
   const currentLifetimeTemplate = buildLicenseEmail({ to: 'buyer@example.test', licenseKey: 'NF-TEST', kind: 'lifetime', download: 'https://mamalead.com/#download' })
-  check('current Lifetime email uses the selected support inbox and current product features', currentLifetimeTemplate.html.includes('mamaleads997@gmail.com') && !/Decision Makers|Decision Maker searches/.test(currentLifetimeTemplate.html + currentLifetimeTemplate.text))
+  check('current Lifetime email uses the selected support inbox and current product features', currentLifetimeTemplate.html.includes('hello@mamalead.com') && !/Decision Makers|Decision Maker searches/.test(currentLifetimeTemplate.html + currentLifetimeTemplate.text))
   const optionsBeforeMac = await call('/v1/download-options', null)
   check('download choices show Windows ready and both Mac builds unavailable before upload', optionsBeforeMac.status === 200 && optionsBeforeMac.body.windows === true && optionsBeforeMac.body.macArm64 === false && optionsBeforeMac.body.macX64 === false)
   const missingMac = await call('/v1/download?platform=mac', null)
@@ -205,16 +204,25 @@ try {
   check('Lifetime blocks requesting or activating a trial without changing access', (await call('/v1/trial', token, 'POST', {email:'new-trial@example.com'}, firstDevice)).status === 409 && (await call('/v1/activate', token, 'POST', {licenseKey:trialKey}, firstDevice)).status === 409 && (await call('/v1/status', token, 'GET', undefined, firstDevice)).body.license.kind === 'lifetime')
   const unlimitedMaps = await call('/v1/maps/reserve', token, 'POST', { requested: 1600 }, firstDevice)
   check('lifetime Maps leads have no total quota', unlimitedMaps.status === 200 && unlimitedMaps.body.allowed === 1600 && unlimitedMaps.body.remaining === null && unlimitedMaps.body.reservationId === null)
-  const secondToken = (await call('/v1/installations', null, 'POST')).body.token
-  const secondActivation = await call('/v1/activate', secondToken, 'POST', { licenseKey: issued.body.licenseKey }, otherDevice)
-  check('the same license activates a second installation', secondActivation.status === 200 && secondActivation.body.active)
-  check('a second Lifetime device also cannot request or activate a trial', (await call('/v1/trial', secondToken, 'POST', {email:'second-trial@example.com'}, otherDevice)).status === 409 && (await call('/v1/activate', secondToken, 'POST', {licenseKey:trialKey}, otherDevice)).status === 409)
-  check('the second installation inherits verified Stripe entitlement', (await call('/v1/status', secondToken, 'GET', undefined, otherDevice)).body.license.active)
+  const rejectedToken = (await call('/v1/installations', null, 'POST')).body.token
+  const secondActivation = await call('/v1/activate', rejectedToken, 'POST', { licenseKey: issued.body.licenseKey }, otherDevice)
+  check('a second machine is denied by the one-machine policy', secondActivation.status === 409 && /one machine/.test(secondActivation.body.error))
+  check('the rejected installation has no license', !(await call('/v1/status',rejectedToken,'GET',undefined,otherDevice)).body.license.active)
+  check('copying the activated token to another machine is denied', (await call('/v1/status',token,'GET',undefined,otherDevice)).status===403)
+  const secondToken = token // Repeated calls from the same licensed desktop.
+  check('repeat activation on the original machine stays active', (await call('/v1/activate',token,'POST',{licenseKey:issued.body.licenseKey},firstDevice)).body.active)
+  // Historical slot 2 must not keep access just because it was activated before this policy.
+  const tokenHash=value=>createHash('sha256').update(value).digest('hex')
+  const paidLicenseId=service.db.prepare('select license_id from installations where token_hash=?').get(tokenHash(token)).license_id
+  service.db.prepare('update installations set license_id=?,license_slot=2 where token_hash=?').run(paidLicenseId,tokenHash(rejectedToken))
+  check('historical second-machine activation cannot authorize API access', !(await call('/v1/status',rejectedToken,'GET',undefined,otherDevice)).body.license.active && (await call('/v1/maps/reserve',rejectedToken,'POST',{requested:1},otherDevice)).status===403)
+  check('historical second machine cannot reactivate the same key', (await call('/v1/activate',rejectedToken,'POST',{licenseKey:issued.body.licenseKey},otherDevice)).status===409)
+  check('the original machine and historical audit record are preserved', (await call('/v1/status',token,'GET',undefined,firstDevice)).body.license.active && service.db.prepare('select license_slot from installations where token_hash=?').get(tokenHash(rejectedToken)).license_slot===2)
   const includedStatus = await call('/v1/status', token, 'GET', undefined, firstDevice)
   check('lifetime activation includes 1,000 Decision Maker searches for 30 days', includedStatus.body.decisionMaker.active && includedStatus.body.decisionMaker.status === 'included' && includedStatus.body.decisionMaker.monthlyRemaining === 1000 && Date.parse(includedStatus.body.decisionMaker.renewsAt) > Date.now())
   const includedUse = await call('/v1/decision-maker/consume', token, 'POST', { leadId: '00000000-0000-4000-8000-000000000010' }, firstDevice)
-  const includedOtherDevice = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000010' }, otherDevice)
-  check('included allowance is shared across both licensed devices', includedUse.status === 200 && includedUse.body.remaining === 999 && includedOtherDevice.status === 200 && includedOtherDevice.body.remaining === 998)
+  const includedOtherDevice = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000011' }, firstDevice)
+  check('separate legacy searches share the licensed machine allowance', includedUse.status === 200 && includedUse.body.remaining === 999 && includedOtherDevice.status === 200 && includedOtherDevice.body.remaining === 998)
   const includedOwner = service.db.prepare('select id from installations where token_hash = ?').get(createHash('sha256').update(token).digest('hex')).id
   const includedLicense = service.db.prepare('select id, activated_at from licenses where installation_id = ?').get(includedOwner)
   const includedKey = `included:${includedLicense.id}:${new Date(includedLicense.activated_at).toISOString()}`
@@ -223,14 +231,14 @@ try {
   for (let slot = 3; slot <= 999; slot += 1) fillIncluded.run(includedOwner, includedKey, `included-${slot}`, slot, new Date().toISOString())
   service.db.exec('COMMIT')
   const lastIncluded = await call('/v1/decision-maker/consume', token, 'POST', { leadId: '00000000-0000-4000-8000-000000000012' }, firstDevice)
-  const overIncluded = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000013' }, otherDevice)
+  const overIncluded = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000013' }, firstDevice)
   check('the included 1,000th search succeeds and the 1,001st is blocked', lastIncluded.status === 200 && lastIncluded.body.remaining === 0 && overIncluded.status === 429)
   const earlyPass = await call('/v1/checkout', token, 'POST', { product: 'decisionMaker' }, firstDevice)
   check('after included 1,000 are used, a new 30-day pass can be bought immediately', earlyPass.status === 200 && earlyPass.body.url.startsWith('https://checkout.stripe.com/'))
   check('an unpaid pass does not unlock Decision Makers', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active)
   sessions.get(earlyPass.body.url.split('/').at(-1)).status = 'expired'
   service.db.prepare('update licenses set activated_at = ? where key_last4 = ?').run(new Date(Date.now() - 31 * 86_400_000).toISOString(), issued.body.licenseKey.slice(-4))
-  check('Decision Makers included access ends after 30 days', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active && (await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000011' }, otherDevice)).status === 403)
+  check('Decision Makers included access ends after 30 days', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active && (await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000011' }, firstDevice)).status === 403)
   const thirdToken = (await call('/v1/installations', null, 'POST')).body.token
   const thirdActivation = await call('/v1/activate', thirdToken, 'POST', { licenseKey: issued.body.licenseKey }, 'c'.repeat(64))
   check('a third installation is denied by the activation limit', thirdActivation.status === 409)
@@ -265,7 +273,7 @@ try {
   check('an invalid Stripe webhook signature is rejected', badWebhook.status === 400)
   chargeRefunded = true
   check('a refunded payment revokes active status despite a saved license', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.lifetime.active)
-  check('a refunded payment revokes other machines too', !(await call('/v1/status', secondToken, 'GET', undefined, otherDevice)).body.license.active)
+  check('a refunded payment revokes repeated desktop access', !(await call('/v1/status', secondToken, 'GET', undefined, firstDevice)).body.license.active)
   const afterRefund = await call('/v1/activate', token, 'POST', { licenseKey: issued.body.licenseKey }, firstDevice)
   check('a refunded license cannot be activated again', afterRefund.status === 403)
   const refundedDownload = await call('/v1/download-by-license', null, 'POST', { licenseKey: issued.body.licenseKey })
@@ -277,12 +285,12 @@ try {
   const decisionCheckout = await call('/v1/checkout', token, 'POST', { product: 'decisionMaker' }, firstDevice)
   const decisionSessionId = decisionCheckout.body.url?.split('/').at(-1)
   check('Decision Makers opens a manual Rs 1,000 one-time Checkout', decisionCheckout.status === 200 && sessions.get(decisionSessionId)?.mode === 'payment' && sessions.get(decisionSessionId)?.manualPrice === '100000' && !sessions.get(decisionSessionId)?.subscription)
-  const resumedDecision = await call('/v1/checkout', secondToken, 'POST', { product: 'decisionMaker' }, otherDevice)
-  check('a second licensed device reuses the owner’s open pass checkout', resumedDecision.body.url === decisionCheckout.body.url)
+  const resumedDecision = await call('/v1/checkout', secondToken, 'POST', { product: 'decisionMaker' }, firstDevice)
+  check('the licensed desktop reuses its open pass checkout', resumedDecision.body.url === decisionCheckout.body.url)
   Object.assign(sessions.get(decisionSessionId), { status: 'complete', payment_status: 'paid' })
   const decisionReturn = await fetch(base + `/return?session_id=${decisionSessionId}`)
-  const paidStatus = await call('/v1/status', secondToken, 'GET', undefined, otherDevice)
-  check('verified one-time payment unlocks 1,000 searches for 30 days on both devices', decisionReturn.status === 200 && paidStatus.body.decisionMaker.active && paidStatus.body.decisionMaker.status === 'paid' && paidStatus.body.decisionMaker.monthlyRemaining === 1000 && paidStatus.body.decisionMaker.periodDays === 30)
+  const paidStatus = await call('/v1/status', secondToken, 'GET', undefined, firstDevice)
+  check('verified one-time payment unlocks 1,000 searches for 30 days on the licensed device', decisionReturn.status === 200 && paidStatus.body.decisionMaker.active && paidStatus.body.decisionMaker.status === 'paid' && paidStatus.body.decisionMaker.monthlyRemaining === 1000 && paidStatus.body.decisionMaker.periodDays === 30)
   const decisionLead = '00000000-0000-4000-8000-000000000001'
   const firstUse = await call('/v1/decision-maker/consume', token, 'POST', { leadId: decisionLead }, firstDevice)
   const duplicateUse = await call('/v1/decision-maker/consume', token, 'POST', { leadId: decisionLead }, firstDevice)
@@ -293,10 +301,10 @@ try {
   service.db.exec('BEGIN')
   for (let slot = 2; slot <= 999; slot += 1) insertUsage.run(ownerId, periodKey, `filler-${slot}`, slot, new Date().toISOString())
   service.db.exec('COMMIT')
-  const lastUse = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: decisionLead }, otherDevice)
-  const overLimit = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000002' }, otherDevice)
-  check('the 1,000th lead succeeds and the 1,001st is blocked across both devices', lastUse.status === 200 && lastUse.body.remaining === 0 && overLimit.status === 429)
-  const nextPass = await call('/v1/checkout', secondToken, 'POST', { product: 'decisionMaker' }, otherDevice)
+  const lastUse = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000003' }, firstDevice)
+  const overLimit = await call('/v1/decision-maker/consume', secondToken, 'POST', { leadId: '00000000-0000-4000-8000-000000000002' }, firstDevice)
+  check('the 1,000th lead succeeds and the 1,001st is blocked on repeated requests', lastUse.status === 200 && lastUse.body.remaining === 0 && overLimit.status === 429)
+  const nextPass = await call('/v1/checkout', secondToken, 'POST', { product: 'decisionMaker' }, firstDevice)
   const nextSessionId = nextPass.body.url?.split('/').at(-1)
   check('used paid quota permits another immediate manual payment', nextPass.status === 200 && nextSessionId !== decisionSessionId && sessions.get(nextSessionId)?.mode === 'payment')
   check('the unpaid next pass cannot reset the used quota', !(await call('/v1/status', token, 'GET', undefined, firstDevice)).body.decisionMaker.active)
@@ -409,11 +417,11 @@ try {
   check('Stripe-entered duplicate email is refunded without issuing another Lifetime key',repeatWebStatus.status===200 && !repeatWebStatus.body.lifetime.active && /duplicate payment was refunded/.test(repeatWebStatus.body.purchaseError) && emails.length===emailCount && refunds.length===beforeRefunds+1)
   await call('/v1/status',repeatWebToken)
   check('duplicate website return is idempotent',refunds.length===beforeRefunds+1 && emails.length===emailCount)
-  for (const device of ['c'.repeat(64),'d'.repeat(64)]) {
-    const installation=(await call('/v1/installations',null,'POST')).body.token
-    const result=await call('/v1/activate',installation,'POST',{licenseKey:webKey},device)
-    check('website purchase leaves desktop activation slots available '+device[0],result.status===200 && result.body.active)
-  }
+  const competingDevices=await Promise.all(['c'.repeat(64),'d'.repeat(64)].map(async device=>({device,token:(await call('/v1/installations',null,'POST')).body.token})))
+  const competingActivations=await Promise.all(competingDevices.map(({device,token})=>call('/v1/activate',token,'POST',{licenseKey:webKey},device)))
+  check('concurrent first activations have exactly one winner despite legacy max=2 config', competingActivations.filter(r=>r.status===200&&r.body.active).length===1 && competingActivations.filter(r=>r.status===409).length===1)
+  const winningDevice=competingDevices[competingActivations.findIndex(r=>r.status===200)]
+  check('concurrent activation winner can reactivate without consuming another slot', (await call('/v1/activate',winningDevice.token,'POST',{licenseKey:webKey},winningDevice.device)).body.active)
   const webTrialToken=(await call('/v1/installations',null,'POST')).body.token
   await call('/v1/trial',webTrialToken,'POST',{email:'website-trial@example.test'})
   const webTrialKey=emails.at(-1).licenseKey
@@ -449,6 +457,8 @@ try {
     await new Promise((resolve) => live.server.close(resolve))
     live.db.close()
   }
+  if(process.env.BILLING_QA_SQLITE_ONLY!=='1') {
+  const {createCloudFunction}=await import('../billing-server/api/billing.mjs')
   const cloudRows = new Map()
   const cloudReservations = new Map()
   let blobAccess
@@ -499,6 +509,7 @@ try {
   check('forged download grants are rejected', invalidDownload.status === 401)
   const cloudReturn = await cloudCall('return', 'GET', null, null, `&session_id=${cloudSessionId}`)
   check('Vercel function reconciles a verified payment', cloudReturn.status === 200 && cloudRows.values().next().value.lifetime_session_id === cloudSessionId)
+  } else console.log('SQLite production validation: legacy Vercel adapter suite excluded; exercised separately in desktop repository QA.')
   const legacyPath = join(dir, 'legacy.db')
   const legacy = new DatabaseSync(legacyPath)
   legacy.exec('create table installations (id text primary key, token_hash text not null unique, customer_id text, lifetime_session_id text, decision_subscription_id text, created_at text not null)')

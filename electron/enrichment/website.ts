@@ -13,7 +13,7 @@ export {uniqueAddresses} from './contact-dedupe'
 import { chromium, type Browser } from 'playwright'
 import { parse, parseFragment, serialize, type DefaultTreeAdapterMap } from 'parse5'
 import { isBusinessOwner, ownerEmail } from './owner-contact'
-import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, stripContactCodeExamples } from './email-extractor'
+import { decodePublishedEmailHtml, extractPeople, extractPublishedEmails, isPlaceholderEmail, stripContactCodeExamples } from './email-extractor'
 import { canonicalSocialProfile, socialPlatformOf, socialProfileIdentity } from '../social-profile'
 import { readWebsitePage } from './http-page'
 import {resolvePublishedShareLinks} from './social-redirects'
@@ -77,7 +77,7 @@ export interface WebsiteFindings {
  * a lead.
  */
 const EMAIL_NOISE =
-  /(sentry|wixpress|example|domain\.com|yourdomain|email\.com|sentry\.io|godaddy|squarespace|shopify|wordpress|mailservice|mail-?host|formspree|hubspot|mailchimp|sendgrid|cloudflare|jquery|bootstrap|gstatic|googleapis|schema\.org|w3\.org|protectedemail|no-?reply)/i
+  /(godaddy|squarespace|shopify|wordpress|mailservice|mail-?host|formspree|hubspot|mailchimp|sendgrid|cloudflare|jquery|bootstrap|gstatic|googleapis|schema\.org|w3\.org|protectedemail|no-?reply)/i
 
 /** Roles worth writing to first, in the order a person would try them. */
 const ROLE_RANK: [RegExp, number][] = [
@@ -297,8 +297,8 @@ export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<Web
   const emails = cleanEmails([
     ...Array.from(html.matchAll(/mailto:([^"'\s?<>]+)/gi), (match) => decodeHtml(match[1])),
     ...(text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? []),
-    ...extractPublishedEmails(text),
-  ]).map((value) => ({ value, score: text.toLowerCase().includes(value) || html.toLowerCase().includes('mailto:'+value) ? scoreEmail(value, siteHost) : Math.min(35,scoreEmail(value,siteHost)), page: pageUrl }))
+    ...extractPublishedEmails(text,pageUrl),
+  ],pageUrl).map((value) => ({ value, score: text.toLowerCase().includes(value) || html.toLowerCase().includes('mailto:'+value) ? scoreEmail(value, siteHost) : Math.min(35,scoreEmail(value,siteHost)), page: pageUrl }))
 
   const phones = publishedPhonesFromHtml(html,pageUrl)
 
@@ -309,7 +309,7 @@ export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<Web
     const node=value as Record<string,unknown>
     for(const raw of Array.isArray(node.email)?node.email:[node.email]) {
       if(typeof raw!=='string')continue
-      const email=cleanEmails([raw.replace(/^mailto:/i,'')])[0]
+      const email=cleanEmails([raw.replace(/^mailto:/i,'')],pageUrl)[0]
       if(email && !emails.some(item=>item.value===email))emails.push({value:email,score:scoreEmail(email,siteHost),page:pageUrl})
     }
     for(const raw of Array.isArray(node.telephone)?node.telephone:[node.telephone]) {
@@ -339,7 +339,7 @@ export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<Web
   // A generic firm mailbox is never assigned to every person in a team.
   for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']mailto:([^"'?<>]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)) {
     const label = readableHtml(match[2]).replace(/\s+/g, ' ').trim()
-    const address = cleanEmails([decodeHtml(match[1])])[0]
+    const address = cleanEmails([decodeHtml(match[1])],pageUrl)[0]
     if (!address || label.split(/\s+/).length<2 || !isUsablePerson(label, '')) continue
     const person = people.find(saved => saved.fullName.toLowerCase() === label.toLowerCase())
     if (person && !person.email) person.email = address
@@ -349,7 +349,7 @@ export function contactFindingsFromHtml(html: string, pageUrl: string): Omit<Web
   attachPeopleCards(html, pageUrl, people)
   // Person fields may exist only in structured data, outside visible text/mailto links.
   for (const person of people) {
-    if (person.email && isUsableEmail(person.email) && !emails.some(item=>item.value===person.email)) emails.push({value:person.email,score:scoreEmail(person.email,siteHost),page:pageUrl})
+    if (person.email && isUsableEmail(person.email,pageUrl) && !emails.some(item=>item.value===person.email)) emails.push({value:person.email,score:scoreEmail(person.email,siteHost),page:pageUrl})
     if (person.phone && normalisePhone(person.phone) && !phones.some(item=>item.value===normalisePhone(person.phone!))) phones.push({value:normalisePhone(person.phone),page:pageUrl})
   }
 
@@ -660,25 +660,24 @@ const ROLE_ANYWHERE = new RegExp(
   String.raw`\b(Founding Attorney|Founding Partner|Founding Director|Co-Owner|Proprietor|CEO|CFO|CTO|COO|CMO|Chief Executive Officer|Managing Director|Managing Partner|Senior Partner|Co-Founder|Director|Owner|Founder|Practice Manager|Clinic Director|Manager|Principal|Partner|Attorney|Lawyer|Barrister|Advocate|Solicitor|Associate|Head of [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Lead [A-Za-z]+(?:[^\S\n]+[A-Za-z]+){0,2}|Therapist|Dentist|Doctor|Dermatologist|Physiotherapist|Chiropractor|Surgeon|Consultant|Specialist|Practitioner)\b`, 'i',
 )
 
-function cleanEmails(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim().toLowerCase()).filter(isUsableEmail)))
+function cleanEmails(values: string[], siteUrl = ''): string[] {
+  return Array.from(new Set(values.map((value) => value.trim().toLowerCase()).filter(value=>isUsableEmail(value,siteUrl))))
 }
 
 /**
  * Whether an address found on a page belongs to the business. Exported so a stored address can
  * be judged by the same rule that decides whether to store it.
  */
-export function isUsableEmail(value: string): boolean {
+export function isUsableEmail(value: string, siteUrl = ''): boolean {
   value=value.trim().toLowerCase()
   if (!hasPublicEmailDomain(value)) return false
   if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(value)) return false
   if (EMAIL_NOISE.test(value)) return false
+  if (isPlaceholderEmail(value,siteUrl)) return false
   const [local,domain]=value.split('@')
-  if (/^(?:test|yourcompany|domain|mysite|website)\.com$/.test(domain) || /^example\./.test(domain)) return false
   if (/^(?:yourname|your\.name|username|someone|name|email|user|abc|xyz)$/.test(local)) return false
   // Sample names in free-mail/demo templates; do not discard real named company contacts.
   if (/^(?:john\.?doe|jane\.?doe|test)$/.test(local) && /^(?:gmail|yahoo|hotmail|outlook|company|email)\.com$/.test(domain)) return false
-  if (domain==='company.com' && /^(?:info|contact|hello|sales|support)$/.test(local)) return false
   // Obfuscated addresses and asset filenames occasionally look like mailboxes.
   return !/\.(png|jpe?g|gif|svg|webp|css|js)$/i.test(value)
 }
@@ -1159,7 +1158,7 @@ export class WebsiteEnricher {
           }
         }
 
-        for (const address of cleanEmails([...data.mailto.map((entry) => entry.address), ...(data.text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [])])) {
+        for (const address of cleanEmails([...data.mailto.map((entry) => entry.address), ...(data.text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [])],url)) {
           if (emailSet.has(address)) continue
           emailSet.set(address, { value: address, score: scoreEmail(address, siteHost), page: url })
         }

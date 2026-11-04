@@ -1,6 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { normalizeOwnerEmail, validOwnerPasswordHash, verifyOwnerPassword } from './owner-password.mjs'
-import {supportApi} from './support-api.mjs'
 import { ACTIVITY_REPORTING_SINCE } from './reporting-period.mjs'
 
 // Owner API with read-only views and an optional narrow Lifetime cancellation bridge.
@@ -56,7 +55,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
 
   const stripeKey = env.STRIPE_SECRET_KEY ?? ''
   const mode = /^(sk|rk)_live_/.test(stripeKey) ? 'live' : /^(sk|rk)_test_/.test(stripeKey) ? 'test' : 'missing'
-  const cap = Math.max(1, Math.min(20, Number(env.LICENSE_MAX_ACTIVATIONS ?? 2)))
+  const cap = 1
   const email = (value) => (env.ADMIN_SHOW_EMAILS === '1' ? String(value ?? '') : maskEmail(value))
   const pricesSet = /^price_[A-Za-z0-9]+$/.test(env.STRIPE_PRICE_LIFETIME ?? '')
   const reportingSince = new Date(env.ADMIN_REPORTING_SINCE ?? ACTIVITY_REPORTING_SINCE).toISOString()
@@ -121,7 +120,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     id: short(l.id), last4: l.key_last4, email: email(l.email), created: iso(l.created_at),
     actionId: cancelLifetime ? l.id : null,
     sentAt: iso(l.sent_at), revokedAt: iso(l.revoked_at), activatedAt: iso(l.activated_at),
-    slotsUsed: (d.attached.get(l.id) ?? []).length, cap,
+    slotsUsed: (d.attached.get(l.id) ?? []).filter(r=>Number(r.license_slot)===1).length, cap,
   })).sort(newest)
 
   const activationRows = (d) => d.licenses.map((l) => ({
@@ -147,7 +146,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
       id: short(r.id), kind: desktop ? 'desktop' : checkout ? 'checkout' : 'unseen',
       created: iso(r.created_at), lastSeen: iso(r.last_seen_at),
       device: r.device_id ? short(r.device_id) : null, platform: r.device_platform || null,
-      licensed: Boolean(owner ? ownerActive : trial ? trialActive : r.license_id && license && !license.revoked_at), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
+      licensed: Boolean(owner ? ownerActive : trial ? trialActive : r.license_id && license && !license.revoked_at && Number(r.license_slot)===1), license: license?.key_last4 ?? null, slot: r.license_slot ?? null,
       licenseType: owner?.kind ?? (trial ? 'trial' : license ? 'lifetime' : null),
       ownerIssued: Boolean(owner),
       buyer: Boolean(r.lifetime_session_id),
@@ -201,7 +200,6 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
     add('installer', 'Private installer', ['blob', 'local-file'].includes(inst.storage) ? (inst.ready ? 'ok' : 'warn') : inst.storage === 'local-url' ? 'warn' : 'missing', inst.detail)
     add('email', 'License email delivery', emailConfig().provider === 'resend' ? 'ok' : 'missing',
       emailConfig().provider === 'resend' ? 'Resend key and sender address are set.' : 'Not configured. License keys are shown once on the purchase return page.')
-    add('support', 'Support inbox', supportWriter && env.SUPPORT_INBOX && env.RESEND_API_KEY ? 'ok' : 'missing', 'Tickets are saved by billing. Replies require the loopback writer, SUPPORT_INBOX and Resend configuration.')
     return checks
   }
 
@@ -363,8 +361,7 @@ export function createAdminHandler({ env = process.env, store, fetch: outbound =
         return respond(200,await supportWriter.cacheStats(from,to))
       }
       if(path==='/admin/api/support'||path.startsWith('/admin/api/support/')){
-        try{return respond(200,await supportApi({method,url,store,writer:supportWriter,body:()=>body(readBody,16384),email,actor:bearer?'owner-token':ownerEmail||'owner',cap}))}
-        catch(e){throw new AdminError([400,404,405,409,413,429,502,503].includes(e.status)?e.status:503,[400,404,405,409,413,429,502,503].includes(e.status)?e.message:'Support is temporarily unavailable.')}
+        throw new AdminError(410, 'The admin ticket inbox has been retired. Read and reply to customer messages in your support email inbox.')
       }
 
       if (method === 'POST' && path === '/admin/api/licenses/cancel') {

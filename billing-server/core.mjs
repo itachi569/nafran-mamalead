@@ -3,6 +3,8 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { readFileSync } from 'node:fs'
 import { buildLicenseEmail } from './license-email.mjs'
 import { createAssistService } from './assist.mjs'
+import { createWebsiteAssist } from './website-assist.mjs'
+import {createEmailValidityService} from './email-validity.mjs'
 import { billingPage as page } from './payment-page.mjs'
 import {sendSupport,supportConfig,sendWebSupport,webSupportConfig} from './support.mjs'
 import {SupportError} from './support-contract.mjs'
@@ -219,11 +221,13 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     }
     const trialExpiry = isTrial && linkedLicense.expires_at ? Date.parse(linkedLicense.expires_at) : 0
     const trialActive = Boolean(isTrial && !linkedLicense.revoked_at && linkedLicense.bound_installation_id === row.id && trialExpiry > Date.now())
-    const licenseActive = Boolean(linkedLicense && !linkedLicense.revoked_at && (isTrial ? trialActive : lifetimeActive))
+    // Slot 1 is the original licensed machine. Keep historical extra-slot records for
+    // audit/support, but they cannot authorize use under the single-machine policy.
+    const licenseActive = Boolean(linkedLicense && !linkedLicense.revoked_at && Number(row.license_slot) === 1 && (isTrial ? trialActive : lifetimeActive))
     const decisionPurchaseRow = linkedDecisionLicense ? await store.byId(linkedDecisionLicense.installation_id) : null
     const decisionPurchaseSession = decisionPurchaseRow && linkedDecisionLicense?.purchase_session_id
       ? await stripe(`checkout/sessions/${encodeURIComponent(linkedDecisionLicense.purchase_session_id)}`) : null
-    const decisionLicenseActive = Boolean(linkedDecisionLicense?.sent_at && !linkedDecisionLicense.revoked_at && decisionPurchaseRow &&
+    const decisionLicenseActive = Boolean(linkedDecisionLicense?.sent_at && !linkedDecisionLicense.revoked_at && Number(row.decision_license_slot) === 1 && decisionPurchaseRow &&
       decisionPurchaseSession?.metadata?.product === 'decisionMaker' && decisionPurchaseSession.customer === decisionPurchaseRow.customer_id &&
       await verifiedCheckoutCharge(decisionPurchaseSession, decisionPurchaseRow.id))
     const trialMapUsage = isTrial && typeof store.trialMapUsage === 'function'
@@ -502,11 +506,12 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     }
     const current = await store.licenseForInstallation(row.id)
     const currentDecision = isDecision ? await store.decisionLicenseForInstallation(row.id) : null
+    if ((current?.id===license.id && Number(row.license_slot)!==1) || (currentDecision?.id===license.id && Number(row.decision_license_slot)!==1)) throw new HttpError(409,'This license key is already active on another machine. One key works on one machine.')
     if (currentDecision?.id === license.id) return { active: true, kind: 'decision', email: license.email, last4: license.key_last4, activatedAt: license.activated_at ?? null, expiresAt: null }
     if (current?.id === license.id) return { active: true, kind: isTrial ? 'trial' : 'lifetime', email: license.email, last4: license.key_last4, activatedAt: license.activated_at ?? null, expiresAt: isTrial ? license.expires_at : null }
     if (isDecision) {
-      const max = Math.max(1, Math.min(20, Number(env.LICENSE_MAX_ACTIVATIONS ?? 2)))
-      if (await store.countDecisionLicenseActivations(license.id) >= max || !await store.attachDecisionLicense(row.id, license.id, new Date().toISOString(), max)) throw new HttpError(409, `This Decision Makers key is already active on ${max} machines.`)
+      const max = 1
+      if (await store.countDecisionLicenseActivations(license.id) >= max || !await store.attachDecisionLicense(row.id, license.id, new Date().toISOString(), max)) throw new HttpError(409, 'This license key is already active on another machine. One key works on one machine.')
       return { active: true, kind: 'decision', email: license.email, last4: license.key_last4, activatedAt: new Date().toISOString(), expiresAt: null }
     }
     if (isTrial) {
@@ -516,11 +521,12 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (!activated) throw new HttpError(409, 'This trial key is already used or expired.')
       return { active: true, kind: 'trial', email: license.email, last4: license.key_last4, activatedAt: activated.activated_at, expiresAt: activated.expires_at }
     }
-    const max = Math.max(1, Math.min(20, Number(env.LICENSE_MAX_ACTIVATIONS ?? 2)))
+    // A legacy environment value of 2 must not reopen a second activation slot.
+    const max = 1
     const count = typeof store.countLicenseActivations === 'function' ? await store.countLicenseActivations(license.id) : 0
-    if (count >= max) throw new HttpError(409, `This license is already active on ${max} machines.`)
+    if (count >= max) throw new HttpError(409, 'This license key is already active on another machine. One key works on one machine.')
     if (await store.attachLicense(row.id, license.id, new Date().toISOString(), max) === false) {
-      throw new HttpError(409, `This license is already active on ${max} machines.`)
+      throw new HttpError(409, 'This license key is already active on another machine. One key works on one machine.')
     }
     return { active: true, kind: 'lifetime', email: license.email, last4: license.key_last4, activatedAt: new Date().toISOString(), expiresAt: null }
   }
@@ -595,6 +601,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
   }
 
   const assist = createAssistService({ env, store, ErrorType: HttpError })
+  const websiteAssist = createWebsiteAssist({ env, store, ErrorType: HttpError, providerFetch: stripeFetch })
+  const emailValidity = createEmailValidityService({env,store,ErrorType:HttpError})
 
   async function handle({ method, url: rawUrl, authorization, deviceId: rawDeviceId, devicePlatform: rawDevicePlatform, stripeSignature, ip = '', readBody = async () => '' }) {
     try {
@@ -659,6 +667,11 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         if (!purchasedInstallation) throw new HttpError(401, 'This license key is invalid or revoked.')
         return json(200, await downloadLink(purchasedInstallation))
       }
+      if(method==='GET' && url.pathname==='/v1/assist/web/config')return json(200,await websiteAssist.configuration(ip))
+      if(method==='POST' && url.pathname==='/v1/assist/web/chat'){
+        const result=await websiteAssist.chat(ip,await jsonBody(readBody))
+        return json(result.status,result.body)
+      }
       if(method==='GET' && url.pathname==='/v1/support/web/config')return json(200,webSupportConfig(env,store))
       if(method==='POST' && url.pathname==='/v1/support/web'){
         const raw=await readBody()
@@ -668,6 +681,24 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       }
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/download') {
         const row = await installation(authorization, deviceId, devicePlatform)
+        if(url.pathname.startsWith('/v1/email-validity/')){
+          if(!deviceId)throw new HttpError(400,'A device identity is required.')
+          if(method==='GET'&&url.pathname==='/v1/email-validity/status')return json(200,emailValidity.configuration())
+          const match=/^\/v1\/email-validity\/jobs\/([a-f0-9-]{36})$/.exec(url.pathname)
+          if(method==='DELETE'&&match)return json(200,emailValidity.cancel(row.id,match[1]))
+          // Payment is checked when starting each short-lived job. Polls check the live
+          // licence record, avoiding repeated Stripe round-trips while SMTP is working.
+          if(method==='GET'&&match){
+            const license=await store.licenseForInstallation?.(row.id)
+            if(!license||license.revoked_at||!license.activated_at||Number(row.license_slot)!==1||
+              (license.kind==='trial'&&!(Date.parse(license.expires_at)>Date.now())))throw new HttpError(403,'An active licence is required to read email results.')
+            return json(200,emailValidity.status(row.id,match[1]))
+          }
+          const status=await verifiedStatus(row)
+          if(!status.license?.active||!['trial','lifetime'].includes(status.license.kind))throw new HttpError(403,'Activate an active trial or lifetime license before checking emails.')
+          if(method==='POST'&&url.pathname==='/v1/email-validity/jobs')return json(202,await emailValidity.start(row.id,await jsonBody(readBody)))
+          throw new HttpError(404,'Email verification route not found.')
+        }
         if (method==='POST' && url.pathname.startsWith('/v1/lead-cache/')) {
           if(!deviceId)throw new HttpError(400,'A device identity is required.')
           const status=await verifiedStatus(row)
@@ -955,5 +986,5 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     }
   }
 
-  return { handle, mode, publicUrl }
+  return { handle, mode, publicUrl, close:()=>emailValidity.close() }
 }

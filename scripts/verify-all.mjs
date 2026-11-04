@@ -6,6 +6,9 @@
 // anywhere failed.
 import { spawnSync } from 'node:child_process'
 
+const imports=spawnSync(process.execPath,['scripts/check-test-imports.cjs'],{stdio:'inherit'})
+if(imports.status!==0)process.exit(1)
+
 const SUITES = [
   'verify-backend',
   'verify-pages',

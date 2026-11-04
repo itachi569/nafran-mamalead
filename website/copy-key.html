@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Copy your license key · MamaLead</title>
+  <meta name="description" content="Copy the license key from your MamaLead email, then activate it in the desktop app.">
+  <link rel="icon" href="/img/mamalead-favicon.png">
+  <link rel="stylesheet" href="/copy-key.css">
+  <script src="/copy-key.js" defer></script>
+</head>
+<body>
+  <main>
+    <div class="brand"><img src="/img/mamalead-favicon.png" width="46" height="46" alt=""><span>MamaLead</span></div>
+    <section class="card" aria-labelledby="copy-title">
+      <div class="eyebrow"><span></span> YOUR NEXT STEP</div>
+      <h1 id="copy-title">Copy. Paste.<br><span>You're ready to start.</span></h1>
+      <p class="intro">Copy your key below, then paste it into MamaLead.</p>
+      <div class="key-box">
+        <label for="license-key">YOUR LICENSE KEY</label>
+        <textarea id="license-key" readonly rows="3" spellcheck="false" autocomplete="off" aria-describedby="copy-status" placeholder="Open this page from your license email."></textarea>
+        <button id="copy-key" type="button" disabled>
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="8" y="8" width="12" height="13" rx="2"></rect><path d="M16 8V4a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h3"></path></svg>
+          <span id="copy-label">Copy license key</span>
+        </button>
+      </div>
+      <p id="copy-status" role="status" aria-live="polite">Open “Copy license key” from your MamaLead email.</p>
+      <noscript><p>JavaScript is needed for the copy button. You can select and copy the key directly from your email instead.</p></noscript>
+      <div class="next"><span class="step">1</span><p>Open <strong>Settings &amp; Billing → Account</strong><br>in MamaLead. Paste your key and choose <strong>Activate</strong>.</p></div>
+      <p class="privacy">Keep your key private. This page only copies your key; activation happens in the app.</p>
+    </section>
+    <footer>Need a hand? <a href="mailto:hello@mamalead.com?subject=MamaLead%20Support">hello@mamalead.com</a></footer>
+  </main>
+</body>
+</html>

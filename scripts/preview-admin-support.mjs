@@ -3,9 +3,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 const dir=resolve('admin-dashboard');
 const html=readFileSync(resolve(dir,'index.html'),'utf8')
- .replace("return (this.props.dataSource ?? 'live') === 'fixture';","return true;")
- .replace("view: 'overview', q: ''","view: 'support', q: ''")
- .replace(/this\.load\(\);\s+if \(!this\.isFixture\(\)\)/, 'this.load();this.supportLoad(); if (!this.isFixture())');
+ .replace("return (this.props.dataSource ?? 'live') === 'fixture';","return true;");
 createServer((req,res)=>{
  const path=new URL(req.url,'http://localhost').pathname;
  if(path==='/admin/'||path==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(html);return}

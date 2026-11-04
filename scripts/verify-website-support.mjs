@@ -8,14 +8,14 @@ import {createServer} from 'node:net'
 import {chromium} from 'playwright'
 import {createBillingServer} from '../billing-server/server.mjs'
 import {parse} from 'parse5'
-const supportMailto='mailto:mamaleads997@gmail.com?subject=MamaLead%20Support'
+const supportMailto='mailto:hello@mamalead.com?subject=MamaLead%20Support'
 // Catch a plain text email or a missing mailto before the browser runtime mounts.
 for(const file of ['index.html','support.html','privacy.html','terms.html','thank-you.html']){
  let addresses=0
  const visit=(node,link=null)=>{
   if(['script','style'].includes(node.tagName))return
   if(node.tagName==='a')link=node.attrs.find(a=>a.name==='href')?.value
-  if(node.nodeName==='#text'&&node.value.includes('mamaleads997@gmail.com')){
+  if(node.nodeName==='#text'&&node.value.includes('hello@mamalead.com')){
    addresses++;assert.equal(link,supportMailto,`${file}: displayed support email must be a mailto with MamaLead Support subject`)
   }
   for(const child of node.childNodes||[])visit(child,link)
@@ -45,7 +45,7 @@ try{
  const url=base+'/support?billingApi='+encodeURIComponent(apiBase)
  await page.goto(url,{waitUntil:'networkidle'})
  assert.equal(await page.locator('link[rel="canonical"]').getAttribute('href'),'https://mamalead.com/support')
- const emailLink=page.getByRole('link',{name:'mamaleads997@gmail.com',exact:true})
+ const emailLink=page.getByRole('link',{name:'hello@mamalead.com',exact:true})
  assert.equal(await emailLink.getAttribute('href'),supportMailto)
  const emailStyle=await emailLink.evaluate(el=>{const s=getComputedStyle(el);return {color:s.color,weight:s.fontWeight,underline:s.textDecorationLine,font:s.fontFamily}})
  assert.equal(emailStyle.color,'rgb(28, 28, 28)');assert.equal(emailStyle.weight,'700');assert.match(emailStyle.underline,/underline/);assert.match(emailStyle.font,/Satoshi/)
@@ -90,7 +90,7 @@ try{
  assert.deepEqual(errors,[])
  await page.route(apiBase+'/v1/support/web/config',r=>r.fulfill({headers:{'access-control-allow-origin':base},json:{configured:false,captchaConfigured:false,turnstileSiteKey:null}}))
  await page.reload({waitUntil:'networkidle'})
- await page.getByText('The support form is temporarily unavailable. Please email mamaleads997@gmail.com.',{exact:true}).waitFor()
+ await page.getByText('The support form is temporarily unavailable. Please email hello@mamalead.com.',{exact:true}).waitFor()
  assert.equal(await page.locator('button[type="submit"]').getAttribute('aria-disabled'),'true')
  assert.equal(await page.locator(`a[href="${supportMailto}"]`).count()>0,true)
  console.log('PASS public CAPTCHA form, clean routes, validation links, draft recovery, conflict recovery, double-click prevention, no billing installations, inbox + acknowledgment and responsive layouts; no real messages sent')

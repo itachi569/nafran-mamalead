@@ -241,6 +241,7 @@ export async function runEmailVerificationBatches(
     onProgress: (progress: EmailVerificationBatchProgress) => void
     batchSize?: number
     retryDelayMs?: number
+    retryMissing?: boolean
   },
 ): Promise<{ failed: string[]; retries: number; cancelled: boolean }> {
   const unique = Array.from(new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean)))
@@ -300,7 +301,10 @@ export async function runEmailVerificationBatches(
       checked += 1
     }
     const missing = item.emails.filter((address) => !returned.has(address))
-    if (missing.length) requeue({ emails: missing, attempts: item.attempts })
+    if (missing.length) {
+      if(options.retryMissing===false)failed.push(...missing)
+      else requeue({ emails: missing, attempts: item.attempts })
+    }
     currentSize = 0
     emit()
   }

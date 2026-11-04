@@ -76,7 +76,7 @@ try {
   const desktopB = (await bill('/v1/installations', null, 'POST')).body.token
   const desktopC = (await bill('/v1/installations', null, 'POST')).body.token
   const devices = ['a'.repeat(64), 'b'.repeat(64), 'c'.repeat(64)]
-  check('billing flow: two desktop activations succeed', (await bill('/v1/activate', desktopA, 'POST', { licenseKey }, devices[0])).status === 200 && (await bill('/v1/activate', desktopB, 'POST', { licenseKey }, devices[1])).status === 200)
+  check('billing flow: one desktop succeeds and the second is denied', (await bill('/v1/activate', desktopA, 'POST', { licenseKey }, devices[0])).status === 200 && (await bill('/v1/activate', desktopB, 'POST', { licenseKey }, devices[1])).status === 409)
   check('billing flow: third activation is still denied', (await bill('/v1/activate', desktopC, 'POST', { licenseKey }, devices[2])).status === 409)
   const statusA = await bill('/v1/status', desktopA, 'GET', undefined, devices[0])
   check('billing flow: /v1/status response is unchanged and licensed', statusA.status === 200 && statusA.body.license.active === true && statusA.body.lifetime.active === true && !('lastSeen' in statusA.body))
@@ -124,8 +124,8 @@ try {
   const summary = await call('/admin/api/summary', { cookie })
   const c = summary.body.counts
   const u = summary.body.usage
-  check('summary counts the test purchase, customer, license and slots', summary.status === 200 && c.purchases === 1 && c.customers === 1 && c.licenses === 1 && c.slotsUsed === 2 && c.slotsTotal === 2 && summary.body.mode === 'test')
-  check('usage: 4 registered, 2 desktop, 1 checkout identity, 1 not yet seen', u.tracking === true && u.registered === 4 && u.desktop === 2 && u.checkout === 1 && u.unseen === 1 && u.licensed === 2)
+  check('summary counts the test purchase, customer, license and slots', summary.status === 200 && c.purchases === 1 && c.customers === 1 && c.licenses === 1 && c.slotsUsed === 1 && c.slotsTotal === 1 && summary.body.mode === 'test')
+  check('usage: 4 registered, 1 licensed desktop, 1 checkout identity, 2 not yet seen', u.tracking === true && u.registered === 4 && u.desktop === 1 && u.checkout === 1 && u.unseen === 2 && u.licensed === 1)
   check('usage: one desktop active in the last 24 hours', u.active24h === 1 && u.active7d === 1 && u.active30d === 1)
   check('downloads: one protected download recorded', summary.body.downloads.tracking === true && summary.body.downloads.total === 1 && summary.body.downloads.buyers === 1)
   check('summary reports an emailed key while email configuration is hidden from the admin fixture', summary.body.email.provider === 'none' && c.emailed === 1)
@@ -154,7 +154,7 @@ try {
   check('unknown filters are rejected', (await call('/admin/api/licenses?filter=drop', { cookie })).status === 400)
   check('license filter "full" finds the license at its activation limit', (await call('/admin/api/licenses?filter=full', { cookie })).body.rows.length === 1)
   const activations = await call('/admin/api/activations', { cookie })
-  check('activation slots show both machines', activations.body.rows[0].slots.filter((s) => s.installation).length === 2)
+  check('activation slots show the single licensed machine', activations.body.rows[0].slots.filter((s) => s.installation).length === 1)
   check('activation slots include short device IDs and platform', activations.body.rows[0].slots.some((s) => s.device === devices[0].slice(0, 8) && s.platform === 'Windows x64 10.0'))
   const publicInstaller = await fetch(`${base}/v1/download`, { redirect: 'manual' })
   const publicSummary = await call('/admin/api/summary', { cookie })
@@ -173,7 +173,7 @@ try {
   check('billing flow: the trial activates on its first machine', (await bill('/v1/activate', trialInstall, 'POST', { licenseKey: trialKey }, 'd'.repeat(64))).status === 200)
   const trialSummary = await call('/admin/api/summary', { cookie })
   const trialUsers = await call('/admin/api/users?filter=licensed', { cookie })
-  check('admin shows sent, activated and active trials without counting them as paid licenses', trialSummary.body.counts.trials === 1 && trialSummary.body.counts.trialActivated === 1 && trialSummary.body.counts.trialActive === 1 && trialSummary.body.counts.licenses === 1 && trialSummary.body.usage.licensed === 3 && trialUsers.body.rows.some((r) => r.licenseType === 'trial' && r.licensed))
+  check('admin shows sent, activated and active trials without counting them as paid licenses', trialSummary.body.counts.trials === 1 && trialSummary.body.counts.trialActivated === 1 && trialSummary.body.counts.trialActive === 1 && trialSummary.body.counts.licenses === 1 && trialSummary.body.usage.licensed === 2 && trialUsers.body.rows.some((r) => r.licenseType === 'trial' && r.licensed))
 
   const secondTrialInstall = (await bill('/v1/installations', null, 'POST')).body.token
   check('a second person can receive a trial key without activating it', (await bill('/v1/trial', secondTrialInstall, 'POST', { email: 'second-trial@example.test' })).status === 200)
@@ -213,7 +213,7 @@ try {
   }
   const privateSummary = (await call('/admin/api/summary', { cookie })).body
   const privateUsers = (await call('/admin/api/users', { cookie })).body.rows.filter((r) => r.ownerIssued)
-  check('owner-issued Lifetime and unexpired trials are counted as active access', privateSummary.counts.ownerKeys === 6 && privateSummary.counts.ownerActive === 2 && privateSummary.usage.licensed === 5)
+  check('owner-issued Lifetime and unexpired trials are counted as active access', privateSummary.counts.ownerKeys === 6 && privateSummary.counts.ownerActive === 2 && privateSummary.usage.licensed === 4)
   check('private keys do not inflate purchased licenses, revenue or emailed trials', privateSummary.counts.licenses === 1 && privateSummary.counts.purchases === 1 && privateSummary.counts.customers === 1 && privateSummary.counts.trials === 2)
   check('revoked, expired, unused and incorrectly bound private keys cannot count as licensed', privateUsers.length === 6 && privateUsers.filter((r) => r.licensed).map((r) => r.license).sort().join(',') === 'P001,P002')
   check('private key holders retain masked email and the correct grant type', privateUsers.every((r) => r.email === 'p••••••@example.test') && privateUsers.find((r) => r.license === 'P002').licenseType === 'trial')
@@ -222,7 +222,7 @@ try {
   const freshAdmin = createAdminHandler({ env: { ...adminEnv, ADMIN_REPORTING_SINCE: futureCutoff, ADMIN_SHOW_EMAILS: '1' }, store, fetch: fakeStripe })
   const freshCall = async (url, auth = `Bearer ${ownerToken}`) => freshAdmin.handle({ method: 'GET', url, authorization: auth, ip: '127.0.0.3' })
   const fresh = JSON.parse((await freshCall('/admin/api/summary')).body)
-  check('fresh activity reporting starts at zero without resetting customers or licences', fresh.activity.since === futureCutoff && fresh.activity.usage.registered === 0 && fresh.activity.usage.active7d === 0 && fresh.activity.downloads.total === 0 && fresh.activity.trials === 0 && fresh.counts.purchases === 1 && fresh.counts.ownerKeys === 6 && fresh.usage.licensed === 5)
+  check('fresh activity reporting starts at zero without resetting customers or licences', fresh.activity.since === futureCutoff && fresh.activity.usage.registered === 0 && fresh.activity.usage.active7d === 0 && fresh.activity.downloads.total === 0 && fresh.activity.trials === 0 && fresh.counts.purchases === 1 && fresh.counts.ownerKeys === 6 && fresh.usage.licensed === 4)
   check('previous activity remains available in the same authenticated summary', fresh.downloads.total === 2 && fresh.counts.trials === 2 && fresh.usage.registered > 0)
   billing.db.prepare('update billing_public_downloads set created_at = ?').run(futureCutoff)
   const period = JSON.parse((await freshCall('/admin/api/summary')).body)

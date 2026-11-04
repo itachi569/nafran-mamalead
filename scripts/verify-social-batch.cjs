@@ -20,11 +20,11 @@ test('a healthy homepage taking over the former 3.5-second cutoff still returns 
     assert.equal(result.error,null);assert.equal(result.socials[0].handle,'slowclinic')
   })
 })
-test('transient connection failure retries HTTP as HTTPS and clears the earlier error',async()=>{
+test('transient connection failure retries the same HTTPS URL and clears the earlier error',async()=>{
   const requested=[]
   await mocked(async url=>{requested.push(url);if(requested.length===1)throw new TypeError('fetch failed');return response(url,html('recoveredclinic'))},async()=>{
     const result=await new WebsiteEnricher().inspectSocialFast('http://clinic.fixture.test/')
-    assert.deepEqual(requested,['https://clinic.fixture.test/','https://www.clinic.fixture.test/'])
+    assert.deepEqual(requested,['https://clinic.fixture.test/','https://clinic.fixture.test/'])
     assert.equal(result.error,null);assert.equal(result.socials.length,1)
   })
 })
@@ -50,7 +50,7 @@ test('hidden injected profile links are excluded; genuine visible links remain',
   const result=socialLinksFromHtml(`<marquee style="position:absolute;width:0px"><a href="https://x.com/unrelated">spam</a></marquee><div hidden>${html('hidden')}</div><div style="display:none">${html('hidden2')}</div>${html('clinic')}`,'https://clinic.fixture.test')
   assert.deepEqual(result.map(x=>x.handle),['clinic'])
 })
-test('50 sites complete with out-of-order progress, retry, one unavailable site and later successes',async()=>{
+for(const total of [50,200]) test(`${total} sites complete with out-of-order progress, retry, one unavailable site and later successes`,async()=>{
   const {db,repo,ws}=database(),events=[],attempts=new Map();let active=0,peak=0
   try{await mocked(async(url,init)=>{
     const name=new URL(url).hostname.replace(/^www\./,'').split('.')[0],n=Number(name.slice(4));attempts.set(n,(attempts.get(n)||0)+1)
@@ -61,23 +61,23 @@ test('50 sites complete with out-of-order progress, retry, one unavailable site 
       return response(url,n===2?'denied':n===3?'<h1>No published profiles</h1>':html(name),n===2?403:200)
     }finally{active--}
   },async()=>{
-    const urls=Array.from({length:50},(_,i)=>`https://site${i}.fixture.test`)
+    const urls=Array.from({length:total},(_,i)=>`https://site${i}.fixture.test`)
     const imported=repo.importWebsites(ws,urls,false),job=repo.queueJob(ws,'social',imported.leadIds)
     const runner=new EnrichmentRunner(db,repo,{onProgress:event=>{if(event.jobId===job.jobId)events.push(event)}})
     await runner.drain()
     const status=repo.jobStatus(ws,job.jobId)
-    assert.equal(status.processed,50);assert.equal(status.total,50);assert.equal(status.failed,1);assert.equal(status.found,48)
+    assert.equal(status.processed,total);assert.equal(status.total,total);assert.equal(status.failed,1);assert.equal(status.found,total-2)
     assert.equal(peak,3);assert.equal(attempts.get(1),2);assert.equal(attempts.get(2),1)
     assert.equal(status.outcomes[imported.leadIds[0]].status,'found')
     assert.equal(status.outcomes[imported.leadIds[2]].status,'error')
     assert.equal(status.outcomes[imported.leadIds[3]].status,'not-published')
-    assert.equal(status.outcomes[imported.leadIds[49]].status,'found')
-    assert.equal(Object.keys(status.outcomes).length,50)
+    assert.equal(status.outcomes[imported.leadIds[total-1]].status,'found')
+    assert.equal(Object.keys(status.outcomes).length,total)
     assert(events.some(e=>e.outcomes[imported.leadIds[1]]&&!e.outcomes[imported.leadIds[0]]),'later sites appear while the first site is still loading')
     assert(events.every((e,i)=>i===0||e.processed>=events[i-1].processed),'progress never goes backwards')
     assert(events.every(e=>e.processed===Object.keys(e.outcomes).length),'percentage matches actually completed rows')
     assert.deepEqual(status.activeLeadIds,[])
-    assert.equal(db.one('select count(*) n from social_profiles').n,48)
+    assert.equal(db.one('select count(*) n from social_profiles').n,total-2)
     assert.equal(repo.jobTotals(ws).running,0);assert.equal(repo.jobTotals(ws).queued,0)
   })}finally{db.close()}
 })

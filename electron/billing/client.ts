@@ -294,6 +294,13 @@ export async function billingPaymentDetails(): Promise<{ card: { brand: string; 
 export async function billingAssistStatus(): Promise<{ configured: boolean; savedOnDevice: boolean }> {
   return request('/v1/assist/status', 'GET', undefined, await installationToken())
 }
+
+/** Authenticated, short requests: SMTP work continues in a server job, not a long HTTP request. */
+export async function emailValidityRequest<T>(path:string,method='GET',body?:unknown,signal?:AbortSignal):Promise<T>{
+  if(!/^\/(?:status|jobs(?:\/[a-f0-9-]{36})?)$/.test(path))throw new Error('Invalid email verification request.')
+  signal?.throwIfAborted()
+  return request<T>('/v1/email-validity'+path,method,body,await installationToken(),10_000,signal)
+}
 export async function billingAssistChat(payload: unknown): Promise<{ text: string; model: string }> {
   return request('/v1/assist/chat', 'POST', payload, await installationToken(), 45_000)
 }

@@ -119,6 +119,14 @@ export function createBillingServer(options = {}) {
   const store = {
     ...cacheStore,
     ...createSqliteSupportStore(db),
+    readAssistUsage: async (key) => db.prepare('select used from assist_usage where bucket = ? and (expires_at is null or expires_at >= ?)').get(key,Date.now())?.used ?? 0,
+    releaseAssistUsage: async (buckets) => {
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        for(const {key} of buckets)db.prepare('update assist_usage set used = max(0, used - 1) where bucket = ?').run(key)
+        db.exec('COMMIT')
+      } catch(error){db.exec('ROLLBACK');throw error}
+    },
     reserveAssistUsage: async (buckets) => {
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -371,6 +379,7 @@ export function createBillingServer(options = {}) {
   let supportRetryBusy=false
   const supportTimer=setInterval(async()=>{if(supportRetryBusy)return;supportRetryBusy=true;try{await retrySupportDelivery({env,store,fetcher:options.fetch})}catch{}finally{supportRetryBusy=false}},60000)
   supportTimer.unref();server.once('close',()=>clearInterval(supportTimer))
+  server.once('close',()=>handler.close())
   const cacheTimer=setInterval(()=>{try{cacheStore.leadCachePrune()}catch{}},86400000)
   cacheTimer.unref();server.once('close',()=>clearInterval(cacheTimer))
   const licenseAdmin = createLicenseAdminServer(db, {env, fetch: options.fetch, cacheStore})

@@ -253,6 +253,8 @@ const desktop = {
       provider: 'apify' | 'leadsangel' | 'mailverifier' | 'local'
       level: 'dns' | 'mailbox'
       mode: 'dns-only' | 'provider'
+      managed?: boolean
+      message?: string
       leadsAngelConfigured: boolean
       leadsAngelExpiresOn: string | null
       progress: {

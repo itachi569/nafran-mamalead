@@ -18,11 +18,14 @@ export function buildLicenseEmail({ to, licenseKey, kind, download }) {
   const trial = kind === 'trial'
   const decision = kind === 'decision'
   const name = greetingNameFromEmail(to)
+  // Email clients cannot execute clipboard scripts. Keep the key in a URL
+  // fragment so opening the separate copy page never sends it to the web server.
+  const copyUrl = `https://mamalead.com/copy-key#key=${encodeURIComponent(licenseKey)}`
   const subject = trial ? 'Your MamaLead 1-day trial key is ready' : decision ? 'Your MamaLead Decision Makers key is ready' : 'Your MamaLead lifetime license key is ready'
   const intro = trial
     ? 'Your 1-day trial is ready. Activate this key in the desktop app to start 24 hours and capture up to 300 Google Maps leads across any keywords.'
     : decision ? 'Your Decision Makers pass is ready. Activate this key in the desktop app to use 1,000 Decision Maker searches during your 30-day pass.'
-      : 'Here is your lifetime license key. Activate it in the desktop app to unlock unlimited Maps, email, phone and social lookups.'
+      : 'Here is your lifetime license key. Activate it on one machine in the desktop app to unlock unlimited Maps, email, phone and social lookups.'
   const features = trial
     ? ['Up to 300 Google Maps leads', 'Search any keywords and cities within that total', '24 hours from first activation on one device', 'Export and save your captured leads']
     : decision ? ['1,000 Decision Maker searches across your licensed devices', 'Your pass lasts 30 days from payment', 'A new pass can be bought when searches run out or the 30 days end', 'Payment is manual; no automatic renewal']
@@ -35,6 +38,7 @@ export function buildLicenseEmail({ to, licenseKey, kind, download }) {
     INTRO_HEADING: trial ? 'Welcome to your 1-day trial!' : 'Thank you for your purchase!',
     INTRO_COPY: intro,
     LICENSE_KEY: licenseKey,
+    COPY_KEY_URL: copyUrl,
     DONE_TITLE: trial ? 'Done! Your trial starts now' : decision ? 'Done! Decision Makers is ready' : 'Done! Lifetime is active',
     DONE_COPY: trial ? 'Your 24-hour trial and 300-lead allowance start at activation.' : decision ? 'Your 1,000-search pass lasts 30 days from payment. Your remaining count appears in Settings → Usage.' : 'Your unlimited Maps, email, phone and social lookups start at activation.',
     IMPORTANT_COPY: trial
@@ -52,7 +56,7 @@ export function buildLicenseEmail({ to, licenseKey, kind, download }) {
     if (!(key in replacements)) throw new Error(`Unknown email template field: ${key}`)
     return escapeHtml(replacements[key])
   })
-  const text = `Hey ${name},\n\n${intro}\n\nYour license key: ${licenseKey}\n\nDownload MamaLead: ${download}\nOpen Settings & Billing → Account, paste the key, and choose Activate.\n\n${features.join('\n')}\n\nKeep your key private.\n`
+  const text = `Hey ${name},\n\n${intro}\n\nYour license key: ${licenseKey}\n\nCopy license key (opens a browser page): ${copyUrl}\nYou can also select and copy the key above.\n\nDownload MamaLead: ${download}\nOpen Settings & Billing → Account, paste the key, and choose Activate.\n\n${features.join('\n')}\n\nKeep your key private.\n`
   return {
     subject, html, text,
     attachments: [{ filename: 'mamalead-logo.png', content: logo, content_type: 'image/png', content_id: 'mamalead-logo' }],

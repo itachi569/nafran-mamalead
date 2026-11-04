@@ -1,6 +1,7 @@
 import {IdentitySet} from '../scraper/cache-key'
 import { contactQuality } from '../lead-quality'
 import {hasPublicEmailDomain} from '../email-domain'
+import {isPlaceholderEmail} from '../enrichment/email-extractor'
 import { directoryScanError, socialWebsite } from '../enrichment/source-policy'
 import { cleanWebsiteUrl, websiteDomain } from '../website-domain'
 // Reads and writes for the pages, kept in one place so the IPC layer stays thin and the
@@ -397,7 +398,16 @@ export interface DashboardTotals {
 export function scoreLead(lead: LeadInput): number { return contactQuality(lead) }
 
 export class Repository {
-  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality(); this.repairPhoneQuality(); this.repairPrivateEmails() }
+  constructor(private readonly db: LocalDatabase) { this.repairDataQuality(); this.repairImportQuality(); this.repairPhoneQuality(); this.repairPrivateEmails(); this.repairPlaceholderEmails() }
+
+  private repairPlaceholderEmails():void {
+    const migration='placeholder-emails-1.4.37'
+    if(this.db.one('select name from app_data_migrations where name=?',[migration]))return
+    this.db.transaction(()=>{
+      this.pruneNoisyContacts((value,website)=>!isPlaceholderEmail(value,website))
+      this.db.run('insert into app_data_migrations (name,applied_at) values (?,?)',[migration,nowIso()])
+    })
+  }
 
   private repairPrivateEmails():void {
     const migration='private-emails-1.4.34'
@@ -1215,15 +1225,20 @@ export class Repository {
    * Removes stored email addresses a page's footer or a form widget produced rather than the
    * business. The worker refuses them now, and this clears any that were stored before it did.
    */
-  pruneNoisyContacts(isUsable: (value: string) => boolean): { removed: number } {
-    const rows = this.db.query<{ id: string; value: string }>("select id, value from lead_contacts where kind = 'email'")
-    let removed = 0
-    for (const row of rows) {
-      if (isUsable(row.value)) continue
-      this.db.run('delete from lead_contacts where id = ?', [row.id])
-      removed += 1
-    }
-    return { removed }
+  pruneNoisyContacts(isUsable: (value: string, website?:string) => boolean): { removed: number } {
+    return this.db.transaction(()=>{
+      const rows = this.db.query<Record<string,unknown>&{id:string;lead_id:string;value:string;website:string}>("select c.*,l.website from lead_contacts c join leads l on l.id=c.lead_id where c.kind='email'")
+      let removed = 0
+      const changed=new Set<string>()
+      for (const {website,...row} of rows) {
+        if (isUsable(row.value,website)) continue
+        this.archiveQuality('lead_contacts',row,'Template or unusable email; original preserved')
+        this.db.run('delete from lead_contacts where id = ?', [row.id])
+        changed.add(row.lead_id);removed += 1
+      }
+      for(const id of changed){this.retainMainEmail(id);this.recomputeLeadScore(id)}
+      return { removed }
+    })
   }
 
   // ---------------------------------------------------------------- social profiles

@@ -3,6 +3,7 @@ import {leadCacheEnabled} from './runtime-config'
 import {leadCacheLookup,drainLeadCache,cacheSharingActive} from './billing/lead-cache-client'
 import type {CacheEnrichment} from './scraper/cached-maps'
 import {precheckEmail,isRoleEmail} from './email-precheck'
+import {serverEmailValidityStatus,verifyEmailsOnServer} from './billing/email-validity-client'
 import {registerSupportIpc} from './support-ipc'
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, shell } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -565,16 +566,21 @@ ipcMain.handle('emailValidity:removeLeadsAngel', () => {
   return { configured: false, expiresOn: null }
 })
 
-ipcMain.handle('emailValidity:status', () => ({
-  configured: true,
-  level: leadsAngelCredentials || apifyApiToken || mailVerifierApiKey ? 'mailbox' : 'dns',
-  mode: leadsAngelCredentials || apifyApiToken || mailVerifierApiKey ? 'provider' : 'dns-only',
+ipcMain.handle('emailValidity:status', async () => {
+ const local=Boolean(leadsAngelCredentials || apifyApiToken || mailVerifierApiKey)
+ const server=local?null:await serverEmailValidityStatus()
+ return {
+  configured: local || Boolean(server?.configured),
+  level: 'mailbox',
+  mode: 'provider',
+  managed: !local,
+  message: server?.message,
   fromEnvironment: leadsAngelCredentials ? false : apifyApiToken ? apifyFromEnvironment : mailVerifierFromEnvironment,
-  provider: leadsAngelCredentials ? 'leadsangel' : apifyApiToken ? 'apify' : mailVerifierApiKey ? 'mailverifier' : 'local',
-  leadsAngelConfigured: Boolean(leadsAngelCredentials),
+  provider: leadsAngelCredentials ? 'leadsangel' : apifyApiToken ? 'apify' : mailVerifierApiKey ? 'mailverifier' : 'leadsangel',
+  leadsAngelConfigured: Boolean(leadsAngelCredentials || server?.configured),
   leadsAngelExpiresOn: leadsAngelCredentials?.expiresOn ?? null,
   progress: emailValidityProgress,
-}))
+}})
 
 ipcMain.handle('emailValidity:cancel', () => {
   if (!emailValidityController || !emailValidityBusy) return { cancelled: false }
@@ -598,6 +604,7 @@ ipcMain.handle(
     setEmailValidityProgress({ state: 'running', message: 'Preparing email validity check…', total: 0, checked: 0, failed: 0, pending: 0, retries: 0, batchSize: 0 })
     try {
     const leadsAngel = leadsAngelCredentials
+    const managedVerifier=!leadsAngel&&!apifyApiToken&&!mailVerifierApiKey&&mockEmailVerifierRequests===0
 
     const provider: EmailValidityProvider = payload.recheckUnknown && leadsAngel
       ? 'leadsangel'
@@ -609,7 +616,7 @@ ipcMain.handle(
         ? 'apify'
         : mailVerifierApiKey
           ? 'mailverifier'
-          : 'local'
+          : 'leadsangel'
     const { db, repository } = openDatabase()
     const workspace = db.ensureWorkspace()
     const contactIds = new Set((payload.contactIds ?? []).map(String))
@@ -675,7 +682,6 @@ ipcMain.handle(
           try { result=await precheckEmail(address,emailValidityController!.signal) }
           catch(error){if(emailValidityController!.signal.aborted)break;throw error}
           if(result)save(rows,result)
-          else if(provider==='local')save(rows,{email:address,status:'unknown',verified:false,score:null,provider:'local',message:'Domain accepts mail; mailbox deliverability was not checked. Configure a verification provider in Settings → Account.'})
           else pendingQueue.push(entry)
           setEmailValidityProgress({checked:summary.checked,pending:queue.length-summary.checked,message:'Checking email domains before paid mailbox verification…'})
         }
@@ -707,6 +713,17 @@ ipcMain.handle(
         }
         mockEmailVerifierDelayMs = 0
         mockEmailVerifierUnknown = false
+      } else if (managedVerifier) {
+        const outcome=await runEmailVerificationBatches(pendingQueue.map(([address])=>address),
+          (batch,signal)=>verifyEmailsOnServer(batch,signal,results=>{
+            for(const result of results){const rows=byAddress.get(result.email);if(rows)save(rows,result)}
+            setEmailValidityProgress({checked:summary.checked,pending:queue.length-summary.checked})
+          },message=>setEmailValidityProgress({message})),{
+            signal:emailValidityController.signal,batchSize:20,retryMissing:false,
+            onResult:result=>{const rows=byAddress.get(result.email);if(rows)save(rows,result)},
+            onProgress:progress=>setEmailValidityProgress({...progress,total:queue.length,checked:summary.checked,pending:Math.max(0,queue.length-summary.checked-progress.failed),message:`Mailbox check: ${summary.checked} of ${queue.length} checked · ${progress.failed} need retry.`}),
+          })
+        summary.failed=outcome.failed.length
       } else if (provider === 'leadsangel' && leadsAngel) {
         const outcome = await runEmailVerificationBatches(
           pendingQueue.map(([address]) => address),

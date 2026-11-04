@@ -16,6 +16,7 @@ try {
       const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 })
       await page.setContent(html, { waitUntil: 'load' })
       await page.screenshot({ path: resolve(output, `${kind}-${name}.png`), fullPage: true })
+      await page.locator('p.key').locator('xpath=ancestor::table[1]').screenshot({ path: resolve(output, `${kind}-key-${name}.png`) })
       await page.close()
     }
   }

@@ -61,12 +61,12 @@ export function stripContactCodeExamples(text: string): string {
 }
 
 /** Literal addresses and explicit [at]/(at) obfuscation; prose such as "team at company.com" is not an email. */
-export function extractPublishedEmails(text: string): string[] {
+export function extractPublishedEmails(text: string, siteUrl = ''): string[] {
   const decoded=text.replace(/&#(x[0-9a-f]+|[0-9]+);/gi,(_match,code:string)=>{
     const value=parseInt(code.replace(/^x/i,''),/^x/i.test(code)?16:10)
     return value>0 && value<=0x10ffff ? String.fromCodePoint(value) : ''
   }).replace(/\s*(?:\[\s*at\s*\]|\(\s*at\s*\))\s*/gi,'@').replace(/\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\))\s*/gi,'.')
-  return [...new Set((decoded.match(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi) ?? []).map(value=>value.toLowerCase()).filter(hasPublicEmailDomain))]
+  return [...new Set((decoded.match(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+/gi) ?? []).map(value=>value.toLowerCase()).filter(value=>hasPublicEmailDomain(value) && !isPlaceholderEmail(value,siteUrl)))]
 }
 
 /** A person named by a result snippet, still a suggestion until somebody confirms it. */
@@ -78,7 +78,23 @@ export interface ExtractedPerson {
 }
 
 /** Domain parts that mark an address as a placeholder rather than a mailbox. */
-const PLACEHOLDER_DOMAINS = ['example.com', 'example.org', 'example.net', 'domain.com', 'yourdomain.com', 'email.com', 'sentry.io', 'wixpress.com']
+export const PLACEHOLDER_DOMAINS = ['example.com', 'example.org', 'example.net', 'domain.com', 'yourdomain.com', 'email.com', 'sentry.io', 'wixpress.com', 'yourcompany.com', 'yoursite.com', 'mysite.com', 'website.com', 'test.com'] as const
+
+// These domains can also be real services. Reject generic template mailboxes on unrelated
+// sites, without blacklisting named mail.com users or a company's own contact address.
+export const GENERIC_TEMPLATE_DOMAINS = ['info.com', 'mail.com', 'company.com', 'sample.com', 'site.com', 'business.com', 'email.org'] as const
+export function isPlaceholderEmail(value: string, siteUrl = ''): boolean {
+  const [local,domain] = value.trim().toLowerCase().split('@')
+  if (!domain) return false
+  const matches = (known:string) => domain===known || domain.endsWith('.'+known)
+  if (PLACEHOLDER_DOMAINS.some(matches) || /^example\./.test(domain)) return true
+  if (!/^(?:contact|info|hello|admin|support|sales)$/.test(local) || !GENERIC_TEMPLATE_DOMAINS.some(matches)) return false
+  try {
+    const host = new URL(/^https?:\/\//i.test(siteUrl)?siteUrl:'https://'+siteUrl).hostname.toLowerCase().replace(/^www\./,'')
+    if (host===domain || host.endsWith('.'+domain) || domain.endsWith('.'+host)) return false
+  } catch { /* With no business domain, a generic template address is not evidence. */ }
+  return true
+}
 
 /** Local parts that are roles or placeholders rather than a person's mailbox. */
 const PLACEHOLDER_LOCALS = ['example', 'email', 'yourname', 'someone', 'name', 'test', 'user', 'no-reply', 'noreply', 'donotreply']
@@ -159,7 +175,7 @@ function worthKeeping(value: string): boolean {
   if (!/^[a-z0-9.!+_%'-]+$/.test(local)) return false
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return false
   if (/\*/.test(local)) return false
-  if (PLACEHOLDER_DOMAINS.some((known) => domain === known || domain.endsWith(`.${known}`))) return false
+  if (isPlaceholderEmail(value)) return false
   if (PLACEHOLDER_LOCALS.includes(local)) return false
   // A single-character local part is a mask or a typo, not a mailbox.
   if (local.length < 2) return false

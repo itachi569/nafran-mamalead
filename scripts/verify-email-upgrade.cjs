@@ -13,22 +13,31 @@ async function main(){
   }
   db.run('delete from app_data_migrations where name=?',['private-emails-1.4.34'])
   db.run('insert or ignore into app_data_migrations (name,applied_at) values (?,?)',['private-emails-1.4.33',at])
+  const templateId=repo.importWebsites(ws,['https://timemedical.pk'],false).leadIds[0]
+  for(const [id,value,score] of [['old-placeholder','contact@info.com',99],['real-alternative','hello@timemedical.pk',70]]){
+    db.run('insert into lead_contacts (id,lead_id,workspace_id,kind,value,source,score,created_at) values (?,?,?,?,?,?,?,?)',[id,templateId,ws,'email',value,'https://timemedical.pk/contact/',score,at])
+  }
+  db.run('delete from app_data_migrations where name=?',['placeholder-emails-1.4.37'])
   db.close()
   const env={...process.env,LEADSNAP_BILLING_API_URL:'http://127.0.0.1:9'}
   delete env.ELECTRON_RUN_AS_NODE;delete env.VITE_DEV_SERVER_URL
   const app=await _electron.launch({executablePath:electronTestExecutable(packaged),args:[...packaged?[]:[root],...(process.platform==='linux'&&process.env.CI?['--no-sandbox']:[]),'--user-data-dir='+profile],env,timeout:60000})
   try{
     await app.firstWindow()
-    const result=await app.evaluate(async({app},{ws,leadId})=>{
+    const result=await app.evaluate(async({app},{ws,leadId,templateId})=>{
       await app.whenReady()
       const req=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/package.json')
       const {db,repository}=req('./dist-electron/db/index.js').openDatabase()
       const contacts=repository.listContacts(ws,'email',[leadId])
       let editRejected=false
       try{repository.updateContact('public-alternative',{value:'hello@office.local'})}catch(error){editRejected=/public domain/.test(error.message)}
-      return {version:app.getVersion(),emails:contacts.map(row=>row.value),archived:db.one("select count(*) n from data_quality_repairs where row_id='old-private'").n,editRejected}
-    },{ws,leadId})
+      const templateEmails=repository.listContacts(ws,'email',[templateId]).map(row=>row.value)
+      const archivedTemplate=JSON.parse(db.one("select original_json from data_quality_repairs where row_id='old-placeholder'").original_json)
+      const {Repository}=req('./dist-electron/db/repository.js');new Repository(db)
+      return {version:app.getVersion(),emails:contacts.map(row=>row.value),archived:db.one("select count(*) n from data_quality_repairs where row_id='old-private'").n,editRejected,templateEmails,archivedTemplate,templateArchiveCount:db.one("select count(*) n from data_quality_repairs where row_id='old-placeholder'").n}
+    },{ws,leadId,templateId})
     assert.deepEqual(result.emails,['hello@legacyclinic.com']);assert.equal(result.archived,1);assert.equal(result.editRejected,true)
+    assert.deepEqual(result.templateEmails,['hello@timemedical.pk']);assert.equal(result.archivedTemplate.value,'contact@info.com');assert.equal(result.archivedTemplate.source,'https://timemedical.pk/contact/');assert.equal(result.templateArchiveCount,1)
     console.log(JSON.stringify({packaged,...result,passed:true}))
   }finally{await app.close()}
 }

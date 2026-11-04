@@ -11,6 +11,13 @@ DataForSEO adapter, identity and email matching, progress/stop controls, imports
 exports, billing integration, notifications, Assist navigation, and verification scripts.
 Private credentials and customer data are intentionally not part of GitHub.
 
+As of 1.4.37, the retired `test-owner-*` and `test-deep-*` scripts and their
+owner-only UI verification/capture scripts are removed from the active test folder.
+Use the archive checkout below to run them with the matching implementation.
+Current contact extraction regressions remain in `test-email-extraction.cjs`,
+`test-qa-1432.cjs` and `test-qa-1433.cjs`. `check-test-imports.cjs` checks active
+test imports after the build in local verification and Desktop QA.
+
 ## Restore for development
 
 Fetch the archive and create a separate checkout. Do not reset the current product branch.

@@ -20,5 +20,9 @@ db.close();db=new LocalDatabase(file);repo=new Repository(db);cache=new LeadCach
 assert.equal(cache.pending().length,1);cache.complete(cache.pending()[0].id);assert.equal(cache.pending().length,0)
 assert.equal(repo.listContacts(ws,'email').length,1)
 assert.ok(repo.knownIdentities(ws).has({website:'https://www.dentist.com/another'}))
+const placeholderId=repo.importWebsites(ws,['https://realbiz.pk'],false).leadIds[0]
+cache.seed(repo,ws,placeholderId,{emails:[{value:'contact@info.com',source:'https://realbiz.pk/contact',score:90}],phones:[],socials:[],address:'',enrichedAt:now,scannedKinds:['email']})
+assert.deepEqual(repo.listContacts(ws,'email',[placeholderId]),[])
+assert.equal(repo.cacheSeededIds('email').has(placeholderId),false,'discarded template email must not suppress a fresh website scan')
 db.close()
 console.log('PASS real SQLite: cached contacts and verification reset, no duplicate enrichment jobs, hidden hit count, identity dedupe, durable retry/drop/reopen')

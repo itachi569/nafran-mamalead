@@ -108,7 +108,7 @@ try {
  const navigation=page.waitForRequest('https://checkout.stripe.com/c/pay/website_fixture')
  await page.getByRole('button',{name:'Try again',exact:true}).click();await navigation
  assert.equal(checkoutCalls,2)
- for(const selector of ['.hero-buy','.desktop-pricing','.pricing-lifetime .pricing-action','#top a:has-text("Buy now")']){
+ for(const selector of ['.hero-buy','.desktop-pricing','.pricing-lifetime .pricing-action','#top a:has-text("Buy now")','#footer [data-lifetime-checkout]']){
   await page.goto(base,{waitUntil:'networkidle'})
   let cta
   cta=page.locator(selector)
@@ -187,7 +187,7 @@ try {
  paid=true
  await page.goto(base+'/?checkout=success&session_id=verified',{waitUntil:'networkidle'})
  await page.getByText('Payment successful',{exact:true}).waitFor()
- assert.equal(new URL(page.url()).pathname,'/thank-you.html','old checkout returns also use the new thank-you page')
+ assert.equal(new URL(page.url()).pathname,'/thank-you','old checkout returns also use the canonical thank-you page')
  await page.getByRole('link',{name:'Back to MamaLead'}).click()
  assert.equal(new URL(page.url()).search,'')
  assert.deepEqual(errors,[])

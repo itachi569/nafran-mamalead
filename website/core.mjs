@@ -141,7 +141,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
     }
     const trialExpiry = isTrial && linkedLicense.expires_at ? Date.parse(linkedLicense.expires_at) : 0
     const trialActive = Boolean(isTrial && !linkedLicense.revoked_at && linkedLicense.bound_installation_id === row.id && trialExpiry > Date.now())
-    const licenseActive = Boolean(linkedLicense && !linkedLicense.revoked_at && (isTrial ? trialActive : lifetimeActive))
+    const licenseActive = Boolean(linkedLicense && !linkedLicense.revoked_at && Number(row.license_slot) === 1 && (isTrial ? trialActive : lifetimeActive))
     let decisionPrice = { amount: 300, currency: 'usd', interval: 'month' }
     if (prices.decisionMaker) {
       decisionPrice = await price(prices.decisionMaker)
@@ -211,8 +211,8 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
         from,
         to: [to],
         subject: kind === 'trial' ? 'Your Nafran 1-day trial key' : 'Your Nafran Leads Scraper lifetime license',
-        text: `${kind === 'trial' ? 'Your trial lasts 24 hours from its first activation on one machine.' : 'Thank you for your purchase. Your lifetime license works on up to two machines.'}\n\nLicense key: ${licenseKey}\n\nDownload the installer at ${download}, then enter the key in Nafran Leads Scraper → Settings → Account.\n`,
-        html: `<p>${kind === 'trial' ? 'Your trial lasts 24 hours from its first activation on one machine.' : 'Thank you for your purchase. Your lifetime license works on up to two machines.'}</p><p><strong>License key:</strong> <code>${escapeHtml(licenseKey)}</code></p><p><a href="${escapeHtml(download)}">Download the installer</a>, then enter the key in Nafran Leads Scraper → Settings → Account.</p>`,
+        text: `${kind === 'trial' ? 'Your trial lasts 24 hours from its first activation on one machine.' : 'Thank you for your purchase. Your lifetime license works on one machine.'}\n\nLicense key: ${licenseKey}\n\nDownload the installer at ${download}, then enter the key in Nafran Leads Scraper → Settings → Account.\n`,
+        html: `<p>${kind === 'trial' ? 'Your trial lasts 24 hours from its first activation on one machine.' : 'Thank you for your purchase. Your lifetime license works on one machine.'}</p><p><strong>License key:</strong> <code>${escapeHtml(licenseKey)}</code></p><p><a href="${escapeHtml(download)}">Download the installer</a>, then enter the key in Nafran Leads Scraper → Settings → Account.</p>`,
       }),
       signal: AbortSignal.timeout(20_000),
     })
@@ -306,6 +306,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (!originalInstallation || !(await verifiedStatus(originalInstallation)).lifetime.active) throw new HttpError(403, 'The purchase behind this license is not active.')
     }
     const current = await store.licenseForInstallation(row.id)
+    if (current?.id === license.id && Number(row.license_slot)!==1) throw new HttpError(409, 'This license key is already active on another machine. One key works on one machine.')
     if (current?.id === license.id) return { active: true, kind: isTrial ? 'trial' : 'lifetime', email: license.email, last4: license.key_last4, activatedAt: license.activated_at ?? null, expiresAt: isTrial ? license.expires_at : null }
     if (isTrial) {
       const activatedAt = new Date().toISOString()
@@ -314,7 +315,7 @@ export function createBillingHandler({ env = process.env, store, fetch: stripeFe
       if (!activated) throw new HttpError(409, 'This trial key is already used or expired.')
       return { active: true, kind: 'trial', email: license.email, last4: license.key_last4, activatedAt: activated.activated_at, expiresAt: activated.expires_at }
     }
-    const max = Math.max(1, Math.min(20, Number(env.LICENSE_MAX_ACTIVATIONS ?? 2)))
+    const max = 1
     const count = typeof store.countLicenseActivations === 'function' ? await store.countLicenseActivations(license.id) : 0
     if (count >= max) throw new HttpError(409, `This license is already active on ${max} machines.`)
     if (await store.attachLicense(row.id, license.id, new Date().toISOString(), max) === false) {

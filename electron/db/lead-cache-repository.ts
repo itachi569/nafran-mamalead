@@ -4,6 +4,7 @@ import type {Repository} from './repository'
 import type {CacheEnrichment} from '../scraper/cached-maps'
 import {mapsPlaceIdentity} from '../scraper/saved-places'
 import type {Lead} from '../scraper/types'
+import {isUsableEmail} from '../enrichment/website'
 
 export class LeadCacheRepository {
   constructor(private db:LocalDatabase){}
@@ -27,12 +28,15 @@ export class LeadCacheRepository {
   seed(repository:Repository,workspaceId:string,leadId:string,e:CacheEnrichment){
     if(Date.parse(e.enrichedAt)<Date.now()-30*86400000)return
     this.db.transaction(()=>{
-      for(const email of e.emails.slice(0,1))repository.upsertContact({leadId,kind:'email',value:email.value,source:email.source,verified:false,score:email.score})
+      const website=this.db.one<{website:string}>('select website from leads where id=?',[leadId])?.website||''
+      const emails=e.emails.filter(email=>isUsableEmail(email.value,website)).slice(0,1)
+      for(const email of emails)repository.upsertContact({leadId,kind:'email',value:email.value,source:email.source,verified:false,score:email.score})
       for(const phone of e.phones)repository.upsertContact({leadId,kind:'phone',value:phone.value,source:phone.source,verified:false,score:0})
       for(const social of e.socials)repository.upsertSocialProfile({workspaceId,leadId,platform:social.platform as any,handle:'',profileUrl:social.url,source:social.source||''})
       repository.markLeadScanned(leadId)
       const kinds=e.scannedKinds||(['email','phone','social'] as const).filter(k=>e[{email:'emails',phone:'phones',social:'socials'}[k] as 'emails'|'phones'|'socials'].length)
-      this.db.run('insert into lead_cache_seeded(lead_id,email,phone,social,seeded_at) values(?,?,?,?,?) on conflict(lead_id) do update set email=excluded.email,phone=excluded.phone,social=excluded.social,seeded_at=excluded.seeded_at',[leadId,kinds.includes('email')?1:0,kinds.includes('phone')?1:0,kinds.includes('social')?1:0,e.enrichedAt])
+      // Re-check the website when the cache's only email was a template placeholder.
+      this.db.run('insert into lead_cache_seeded(lead_id,email,phone,social,seeded_at) values(?,?,?,?,?) on conflict(lead_id) do update set email=excluded.email,phone=excluded.phone,social=excluded.social,seeded_at=excluded.seeded_at',[leadId,kinds.includes('email')&&(!e.emails.length||emails.length)?1:0,kinds.includes('phone')?1:0,kinds.includes('social')?1:0,e.enrichedAt])
       // Cached evidence never carries another device's verification verdict.
       this.db.run('update lead_contacts set validation_status=null,validation_message=null,validated_at=null where lead_id=?',[leadId])
     })

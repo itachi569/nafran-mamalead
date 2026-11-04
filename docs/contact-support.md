@@ -1,5 +1,13 @@
 # Contact support — MamaLead 1.4.26
 
+## Current workflow — 4 November 2026
+
+Customer conversations are handled in the `hello@mamalead.com` email inbox. The admin dashboard no longer contains a Support tab, message queues, unread badges, ticket details, replies or notes. Its retired `/admin/api/support` routes return HTTP 410 after owner authentication; stale dashboard sessions cannot send replies. The existing Email section remains for licence delivery records, not support conversations.
+
+Direct website email links open the visitor's mail app. Existing desktop and `/support` forms continue to deliver messages to the configured support inbox with the customer's address in Reply-To, so an inbox reply goes to the customer. Their existing storage, retry queue and receipt API remain compatible with installed apps. Historical records are preserved; this change does not erase customer messages or disable pending email delivery. There is no incoming-mail sync with the admin dashboard.
+
+The sections below document the original ticket implementation retained for compatibility, not the current admin interface. The former inbox code remains in Git history and the backend modules for future reference. No production deployment is performed by this local change.
+
 The desktop app has one support form, reachable from the sidebar, Settings → Account, the licence lock and failed Assist answers. It works without an active licence. The form keeps a local draft, creates one ticket per send, preserves its retry identifier, and offers a mail-app fallback when the server is unavailable. Website checkout and trial forms are unchanged.
 
 ## Server configuration

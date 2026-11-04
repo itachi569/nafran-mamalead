@@ -28,12 +28,25 @@ jobs:
       - run: npm ci
       - run: npm run test:electron-paths
       - run: npm run build
+      - run: node scripts/check-test-imports.cjs
+      - name: Server email validity and Mama AI contracts
+        run: |
+          node scripts/build-server-email-provider.mjs --check
+          node --test scripts/verify-email-validity-server.mjs scripts/verify-website-assist.mjs
       - name: Database and contact regression tests
         run: |
           node scripts/test-database.cjs
           node --test scripts/test-qa-1432.cjs scripts/test-qa-1433.cjs scripts/test-email-extraction.cjs scripts/test-support-client-ip.mjs
       - name: Shared Maps cache and repeat-scan regressions
         run: npm run lead-cache:test
+      - name: Social Profiles 50-site and 200-site batches
+        run: node --test --test-name-pattern="sites complete" scripts/verify-social-batch.cjs
+      - name: Single-machine licences and public pages
+        run: |
+          node scripts/verify-billing-server.mjs
+          node scripts/verify-owner-licenses.mjs
+          node admin-dashboard/server/verify-admin.mjs
+          node scripts/verify-public-pages.mjs
       - name: Install Linux browser dependencies
         if: runner.os == 'Linux'
         run: npx playwright install-deps chromium
@@ -41,12 +54,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           xvfb-run --auto-servernum node scripts/verify-email-upgrade.cjs
-          xvfb-run --auto-servernum node scripts/verify-lead-cache-ui.cjs
+          xvfb-run --auto-servernum node scripts/repeat-lead-cache-ui.cjs
           xvfb-run --auto-servernum node scripts/verify-website-lookup-ui.cjs
       - name: Website Lookup UI (Windows)
         if: runner.os == 'Windows'
         run: |
           node scripts/verify-email-upgrade.cjs
+          node scripts/repeat-lead-cache-ui.cjs
           node scripts/verify-website-lookup-ui.cjs
       - uses: actions/upload-artifact@v4
         if: always()
