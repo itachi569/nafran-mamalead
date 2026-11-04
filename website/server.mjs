@@ -9,6 +9,7 @@ const port = Number(process.env.LANDING_PORT || 38751)
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -18,7 +19,7 @@ const types = {
   '.woff2': 'font/woff2',
 }
 
-const allowedFile = /^(?:index\.html|thank-you\.html|thank-you\.js|privacy\.html|terms\.html|support\.html|support\.js|sales\.js|billing\.js|vendor\/[\w.-]+|uploads\/[\w .-]+|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
+const allowedFile = /^(?:index\.html|thank-you\.html|thank-you\.js|privacy\.html|terms\.html|support\.html|support\.js|sales\.js|billing\.js|mama-ai\.(?:js|css)|vendor\/[\w.-]+|uploads\/[\w .-]+|fonts\/[\w.-]+|img\/[\w.\/-]+|lottie\/[\w.-]+)$/
 
 const server = createServer(async (request, response) => {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
@@ -40,6 +41,11 @@ const server = createServer(async (request, response) => {
     return
   }
   const aliases={'/support':'support.html','/privacy':'privacy.html','/terms':'terms.html','/thank-you':'thank-you.html'}
+  const cleanPath=pathname==='/index.html' ? '/' : Object.keys(aliases).find(key=>'/'+aliases[key]===pathname)
+  if(cleanPath){
+    response.writeHead(301,{location:cleanPath+new URL(request.url,'http://localhost').search,'cache-control':'no-store'}).end()
+    return
+  }
   if(pathname.endsWith('/') && aliases[pathname.slice(0,-1)]){
     response.writeHead(301,{location:pathname.slice(0,-1)+new URL(request.url,'http://localhost').search,'cache-control':'no-store'}).end()
     return
@@ -67,7 +73,7 @@ const server = createServer(async (request, response) => {
   response.writeHead(200, {
     'content-type': types[extension] || 'application/octet-stream',
     'content-length': info.size,
-    'cache-control': extension === '.html' || ['sales.js','billing.js'].includes(file) ? 'no-store' : 'public, max-age=86400',
+    'cache-control': extension === '.html' || ['sales.js','billing.js','mama-ai.js','mama-ai.css'].includes(file) ? 'no-store' : 'public, max-age=86400',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'strict-origin-when-cross-origin',

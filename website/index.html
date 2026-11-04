@@ -14,6 +14,7 @@
 <link rel="icon" type="image/png" href="img/mamalead-favicon.png?v=2">
 <link rel="preconnect" href="https://api.mamalead.com" crossorigin>
 <link rel="preconnect" href="https://checkout.stripe.com">
+<link rel="stylesheet" href="./mama-ai.css?v=1"><script src="./mama-ai.js?v=1" defer></script>
 <script src="./billing.js"></script>
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
@@ -69,10 +70,10 @@
 }
 </style>
 <style>
-a[href^="mailto:mamaleads997@gmail.com"] { transition: opacity .15s ease; }
-a[href^="mailto:mamaleads997@gmail.com"]:hover { opacity: .78; }
-a[href^="mailto:mamaleads997@gmail.com"]:focus-visible { outline: 2px solid #45693a; outline-offset: 4px; border-radius: 2px; }
-@media (prefers-reduced-motion: reduce) { a[href^="mailto:mamaleads997@gmail.com"] { transition: none; } }
+a[href^="mailto:hello@mamalead.com"] { transition: opacity .15s ease; }
+a[href^="mailto:hello@mamalead.com"]:hover { opacity: .78; }
+a[href^="mailto:hello@mamalead.com"]:focus-visible { outline: 2px solid #45693a; outline-offset: 4px; border-radius: 2px; }
+@media (prefers-reduced-motion: reduce) { a[href^="mailto:hello@mamalead.com"] { transition: none; } }
 /* Native smooth scrolling, with reduced-motion support and no scroll handler. */
 html:has(#page-start:target) { scroll-behavior: smooth; }
 .back-to-top {
@@ -355,11 +356,7 @@ html:has(#page-start:target) { scroll-behavior: smooth; }
     <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5m-6 6 6-6 6 6"></path></svg>
   </a>
 
-  <a class="help-launcher" href="support.html" aria-label="Need help? Contact MamaLead support" style="position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 80; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 8px 0 18px; border-radius: 999px; border: 1px solid rgba(28,28,28,.06); background: #FFFFFF; color: #1C1C1C; box-shadow: 0 18px 40px -18px rgba(28,28,28,.45), 0 2px 6px rgba(28,28,28,.06); transition: transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s ease;" style-hover="transform: translateY(-2px); color: #1C1C1C; box-shadow: 0 24px 46px -18px rgba(28,28,28,.55), 0 2px 6px rgba(28,28,28,.06);">
-    <span aria-hidden="true" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #2E9E5B; box-shadow: 0 0 0 3px rgba(46,158,91,.16);"></span>
-    <span style="font-size: 15px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap;">Need help?</span>
-    <span style="display: inline-flex; align-items: center; height: 30px; padding: 0 11px; border-radius: 999px; background: #E6EDDF; color: #34502F; font-size: 12px; font-weight: 700; white-space: nowrap;">Support</span>
-  </a>
+  <button type="button" id="mama-ai-launcher" class="help-launcher mama-ai-launcher" aria-label="Ask Mama AI" aria-haspopup="dialog" aria-expanded="false" aria-controls="mama-ai-panel"><img src="img/mamalead-favicon.png" width="34" height="34" alt=""><span>Mama AI</span><span>Ask me ↗</span></button>
 
   <header class="site-header" style="position: sticky; top: 0; z-index: 60; background: rgba(239,239,239,.6); backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%); border-bottom: 1px solid rgba(255,255,255,.7);">
     <div class="site-header-row" style="max-width: 1180px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;">
@@ -483,7 +480,7 @@ html:has(#page-start:target) { scroll-behavior: smooth; }
   <section id="pricing" data-screen-label="Pricing" class="pricing-section">
  <div class="pricing-intro"><span class="latest-eyebrow">CHOOSE YOUR ACCESS</span><h2>Lifetime access.<br>Half the price.</h2><p>Regular price Rs 20,000. Get Lifetime access for Rs 10,000 with our launch offer. Download MamaLead for Windows, then activate your plan in the app.</p></div>
  <div class="pricing-grid">
-  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on up to two machines. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Lifetime access here and pay securely through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p><p style="margin:10px 0 0;font-size:13px">Questions before buying? <a href="support.html?topic=licence" style="color:inherit;text-decoration:underline;text-underline-offset:3px">Contact us</a></p></div><div style="margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px;"><sc-if value="{{ showCountdown }}" hint-placeholder-val="{{ true }}"><span role="timer" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span aria-hidden="true" style="width: 7px; height: 7px; flex: none; border-radius: 50%; background: #FF6B5E;"></span><span>Ends in <span style="font-variant-numeric: tabular-nums;">{{ countdown }}</span></span></span></sc-if><sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span>Only {{ seatsLeft }} left</span></span></sc-if></div><a href="#pricing" data-lifetime-checkout="true" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" class="pricing-action fomo-buy" style="margin-top: 14px; background: #B8281F; color: #FFFFFF; box-shadow: 0 18px 34px -18px rgba(184,40,31,.8);">Claim lifetime access at 50% off</a></article>
+  <article class="pricing-card pricing-lifetime"><span class="plan-label">LIFETIME ACCESS · LAUNCH OFFER</span><div class="plan-offer"><span>Regular <s>Rs 20,000</s></span><span class="offer-saving">50% OFF</span></div><h3>Rs 10,000 <small>one time</small></h3><p class="plan-summary">Save Rs 10,000 on core desktop features for life, on one machine. Pay once with no recurring payment.</p><ul><li>Unlimited Google Maps leads</li><li>Unlimited published business email lookups</li><li>Unlimited phone and social profile lookups</li><li>Website Lookup with email, phone, social and address fields</li><li>Saved lists, run history and reports</li><li>Unlimited PDF and Excel exports</li></ul><div class="plan-next"><strong>Activate after secure checkout</strong><p>Choose Lifetime access here and pay securely through Stripe. Your Lifetime key is emailed after verified payment; activate it in Account.</p><p style="margin:10px 0 0;font-size:13px">Questions before buying? <a href="support.html?topic=licence" style="color:inherit;text-decoration:underline;text-underline-offset:3px">Contact us</a></p></div><div style="margin: 22px 0 0; display: flex; flex-wrap: wrap; gap: 8px;"><sc-if value="{{ showCountdown }}" hint-placeholder-val="{{ true }}"><span role="timer" style="display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span aria-hidden="true" style="width: 7px; height: 7px; flex: none; border-radius: 50%; background: #FF6B5E;"></span><span>Ends in <span style="font-variant-numeric: tabular-nums;">{{ countdown }}</span></span></span></sc-if><sc-if value="{{ showSeats }}" hint-placeholder-val="{{ true }}"><span style="display: inline-flex; align-items: center; padding: 7px 13px; border-radius: 999px; border: 1px solid rgba(255,180,171,.45); color: #FFB4AB; font-size: 13px; font-weight: 700;"><span>Only {{ seatsLeft }} left</span></span></sc-if></div><a href="#pricing" data-lifetime-checkout="true" onClick="{{ onLifetimeCheckout }}" aria-disabled="{{ checkoutBusy }}" class="pricing-action fomo-buy" style="margin-top: 14px; background: #B8281F; color: #FFFFFF; box-shadow: 0 18px 34px -18px rgba(184,40,31,.8);">Claim lifetime access at 50% off</a></article>
   <article class="pricing-card"><span class="plan-label">1-DAY TRIAL</span><h3>Free</h3><p class="plan-summary">Explore the core features for 24 hours from activation. One trial per email and one machine.</p><ul><li>300 Google Maps leads total across keywords</li><li>Website emails, phone numbers and social profiles</li><li>Website Lookup with your selected contact fields</li><li>All Leads, Saved Lists and Run History</li><li>Branded PDF and Excel exports</li><li>Saved lead data stays on your computer</li></ul><div class="plan-next"><strong>Start with your email</strong><p>Enter your email here to receive a trial key, then download the app. Paste the key in Account; your 24 hours start when you activate.</p><p style="margin:10px 0 0;font-size:13px">Questions before buying? <a href="support.html?topic=licence" style="color:inherit;text-decoration:underline;text-underline-offset:3px">Contact us</a></p></div><a href="#download" class="pricing-action" onClick="{{ onOpenTrial }}">Get my free trial key</a></article>
  </div><p class="pricing-note">Email validity is optional and requires a configured, authorised verification provider. Public website availability and provider limits still apply. See your plan and Maps usage in Settings &amp; Billing.</p>
 </section>
@@ -1053,9 +1050,9 @@ html:has(#page-start:target) { scroll-behavior: smooth; }
           </div>
           <p class="ml-footer-headline">Find the right businesses.<br><span>Make your next move.</span></p>
           <p class="ml-footer-description">Turn Google Maps searches into organised business contacts. Find published emails, phones and social profiles, then save and export your results.</p>
-          <a class="ml-footer-email" href="mailto:mamaleads997@gmail.com?subject=MamaLead%20Support">
+          <a class="ml-footer-email" href="mailto:hello@mamalead.com?subject=MamaLead%20Support">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"></rect><path d="m4 7 8 6 8-6"></path></svg>
-            mamaleads997@gmail.com
+            hello@mamalead.com
           </a>
         </div>
         <nav class="ml-footer-nav" aria-label="Footer">
@@ -1724,7 +1721,7 @@ class Component extends DCLogic {
         if (!returning || paid) return;
         if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 1800));
       }
-      this.setState({ checkoutNotice: 'Payment or email delivery is not confirmed yet. Retry the check, or contact mamaleads997@gmail.com if you have already paid.' });
+      this.setState({ checkoutNotice: 'Payment or email delivery is not confirmed yet. Retry the check, or contact hello@mamalead.com if you have already paid.' });
     } catch (error) { if (this._mounted) this.setState({ checkoutNotice: returning ? error.message : '' }); }
   }
 
