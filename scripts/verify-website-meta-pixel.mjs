@@ -45,6 +45,7 @@ try {
   await page.evaluate(()=>{location.hash='#pricing'});await page.waitForTimeout(400)
   await page.evaluate(()=>{window.MamaLeadAnalytics.init();window.MamaLeadAnalytics.init()})
   await page.addScriptTag({url:base+'/analytics.js'})
+  assert.deepEqual(calls[0].args,['set','autoConfig',false,'1628121598802764'],'automatic setup disabled before init')
   assert.equal(inits(calls).length,1);assert.deepEqual(inits(calls)[0].args,['init','1628121598802764'],'init with ID only, no advanced matching')
   assert.equal(count(calls,'PageView'),1,'one PageView on home despite re-renders/hash')
   for(const p of ['support','privacy','terms']){calls.length=0;await page.goto(base+'/'+p,{waitUntil:'networkidle'});assert.equal(count(calls,'PageView'),1,'PageView on '+p+' '+JSON.stringify(calls))}

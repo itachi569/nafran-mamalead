@@ -55,6 +55,8 @@
       if (!sanitizeUrl()) return;
       loadBase();
       initialized = true;
+      // Use only the explicit events below, not Meta's automatic setup/inferred events.
+      call('set', 'autoConfig', false, PIXEL_ID);
       call('init', PIXEL_ID);
       call('track', 'PageView');
     } catch { /* no-op */ }
