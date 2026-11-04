@@ -2,6 +2,7 @@
  * Single source of advertising tracking for the public website only.
  * - Loaded async/defer; every call is wrapped so ad blockers or Meta errors never break flows.
  * - No advanced matching, no customer data in event parameters.
+ * - Marketing pages only; no payment returns, thank-you, copy-key, admin or desktop.
  * - Consent: not yet decided by the owner. Pixel loads without a blocking banner.
  *   To add a consent gate later, make consentGranted() return the visitor's choice
  *   and call MamaLeadAnalytics.init() after acceptance.
@@ -11,8 +12,13 @@
 (() => {
   'use strict';
   if (window.MamaLeadAnalytics) return; // Guard against the script being evaluated twice.
+  const pageUrl = new URL(location.href);
+  const marketingHost = /^(mamalead\.com|www\.mamalead\.com|localhost|127\.0\.0\.1|\[::1\])$/i;
+  const marketingPath = /^\/(?:index\.html|(?:support|privacy|terms)(?:\.html)?\/?)?$/;
+  if (!/^https?:$/.test(pageUrl.protocol) || !marketingHost.test(pageUrl.hostname) ||
+      !marketingPath.test(pageUrl.pathname) || pageUrl.searchParams.has('checkout')) return;
   const PIXEL_ID = '1628121598802764';
-  const SENSITIVE = /^(session_id|checkout_session|cs|token|access_token|key|license|licence|email|e|payment_intent\w*|setup_intent\w*)$/i;
+  const SENSITIVE = /^(session(?:[_-]?id)?|checkout[_-]?session(?:[_-]?id)?|cs|(?:access[_-]?|refresh[_-]?)?token|key|licen[cs]e(?:[_-]?key)?|email(?:[_-]?address)?|e|client[_-]?secret|password|payment_intent\w*|setup_intent\w*)$/i;
   let initialized = false;
 
   const consentGranted = () => true; // Consent policy undecided; hook for a future gate.
@@ -26,7 +32,8 @@
       }
       if (url.hash && /[=@]/.test(url.hash)) { url.hash = ''; changed = true; }
       if (changed) history.replaceState(history.state, '', url.pathname + url.search + url.hash);
-    } catch { /* never break the page */ }
+      return true;
+    } catch { return false; /* Skip tracking if the URL cannot be safely cleaned. */ }
   }
 
   function loadBase() {
@@ -45,8 +52,7 @@
   function init() {
     if (initialized || !consentGranted()) return;
     try {
-      // thank-you.js removes the checkout query after verification; strip anything sensitive first anyway.
-      sanitizeUrl();
+      if (!sanitizeUrl()) return;
       loadBase();
       initialized = true;
       call('init', PIXEL_ID);

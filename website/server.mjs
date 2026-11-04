@@ -73,7 +73,7 @@ const server = createServer(async (request, response) => {
   response.writeHead(200, {
     'content-type': types[extension] || 'application/octet-stream',
     'content-length': info.size,
-    'cache-control': extension === '.html' || file.startsWith('copy-key.') || ['sales.js','billing.js','thank-you.js','support.js','mama-ai.js','mama-ai.css'].includes(file) ? 'no-store' : 'public, max-age=86400',
+    'cache-control': extension === '.html' || file.startsWith('copy-key.') || ['sales.js','billing.js','thank-you.js','support.js','analytics.js','mama-ai.js','mama-ai.css'].includes(file) ? 'no-store' : 'public, max-age=86400',
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': file.startsWith('copy-key.') ? 'no-referrer' : 'strict-origin-when-cross-origin',
