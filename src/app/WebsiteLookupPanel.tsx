@@ -25,7 +25,10 @@ export function WebsiteLookupPanel({V}:{V:AppValues}) {
     if(!jobId||previous?.id!==jobId||!previous.running||scanRunning)return
     let frame=requestAnimationFrame(()=>{
       frame=requestAnimationFrame(()=>{
-        resultsRef.current?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})
+        // Keep the completed scan handoff quick and stable. Smooth scrolling can
+        // keep the results card in motion while the table is rendering, which
+        // delays screenshots and makes the first results feel unresponsive.
+        resultsRef.current?.scrollIntoView({behavior:'auto',block:'start'})
       })
     })
     return ()=>cancelAnimationFrame(frame)
